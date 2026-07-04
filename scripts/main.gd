@@ -1,4 +1,8 @@
 extends Node3D
+## Par for the Curse — implements the anthology module contract by
+## duck-typing core/minigame.gd (signal finished + results dictionary).
+
+signal finished(results: Dictionary)
 
 enum Phase { DRAFT, BUILD, PUTT, BETWEEN }
 
@@ -30,6 +34,8 @@ var current_hand: Array = []
 var grudge_card_idx := -1
 var autobuild_count := 0
 var _build_timer := 0.0
+var _currency_log: Array = []
+var _highlights: Array = []
 
 @onready var putt_controller: Node3D = $PuttController
 @onready var placement: Node3D = $PlacementController
@@ -224,16 +230,20 @@ func _on_ball_died(killer: Trap, victim: int) -> void:
 	camera_rig.focus_on(death_pos, 1.3)
 	_spawn_death_fx(death_pos, v.color)
 	_spawn_gravestone(death_pos, v.color)
+	_currency_log.append({"type": "grudge", "player": victim, "amount": 1, "reason": "died"})
 	var credit := "THE COURSE"
 	var credit_color := Color(0.9, 0.9, 0.9)
 	if killer != null and killer.author_index >= 0:
 		var a = GameState.players[killer.author_index]
 		credit = "%s'S %s" % [a.name, killer.display_name]
 		credit_color = a.color
-		if killer.author_index != victim:
+		if killer.author_index == victim:
+			_highlights.append("%s died to their OWN %s" % [a.name, killer.display_name])
+		else:
 			a.score += ROYALTY
 			a.royalties += ROYALTY
 			caddies[killer.author_index].react("Cheer")
+			_currency_log.append({"type": "royalty", "player": killer.author_index, "amount": ROYALTY, "reason": "killed %s" % v.name})
 			_rebuild_scoreboard()
 	elif killer != null:
 		credit = killer.display_name
@@ -310,6 +320,19 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 		caddies[champ].react("Cheer")
 		_spawn_confetti(caddies[champ].global_position + Vector3(0, 1.5, 0), GameState.players[champ].color)
 		_flash_banner("%s WINS THE MATCH!\n(press R for a rematch)" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
+		var points := {}
+		var monuments: Array = []
+		for i in GameState.players.size():
+			points[i] = GameState.players[i].score
+			if GameState.players[i].royalties >= 6:
+				monuments.append({"player": i, "kind": "butcher", "label": "%s, Architect of Ruin" % GameState.players[i].name})
+		finished.emit({
+			"placements": GameState.standings(),
+			"points": points,
+			"currency_events": _currency_log.duplicate(),
+			"highlights": _highlights.slice(0, 3),
+			"monuments": monuments,
+		})
 		return
 	Sfx.play("round_over")
 	_flash_banner("ROUND OVER", Color(1, 0.85, 0.2), 2.6)
