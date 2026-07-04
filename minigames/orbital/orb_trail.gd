@@ -30,6 +30,8 @@ func _ready() -> void:
 
 func add_point(p: Vector3, now: float) -> void:
 	_pts.append({"p": p, "t": now})
+	if _pts.size() > 400:  # bound memory when render() never runs (headless)
+		_pts.pop_front()
 
 func clear_points() -> void:
 	_pts.clear()

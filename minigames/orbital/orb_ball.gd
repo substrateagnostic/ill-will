@@ -12,7 +12,7 @@ enum S { REST, HELD, FLYING }
 
 const RADIUS := 0.32
 const RESTITUTION := 0.75
-const TANGENT_KEEP := 0.96
+const TANGENT_KEEP := 0.98
 const SPEED_CAP := 13.0
 const DEADLY_SPEED := 4.0
 const REST_SPEED := 1.7

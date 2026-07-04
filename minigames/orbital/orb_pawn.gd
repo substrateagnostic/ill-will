@@ -20,7 +20,8 @@ const JUMP_SPEED := 7.6
 const AIM_TIME := 0.8          # hold A: power 0 -> 1 over this
 const THROW_MIN := 5.5
 const THROW_MAX := 13.0
-const THROW_LOFT_DEG := 26.0
+const THROW_LOFT_MIN_DEG := 20.0  # taps: flat, close-range
+const THROW_LOFT_MAX_DEG := 42.0  # full power: sails into orbit
 const BODY_R := 0.42
 const CENTER_H := 0.55
 const CATCH_WINDOW := 0.2
@@ -220,8 +221,9 @@ func _aim_turn(dt: float, mv: Vector2) -> void:
 	heading = heading.rotated(srf_n, clampf(ang, -7.0 * dt, 7.0 * dt)).normalized()
 
 func throw_vector() -> Dictionary:
-	var v := lerpf(THROW_MIN, THROW_MAX, maxf(charge, 0.0))
-	var loft := deg_to_rad(THROW_LOFT_DEG)
+	var c := maxf(charge, 0.0)
+	var v := lerpf(THROW_MIN, THROW_MAX, c)
+	var loft := deg_to_rad(lerpf(THROW_LOFT_MIN_DEG, THROW_LOFT_MAX_DEG, c))
 	var dir := (heading * cos(loft) + srf_n * sin(loft)).normalized()
 	return {"origin": body_center() + dir * 0.55, "vel": dir * v}
 

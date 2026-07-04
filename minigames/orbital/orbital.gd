@@ -100,6 +100,7 @@ var _autoquit := false
 var _match_override := -1.0
 var _test_mode := ""
 var _shake := 0.0
+var _slowmo_left := 0.0  # game-seconds of slow-mo remaining (tick-driven)
 var _circ := {}
 
 var _cam: Camera3D
@@ -141,8 +142,13 @@ func _parse_args() -> void:
 		elif arg.begins_with("--orbtest="):
 			_test_mode = arg.trim_prefix("--orbtest=")
 	if _fast > 1.01:
+		# Faster-than-realtime WITHOUT changing the integration step:
+		# Godot passes delta = time_scale / physics_ticks_per_second to
+		# _physics_process, so scale BOTH by K -> dt stays exactly 1/60 and
+		# the sim runs K ticks per real tick, bit-identical to a live match.
 		Engine.time_scale = _fast
-		Engine.max_physics_steps_per_frame = maxi(8, int(_fast) * 12)
+		Engine.physics_ticks_per_second = int(60.0 * _fast)
+		Engine.max_physics_steps_per_frame = maxi(8, int(60.0 * _fast))
 		AudioServer.set_bus_mute(0, true)
 
 func _default_config() -> Dictionary:
@@ -403,20 +409,28 @@ func pawn_name(i: int) -> String:
 func _physics_process(delta: float) -> void:
 	if phase == Phase.WAIT:
 		return
-	now += delta
+	# Slow-mo NEVER touches Engine.time_scale (the engine applies that at
+	# frame granularity, which would make ticks machine-dependent). Instead
+	# the sim's own step shrinks for a tick-counted budget: deterministic
+	# in live play, headed captures and --fast sims alike.
+	var sdt := delta
+	if _slowmo_left > 0.0:
+		_slowmo_left -= delta
+		sdt = delta * 0.3
+	now += sdt
 	if phase == Phase.PLAY and bots_enabled:
 		for bot in bots:
-			bot.think(delta, now)
+			bot.think(sdt, now)
 	var neutral := {"move": Vector2.ZERO, "a": false, "b": false}
 	for p in pawns:
 		var pw: OrbPawn = p
 		var inp: Dictionary = _input_for(pw.index) if phase == Phase.PLAY else neutral
-		pw.step(delta, now, inp.move, inp.a, inp.b)
+		pw.step(sdt, now, inp.move, inp.a, inp.b)
 		if pw.held != null:
 			pw.held.global_position = pw.body_center() + pw.up_dir() * 0.5 + pw.heading * 0.25
 	for b in balls:
 		var bb: OrbBall = b
-		bb.step(delta, now)
+		bb.step(sdt, now)
 		if bb.state == OrbBall.S.FLYING and bb.owner_idx >= 0:
 			var a := bb.age(now)
 			if a > _max_flight_age:
@@ -435,7 +449,7 @@ func _physics_process(delta: float) -> void:
 				_spawn_ball_at(pi, _random_visible_n(), false)
 				Sfx.play("confirm")
 				_flash_event("A NEW BALL DRIFTS IN", Color(0.85, 0.88, 1.0))
-			time_left -= delta
+			time_left -= sdt
 			if time_left <= 0.0:
 				_end_match()
 		elif _test_mode == "circ":
@@ -682,11 +696,9 @@ func _end_match() -> void:
 		get_tree().create_timer(2.0, true, false, true).timeout.connect(func() -> void: get_tree().quit())
 
 func _slow_mo() -> void:
-	if _fast > 1.01 or _test_mode != "":
+	if _test_mode != "":
 		return
-	Engine.time_scale = 0.3
-	await get_tree().create_timer(0.35, true, false, true).timeout
-	Engine.time_scale = 1.0
+	_slowmo_left = 0.4  # 24 ticks at 0.3x step = a 0.4s real-time beat
 
 ## --- circumnavigation evidence mode (--orbtest=circ) ------------------------
 
