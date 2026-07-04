@@ -1,0 +1,91 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://minigames/greed/greed.gd" id="1_script"]
+[ext_resource type="FontFile" path="res://assets/fonts/LuckiestGuy-Regular.ttf" id="2_luckiest"]
+[ext_resource type="FontFile" path="res://assets/fonts/Baloo2.ttf" id="3_baloo"]
+
+[node name="Greed" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="RoundLabel" type="Label" parent="UI"]
+offset_left = 24.0
+offset_top = 14.0
+offset_right = 340.0
+offset_bottom = 52.0
+theme_override_fonts/font = ExtResource("3_baloo")
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_color = Color(0.98, 0.95, 0.85, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.08, 0.06, 1)
+theme_override_constants/outline_size = 6
+text = ""
+
+[node name="TimerLabel" type="Label" parent="UI"]
+anchor_left = 0.0
+anchor_right = 1.0
+offset_top = 8.0
+offset_bottom = 66.0
+theme_override_fonts/font = ExtResource("2_luckiest")
+theme_override_font_sizes/font_size = 44
+theme_override_colors/font_color = Color(1, 0.92, 0.6, 1)
+theme_override_colors/font_outline_color = Color(0.15, 0.1, 0.05, 1)
+theme_override_constants/outline_size = 8
+text = ""
+horizontal_alignment = 1
+
+[node name="Banner" type="Label" parent="UI"]
+anchor_left = 0.0
+anchor_top = 0.3
+anchor_right = 1.0
+anchor_bottom = 0.48
+theme_override_fonts/font = ExtResource("2_luckiest")
+theme_override_font_sizes/font_size = 62
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0.2, 0.1, 0, 1)
+theme_override_constants/outline_size = 12
+text = ""
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="PotFlash" type="Label" parent="UI"]
+anchor_left = 0.0
+anchor_top = 0.16
+anchor_right = 1.0
+anchor_bottom = 0.26
+theme_override_fonts/font = ExtResource("2_luckiest")
+theme_override_font_sizes/font_size = 40
+theme_override_colors/font_color = Color(1, 0.9, 0.35, 1)
+theme_override_colors/font_outline_color = Color(0.2, 0.1, 0, 1)
+theme_override_constants/outline_size = 9
+text = ""
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HintLabel" type="Label" parent="UI"]
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -48.0
+offset_bottom = -12.0
+theme_override_font_sizes/font_size = 19
+theme_override_colors/font_color = Color(0.97, 0.97, 0.97, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.12, 1)
+theme_override_constants/outline_size = 6
+text = "MOVE   -   A = GRAB / TACKLE   -   B = DASH   |   CARRY THE POT TO YOUR CHUTE TO BANK IT"
+horizontal_alignment = 1
+
+[node name="ScorePanel" type="PanelContainer" parent="UI"]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -300.0
+offset_top = 14.0
+offset_right = -14.0
+offset_bottom = 60.0
+
+[node name="ScoreRows" type="VBoxContainer" parent="UI/ScorePanel"]

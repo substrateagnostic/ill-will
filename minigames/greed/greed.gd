@@ -1,0 +1,1306 @@
+extends Minigame
+## GREED INC. — a gilded pot in the middle of a vault fills with coins forever.
+## Anyone can grab it and run for their own corner chute to BANK the value as
+## points — but carrying it makes you SLOW, GLOWING, coin-LEAKING, and the most
+## hunted person in the room (every rival's arrow points at you). Tackle the
+## carrier to drop the pot (20% scatters as floor coins, you pocket a royalty).
+## Dash to escape — but a carrier's dash bleeds 2 coins. 3 rounds x 90s.
+##
+## Anthology module contract: root of minigames/greed/greed.tscn, extends
+## Minigame. Runs standalone too — if begin() isn't called 0.5s after _ready it
+## self-starts a 4-player config (GameState colors/names, KayKit chars, seed
+## from --seed= or 1) with bots driving the empty seats.
+##
+## CLI user args (after --):
+##   --greedbots          all players are seeded self-play bots
+##   --seed=N             rng seed for standalone start (default 1)
+##   --players=N          standalone roster size 2..4
+##   --rounds=N           override round count (1..3) for quick verification
+##   --roundtime=S        override 90s round length
+##   --greedcap           state/event-based screenshots -> verify_out, then quit
+##   --outdir=DIR         output dir for --greedcap (default verify_out)
+##   --greedtest=intercept  run the pursuit-tuning test, print tally, quit
+##   --shots=N,...        handled by the house VerifyCapture autoload (PNGs)
+
+enum Phase { WAITING, INTRO, PLAY, ROUND_END, MATCH_END }
+enum PotState { ON_PEDESTAL, CARRIED, LOOSE }
+
+const CHAR_FALLBACKS := [
+	"res://assets/models/kaykit/Barbarian.glb",
+	"res://assets/models/kaykit/Knight.glb",
+	"res://assets/models/kaykit/Mage.glb",
+	"res://assets/models/kaykit/Rogue.glb",
+]
+
+const ARENA_HALF := 7.0
+const CORNER := 5.6                 # chute-centre distance from origin (equidistant)
+const BANK_RADIUS := 1.75
+const GRAB_RANGE := 1.95
+const GRAB_TIME := 0.6
+const TACKLE_RANGE := 1.95
+const POT_START := 5
+const GROW_INTERVAL := 1.2
+const GROW_AMOUNT := 1
+const BURST_INTERVAL := 15.0
+const BURST_AMOUNT := 5
+const SCATTER_FRAC := 0.2
+const DASH_COIN_COST := 2
+const ROUND_TIME := 90.0
+const ROUNDS := 3
+const INTRO_TIME := 1.6
+const ROUND_END_TIME := 3.2
+const MATCH_END_HOLD := 8.0
+
+# corner sign pattern -> chute per player index
+const CORNER_SIGNS := [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]
+
+var roster: Array = []
+var rng := RandomNumberGenerator.new()
+var fx_rng := RandomNumberGenerator.new()
+var practice := false
+var rounds_total := ROUNDS
+var round_time := ROUND_TIME
+
+var players: Array = []             # GreedPlayer per roster slot
+var pot: GreedPot
+var pot_value := POT_START
+var pot_state: PotState = PotState.ON_PEDESTAL
+var carrier_index := -1
+var pot_loose_pos := Vector3.ZERO
+var floor_coins: Array = []         # [{node: Node3D, pos: Vector2}]
+var chute_lights: Array = []        # MeshInstance3D per corner (bank pad glow)
+
+var phase: Phase = Phase.WAITING
+var phase_t := 0.0
+var round_t := 0.0
+var game_t := 0.0
+var round_num := 1
+var grow_t := 0.0
+var burst_t := 0.0
+var banks_this_round := 0
+
+var points := {}
+var round_bank_count := {}
+var biggest_bank := {}
+var drops_caused := {}
+var royalties := {}
+var _currency: Array = []
+var _highlights: Array = []
+var _results := {}
+
+var bots: GreedBots
+var bot_enabled: Array = []
+var _begun := false
+var _reported := false
+var _standalone := false
+
+# CLI
+var _cli_seed := 1
+var _cli_players := 4
+var _cli_rounds := -1
+var _cli_roundtime := -1.0
+var _bots_all := false
+var _test_mode := ""
+var _cap_on := false
+var _cap_dir := "verify_out"
+var _cap_done := {}
+
+# juice
+var _shake := 0.0
+var _cam_base: Transform3D
+var _slowmo := false
+var _vc: Node = null
+var _last_status := 0.0
+
+@onready var cam: Camera3D = $Camera3D
+@onready var sun: DirectionalLight3D = $Sun
+@onready var ui: CanvasLayer = $UI
+@onready var round_label: Label = $UI/RoundLabel
+@onready var timer_label: Label = $UI/TimerLabel
+@onready var banner: Label = $UI/Banner
+@onready var pot_flash: Label = $UI/PotFlash
+@onready var hint_label: Label = $UI/HintLabel
+@onready var score_rows: VBoxContainer = $UI/ScorePanel/ScoreRows
+var arrows: GreedEdgeArrows
+
+
+# ===========================================================================
+# Lifecycle
+# ===========================================================================
+func _ready() -> void:
+	_parse_args()
+	_vc = get_node_or_null("/root/VerifyCapture")
+	_build_world()
+	_build_arrows()
+	banner.visible = false
+	pot_flash.visible = false
+	timer_label.text = ""
+	round_label.text = ""
+	if _test_mode == "intercept":
+		_run_intercept_test()
+		return
+	await get_tree().create_timer(0.5).timeout
+	if not _begun:
+		_standalone = true
+		begin(_default_config())
+
+
+func begin(config: Dictionary) -> void:
+	if _begun:
+		return
+	_begun = true
+	roster = config.roster
+	rng.seed = int(config.rng_seed)
+	fx_rng.seed = int(config.rng_seed) + 9173
+	practice = bool(config.get("practice", false))
+	rounds_total = clampi(int(config.get("rounds", ROUNDS)), 1, ROUNDS)
+	if practice:
+		rounds_total = 1
+	if _cli_rounds > 0:
+		rounds_total = clampi(_cli_rounds, 1, ROUNDS)
+	if _cli_roundtime > 0.0:
+		round_time = clampf(_cli_roundtime, 8.0, 180.0)
+	bots = GreedBots.new()
+	bots.setup(int(config.rng_seed) ^ 0x6EED, roster.size())
+	bot_enabled.clear()
+	for i in roster.size():
+		var dev := int(roster[i].get("device", -99))
+		bot_enabled.append(_bots_all or (_standalone and (dev == -3 or dev == -99)))
+	for i in roster.size():
+		var pl: Dictionary = roster[i]
+		var player := GreedPlayer.new()
+		player.name = "Player%d" % i
+		add_child(player)
+		player.setup(i, pl.color, str(pl.char_scene))
+		players.append(player)
+		points[i] = 0
+		round_bank_count[i] = 0
+		biggest_bank[i] = 0
+		drops_caused[i] = 0
+		royalties[i] = 0
+		_tint_chute(i, pl.color)
+	_log("begin players=%d seed=%d rounds=%d bots=%s" % [
+		roster.size(), int(config.rng_seed), rounds_total, str(bot_enabled)])
+	_start_round()
+
+
+# ===========================================================================
+# Round / match flow
+# ===========================================================================
+func _start_round() -> void:
+	phase = Phase.INTRO
+	phase_t = 0.0
+	round_t = 0.0
+	_last_status = 0.0
+	banks_this_round = 0
+	grow_t = GROW_INTERVAL
+	burst_t = BURST_INTERVAL
+	carrier_index = -1
+	pot_state = PotState.ON_PEDESTAL
+	if round_num == 1:
+		pot_value = POT_START
+	_clear_floor_coins()
+	for i in roster.size():
+		round_bank_count[i] = 0
+		var pos := _spawn_pos(i)
+		var face := atan2(-pos.x, -pos.z)   # face the vault centre
+		(players[i] as GreedPlayer).reset_for_round(pos, face)
+	round_label.text = "ROUND %d / %d" % [round_num, rounds_total]
+	_flash_banner("ROUND %d" % round_num, Color(1, 0.85, 0.2), 1.2)
+	hint_label.visible = round_num == 1
+	if round_num == 1:
+		var tw := create_tween()
+		tw.tween_interval(8.0)
+		tw.tween_callback(func() -> void: hint_label.visible = false)
+	_rebuild_scoreboard()
+	_log("round_start %d pot=%d" % [round_num, pot_value])
+
+
+func _end_round(kind: String) -> void:
+	phase = Phase.ROUND_END
+	phase_t = 0.0
+	# whistle: freeze the world, pot goes home. A carrier at the bell loses it.
+	if carrier_index >= 0:
+		(players[carrier_index] as GreedPlayer).set_carrier(false)
+		carrier_index = -1
+	var greed_punished := banks_this_round == 0
+	if greed_punished:
+		_scatter_entire_pot()
+		_flash_banner("GREED PUNISHED!\nTHE POT SCATTERS", Color(1.0, 0.35, 0.25), 2.8)
+		Sfx.play("grudge")
+		pot_value = POT_START
+	else:
+		_flash_banner("ROUND %d OVER" % round_num, Color(1, 0.85, 0.2), 2.6)
+		Sfx.play("round_over")
+	pot_state = PotState.ON_PEDESTAL
+	# grudge: banked nothing this round
+	for i in roster.size():
+		if int(round_bank_count[i]) == 0:
+			_currency.append({"type": "grudge", "player": i, "amount": 1,
+				"reason": "banked nothing in round %d" % round_num})
+	_rebuild_scoreboard()
+	var bits: Array = []
+	for i in roster.size():
+		bits.append("%s=%d" % [roster[i].name, int(points[i])])
+	_log("round_end %d kind=%s punished=%s scores[%s]" % [
+		round_num, kind, str(greed_punished), ", ".join(bits)])
+
+
+func _finish_match() -> void:
+	phase = Phase.MATCH_END
+	phase_t = 0.0
+	var order: Array = range(roster.size())
+	order.sort_custom(func(a, b):
+		if int(points[a]) != int(points[b]):
+			return int(points[a]) > int(points[b])
+		return a < b)
+	var champ: int = order[0]
+	var champ_pl: Dictionary = roster[champ]
+	_flash_banner("%s WINS GREED INC.!" % champ_pl.name, champ_pl.color, 9999.0)
+	Sfx.play("match_win")
+	(players[champ] as GreedPlayer).cheer()
+	_confetti((players[champ] as GreedPlayer).global_position + Vector3(0, 1.8, 0), champ_pl.color)
+	_shake = maxf(_shake, 0.5)
+	# highlights
+	_highlights.clear()
+	var bb := _dict_max(biggest_bank)
+	if int(biggest_bank[bb]) > 0:
+		_highlights.append("%s's biggest heist: %d coins" % [roster[bb].name, int(biggest_bank[bb])])
+	var dc := _dict_max(drops_caused)
+	if int(drops_caused[dc]) >= 1:
+		_highlights.append("%s forced %d drop%s" % [roster[dc].name, int(drops_caused[dc]),
+			"" if int(drops_caused[dc]) == 1 else "s"])
+	# monuments: The Banker for a 30+ single bank
+	var monuments: Array = []
+	for i in roster.size():
+		if int(biggest_bank[i]) >= 30:
+			monuments.append({"player": i, "kind": "banker",
+				"label": "%s, The Banker" % roster[i].name})
+			break
+	_results = {
+		"placements": order,
+		"points": points.duplicate(),
+		"currency_events": _currency.duplicate(),
+		"highlights": _highlights.slice(0, 3),
+		"monuments": monuments,
+	}
+	_log("match_end " + JSON.stringify(_results))
+
+
+# ===========================================================================
+# Main loop
+# ===========================================================================
+func _physics_process(delta: float) -> void:
+	if phase == Phase.WAITING:
+		return
+	game_t += delta
+	phase_t += delta
+	match phase:
+		Phase.INTRO:
+			for p in players:
+				(p as GreedPlayer).set_move_intent(Vector2.ZERO)
+				(p as GreedPlayer).tick_movement(delta)
+			if phase_t >= INTRO_TIME:
+				phase = Phase.PLAY
+				round_t = 0.0
+				_flash_banner("GRAB IT!", Color(1, 0.85, 0.2), 0.8)
+				Sfx.play("confirm")
+		Phase.PLAY:
+			round_t += delta
+			_tick_play(delta)
+		Phase.ROUND_END:
+			for p in players:
+				(p as GreedPlayer).set_move_intent(Vector2.ZERO)
+				(p as GreedPlayer).tick_movement(delta)
+			if phase_t >= ROUND_END_TIME:
+				round_num += 1
+				if round_num > rounds_total:
+					_finish_match()
+				else:
+					_start_round()
+		Phase.MATCH_END:
+			for p in players:
+				(p as GreedPlayer).tick_movement(delta)
+			if phase_t >= MATCH_END_HOLD and not _reported:
+				_reported = true
+				report_finished(_results)
+
+
+func _tick_play(delta: float) -> void:
+	# 1. pot growth (only while it sits on the pedestal)
+	if pot_state == PotState.ON_PEDESTAL:
+		grow_t -= delta
+		if grow_t <= 0.0:
+			grow_t = GROW_INTERVAL
+			pot_value += GROW_AMOUNT
+			Sfx.play("card", -14.0)
+		burst_t -= delta
+		if burst_t <= 0.0:
+			burst_t = BURST_INTERVAL
+			pot_value += BURST_AMOUNT
+			pot.geyser()
+			Sfx.play("bumper", -3.0)
+			_flash_pot("+%d!" % BURST_AMOUNT, Color(1.0, 0.9, 0.35))
+
+	# 2. drive every player in index order (deterministic)
+	for p in roster.size():
+		var me: GreedPlayer = players[p]
+		var inp := _input_for(p, delta)
+		me.set_move_intent(inp.move)
+		# dash (B)
+		if inp.dash and me.can_act():
+			if me.is_carrier:
+				if pot_value > POT_START and me.try_dash():
+					pot_value -= DASH_COIN_COST
+					pot_value = maxi(pot_value, 1)
+					_leak_burst(me.global_position)
+					_flash_pot("-%d" % DASH_COIN_COST, Color(1.0, 0.5, 0.3))
+				elif me.dash_cd <= 0.0:
+					me.try_dash()   # too poor to bleed coins: free hop
+			else:
+				me.try_dash()
+		# A: tackle the carrier, else grab the pot
+		_handle_action(p, me, inp, delta)
+		me.tick_movement(delta)
+
+	# 3. keep everyone inside the vault (belt-and-braces vs. wall tunnelling)
+	for p in players:
+		var gp: GreedPlayer = p
+		gp.global_position.x = clampf(gp.global_position.x, -ARENA_HALF + 0.4, ARENA_HALF - 0.4)
+		gp.global_position.z = clampf(gp.global_position.z, -ARENA_HALF + 0.4, ARENA_HALF - 0.4)
+
+	# 4. resolve pot follow, floor-coin pickups, banking
+	_update_pot_transform()
+	_tick_floor_coins()
+	if carrier_index >= 0:
+		_check_bank(carrier_index)
+
+	# 5. HUD / arrows
+	_update_hud()
+
+	if _cap_on:
+		_capture_beats()
+
+	# 6. timeout
+	if round_t >= round_time:
+		_end_round("timeout")
+
+	# periodic status for verification logs
+	if round_t - _last_status >= 10.0:
+		_last_status = round_t
+		_log("status t=%.0f pot=%d state=%s carrier=%d coins=%d" % [
+			round_t, pot_value, PotState.keys()[pot_state], carrier_index, floor_coins.size()])
+
+
+func _process(delta: float) -> void:
+	if phase == Phase.WAITING:
+		return
+	# camera shake
+	cam.global_transform = _cam_base
+	if _shake > 0.002:
+		_shake = maxf(0.0, _shake - delta * 1.4)
+		cam.position += Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
+			fx_rng.randf_range(-1, 1)) * _shake * 0.4
+	if pot:
+		pot.tick(delta)
+	for p in players:
+		(p as GreedPlayer).tick_visual(delta, game_t)
+	# HUD timer colour
+	if phase == Phase.PLAY or phase == Phase.INTRO:
+		var remain := int(ceil(maxf(0.0, round_time - round_t)))
+		timer_label.text = str(remain)
+		var hot := remain <= 10
+		timer_label.add_theme_color_override("font_color",
+			Color(1, 0.3, 0.2) if hot else Color(1, 0.92, 0.6))
+	else:
+		timer_label.text = ""
+	# floor coin bob
+	for c in floor_coins:
+		(c.node as Node3D).rotation.y += delta * 3.0
+
+
+# ===========================================================================
+# Action handling: grab (hold) & tackle (tap)
+# ===========================================================================
+func _handle_action(p: int, me: GreedPlayer, inp: Dictionary, delta: float) -> void:
+	if me.is_carrier:
+		me.show_grab_progress(0.0)
+		return
+	# tackle takes priority when a carrier is in reach
+	if carrier_index >= 0 and carrier_index != p:
+		var cp: GreedPlayer = players[carrier_index]
+		var d: float = _flat_dist(me.global_position, cp.global_position)
+		if d < TACKLE_RANGE:
+			me.show_grab_progress(0.0)
+			if inp.tackle and me.can_act() and me.tackle_lock <= 0.0:
+				_attempt_tackle(p)
+			return
+	# grab: hold A near a grabbable pot
+	if pot_state == PotState.ON_PEDESTAL or pot_state == PotState.LOOSE:
+		var pot2 := pot_world_2d()
+		var d2: float = Vector2(me.global_position.x, me.global_position.z).distance_to(pot2)
+		if d2 < GRAB_RANGE and me.can_act():
+			if inp.grab:
+				me.grab_hold += delta
+				me.show_grab_progress(me.grab_hold / GRAB_TIME)
+				if me.grab_hold >= GRAB_TIME:
+					_do_grab(p)
+				return
+	me.grab_hold = 0.0
+	me.show_grab_progress(0.0)
+
+
+func _do_grab(p: int) -> void:
+	var me: GreedPlayer = players[p]
+	me.grab_hold = 0.0
+	me.show_grab_progress(0.0)
+	me.set_carrier(true)
+	me.immune_t = maxf(me.immune_t, 0.5)   # grace to break away — no instant re-mug
+	carrier_index = p
+	pot_state = PotState.CARRIED
+	pot.set_carried(true)
+	# stop everyone else mid-grab (the pot just moved)
+	for q in roster.size():
+		if q != p:
+			(players[q] as GreedPlayer).grab_hold = 0.0
+			(players[q] as GreedPlayer).show_grab_progress(0.0)
+	Sfx.play("confirm", -2.0)
+	_flash_pot("GRABBED!", roster[p].color)
+	_cap_event("grab")
+	_log("grab p%d pot=%d at=(%.1f,%.1f) chute=(%.1f,%.1f)" % [p, pot_value,
+		me.global_position.x, me.global_position.z, chute_pos(p).x, chute_pos(p).y])
+
+
+func _attempt_tackle(p: int) -> void:
+	var me: GreedPlayer = players[p]
+	var cp: GreedPlayer = players[carrier_index]
+	me.do_tackle_swing()
+	if not cp.can_be_tackled():
+		# whiffed into i-frames / immunity — escape was priced but it paid off
+		Sfx.play("invalid", -8.0)
+		_log("tackle_whiff p%d -> p%d (iframe)" % [p, carrier_index])
+		return
+	var victim := carrier_index
+	_drop_carrier(victim, p)
+
+
+func _drop_carrier(victim: int, tackler: int) -> void:
+	var cp: GreedPlayer = players[victim]
+	var drop_pos := cp.global_position
+	# 20% of the pot scatters as floor coins (each worth +1)
+	var scatter := int(round(float(pot_value) * SCATTER_FRAC))
+	scatter = clampi(scatter, 0, pot_value - 1)
+	pot_value -= scatter
+	_spawn_floor_coins(drop_pos, scatter)
+	# pot lands where it fell
+	pot_state = PotState.LOOSE
+	pot_loose_pos = Vector3(
+		clampf(drop_pos.x, -ARENA_HALF + 1.0, ARENA_HALF - 1.0),
+		0.0,
+		clampf(drop_pos.z, -ARENA_HALF + 1.0, ARENA_HALF - 1.0))
+	cp.set_carrier(false)
+	cp.get_stunned()
+	carrier_index = -1
+	pot.set_carried(false)
+	# tackler profits: +1 royalty ("mugging pays")
+	points[tackler] = int(points[tackler]) + 1
+	royalties[tackler] = int(royalties[tackler]) + 1
+	drops_caused[tackler] = int(drops_caused[tackler]) + 1
+	_currency.append({"type": "royalty", "player": tackler, "amount": 1,
+		"reason": "mugged %s off the pot" % roster[victim].name})
+	_currency.append({"type": "grudge", "player": victim, "amount": 1,
+		"reason": "got mugged off the pot"})
+	# juice: hit-pause, shake, coin burst
+	_hit_pause()
+	_shake = maxf(_shake, 0.45)
+	_coin_burst(drop_pos + Vector3(0, 1.0, 0), 22)
+	Sfx.play("splat", -1.0)
+	Sfx.play("death", -6.0)
+	_flash_banner("%s MUGGED %s!" % [roster[tackler].name, roster[victim].name],
+		roster[tackler].color, 1.8)
+	_cap_event("drop")
+	_rebuild_scoreboard()
+	_log("drop victim=%d tackler=%d scatter=%d pot=%d" % [victim, tackler, scatter, pot_value])
+
+
+func _check_bank(p: int) -> void:
+	var me: GreedPlayer = players[p]
+	var here := Vector2(me.global_position.x, me.global_position.z)
+	if here.distance_to(chute_pos(p)) <= BANK_RADIUS:
+		_do_bank(p)
+
+
+func _do_bank(p: int) -> void:
+	var amount := pot_value
+	points[p] = int(points[p]) + amount
+	round_bank_count[p] = int(round_bank_count[p]) + 1
+	banks_this_round += 1
+	biggest_bank[p] = maxi(int(biggest_bank[p]), amount)
+	var me: GreedPlayer = players[p]
+	me.set_carrier(false)
+	me.cheer()
+	carrier_index = -1
+	# ceremony
+	_bank_ceremony(p, amount)
+	# pot resets and returns to the pedestal
+	pot_value = POT_START
+	pot_state = PotState.ON_PEDESTAL
+	pot.set_carried(false)
+	grow_t = GROW_INTERVAL
+	burst_t = BURST_INTERVAL
+	_cap_event("bank")
+	_rebuild_scoreboard()
+	_log("bank p%d amount=%d total=%d at=(%.1f,%.1f)" % [p, amount, int(points[p]),
+		me.global_position.x, me.global_position.z])
+
+
+func _bank_ceremony(p: int, amount: int) -> void:
+	var pl: Dictionary = roster[p]
+	var at := chute_pos(p)
+	var world := Vector3(at.x, 0.2, at.y)
+	Sfx.play("match_win")
+	_shake = maxf(_shake, 0.5)
+	_flash_banner("%s BANKS %d!" % [pl.name, amount], pl.color, 2.4)
+	_coin_rain(world, mini(amount, 40), pl.color)
+	_confetti(world + Vector3(0, 1.4, 0), pl.color)
+	# light the chute pad up
+	var idx := p
+	if idx < chute_lights.size():
+		var mat := (chute_lights[idx] as MeshInstance3D).material_override as StandardMaterial3D
+		if mat:
+			var tw := create_tween()
+			mat.emission_energy_multiplier = 3.5
+			tw.tween_property(mat, "emission_energy_multiplier", 0.9, 1.2)
+
+
+# ===========================================================================
+# Floor coins
+# ===========================================================================
+func _spawn_floor_coins(around: Vector3, n: int) -> void:
+	for i in n:
+		var ang := fx_rng.randf_range(0.0, TAU)
+		var r := fx_rng.randf_range(0.6, 2.1)
+		var pos := Vector2(around.x + cos(ang) * r, around.z + sin(ang) * r)
+		pos.x = clampf(pos.x, -ARENA_HALF + 0.6, ARENA_HALF - 0.6)
+		pos.y = clampf(pos.y, -ARENA_HALF + 0.6, ARENA_HALF - 0.6)
+		var node := MeshInstance3D.new()
+		var m := CylinderMesh.new()
+		m.top_radius = 0.26
+		m.bottom_radius = 0.26
+		m.height = 0.09
+		node.mesh = m
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(1.0, 0.83, 0.16)
+		mat.metallic = 0.85
+		mat.roughness = 0.25
+		mat.emission_enabled = true
+		mat.emission = Color(1.0, 0.7, 0.08)
+		mat.emission_energy_multiplier = 0.8
+		node.material_override = mat
+		node.rotation.x = 0.22
+		add_child(node)
+		node.global_position = Vector3(pos.x, 0.35, pos.y)
+		floor_coins.append({"node": node, "pos": pos})
+
+
+func _tick_floor_coins() -> void:
+	for p in roster.size():
+		var me: GreedPlayer = players[p]
+		if not me.can_act():
+			continue
+		var mp := Vector2(me.global_position.x, me.global_position.z)
+		for i in range(floor_coins.size() - 1, -1, -1):
+			var c: Dictionary = floor_coins[i]
+			if (c.pos as Vector2).distance_to(mp) < 0.85:
+				(c.node as Node3D).queue_free()
+				floor_coins.remove_at(i)
+				points[p] = int(points[p]) + 1
+				Sfx.play("card", -10.0)
+				_rebuild_scoreboard()
+
+
+func _scatter_entire_pot() -> void:
+	# the whole hoard bursts across the vault (visual only — nobody scores it)
+	_coin_burst(pot.global_position + Vector3(0, 1.0, 0), mini(pot_value * 2, 90))
+	_shake = maxf(_shake, 0.7)
+
+
+func _clear_floor_coins() -> void:
+	for c in floor_coins:
+		(c.node as Node3D).queue_free()
+	floor_coins.clear()
+
+
+# ===========================================================================
+# Pot transform
+# ===========================================================================
+func _update_pot_transform() -> void:
+	match pot_state:
+		PotState.ON_PEDESTAL:
+			pot.global_position = Vector3(0, 0.55, 0)
+		PotState.CARRIED:
+			if carrier_index >= 0:
+				var c: GreedPlayer = players[carrier_index]
+				var fwd := Vector3(sin(c.yaw), 0, cos(c.yaw))
+				pot.global_position = c.global_position + Vector3(0, 1.35, 0) + fwd * 0.15
+			pot.update_value(pot_value)
+			return
+		PotState.LOOSE:
+			pot.global_position = pot_loose_pos + Vector3(0, 0.55, 0)
+	pot.update_value(pot_value)
+
+
+func pot_world_2d() -> Vector2:
+	if pot_state == PotState.LOOSE:
+		return Vector2(pot_loose_pos.x, pot_loose_pos.z)
+	return Vector2.ZERO   # pedestal is at origin
+
+
+# ===========================================================================
+# Input / bots
+# ===========================================================================
+func _input_for(p: int, delta: float) -> Dictionary:
+	if bot_enabled[p]:
+		var d: Dictionary = bots.decide(p, self, delta)
+		return {"move": d.move, "grab": d.grab, "tackle": d.tackle, "dash": d.dash}
+	return {
+		"move": PlayerInput.get_move(p),
+		"grab": PlayerInput.is_down(p, "a"),
+		"tackle": PlayerInput.just_pressed(p, "a"),
+		"dash": PlayerInput.just_pressed(p, "b"),
+	}
+
+
+# ===========================================================================
+# Geometry helpers
+# ===========================================================================
+func chute_pos(i: int) -> Vector2:
+	var s: Vector2 = CORNER_SIGNS[i % 4]
+	return s * CORNER
+
+
+func _spawn_pos(i: int) -> Vector3:
+	var c := chute_pos(i)
+	# just inside the chute, facing centre
+	var inward := (-c).normalized() * 1.2
+	return Vector3(c.x + inward.x, 0.1, c.y + inward.y)
+
+
+func _flat_dist(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x, a.z).distance_to(Vector2(b.x, b.z))
+
+
+func _dict_max(d: Dictionary) -> int:
+	var best := 0
+	for k in d:
+		if int(d[k]) > int(d[best]):
+			best = int(k)
+	return best
+
+
+# ===========================================================================
+# HUD
+# ===========================================================================
+func _update_hud() -> void:
+	# edge arrows all point at the carrier
+	if carrier_index >= 0 and arrows:
+		var c: GreedPlayer = players[carrier_index]
+		var head := c.global_position + Vector3(0, 1.6, 0)
+		var behind := cam.is_position_behind(head)
+		var screen: Vector2 = cam.unproject_position(head)
+		if behind:
+			screen = ui.get_viewport().get_visible_rect().size - screen
+		var list: Array = []
+		for q in roster.size():
+			if q != carrier_index:
+				list.append({"color": roster[q].color})
+		arrows.update_arrows(true, screen, list, game_t)
+	elif arrows:
+		arrows.update_arrows(false, Vector2.ZERO, [], game_t)
+
+
+func _rebuild_scoreboard() -> void:
+	for c in score_rows.get_children():
+		c.queue_free()
+	var order: Array = range(roster.size())
+	order.sort_custom(func(a, b):
+		if int(points[a]) != int(points[b]):
+			return int(points[a]) > int(points[b])
+		return a < b)
+	for i in order:
+		var pl: Dictionary = roster[i]
+		var row := Label.new()
+		var tag := ""
+		if i == carrier_index:
+			tag = "  CARRYING"
+		row.text = "%s  %d%s" % [pl.name, int(points[i]), tag]
+		row.add_theme_font_size_override("font_size", 24)
+		row.add_theme_color_override("font_color", pl.color)
+		row.add_theme_color_override("font_outline_color", Color(0.1, 0.08, 0.06))
+		row.add_theme_constant_override("outline_size", 5)
+		score_rows.add_child(row)
+
+
+func _flash_banner(text: String, color: Color, duration: float) -> void:
+	banner.text = text
+	banner.add_theme_color_override("font_color", color)
+	banner.visible = true
+	banner.pivot_offset = banner.size / 2.0
+	banner.scale = Vector2(0.55, 0.55)
+	var pop := create_tween()
+	pop.tween_property(banner, "scale", Vector2.ONE, 0.28) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if duration < 100.0:
+		var tw := create_tween()
+		tw.tween_interval(duration)
+		tw.tween_callback(func() -> void: banner.visible = false)
+
+
+func _flash_pot(text: String, color: Color) -> void:
+	pot_flash.text = text
+	pot_flash.add_theme_color_override("font_color", color)
+	pot_flash.visible = true
+	pot_flash.pivot_offset = pot_flash.size / 2.0
+	pot_flash.scale = Vector2(0.6, 0.6)
+	var pop := create_tween()
+	pop.tween_property(pot_flash, "scale", Vector2.ONE, 0.22) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var tw := create_tween()
+	tw.tween_interval(0.9)
+	tw.tween_callback(func() -> void: pot_flash.visible = false)
+
+
+# ===========================================================================
+# FX
+# ===========================================================================
+func _hit_pause() -> void:
+	if _slowmo:
+		return
+	_slowmo = true
+	Engine.time_scale = 0.05
+	await get_tree().create_timer(0.05, true, false, true).timeout
+	Engine.time_scale = 1.0
+	_slowmo = false
+
+
+func _coin_burst(pos: Vector3, amount: int) -> void:
+	var p := CPUParticles3D.new()
+	add_child(p)
+	p.global_position = pos
+	p.one_shot = true
+	p.amount = maxi(amount, 1)
+	p.lifetime = 0.9
+	p.explosiveness = 0.9
+	p.direction = Vector3.UP
+	p.spread = 60.0
+	p.initial_velocity_min = 3.0
+	p.initial_velocity_max = 6.5
+	p.gravity = Vector3(0, -11.0, 0)
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.1
+	mesh.bottom_radius = 0.1
+	mesh.height = 0.03
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.85, 0.2)
+	mat.metallic = 0.8
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.7, 0.1)
+	p.material_override = mat
+	p.emitting = true
+	get_tree().create_timer(1.4).timeout.connect(p.queue_free)
+
+
+func _coin_rain(pos: Vector3, amount: int, _color: Color) -> void:
+	var p := CPUParticles3D.new()
+	add_child(p)
+	p.global_position = pos + Vector3(0, 4.5, 0)
+	p.one_shot = true
+	p.amount = maxi(amount, 6)
+	p.lifetime = 1.3
+	p.explosiveness = 0.5
+	p.direction = Vector3.DOWN
+	p.spread = 25.0
+	p.initial_velocity_min = 3.0
+	p.initial_velocity_max = 6.0
+	p.gravity = Vector3(0, -14.0, 0)
+	var mesh := CylinderMesh.new()
+	mesh.top_radius = 0.12
+	mesh.bottom_radius = 0.12
+	mesh.height = 0.035
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.86, 0.2)
+	mat.metallic = 0.8
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.72, 0.12)
+	p.material_override = mat
+	p.emitting = true
+	get_tree().create_timer(2.0).timeout.connect(p.queue_free)
+
+
+func _leak_burst(pos: Vector3) -> void:
+	_coin_burst(pos + Vector3(0, 0.9, 0), 8)
+	Sfx.play("card", -6.0)
+
+
+func _confetti(pos: Vector3, color: Color) -> void:
+	for c in [color, Color(1, 0.9, 0.4), Color.WHITE]:
+		var p := CPUParticles3D.new()
+		add_child(p)
+		p.global_position = pos
+		p.one_shot = true
+		p.amount = 18
+		p.lifetime = 1.2
+		p.explosiveness = 1.0
+		p.direction = Vector3.UP
+		p.spread = 55.0
+		p.initial_velocity_min = 3.5
+		p.initial_velocity_max = 6.5
+		p.gravity = Vector3(0, -7.0, 0)
+		p.angular_velocity_min = -360.0
+		p.angular_velocity_max = 360.0
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(0.08, 0.02, 0.08)
+		p.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = c
+		p.material_override = mat
+		p.emitting = true
+		get_tree().create_timer(2.2).timeout.connect(p.queue_free)
+
+
+# ===========================================================================
+# World build
+# ===========================================================================
+func _build_world() -> void:
+	# environment: warm vault, gentle glow so gold blooms
+	var env := Environment.new()
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color(0.10, 0.09, 0.13)
+	sky_mat.sky_horizon_color = Color(0.28, 0.22, 0.18)
+	sky_mat.ground_bottom_color = Color(0.06, 0.05, 0.05)
+	sky_mat.ground_horizon_color = Color(0.20, 0.16, 0.13)
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_energy = 0.55
+	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.glow_enabled = true
+	env.glow_intensity = 0.55
+	env.glow_bloom = 0.15
+	env.glow_hdr_threshold = 0.95
+	var we := WorldEnvironment.new()
+	we.environment = env
+	add_child(we)
+
+	sun.rotation_degrees = Vector3(-55, 32, 0)
+	sun.light_energy = 1.25
+	sun.light_color = Color(1.0, 0.94, 0.82)
+	sun.shadow_enabled = true
+
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(-25, -135, 0)
+	fill.light_energy = 0.3
+	fill.light_color = Color(0.8, 0.7, 0.9)
+	add_child(fill)
+
+	# vault floor (warm wood)
+	var floor_body := StaticBody3D.new()
+	floor_body.collision_layer = 1
+	var fshape := CollisionShape3D.new()
+	var fbox := BoxShape3D.new()
+	fbox.size = Vector3(ARENA_HALF * 2.0, 0.4, ARENA_HALF * 2.0)
+	fshape.shape = fbox
+	fshape.position.y = -0.2
+	floor_body.add_child(fshape)
+	var fmesh := MeshInstance3D.new()
+	var fbm := BoxMesh.new()
+	fbm.size = Vector3(ARENA_HALF * 2.0, 0.4, ARENA_HALF * 2.0)
+	fmesh.mesh = fbm
+	var fmat := StandardMaterial3D.new()
+	fmat.albedo_color = Color(0.34, 0.22, 0.13)
+	fmat.roughness = 0.85
+	fmesh.material_override = fmat
+	fmesh.position.y = -0.2
+	floor_body.add_child(fmesh)
+	add_child(floor_body)
+
+	# a felt "money-pit" inlay circle under the pedestal
+	var inlay := MeshInstance3D.new()
+	var im := CylinderMesh.new()
+	im.top_radius = 3.2
+	im.bottom_radius = 3.2
+	im.height = 0.02
+	inlay.mesh = im
+	var imat := StandardMaterial3D.new()
+	imat.albedo_color = Color(0.16, 0.28, 0.20)
+	imat.roughness = 0.9
+	inlay.material_override = imat
+	inlay.position.y = 0.012
+	add_child(inlay)
+
+	_build_walls()
+	_build_pedestal()
+	_build_chutes()
+	_build_crates()
+
+	# pot
+	pot = GreedPot.new()
+	pot.name = "Pot"
+	add_child(pot)
+	pot.build()
+	pot.global_position = Vector3(0, 0.55, 0)
+	pot.update_value(pot_value)
+
+	# camera: fixed 3/4, whole vault in frame
+	cam.position = Vector3(0, 15.5, 12.8)
+	cam.look_at(Vector3(0, 0.9, 0))
+	cam.fov = 56.0
+	_cam_base = cam.global_transform
+
+
+func _build_walls() -> void:
+	var t := 0.4
+	var h := 1.4
+	var specs := [
+		[Vector3(0, h * 0.5, -ARENA_HALF), Vector3(ARENA_HALF * 2.0, h, t)],
+		[Vector3(0, h * 0.5, ARENA_HALF), Vector3(ARENA_HALF * 2.0, h, t)],
+		[Vector3(-ARENA_HALF, h * 0.5, 0), Vector3(t, h, ARENA_HALF * 2.0)],
+		[Vector3(ARENA_HALF, h * 0.5, 0), Vector3(t, h, ARENA_HALF * 2.0)],
+	]
+	for s in specs:
+		var pos: Vector3 = s[0]
+		var sz: Vector3 = s[1]
+		var body := StaticBody3D.new()
+		body.collision_layer = 1
+		body.position = pos
+		var cs := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = sz
+		cs.shape = box
+		body.add_child(cs)
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = sz
+		mi.mesh = bm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.28, 0.18, 0.11)
+		mat.roughness = 0.8
+		mi.material_override = mat
+		body.add_child(mi)
+		# gold trim cap along the top
+		var trim := MeshInstance3D.new()
+		var tm := BoxMesh.new()
+		tm.size = Vector3(sz.x + 0.05, 0.12, sz.z + 0.05)
+		trim.mesh = tm
+		var tmat := StandardMaterial3D.new()
+		tmat.albedo_color = Color(0.85, 0.68, 0.2)
+		tmat.metallic = 0.8
+		tmat.roughness = 0.3
+		tmat.emission_enabled = true
+		tmat.emission = Color(0.6, 0.45, 0.1)
+		tmat.emission_energy_multiplier = 0.3
+		trim.material_override = tmat
+		trim.position.y = h * 0.5 + 0.02
+		body.add_child(trim)
+		add_child(body)
+
+
+func _build_pedestal() -> void:
+	var body := StaticBody3D.new()
+	body.collision_layer = 1
+	var cs := CollisionShape3D.new()
+	var cyl := CylinderShape3D.new()
+	cyl.radius = 0.85
+	cyl.height = 0.5
+	cs.shape = cyl
+	cs.position.y = 0.25
+	body.add_child(cs)
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.85
+	cm.bottom_radius = 1.0
+	cm.height = 0.5
+	mi.mesh = cm
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.45, 0.32, 0.18)
+	mat.roughness = 0.6
+	mat.metallic = 0.2
+	mi.material_override = mat
+	mi.position.y = 0.25
+	body.add_child(mi)
+	add_child(body)
+
+
+func _build_chutes() -> void:
+	chute_lights.clear()
+	for i in 4:
+		var c := chute_pos(i)
+		# glowing bank pad (tinted to the owner in _tint_chute)
+		var pad := MeshInstance3D.new()
+		var pm := CylinderMesh.new()
+		pm.top_radius = BANK_RADIUS
+		pm.bottom_radius = BANK_RADIUS
+		pm.height = 0.04
+		pad.mesh = pm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.6, 0.6, 0.6)
+		mat.emission_enabled = true
+		mat.emission = Color(0.5, 0.5, 0.5)
+		mat.emission_energy_multiplier = 0.9
+		pad.material_override = mat
+		pad.position = Vector3(c.x, 0.03, c.y)
+		add_child(pad)
+		chute_lights.append(pad)
+		# a back funnel wall behind the pad (the "chute")
+		var funnel := MeshInstance3D.new()
+		var tm := CylinderMesh.new()
+		tm.top_radius = 1.4
+		tm.bottom_radius = 0.5
+		tm.height = 1.3
+		funnel.mesh = tm
+		var fmat := StandardMaterial3D.new()
+		fmat.albedo_color = Color(0.22, 0.16, 0.12)
+		fmat.roughness = 0.8
+		funnel.material_override = fmat
+		var back := c + (-c).normalized() * -0.9   # pushed outward toward corner
+		funnel.position = Vector3(back.x, 0.65, back.y)
+		add_child(funnel)
+
+
+func _tint_chute(i: int, color: Color) -> void:
+	if i >= chute_lights.size():
+		return
+	var mat := (chute_lights[i] as MeshInstance3D).material_override as StandardMaterial3D
+	if mat:
+		mat.albedo_color = color
+		mat.emission = color
+		mat.emission_energy_multiplier = 0.9
+
+
+func _build_crates() -> void:
+	var spots := [Vector2(3.1, 0.2), Vector2(-3.1, -0.2), Vector2(0.2, 3.1), Vector2(-0.2, -3.1)]
+	for sp in spots:
+		var body := StaticBody3D.new()
+		body.collision_layer = 1
+		var cs := CollisionShape3D.new()
+		var box := BoxShape3D.new()
+		box.size = Vector3(0.95, 0.95, 0.95)
+		cs.shape = box
+		cs.position.y = 0.48
+		body.add_child(cs)
+		var mi := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.95, 0.95, 0.95)
+		mi.mesh = bm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.5, 0.36, 0.2)
+		mat.roughness = 0.85
+		mi.material_override = mat
+		mi.position.y = 0.48
+		body.add_child(mi)
+		body.position = Vector3(sp.x, 0, sp.y)
+		add_child(body)
+
+
+func _build_arrows() -> void:
+	arrows = GreedEdgeArrows.new()
+	arrows.name = "EdgeArrows"
+	ui.add_child(arrows)
+
+
+# ===========================================================================
+# Config / args
+# ===========================================================================
+func _parse_args() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--greedbots":
+			_bots_all = true
+		elif arg.begins_with("--seed="):
+			_cli_seed = int(arg.trim_prefix("--seed="))
+		elif arg.begins_with("--players="):
+			_cli_players = clampi(int(arg.trim_prefix("--players=")), 2, 4)
+		elif arg.begins_with("--rounds="):
+			_cli_rounds = int(arg.trim_prefix("--rounds="))
+		elif arg.begins_with("--roundtime="):
+			_cli_roundtime = float(arg.trim_prefix("--roundtime="))
+		elif arg == "--greedcap":
+			_cap_on = true
+		elif arg.begins_with("--outdir="):
+			_cap_dir = arg.trim_prefix("--outdir=")
+		elif arg.begins_with("--greedtest="):
+			_test_mode = arg.trim_prefix("--greedtest=")
+	if _cap_on:
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
+
+
+func _default_config() -> Dictionary:
+	PlayerInput.auto_assign(_cli_players)
+	var r: Array = []
+	for i in _cli_players:
+		r.append({
+			"index": i,
+			"name": GameState.PLAYER_NAMES[i],
+			"color": GameState.PLAYER_COLORS[i],
+			"char_scene": CHAR_FALLBACKS[i],
+			"device": PlayerInput.device_of(i),
+		})
+	return {"roster": r, "rounds": ROUNDS, "rng_seed": _cli_seed, "practice": false}
+
+
+# ===========================================================================
+# Screenshot capture (event/state based — reliable regardless of framerate)
+# ===========================================================================
+func _cap_event(tag: String) -> void:
+	if not _cap_on:
+		return
+	if _cap_done.has(tag):
+		return
+	# hold the shot a beat so the carrier glow / arrows / scatter are on screen
+	get_tree().create_timer(0.35, true, false, true).timeout.connect(
+		func() -> void: _grab_shot(tag, false))
+	_cap_done[tag] = true
+
+
+func _capture_beats() -> void:
+	# a clean "vault + growing pot" baseline early in round 1
+	if round_num == 1 and round_t >= 3.0 and not _cap_done.has("arena"):
+		_cap_done["arena"] = true
+		_grab_shot("arena", false)
+	# quit once the whole arc (grab -> hunt -> drop -> bank) is on film, or on a
+	# safety timeout so a quiet run still terminates
+	var have_all: bool = _cap_done.has("arena") and _cap_done.has("grab") \
+		and _cap_done.has("drop") and _cap_done.has("bank")
+	if (have_all or round_t > 60.0) and not _cap_done.has("_quit"):
+		_cap_done["_quit"] = true
+		get_tree().create_timer(1.2, true, false, true).timeout.connect(
+			func() -> void:
+				print("GREED_CAP_DONE")
+				get_tree().quit())
+
+
+func _grab_shot(tag: String, quit_after: bool) -> void:
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+		var img := get_viewport().get_texture().get_image()
+		var path := "res://%s/greed_%s.png" % [_cap_dir, tag]
+		img.save_png(path)
+		print("GREED_CAP ", path)
+	else:
+		print("GREED_CAP_SKIP_HEADLESS ", tag)
+	if quit_after:
+		get_tree().quit()
+
+
+# ===========================================================================
+# Pursuit-tuning test (spec Risk: "turtle camping / interception possible")
+# ===========================================================================
+## Kinematic model of the make-or-break chase, using the REAL movement
+## constants (carry speed, dash speed/time/cd/i-frames, tackle range, chute
+## geometry). A carrier grabs at centre and runs to its OWN (farthest) chute; a
+## dashing chaser starts at an ADJACENT chute and pursues. Both may dash. We
+## count how often the chaser lands a tackle before the carrier banks. Spec bar:
+## catchable in >=60% of runs.
+func _run_intercept_test() -> void:
+	var trials := 80
+	var catches := 0
+	var trng := RandomNumberGenerator.new()
+	trng.seed = _cli_seed
+	var carry_speed := GreedPlayer.MOVE_SPEED * GreedPlayer.CARRY_SPEED_MULT
+	var base_speed := GreedPlayer.MOVE_SPEED
+	var dt := 1.0 / 60.0
+	for tr in trials:
+		var c_idx := trng.randi_range(0, 3)
+		var goal := chute_pos(c_idx)
+		var adj := _adjacent_corner_indices(c_idx)
+		var chaser_corner: int = adj[trng.randi_range(0, adj.size() - 1)]
+		var carrier := Vector2(trng.randf_range(-0.7, 0.7), trng.randf_range(-0.7, 0.7))
+		var chaser := chute_pos(chaser_corner)
+		var carrier_dash_cd := trng.randf_range(0.0, GreedPlayer.DASH_CD)
+		var chaser_dash_cd := trng.randf_range(0.0, 0.4)
+		var carrier_dash_t := -1.0
+		var chaser_dash_t := -1.0
+		var carrier_iframe := 0.0
+		var carrier_vel := Vector2.ZERO
+		var caught := false
+		var t := 0.0
+		while t < 6.0:
+			t += dt
+			carrier_dash_cd = maxf(0.0, carrier_dash_cd - dt)
+			chaser_dash_cd = maxf(0.0, chaser_dash_cd - dt)
+			carrier_iframe = maxf(0.0, carrier_iframe - dt)
+			var gap := chaser.distance_to(carrier)
+			# --- carrier: run to goal; dash to flee if hunter is closing ---
+			var cdir := (goal - carrier)
+			cdir = cdir.normalized() if cdir.length() > 0.001 else Vector2.ZERO
+			var cspeed := carry_speed
+			if carrier_dash_t >= 0.0:
+				carrier_dash_t += dt
+				cspeed = GreedPlayer.DASH_SPEED * GreedPlayer.CARRY_DASH_MULT
+				if carrier_dash_t >= GreedPlayer.DASH_TIME:
+					carrier_dash_t = -1.0
+			elif gap < 2.6 and carrier_dash_cd <= 0.0:
+				carrier_dash_t = 0.0
+				carrier_dash_cd = GreedPlayer.DASH_CD
+				carrier_iframe = GreedPlayer.DASH_IFRAME
+				cspeed = GreedPlayer.DASH_SPEED * GreedPlayer.CARRY_DASH_MULT
+			carrier_vel = cdir * cspeed
+			carrier += carrier_vel * dt
+			# --- chaser: LEAD pursuit (aim where the carrier will be), dash ---
+			var chspeed := base_speed
+			if chaser_dash_t >= 0.0:
+				chaser_dash_t += dt
+				chspeed = GreedPlayer.DASH_SPEED
+				if chaser_dash_t >= GreedPlayer.DASH_TIME:
+					chaser_dash_t = -1.0
+			elif chaser_dash_cd <= 0.0:
+				chaser_dash_t = 0.0
+				chaser_dash_cd = GreedPlayer.DASH_CD
+				chspeed = GreedPlayer.DASH_SPEED
+			var lead_t: float = clampf(gap / 6.6, 0.0, 0.9)   # ~avg chaser speed w/ dashes
+			var aim := carrier + carrier_vel * lead_t
+			var chdir := (aim - chaser)
+			chdir = chdir.normalized() if chdir.length() > 0.001 else Vector2.ZERO
+			chaser += chdir * chspeed * dt
+			# --- resolve ---
+			if chaser.distance_to(carrier) <= TACKLE_RANGE and carrier_iframe <= 0.0:
+				caught = true
+				break
+			if carrier.distance_to(goal) <= BANK_RADIUS:
+				break
+		if caught:
+			catches += 1
+	var rate := float(catches) / float(trials)
+	var verdict := "PASS" if rate >= 0.6 else "FAIL"
+	print("GREED_INTERCEPT trials=%d catches=%d rate=%.2f (bar>=0.60) %s" % [
+		trials, catches, rate, verdict])
+	get_tree().quit(0 if rate >= 0.6 else 1)
+
+
+func _adjacent_corner_indices(i: int) -> Array:
+	var c: Vector2 = CORNER_SIGNS[i]
+	var out: Array = []
+	for j in 4:
+		if j == i:
+			continue
+		var o: Vector2 = CORNER_SIGNS[j]
+		# adjacent = shares exactly one axis sign (edge neighbour, not diagonal)
+		if (is_equal_approx(o.x, c.x)) != (is_equal_approx(o.y, c.y)):
+			out.append(j)
+	return out
+
+
+# ===========================================================================
+func _log(msg: String) -> void:
+	var f := -1
+	if _vc != null:
+		f = int(_vc.frame)
+	print("GREED_EVT t=%.2f frame=%d | %s" % [game_t, f, msg])
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if _standalone and event.is_action_pressed("restart"):
+		get_tree().reload_current_scene()
