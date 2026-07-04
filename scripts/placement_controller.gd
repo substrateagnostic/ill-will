@@ -20,9 +20,11 @@ var _valid := false
 @onready var disc: MeshInstance3D = $ValidityDisc
 @onready var disc_mat: StandardMaterial3D = disc.get_surface_override_material(0)
 
-func begin(scene: PackedScene, author_idx: int, author_color: Color) -> void:
+func begin(scene: PackedScene, author_idx: int, author_color: Color, params := {}) -> void:
 	cancel()
 	ghost = scene.instantiate()
+	for k in params:
+		ghost.set(k, params[k])
 	trap_container.add_child(ghost)
 	ghost.set_author(author_idx, author_color)
 	ghost.ghostify()

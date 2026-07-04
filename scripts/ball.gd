@@ -2,6 +2,7 @@ class_name Ball
 extends RigidBody3D
 
 signal sunk
+signal died(killer: Trap)
 signal came_to_rest
 
 const STOP_SPEED := 0.12
@@ -10,6 +11,7 @@ const MAX_SPEED := 15.0
 var player_index := 0
 var player_color := Color(1.0, 0.42, 0.35)
 var is_sunk := false
+var is_dead := false
 var is_petrified := false
 var last_rest_position := Vector3.ZERO
 var _was_moving := false
@@ -25,7 +27,7 @@ func _ready() -> void:
 	mesh.set_surface_override_material(0, _mat)
 
 func _physics_process(_delta: float) -> void:
-	if is_sunk or is_petrified:
+	if is_sunk or is_petrified or is_dead:
 		return
 	var speed := linear_velocity.length()
 	if speed > MAX_SPEED:
@@ -45,7 +47,7 @@ func _physics_process(_delta: float) -> void:
 		reset_to_rest()
 
 func putt(direction: Vector3, speed: float) -> void:
-	if is_sunk or is_petrified:
+	if is_sunk or is_petrified or is_dead:
 		return
 	direction.y = 0.0
 	var dir := direction.normalized()
@@ -55,7 +57,21 @@ func putt(direction: Vector3, speed: float) -> void:
 	_was_moving = true
 
 func is_stopped() -> bool:
-	return not _was_moving and not is_sunk
+	return is_dead or (not _was_moving and not is_sunk)
+
+func die(killer: Trap) -> void:
+	if is_sunk or is_dead:
+		return
+	is_dead = true
+	_was_moving = false
+	died.emit(killer)
+	call_deferred("_death_cleanup")
+
+func _death_cleanup() -> void:
+	freeze = true
+	collision_layer = 0
+	collision_mask = 0
+	visible = false
 
 func mark_sunk() -> void:
 	if is_sunk:
@@ -81,6 +97,7 @@ func petrify() -> void:
 
 func reset_for_round(tee_pos: Vector3) -> void:
 	is_sunk = false
+	is_dead = false
 	is_petrified = false
 	_was_moving = false
 	visible = true

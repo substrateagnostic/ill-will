@@ -1,6 +1,6 @@
 extends Trap
 
-const KICK := 4.5
+@export var kick := 4.5
 var _cooldowns := {}
 
 func _init() -> void:
@@ -25,7 +25,7 @@ func _on_body(body: Node3D) -> void:
 	away.y = 0.0
 	if away.length() < 0.01:
 		away = Vector3.FORWARD
-	body.linear_velocity += away.normalized() * KICK + Vector3(0, 1.2, 0)
+	body.linear_velocity += away.normalized() * kick + Vector3(0, 1.2, 0)
 	var tw := create_tween()
 	tw.tween_property($Body, "scale", Vector3(1.25, 0.85, 1.25), 0.06)
 	tw.tween_property($Body, "scale", Vector3.ONE, 0.12)

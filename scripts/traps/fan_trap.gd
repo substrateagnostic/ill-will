@@ -1,6 +1,6 @@
 extends Trap
 
-const PUSH := 6.5
+@export var push := 6.5
 
 func _init() -> void:
 	trap_id = "fan"
@@ -16,4 +16,4 @@ func _physics_process(_delta: float) -> void:
 	wind.y = 0.0
 	for body in $Zone.get_overlapping_bodies():
 		if body is Ball and not body.is_sunk:
-			body.apply_central_force(wind.normalized() * PUSH)
+			body.apply_central_force(wind.normalized() * push)

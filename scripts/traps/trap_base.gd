@@ -10,6 +10,11 @@ var author_color := Color.WHITE
 var footprint_radius := 0.8
 var is_ghost := false
 
+func kill_ball(ball: Ball) -> void:
+	if is_ghost or ball.is_sunk or ball.is_dead:
+		return
+	ball.die(self)
+
 func set_author(idx: int, color: Color) -> void:
 	author_index = idx
 	author_color = color

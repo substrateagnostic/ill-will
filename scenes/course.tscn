@@ -75,6 +75,8 @@ material = SubResource("mat_wood")
 
 [node name="TrapContainer" type="Node3D" parent="."]
 
+[node name="GravestoneContainer" type="Node3D" parent="."]
+
 [node name="CupLiner" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.47, -13)
 mesh = SubResource("liner_mesh")

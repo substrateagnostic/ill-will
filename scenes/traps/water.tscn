@@ -1,0 +1,33 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/traps/water_trap.gd" id="1"]
+
+[sub_resource type="BoxMesh" id="pool_mesh"]
+size = Vector3(2.2, 0.03, 1.4)
+
+[sub_resource type="BoxShape3D" id="zone_shape"]
+size = Vector3(2.1, 0.4, 1.3)
+
+[sub_resource type="StandardMaterial3D" id="mat_water"]
+transparency = 1
+albedo_color = Color(0.2, 0.5, 0.9, 0.75)
+roughness = 0.1
+metallic = 0.2
+
+[node name="WaterTrap" type="Node3D"]
+script = ExtResource("1")
+
+[node name="Pool" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, 0)
+mesh = SubResource("pool_mesh")
+surface_material_override/0 = SubResource("mat_water")
+
+[node name="AccentEdge" type="MeshInstance3D" parent="."]
+transform = Transform3D(1.04, 0, 0, 0, 0.6, 0, 0, 0, 1.06, 0, 0.012, 0)
+mesh = SubResource("pool_mesh")
+
+[node name="Zone" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.2, 0)
+
+[node name="ZoneShape" type="CollisionShape3D" parent="Zone"]
+shape = SubResource("zone_shape")

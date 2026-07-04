@@ -82,6 +82,12 @@ func on_ball_sunk(p: int) -> void:
 	finish_order.append(p)
 	ball_resolved.emit(p, "sunk")
 
+func on_ball_died(p: int) -> void:
+	if _round_over or resolved.has(p) or not strokes.has(p):
+		return
+	resolved[p] = "dead"
+	ball_resolved.emit(p, "dead")
+
 func _post_stroke_resolution() -> void:
 	var p := current_player()
 	if p >= 0 and not resolved.has(p) and strokes[p] >= STROKE_CAP:
