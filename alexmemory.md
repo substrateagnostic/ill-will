@@ -6,6 +6,12 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **THE FLEET IS HOME: EIGHT GAMES LIVE.** Par for the Curse (3 courses +
+  chaos round), Echo Chamber (parry triangle + ghost shatter), Tilt (shove
+  clash), Orbital Dodgeball, Mower Mayhem, Greed Inc., Swap Meet, and Dead
+  Weight — all reviewed, merged, and in the Estate auction pool. Start an
+  ESTATE NIGHT and the podium picks from all eight. Throne + Last Will
+  specs are staged for the next wave (→ roster of 10).
 - **MORNING REVIEW MENU**: (1) The PILGRIMAGE TRAIL is built and live —
   start an Estate Night and watch the Reckoning parade march the pawns up
   the hill; claim a tollgate by passing it. Screenshot:
