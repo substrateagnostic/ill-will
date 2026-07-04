@@ -32,10 +32,14 @@ const CHAR_FALLBACKS := [
 const SPAWN_R := 3.5
 const COIN_INTERVAL := 3.0
 const COIN_LOOSE_MASS := 0.08
-const SHOVE_RANGE := 1.7
+const SHOVE_RANGE := 2.05        # v1.1: +0.35 reach pays for the 0.12s windup
+                                 # (a fleeing target covers ~0.54m during it)
 const SHOVE_HALF_ANGLE := 55.0   # degrees
 const SHOVE_POWER := 7.5
+const CLASH_WINDOW := 0.25       # both shoves pressed within this -> CLASH
+const CLASH_KB := 0.4            # clash knockback factor (vs full shove)
 const ROYALTY_WINDOW := 1.5      # s between shove contact and the fall
+const BANNER_FONT := preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 const GUANO_GRAV := 14.0
 const SLIP_RADIUS := 1.25
 const SLIP_TIME := 4.0
@@ -220,6 +224,11 @@ func _tick_play(delta: float) -> void:
 			if inp.a and gull.can_bomb():
 				gull.drop()
 				_spawn_guano(gull.global_position, p)
+	# shoves whose windup just completed land NOW (clash check inside)
+	for p in roster.size():
+		var pawn: TiltPawn = pawns[p]
+		if pawn.consume_shove_release() and pawn.state == TiltPawn.PState.STANDING:
+			_resolve_shove(p)
 	_separate_pawns()
 	# edge falls
 	for p in roster.size():
@@ -388,12 +397,46 @@ func _mass_points() -> Array:
 		pts.append({"pos": c.l, "m": COIN_LOOSE_MASS})
 	return pts
 
+## A pressed: start the windup (the readable tell). The hit lands
+## SHOVE_WINDUP (0.12s) later in _resolve_shove.
 func _try_shove(p: int) -> void:
 	var pawn: TiltPawn = pawns[p]
-	if not pawn.try_shove():
+	if not pawn.try_shove(game_t):
 		return
+	Sfx.play("card", -10.0)  # quiet tell
+	_log("shove_windup p%d" % p)
+
+## Windup completed. If a victim in our cone ALSO has a live shove (pressed
+## within CLASH_WINDOW) and we are inside THEIR cone -> the shoves CLASH:
+## soft mutual push-apart, no royalty, sparks + CLASH! floaty. Otherwise the
+## normal cone knockback.
+func _resolve_shove(p: int) -> void:
+	var pawn: TiltPawn = pawns[p]
 	Sfx.play("putt", -6.0)
 	_shove_fx(pawn)
+	# clash check first: nearest mutual shover wins the drama
+	var clash_q := -1
+	var clash_d := 999.0
+	for q in roster.size():
+		if q == p:
+			continue
+		var other: TiltPawn = pawns[q]
+		if other.state != TiltPawn.PState.STANDING or other.braced:
+			continue
+		if game_t - other.shove_press_t > CLASH_WINDOW:
+			continue
+		var to_other := other.lpos - pawn.lpos
+		var d := to_other.length()
+		if d < SHOVE_RANGE \
+				and absf(rad_to_deg(pawn.facing.angle_to(to_other))) < SHOVE_HALF_ANGLE \
+				and absf(rad_to_deg(other.facing.angle_to(-to_other))) < SHOVE_HALF_ANGLE \
+				and d < clash_d:
+			clash_d = d
+			clash_q = q
+	if clash_q >= 0:
+		_do_clash(p, clash_q)
+		return
+	pawn.release_lunge()
 	var hit := false
 	for q in roster.size():
 		if q == p:
@@ -410,6 +453,23 @@ func _try_shove(p: int) -> void:
 	if hit:
 		Sfx.play("splat", -3.0)
 		_shake = maxf(_shake, 0.12)
+
+func _do_clash(p: int, q: int) -> void:
+	var pa: TiltPawn = pawns[p]
+	var pb: TiltPawn = pawns[q]
+	var axis := (pb.lpos - pa.lpos)
+	axis = axis.normalized() if axis.length() > 0.001 else Vector2(1, 0)
+	pa.apply_clash(-axis, SHOVE_POWER * CLASH_KB)
+	pb.apply_clash(axis, SHOVE_POWER * CLASH_KB)
+	var mid := (pa.lpos + pb.lpos) * 0.5
+	var world: Vector3 = platter.disc.global_transform \
+			* Vector3(mid.x, TiltPlatter.PAWN_Y + 1.0, mid.y)
+	_clash_fx(world)
+	_floaty(world + Vector3(0, 0.4, 0), "CLASH!", Color(1.0, 0.9, 0.25))
+	Sfx.play("bumper", -2.0)
+	_shake = maxf(_shake, 0.16)
+	_log("clash p%d<->p%d kb=%.1f r=[%.1f,%.1f]" % [
+		p, q, CLASH_KB, pa.lpos.length(), pb.lpos.length()])
 
 func _in_slip(lp: Vector2) -> bool:
 	for s in splats:
@@ -842,6 +902,53 @@ func _shove_fx(pawn: TiltPawn) -> void:
 	p.material_override = mat
 	p.emitting = true
 	get_tree().create_timer(0.8).timeout.connect(p.queue_free)
+
+## Spark burst at a clash midpoint: hot yellow-white omnidirectional flecks.
+func _clash_fx(pos: Vector3) -> void:
+	var p := CPUParticles3D.new()
+	add_child(p)
+	p.global_position = pos
+	p.one_shot = true
+	p.amount = 22
+	p.lifetime = 0.38
+	p.explosiveness = 1.0
+	p.direction = Vector3.UP
+	p.spread = 180.0
+	p.initial_velocity_min = 4.5
+	p.initial_velocity_max = 8.0
+	p.gravity = Vector3(0, -7.0, 0)
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.09, 0.03, 0.03)
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.92, 0.45)
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.8, 0.2)
+	mat.emission_energy_multiplier = 2.4
+	p.material_override = mat
+	p.emitting = true
+	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
+
+## World-space floating text (Label3D billboard) that rises and fades.
+func _floaty(pos: Vector3, text: String, color: Color) -> void:
+	var lb := Label3D.new()
+	lb.text = text
+	lb.font = BANNER_FONT
+	lb.font_size = 150
+	lb.pixel_size = 0.004
+	lb.modulate = color
+	lb.outline_size = 26
+	lb.outline_modulate = Color(0.2, 0.08, 0.0)
+	lb.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lb.no_depth_test = true
+	add_child(lb)
+	lb.global_position = pos
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lb, "position:y", lb.position.y + 1.1, 0.95) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lb, "modulate:a", 0.0, 0.45).set_delay(0.5)
+	tw.chain().tween_callback(lb.queue_free)
 
 func _splash_fx(pos: Vector3, scale_f: float) -> void:
 	var p := CPUParticles3D.new()

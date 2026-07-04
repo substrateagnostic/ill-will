@@ -49,6 +49,37 @@ func _decide_standing(p: int, g, pawn: TiltPawn, delta: float) -> Dictionary:
 	var move := Vector2.ZERO
 	var press_a := false
 	var press_b := false
+	# counter-shove reflex: someone close is WINDING UP a shove aimed at us
+	# AND we can see it (roughly in front of us — a clash needs mutual cones,
+	# so blindside shoves stay uncounterable, same as for humans). Answer it
+	# (square up + press A) and the shoves clash — rim defense as a timing
+	# game. Rolled per tick over the ~7-tick windup, scaled by aggression.
+	for q in g.pawns.size():
+		if q == p:
+			continue
+		var threat: TiltPawn = g.pawns[q]
+		if threat == null or threat.state != TiltPawn.PState.STANDING:
+			continue
+		if threat.windup_t <= 0.0:
+			continue
+		var to_me: Vector2 = pawn.lpos - threat.lpos
+		if to_me.length() > 1.9:
+			continue
+		if absf(rad_to_deg(threat.facing.angle_to(to_me))) > 62.0:
+			continue
+		if absf(rad_to_deg(pawn.facing.angle_to(-to_me))) > 105.0:
+			continue  # didn't see it coming — eat it like it's v1
+		var face_them: Vector2 = (-to_me).normalized()
+		var can_answer: bool = pawn.shove_cd <= 0.0 and not pawn.braced \
+				and pawn.stagger_t <= 0.0 and pawn.windup_t <= 0.0
+		var desperation: float = 0.15 if pawn.lpos.length() > 4.6 else 0.0
+		var answer: bool = can_answer \
+				and rng.randf() < 0.06 + aggr[p] * 0.10 + desperation
+		var brace_instead: bool = not can_answer and not pawn.braced \
+				and pawn.brace_cd <= 0.0 and pawn.stagger_t <= 0.0 \
+				and pawn.windup_t <= 0.0 and pawn.lpos.length() > 4.2 \
+				and rng.randf() < 0.12
+		return {"move": face_them, "a": answer, "b": brace_instead}
 	var my_r := pawn.lpos.length()
 	var on_low_side := pawn.lpos.dot(dh) > 0.5
 	var in_danger: bool = (tilt_deg > caution_deg[p] and on_low_side) or my_r > 5.6
