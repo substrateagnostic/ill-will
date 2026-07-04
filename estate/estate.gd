@@ -2,7 +2,9 @@ extends Node3D
 ## THE ESTATE — night-loop shell: GROUNDS -> AUCTION -> GAME -> RECKONING.
 ## v1 "clipboard" grounds (panel UI); walkable grounds is phase E2.
 
-enum Phase { GROUNDS, AUCTION, GAME, RECKONING, NIGHT_END }
+enum Phase { GROUNDS, TILES, AUCTION, GAME, RECKONING, NIGHT_END }
+
+const TILE_COST := 2
 
 const MODULES := {
 	"par": {"name": "PAR FOR THE CURSE", "scene": "res://scenes/main.tscn", "mode": "gamestate"},
@@ -22,6 +24,7 @@ const BID_TIME := 8.0
 var phase := Phase.GROUNDS
 var bots := false
 var mockonly := false
+var pool_override: Array = []
 var auction_options: Array = []
 var high_bid := 0
 var high_bidder := -1
@@ -33,6 +36,7 @@ var _monuments_drawn := 0
 var walkers: Array = []
 var _selected_walker := -1
 var _bot_wander_timer := 0.0
+var _tile_buyers: Array = []
 
 @onready var cam: Camera3D = $Camera3D
 @onready var top_bar: HBoxContainer = $UI/TopBar/Row
@@ -48,6 +52,8 @@ func _ready() -> void:
 			bots = true
 		elif arg == "--mockonly":
 			mockonly = true
+		elif arg.begins_with("--pool="):
+			pool_override = Array(arg.trim_prefix("--pool=").split(","))
 	EstateState.start_night(GameState.player_count)
 	PlayerInput.auto_assign(GameState.player_count)
 	_spawn_walkers()
@@ -112,7 +118,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		var hit := space.intersect_ray(q)
 		if hit.is_empty():
 			return
-		if hit.collider is EstateWalker:
+		if phase == Phase.TILES and not _tile_buyers.is_empty():
+			_place_tile(_tile_buyers[0], hit.position)
+		elif hit.collider is EstateWalker:
 			_select_walker(hit.collider.player_idx)
 		elif _selected_walker >= 0:
 			walkers[_selected_walker].walk_target = hit.position
@@ -136,7 +144,8 @@ func _process(delta: float) -> void:
 		if _grounds_timer <= 0.0 or (bots and _grounds_timer < GROUNDS_TIME - 1.5):
 			if bots:
 				_bots_place_bets()
-			_enter_auction()
+				_bots_buy_tiles()
+			_enter_tiles()
 	elif phase == Phase.AUCTION:
 		_bid_timer -= delta
 		_update_auction_clock()
@@ -175,6 +184,7 @@ func _enter_grounds() -> void:
 	phase = Phase.GROUNDS
 	_grounds_timer = GROUNDS_TIME
 	_bet_targets.clear()
+	_tile_buyers.clear()
 	_rebuild_top_bar()
 	_clear_panel("THE GROUNDS — place your bets on the next game")
 	for i in EstateState.players.size():
@@ -202,6 +212,18 @@ func _enter_grounds() -> void:
 				Sfx.play("card")
 				_rebuild_top_bar())
 		row.add_child(bet_btn)
+		var tile_btn := Button.new()
+		tile_btn.text = "TRAP TILE %d♠" % TILE_COST
+		tile_btn.pressed.connect(func():
+			if not _tile_buyers.has(i) and EstateState.spend_grudge(i, TILE_COST):
+				_tile_buyers.append(i)
+				tile_btn.text = "TILE BOUGHT"
+				tile_btn.disabled = true
+				Sfx.play("grudge")
+				_rebuild_top_bar()
+			else:
+				Sfx.play("invalid"))
+		row.add_child(tile_btn)
 		phase_box.add_child(row)
 	var clock := Label.new()
 	clock.name = "Clock"
@@ -221,6 +243,54 @@ func _bots_place_bets() -> void:
 	for i in EstateState.players.size():
 		EstateState.place_bet(i, EstateState.rng.randi_range(0, EstateState.players.size() - 1))
 
+func _bots_buy_tiles() -> void:
+	for i in EstateState.players.size():
+		if EstateState.rng.randf() < 0.4 and not _tile_buyers.has(i):
+			if EstateState.spend_grudge(i, TILE_COST):
+				_tile_buyers.append(i)
+
+func _enter_tiles() -> void:
+	if _tile_buyers.is_empty():
+		_enter_auction()
+		return
+	phase = Phase.TILES
+	_rebuild_top_bar()
+	_prompt_next_tile()
+
+func _prompt_next_tile() -> void:
+	if _tile_buyers.is_empty():
+		_enter_auction()
+		return
+	var p: int = _tile_buyers[0]
+	var pl = EstateState.players[p]
+	_clear_panel("%s — CLICK THE LAWN TO SEED YOUR TRAP TILE" % pl.name, pl.color)
+	if bots:
+		var spot := Vector3(EstateState.rng.randf_range(-5.0, 5.0), 0, EstateState.rng.randf_range(-6.0, 1.0))
+		_place_tile(p, spot)
+
+func _place_tile(p: int, pos: Vector3) -> void:
+	if Vector2(pos.x, pos.z + 4.0).length() > 11.0:
+		Sfx.play("invalid")
+		return
+	_tile_buyers.pop_front()
+	var tile := TrapTile.new()
+	$Grounds.add_child(tile)
+	tile.global_position = Vector3(pos.x, 0.0, pos.z)
+	tile.setup(p, EstateState.players[p].color)
+	tile.tripped.connect(_on_tile_tripped)
+	Sfx.play("place")
+	_prompt_next_tile()
+
+func _on_tile_tripped(victim: int, owner_idx: int) -> void:
+	var taken := EstateState.steal_grudge(victim, owner_idx, 1)
+	var v = EstateState.players[victim]
+	var o = EstateState.players[owner_idx]
+	var suffix := " and steals 1♠" if taken > 0 else ""
+	_flash("%s'S TILE TRIPS %s%s" % [o.name, v.name, suffix], o.color, 2.0)
+	EstateState.add_graffiti("%s tripped %s on the grounds" % [o.name, v.name])
+	_redraw_graffiti()
+	_rebuild_top_bar()
+
 func _enter_auction() -> void:
 	if phase == Phase.AUCTION:
 		return
@@ -229,6 +299,8 @@ func _enter_auction() -> void:
 	high_bidder = -1
 	_bid_timer = BID_TIME
 	var pool := ["mock", "mock", "mock"] if mockonly else ["par", "echo", "tilt", "par", "echo", "tilt"]
+	if not pool_override.is_empty():
+		pool = pool_override
 	auction_options.clear()
 	for k in 3:
 		auction_options.append(pool[EstateState.rng.randi_range(0, pool.size() - 1)])

@@ -92,6 +92,18 @@ func apply_results(results: Dictionary) -> Array:
 	games_played += 1
 	return ticker
 
+func steal_grudge(victim: int, thief: int, amount := 1) -> int:
+	var taken: int = mini(amount, players[victim].grudge)
+	players[victim].grudge -= taken
+	players[thief].grudge += taken
+	return taken
+
+func spend_grudge(p: int, amount: int) -> bool:
+	if players[p].grudge < amount:
+		return false
+	players[p].grudge -= amount
+	return true
+
 func place_bet(p: int, target: int) -> bool:
 	if players[p].grudge < 1 or bets.has(p):
 		return false

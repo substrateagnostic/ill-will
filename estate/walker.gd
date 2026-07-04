@@ -9,6 +9,7 @@ var player_idx := 0
 var anim: AnimationPlayer
 var walk_target := Vector3.INF
 var selected := false
+var _anim_lock := 0.0
 
 var _ring_mat: StandardMaterial3D
 var _base_color := Color.WHITE
@@ -48,6 +49,16 @@ func setup(char_scene: PackedScene, color: Color, idx: int) -> void:
 	if anim:
 		anim.play("Idle")
 
+func trip(from: Vector3) -> void:
+	var away := global_position - from
+	away.y = 0.0
+	velocity = away.normalized() * 4.0 + Vector3(0, 5.5, 0)
+	walk_target = Vector3.INF
+	_anim_lock = 0.8
+	if anim and anim.has_animation("Hit_A"):
+		anim.play("Hit_A")
+	Sfx.play("splat", -4.0)
+
 func set_selected(v: bool) -> void:
 	selected = v
 	if _ring_mat:
@@ -74,7 +85,8 @@ func _physics_process(delta: float) -> void:
 		var body := col.get_collider()
 		if body is RigidBody3D:
 			body.apply_central_impulse(-col.get_normal() * 1.4)
-	if anim:
+	_anim_lock = maxf(0.0, _anim_lock - delta)
+	if anim and _anim_lock <= 0.0:
 		var moving := Vector2(velocity.x, velocity.z).length() > 0.5
 		var want := "Walking_A" if moving else "Idle"
 		if anim.current_animation != want and anim.has_animation(want):
