@@ -1,0 +1,137 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://scripts/course.gd" id="1_course"]
+[ext_resource type="Texture2D" path="res://assets/textures/grass_stripes.png" id="2_grass"]
+[ext_resource type="PackedScene" path="res://assets/models/minigolf/flag-red.glb" id="3_flag"]
+[ext_resource type="PackedScene" path="res://assets/models/minigolf/obstacle-block.glb" id="4_block"]
+[ext_resource type="PackedScene" path="res://assets/models/minigolf/obstacle-diamond.glb" id="5_diamond"]
+
+[sub_resource type="StandardMaterial3D" id="mat_green"]
+albedo_texture = ExtResource("2_grass")
+uv1_triplanar = true
+uv1_scale = Vector3(0.25, 0.25, 0.25)
+roughness = 0.95
+
+[sub_resource type="StandardMaterial3D" id="mat_wood"]
+albedo_color = Color(0.93, 0.89, 0.78, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_table"]
+albedo_color = Color(0.42, 0.29, 0.2, 1)
+roughness = 0.65
+
+[sub_resource type="StandardMaterial3D" id="mat_white"]
+albedo_color = Color(0.95, 0.95, 0.92, 1)
+roughness = 0.5
+
+[sub_resource type="BoxShape3D" id="hump_shape"]
+size = Vector3(2.3, 0.44, 2.3)
+
+[sub_resource type="CylinderShape3D" id="cup_shape"]
+height = 0.3
+radius = 0.27
+
+[sub_resource type="StandardMaterial3D" id="mat_hole"]
+shading_mode = 0
+albedo_color = Color(0.05, 0.05, 0.06, 1)
+
+[sub_resource type="CylinderMesh" id="liner_mesh"]
+top_radius = 0.295
+bottom_radius = 0.295
+height = 0.02
+
+[node name="Course" type="Node3D"]
+script = ExtResource("1_course")
+play_rects = Array[Rect2]([Rect2(-5.85, -5.85, 11.7, 11.7)])
+tee_slots = Array[Vector3]([Vector3(-5.4, 0.15, 5), Vector3(-4.8, 0.15, 5), Vector3(-4.2, 0.15, 5), Vector3(-3.6, 0.15, 5)])
+extra_no_build = [{"pos": Vector3(-1.8, 0, 1.8), "radius": 1.7}, {"pos": Vector3(1.8, 0, -1.8), "radius": 1.7}]
+course_center = Vector3(0, 0, 0)
+course_extent = Vector3(6, 0, 6)
+camera_position = Vector3(0, 17, 7)
+camera_fov = 56.0
+
+[node name="Table" type="CSGBox3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.75, 0)
+size = Vector3(15, 0.7, 15)
+material = SubResource("mat_table")
+
+[node name="Geo" type="CSGCombiner3D" parent="."]
+use_collision = true
+
+[node name="Floor" type="CSGBox3D" parent="Geo"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0)
+size = Vector3(12, 0.4, 12)
+material = SubResource("mat_green")
+
+[node name="CupHole" type="CSGCylinder3D" parent="Geo"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, -0.2, -5)
+operation = 2
+radius = 0.3
+height = 0.6
+
+[node name="WallN" type="CSGBox3D" parent="Geo"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.155, -6.05)
+size = Vector3(12.35, 0.71, 0.25)
+material = SubResource("mat_wood")
+
+[node name="WallS" type="CSGBox3D" parent="Geo"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.155, 6.05)
+size = Vector3(12.35, 0.71, 0.25)
+material = SubResource("mat_wood")
+
+[node name="WallW" type="CSGBox3D" parent="Geo"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.05, 0.155, 0)
+size = Vector3(0.25, 0.71, 12.35)
+material = SubResource("mat_wood")
+
+[node name="WallE" type="CSGBox3D" parent="Geo"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.05, 0.155, 0)
+size = Vector3(0.25, 0.71, 12.35)
+material = SubResource("mat_wood")
+
+[node name="Hump1" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, 0, 1.8)
+
+[node name="Shape" type="CollisionShape3D" parent="Hump1"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+shape = SubResource("hump_shape")
+
+[node name="Model" parent="Hump1" instance=ExtResource("4_block")]
+transform = Transform3D(2.4, 0, 0, 0, 3, 0, 0, 0, 2.4, 0, 0, 0)
+
+[node name="Hump2" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 0, -1.8)
+
+[node name="Shape" type="CollisionShape3D" parent="Hump2"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 0)
+shape = SubResource("hump_shape")
+
+[node name="Model" parent="Hump2" instance=ExtResource("5_diamond")]
+transform = Transform3D(2.4, 0, 0, 0, 3, 0, 0, 0, 2.4, 0, 0, 0)
+
+[node name="TrapContainer" type="Node3D" parent="."]
+
+[node name="GravestoneContainer" type="Node3D" parent="."]
+
+[node name="CupLiner" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, -0.47, -5)
+mesh = SubResource("liner_mesh")
+surface_material_override/0 = SubResource("mat_hole")
+
+[node name="CupArea" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, -0.32, -5)
+
+[node name="Shape" type="CollisionShape3D" parent="CupArea"]
+shape = SubResource("cup_shape")
+
+[node name="Flag" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0, -5)
+
+[node name="FlagModel" parent="Flag" instance=ExtResource("3_flag")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0.28, 0, 0)
+
+[node name="TeePad" type="CSGCylinder3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5, 0.005, 5)
+radius = 0.3
+height = 0.012
+material = SubResource("mat_white")

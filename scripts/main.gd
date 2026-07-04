@@ -16,31 +16,33 @@ const CHAR_SCENES := [
 ]
 const BUILD_TIME_LIMIT := 25.0
 const ROYALTY := 2
-const TEE_XS := [-0.9, -0.3, 0.3, 0.9]
-const TEE_Z := 0.0
-const AUTOBUILD_SPOTS := [
-	Vector3(1.4, 0, -4.0), Vector3(-1.5, 0, -8.5), Vector3(0.6, 0, -10.5),
-	Vector3(-1.0, 0, -5.5), Vector3(1.8, 0, -11.5), Vector3(-1.8, 0, -3.0),
-	Vector3(0.0, 0, -7.5), Vector3(2.0, 0, -6.0),
-]
+## Each player drafts + places this many traps per build phase (v2: hazard
+## density doubled). Grudge/cursed rules apply to the first pick only.
+const TRAPS_PER_BUILD := 2
+const CHAOS_TRAP_SPEED := 1.6
 
 var balls: Array = []
 var caddies: Array = []
 var round_manager: RoundManager
+var course: Course
 var phase := Phase.BETWEEN
 var draft_order: Array = []
 var draft_pointer := 0
 var current_hand: Array = []
 var grudge_card_idx := -1
 var autobuild_count := 0
+var _picks_this_turn := 0
 var _build_timer := 0.0
 var _currency_log: Array = []
 var _highlights: Array = []
+var _golden_hour_done := false
 
 @onready var putt_controller: Node3D = $PuttController
 @onready var placement: Node3D = $PlacementController
 @onready var camera_rig: Node3D = $CameraRig
-@onready var course: Node3D = $Course
+@onready var sun: DirectionalLight3D = $Sun
+@onready var fill_light: DirectionalLight3D = $FillLight
+@onready var world_env: WorldEnvironment = $WorldEnvironment
 @onready var turn_label: Label = $UI/TurnLabel
 @onready var stroke_label: Label = $UI/StrokeLabel
 @onready var round_label: Label = $UI/RoundLabel
@@ -52,6 +54,7 @@ var _highlights: Array = []
 @onready var build_hint: Label = $UI/BuildHint
 
 func _ready() -> void:
+	_setup_course()
 	round_manager = RoundManager.new()
 	round_manager.name = "RoundManager"
 	add_child(round_manager)
@@ -61,11 +64,28 @@ func _ready() -> void:
 	putt_controller.stroke_taken.connect(_on_stroke_taken)
 	course.ball_entered_cup.connect(_on_cup_entry)
 	placement.trap_container = course.get_node("TrapContainer")
+	placement.course = course
 	placement.trap_placed.connect(_on_trap_placed)
+	_apply_course_camera()
 	_spawn_balls()
 	banner.visible = false
 	_rebuild_scoreboard()
 	_start_round()
+
+func _setup_course() -> void:
+	var scene: PackedScene = load("res://scenes/courses/%s.tscn" % GameState.course_id)
+	course = scene.instantiate()
+	course.name = "Course"
+	add_child(course)
+	move_child(course, 0)
+
+func _apply_course_camera() -> void:
+	camera_rig.course_center = course.course_center
+	camera_rig.course_extent = course.course_extent
+	camera_rig.home_position = course.camera_position
+	var cam: Camera3D = camera_rig.get_node("Camera3D")
+	cam.position = course.camera_position
+	cam.fov = course.camera_fov
 
 func _spawn_balls() -> void:
 	var n: int = GameState.players.size()
@@ -82,28 +102,61 @@ func _spawn_balls() -> void:
 		var c := Caddy.new()
 		add_child(c)
 		var side := -1.0 if i % 2 == 0 else 1.0
-		c.global_position = Vector3(3.85 * side, -0.4, 0.2 + floorf(i / 2.0) * 1.5)
+		var cx: float = course.course_center.x + (course.course_extent.x + 0.9) * side
+		var cz: float = course.course_center.z + 0.2 + floorf(i / 2.0) * 1.5
+		c.global_position = Vector3(cx, -0.4, cz)
 		c.rotation_degrees.y = 105.0 * side
 		c.setup(CHAR_SCENES[i], GameState.players[i].color)
 		caddies.append(c)
 	course.balls = balls
 
 func _tee_pos(i: int) -> Vector3:
+	var tees: Array = course.tee_positions()
 	var n: int = GameState.players.size()
-	var offset: float = TEE_XS[i] if n == 4 else (TEE_XS[i + (4 - n) / 2])
-	return Vector3(offset, 0.15, TEE_Z)
+	var idx: int = i if n == 4 else i + (4 - n) / 2
+	idx = clampi(idx, 0, tees.size() - 1)
+	var pos: Vector3 = tees[idx]
+	return pos
 
 func _start_round() -> void:
 	banner.visible = false
-	round_label.text = "ROUND %d / %d" % [GameState.round_num, GameState.rounds_total]
 	for i in balls.size():
 		balls[i].reset_for_round(_tee_pos(i))
 		caddies[i].revive()
+	if GameState.is_chaos_round():
+		round_label.text = "CHAOS ROUND"
+		_enter_chaos_round()
+		_begin_putt_phase()
+		return
+	round_label.text = "ROUND %d / %d" % [GameState.round_num, GameState.rounds_total]
 	var standings := GameState.standings()
 	draft_order = standings.duplicate()
 	draft_order.reverse()
 	draft_pointer = 0
+	_picks_this_turn = 0
 	_begin_draft_turn()
+
+func _enter_chaos_round() -> void:
+	course.set_trap_speed_scale(CHAOS_TRAP_SPEED)
+	_apply_golden_hour()
+	Sfx.play("match_win", -4.0)
+	_flash_banner("CHAOS ROUND\nNO WAITING — ALL LIVE", Color(1.0, 0.55, 0.2), 2.8)
+
+func _apply_golden_hour() -> void:
+	if _golden_hour_done:
+		return
+	_golden_hour_done = true
+	var tw := create_tween().set_parallel(true)
+	tw.tween_property(sun, "light_color", Color(1.0, 0.5, 0.24), 1.4)
+	tw.tween_property(sun, "light_energy", 1.7, 1.4)
+	tw.tween_property(sun, "rotation_degrees", Vector3(-14, -128, 0), 1.4)
+	tw.tween_property(fill_light, "light_color", Color(1.0, 0.62, 0.4), 1.4)
+	var env: Environment = world_env.environment
+	tw.tween_property(env, "fog_light_color", Color(1.0, 0.55, 0.3), 1.4)
+	tw.tween_property(env, "fog_density", 0.012, 1.4)
+	var sky_mat: ProceduralSkyMaterial = env.sky.sky_material
+	tw.tween_property(sky_mat, "sky_top_color", Color(0.78, 0.42, 0.34), 1.4)
+	tw.tween_property(sky_mat, "sky_horizon_color", Color(1.0, 0.55, 0.28), 1.4)
 
 func _begin_draft_turn() -> void:
 	if draft_pointer >= draft_order.size():
@@ -117,13 +170,15 @@ func _begin_draft_turn() -> void:
 		if arg.begins_with("--forcetrap="):
 			current_hand[0] = arg.trim_prefix("--forcetrap=")
 	grudge_card_idx = -1
-	var is_last_place: bool = p == GameState.standings().back() and GameState.round_num > 1
+	# Cursed-luck and grudge picks only apply to a player's FIRST trap this turn.
+	var is_last_place: bool = _picks_this_turn == 0 and p == GameState.standings().back() and GameState.round_num > 1
 	if is_last_place:
 		current_hand[0] = TrapCatalog.random_cursed(GameState.rng)
-	if player.grudge > 0:
+	if _picks_this_turn == 0 and player.grudge > 0:
 		grudge_card_idx = current_hand.size()
 		current_hand.append(TrapCatalog.random_cursed(GameState.rng))
-	draft_label.text = "%s — DRAFT YOUR TRAP%s" % [player.name, "  (CURSED LUCK: last place)" if is_last_place else ""]
+	var pick_tag := "" if TRAPS_PER_BUILD <= 1 else "  (%d/%d)" % [_picks_this_turn + 1, TRAPS_PER_BUILD]
+	draft_label.text = "%s — DRAFT YOUR TRAP%s%s" % [player.name, pick_tag, "  (CURSED LUCK: last place)" if is_last_place else ""]
 	draft_label.add_theme_color_override("font_color", player.color)
 	for c in card_row.get_children():
 		c.queue_free()
@@ -165,15 +220,28 @@ func _on_card_picked(card_idx: int) -> void:
 	var info: Dictionary = TrapCatalog.info(id)
 	turn_label.text = "%s PLACES: %s" % [player.name, info.name]
 	placement.begin(TrapCatalog.load_scene(id), p, player.color, info.get("params", {}))
+	# Course saturated for this footprint? Skip the placement silently.
+	if not placement.has_valid_placement():
+		placement.cancel()
+		build_hint.visible = false
+		_advance_after_placement()
 
 func _on_trap_placed(_trap: Trap) -> void:
 	build_hint.visible = false
-	draft_pointer += 1
-	_begin_draft_turn()
+	_advance_after_placement()
+
+func _advance_after_placement() -> void:
+	_picks_this_turn += 1
+	if _picks_this_turn < TRAPS_PER_BUILD:
+		_begin_draft_turn()
+	else:
+		_picks_this_turn = 0
+		draft_pointer += 1
+		_begin_draft_turn()
 
 func _begin_putt_phase() -> void:
 	phase = Phase.PUTT
-	round_manager.start_round(GameState.standings(), balls)
+	round_manager.start_round(GameState.standings(), balls, GameState.is_chaos_round())
 
 func _process(delta: float) -> void:
 	putt_controller.enabled = phase == Phase.PUTT and round_manager.is_turn_ready()
@@ -183,8 +251,7 @@ func _process(delta: float) -> void:
 			placement.cancel()
 			build_hint.visible = false
 			_flash_banner("TOO SLOW — TRAP FORFEITED", Color(0.8, 0.8, 0.8), 1.5)
-			draft_pointer += 1
-			_begin_draft_turn()
+			_advance_after_placement()
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("restart"):
@@ -214,6 +281,7 @@ func _update_stroke_label(p: int) -> void:
 	stroke_label.text = "STROKE %d / %d" % [mini(round_manager.strokes[p] + 1, RoundManager.STROKE_CAP), RoundManager.STROKE_CAP]
 
 func _on_any_ball_sunk(p: int) -> void:
+	print("BALL_SUNK p=%d round=%d" % [p, GameState.round_num])
 	Sfx.play("sink")
 	caddies[p].react("Cheer")
 	_spawn_confetti(course.get_node("CupArea").global_position + Vector3(0, 0.6, 0), GameState.players[p].color)
@@ -247,6 +315,8 @@ func _on_ball_died(killer: Trap, victim: int) -> void:
 			_rebuild_scoreboard()
 	elif killer != null:
 		credit = killer.display_name
+	if GameState.is_chaos_round():
+		_highlights.append("CHAOS CLAIMED %s" % v.name)
 	print("DEATH: %s by %s (round %d)" % [v.name, credit, GameState.round_num])
 	_flash_banner("%s DIED!\nDEATH BY: %s" % [v.name, credit], credit_color, 2.4)
 	round_manager.on_ball_died(victim)
@@ -288,11 +358,7 @@ func _spawn_death_fx(pos: Vector3, color: Color) -> void:
 func _spawn_gravestone(pos: Vector3, color: Color) -> void:
 	var g := GRAVESTONE_SCENE.instantiate()
 	course.get_node("GravestoneContainer").add_child(g)
-	var gx := clampf(pos.x, -2.6, 2.6)
-	var gz := clampf(pos.z, -14.6, 1.6)
-	if gz > -2.0 and absf(gx) < 1.7:
-		gz = -2.0
-	g.global_position = Vector3(gx, 0, gz)
+	g.global_position = course.clamp_gravestone(pos)
 	g.rotation_degrees.y = GameState.rng.randf_range(-25.0, 25.0)
 	g.setup(color, GameState.round_num)
 
@@ -403,9 +469,13 @@ func debug_pick_card(i: int) -> void:
 func debug_place_auto() -> void:
 	if phase != Phase.BUILD or not placement.active:
 		return
-	var spot: Vector3 = AUTOBUILD_SPOTS[autobuild_count % AUTOBUILD_SPOTS.size()]
+	var rot := float((autobuild_count * 45) % 180)
 	autobuild_count += 1
-	placement.debug_place(spot, float((autobuild_count * 45) % 180))
+	if not placement.debug_place_scan(rot, GameState.rng):
+		# Saturated: bail on this placement and move the build along.
+		placement.cancel()
+		build_hint.visible = false
+		_advance_after_placement()
 
 func get_phase_name() -> String:
 	return Phase.keys()[phase]

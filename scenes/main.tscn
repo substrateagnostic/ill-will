@@ -1,7 +1,6 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
-[ext_resource type="PackedScene" path="res://scenes/course.tscn" id="2_course"]
 [ext_resource type="Script" path="res://scripts/putt_controller.gd" id="4_putt"]
 [ext_resource type="Script" path="res://scripts/camera_rig.gd" id="5_cam"]
 [ext_resource type="Script" path="res://scripts/placement_controller.gd" id="6_place"]
@@ -17,10 +16,6 @@ sun_angle_max = 40.0
 
 [sub_resource type="Sky" id="sky"]
 sky_material = SubResource("sky_mat")
-
-[sub_resource type="StandardMaterial3D" id="mat_table"]
-albedo_color = Color(0.42, 0.29, 0.2, 1)
-roughness = 0.65
 
 [sub_resource type="CylinderMesh" id="disc_mesh"]
 top_radius = 1.0
@@ -66,13 +61,6 @@ emission = Color(0.15, 0.45, 0.17, 1)
 
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
-
-[node name="Course" parent="." instance=ExtResource("2_course")]
-
-[node name="Table" type="CSGBox3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.75, -6.5)
-size = Vector3(11, 0.7, 24)
-material = SubResource("mat_table")
 
 [node name="FillLight" type="DirectionalLight3D" parent="."]
 transform = Transform3D(-0.7, 0.42, -0.58, 0, 0.81, 0.59, 0.71, 0.41, -0.57, -5, 6, -10)

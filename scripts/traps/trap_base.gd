@@ -9,6 +9,9 @@ var author_index := -1
 var author_color := Color.WHITE
 var footprint_radius := 0.8
 var is_ghost := false
+## Chaos round cranks powered traps (windmill/crusher/fan) to 1.6x. Motion is
+## time-based, so powered traps multiply their per-frame step by this.
+var speed_scale := 1.0
 
 func kill_ball(ball: Ball) -> void:
 	if is_ghost or ball.is_sunk or ball.is_dead:

@@ -11,7 +11,7 @@ func _init() -> void:
 	footprint_radius = 0.85
 
 func _physics_process(delta: float) -> void:
-	_t = fmod(_t + delta, 2.6)
+	_t = fmod(_t + delta * speed_scale, 2.6)
 	var y := UP_Y
 	if _t < 1.5:
 		y = UP_Y
