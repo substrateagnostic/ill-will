@@ -30,9 +30,9 @@ extends Minigame
 enum Phase { WAIT, PLAY, END }
 
 const PLANET_DEFS := [
-	{"radius": 3.0, "center": Vector3(-3.8, -2.1, 0), "gsurf": 13.0, "col": Color(0.40, 0.51, 0.58)},
-	{"radius": 2.2, "center": Vector3(3.5, -2.5, 0), "gsurf": 12.0, "col": Color(0.60, 0.45, 0.36)},
-	{"radius": 1.8, "center": Vector3(0.8, 3.3, 0), "gsurf": 11.0, "col": Color(0.50, 0.43, 0.60)},
+	{"radius": 3.0, "center": Vector3(-3.8, -2.1, 0), "gsurf": 13.0, "col": Color(0.28, 0.42, 0.52)},
+	{"radius": 2.2, "center": Vector3(3.5, -2.5, 0), "gsurf": 12.0, "col": Color(0.55, 0.33, 0.24)},
+	{"radius": 1.8, "center": Vector3(0.8, 3.3, 0), "gsurf": 11.0, "col": Color(0.42, 0.32, 0.58)},
 ]
 const START_BALLS := [
 	{"planet": 0, "n": Vector3(-0.25, 0.55, 0.80)},
@@ -269,30 +269,32 @@ func _build_stars() -> void:
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.6, 0.6)
-	mm.mesh = quad
-	mm.instance_count = 800
+	var orb := SphereMesh.new()  # unshaded sphere = crisp round star disc
+	orb.radius = 0.16
+	orb.height = 0.32
+	orb.radial_segments = 10
+	orb.rings = 5
+	mm.mesh = orb
+	mm.instance_count = 700
 	for i in mm.instance_count:
 		var dir := Vector3(srng.randf_range(-1, 1), srng.randf_range(-1, 1), srng.randf_range(-1, 1))
 		if dir.length_squared() < 0.01:
 			dir = Vector3.FORWARD
 		var pos := dir.normalized() * srng.randf_range(48.0, 70.0)
-		var s := srng.randf_range(0.35, 1.5)
-		if srng.randf() < 0.04:
-			s *= 2.2
+		var s := srng.randf_range(0.4, 1.4)
+		if srng.randf() < 0.05:
+			s *= 2.4
 		var xf := Transform3D(Basis().scaled(Vector3.ONE * s), pos)
 		mm.set_instance_transform(i, xf)
 		var warm := srng.randf()
 		var c := Color(0.75 + 0.25 * warm, 0.78 + 0.16 * warm, 1.0 - 0.25 * warm)
-		mm.set_instance_color(i, Color(c.r, c.g, c.b, srng.randf_range(0.25, 0.95)))
+		mm.set_instance_color(i, Color(c.r, c.g, c.b, srng.randf_range(0.2, 0.9)))
 	var mmi := MultiMeshInstance3D.new()
 	mmi.multimesh = mm
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.vertex_color_use_as_albedo = true
-	mat.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	mmi.material_override = mat
 	add_child(mmi)
 
@@ -306,7 +308,7 @@ func _build_planet_visual(center: Vector3, r: float, col: Color) -> void:
 	mi.mesh = sm
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = col
-	mat.roughness = 0.88
+	mat.roughness = 0.95
 	mi.material_override = mat
 	mi.position = center
 	add_child(mi)
@@ -769,29 +771,30 @@ func _draw_aim_previews() -> void:
 				if pos.distance_to(Vector3(pl.center)) < float(pl.radius) + OrbBall.RADIUS:
 					hit = true
 			var fade := 1.0 - float(i) / 25.0
-			var s := 0.05 + 0.05 * pw.charge
+			var s := 0.06 + 0.05 * pw.charge
 			if hit:
-				s *= 1.8  # impact blip, then stop
-			_aim_dot(pos, s, Color(col.r, col.g, col.b, 0.28 + 0.5 * fade))
+				s *= 2.0  # impact blip, then stop
+			_aim_dot(pos, s, Color(col.r, col.g, col.b, 0.5 + 0.45 * fade))
 			if hit:
 				break
 		_aim_im.surface_end()
 
 func _aim_dot(p: Vector3, s: float, c: Color) -> void:
+	# camera-facing diamond (reads as a deliberate dotted line, not a pixel)
 	var r := cam_right() * s
 	var u := cam_up() * s
 	_aim_im.surface_set_color(c)
-	_aim_im.surface_add_vertex(p - r - u)
+	_aim_im.surface_add_vertex(p - r)
 	_aim_im.surface_set_color(c)
-	_aim_im.surface_add_vertex(p + r - u)
+	_aim_im.surface_add_vertex(p + u)
 	_aim_im.surface_set_color(c)
-	_aim_im.surface_add_vertex(p + r + u)
+	_aim_im.surface_add_vertex(p + r)
 	_aim_im.surface_set_color(c)
-	_aim_im.surface_add_vertex(p - r - u)
+	_aim_im.surface_add_vertex(p - r)
 	_aim_im.surface_set_color(c)
-	_aim_im.surface_add_vertex(p + r + u)
+	_aim_im.surface_add_vertex(p + r)
 	_aim_im.surface_set_color(c)
-	_aim_im.surface_add_vertex(p - r + u)
+	_aim_im.surface_add_vertex(p - u)
 
 func _spawn_burst(pos: Vector3, color: Color, amount: int) -> void:
 	var part := CPUParticles3D.new()

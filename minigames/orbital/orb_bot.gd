@@ -58,7 +58,7 @@ func _stick_toward(pawn: OrbPawn, world_dir: Vector3) -> Vector2:
 func _think_throw(pawn: OrbPawn, _now: float) -> void:
 	if _target_enemy < 0 or _retarget_t <= 0.0 or not world.pawns[_target_enemy].alive:
 		_target_enemy = _nearest_enemy(pawn)
-		_retarget_t = 0.7
+		_retarget_t = 0.6
 	if _target_enemy < 0:
 		a = false
 		return
@@ -70,14 +70,14 @@ func _think_throw(pawn: OrbPawn, _now: float) -> void:
 		to += enemy.heading * minf(dist * 0.18, 1.4)
 	move = _stick_toward(pawn, to.normalized())
 	if not a:
-		_charge_goal = clampf(dist / 11.0 + rng.randf_range(-0.05, 0.18), 0.35, 1.0)
+		_charge_goal = clampf(dist / 10.0 + rng.randf_range(-0.05, 0.18), 0.3, 1.0)
 		a = true
 		return
 	var tang := to - pawn.srf_n * to.dot(pawn.srf_n)
 	var facing := 0.0
 	if tang.length() > 0.05:
 		facing = pawn.heading.dot(tang.normalized())
-	if pawn.charge >= _charge_goal and (facing > 0.9 or pawn.charge >= 1.0):
+	if pawn.charge >= _charge_goal and (facing > 0.85 or pawn.charge >= 1.0):
 		a = false  # release -> throw
 
 func _think_fetch(pawn: OrbPawn, now: float) -> void:

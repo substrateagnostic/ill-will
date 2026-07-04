@@ -8,8 +8,8 @@ extends MeshInstance3D
 ## becomes a spirograph of everyone's old throws.
 
 const LIFE := 2.0
-const WIDTH := 0.17
-const MAX_ALPHA := 0.8
+const WIDTH := 0.2
+const MAX_ALPHA := 0.9
 
 var color := Color(0.9, 0.9, 0.92)
 

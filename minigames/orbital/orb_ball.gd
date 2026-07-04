@@ -59,7 +59,7 @@ func display_color() -> Color:
 
 func refresh_color() -> void:
 	var c := display_color()
-	_mat.albedo_color = c.lightened(0.2)
+	_mat.albedo_color = c.lightened(0.06)
 	if trail != null:
 		trail.color = c
 

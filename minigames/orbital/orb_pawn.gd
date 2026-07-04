@@ -88,8 +88,8 @@ func setup(char_scene: PackedScene, col: Color) -> void:
 	# always-visible marker orb (no depth test - readable behind planets)
 	_marker = MeshInstance3D.new()
 	var mm := SphereMesh.new()
-	mm.radius = 0.09
-	mm.height = 0.18
+	mm.radius = 0.12
+	mm.height = 0.24
 	_marker.mesh = mm
 	var mmat := StandardMaterial3D.new()
 	mmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -332,7 +332,8 @@ func _orient(dt: float) -> void:
 	if fwd.length_squared() < 0.001:
 		return
 	fwd = fwd.normalized()
-	var target := Basis.looking_at(fwd, up)
+	# KayKit GLBs face +Z, so aim -Z of the basis AWAY from the heading
+	var target := Basis.looking_at(-fwd, up)
 	var k := clampf(1.0 - exp(-14.0 * dt), 0.0, 1.0)
 	global_transform.basis = global_transform.basis.orthonormalized().slerp(target, k)
 
