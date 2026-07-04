@@ -1,0 +1,5 @@
+.godot/
+assets_raw/
+build/
+*.tmp
+verify_out/

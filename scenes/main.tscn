@@ -1,0 +1,93 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="PackedScene" path="res://scenes/course.tscn" id="2_course"]
+[ext_resource type="PackedScene" path="res://scenes/ball.tscn" id="3_ball"]
+[ext_resource type="Script" path="res://scripts/putt_controller.gd" id="4_putt"]
+[ext_resource type="Script" path="res://scripts/camera_rig.gd" id="5_cam"]
+
+[sub_resource type="Environment" id="env"]
+background_mode = 1
+background_color = Color(0.76, 0.85, 0.88, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.68, 0.72, 0.78, 1)
+ambient_light_energy = 1.1
+tonemap_mode = 2
+ssao_enabled = true
+glow_enabled = true
+glow_intensity = 0.4
+glow_bloom = 0.05
+
+[sub_resource type="BoxMesh" id="arrow_mesh"]
+size = Vector3(0.22, 0.02, 2)
+
+[sub_resource type="BoxMesh" id="head_mesh"]
+size = Vector3(0.4, 0.02, 0.4)
+
+[sub_resource type="StandardMaterial3D" id="arrow_mat"]
+albedo_color = Color(0.3, 0.9, 0.35, 1)
+emission_enabled = true
+emission = Color(0.15, 0.45, 0.17, 1)
+
+[sub_resource type="StandardMaterial3D" id="head_mat"]
+albedo_color = Color(0.3, 0.9, 0.35, 1)
+emission_enabled = true
+emission = Color(0.15, 0.45, 0.17, 1)
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_main")
+
+[node name="Course" parent="." instance=ExtResource("2_course")]
+
+[node name="Ball" parent="." instance=ExtResource("3_ball")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
+
+[node name="PuttController" type="Node3D" parent="."]
+script = ExtResource("4_putt")
+
+[node name="AimArrow" type="MeshInstance3D" parent="PuttController"]
+mesh = SubResource("arrow_mesh")
+surface_material_override/0 = SubResource("arrow_mat")
+
+[node name="Head" type="MeshInstance3D" parent="PuttController/AimArrow"]
+transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 0, 0, -1.15)
+mesh = SubResource("head_mesh")
+surface_material_override/0 = SubResource("head_mat")
+
+[node name="CameraRig" type="Node3D" parent="."]
+script = ExtResource("5_cam")
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig"]
+transform = Transform3D(1, 0, 0, 0, 0.66, 0.75, 0, -0.75, 0.66, 0, 12.5, 4.5)
+fov = 50.0
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 6, 8, 4)
+light_energy = 1.25
+light_color = Color(1, 0.96, 0.88, 1)
+shadow_enabled = true
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("env")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="StrokeLabel" type="Label" parent="UI"]
+offset_left = 24.0
+offset_top = 16.0
+offset_right = 400.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 30
+text = "STROKES: 0"
+
+[node name="Banner" type="Label" parent="UI"]
+anchor_left = 0.0
+anchor_top = 0.32
+anchor_right = 1.0
+anchor_bottom = 0.5
+theme_override_font_sizes/font_size = 72
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0.2, 0.1, 0, 1)
+theme_override_constants/outline_size = 12
+text = "SUNK!"
+horizontal_alignment = 1
