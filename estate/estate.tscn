@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://estate/estate.gd" id="1"]
 [ext_resource type="FontFile" path="res://assets/fonts/LuckiestGuy-Regular.ttf" id="2_luckiest"]
@@ -51,6 +51,15 @@ roughness = 0.9
 [sub_resource type="StandardMaterial3D" id="mat_path"]
 albedo_color = Color(0.8, 0.72, 0.58, 1)
 roughness = 0.9
+
+[sub_resource type="CameraAttributesPractical" id="cam_attr"]
+dof_blur_far_enabled = true
+dof_blur_far_distance = 16.0
+dof_blur_far_transition = 9.0
+dof_blur_near_enabled = true
+dof_blur_near_distance = 4.5
+dof_blur_near_transition = 3.0
+dof_blur_amount = 0.06
 
 [node name="Estate" type="Node3D"]
 script = ExtResource("1")
@@ -161,6 +170,7 @@ environment = SubResource("env")
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.798636, 0.601815, 0, -0.601815, 0.798636, 0, 8.5, 6.5)
 fov = 55.0
+attributes = SubResource("cam_attr")
 
 [node name="UI" type="CanvasLayer" parent="."]
 

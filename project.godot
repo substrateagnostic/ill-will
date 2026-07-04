@@ -20,6 +20,7 @@ GameState="*res://scripts/game_state.gd"
 Sfx="*res://scripts/sfx.gd"
 PlayerInput="*res://core/player_input.gd"
 EstateState="*res://estate/estate_state.gd"
+Transition="*res://core/transition.gd"
 VerifyCapture="*res://scripts/verify_capture.gd"
 
 [display]
@@ -29,6 +30,7 @@ window/size/viewport_height=720
 
 [gui]
 
+theme/custom="res://assets/ui/theme.tres"
 theme/custom_font="res://assets/fonts/Fredoka.ttf"
 
 [input]

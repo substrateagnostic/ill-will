@@ -26,7 +26,7 @@ func setup(char_scene: PackedScene, color: Color, idx: int) -> void:
 	shape.position.y = 0.65
 	add_child(shape)
 	var inst := char_scene.instantiate()
-	inst.scale = Vector3(0.85, 0.85, 0.85)
+	inst.scale = Vector3(0.78, 0.78, 0.78)
 	add_child(inst)
 	anim = inst.find_child("AnimationPlayer", true, false)
 	for a in ["Idle", "Walking_A"]:

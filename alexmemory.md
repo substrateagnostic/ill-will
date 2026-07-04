@@ -46,6 +46,18 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-04 — AAA polish pass, part 1 (your standing directive)
+- **3D animated main menu**: slow-orbiting course diorama behind the UI with
+  a spinning windmill and gravestones as set dressing. Screenshot:
+  `verify_out/menu2/shot_0120.png`
+- **Kenney UI theme project-wide**: chunky green pill buttons with depth +
+  proper panels — every button/panel in menu, Par, and Estate upgraded in
+  one stroke (`assets/ui/theme.tres`).
+- **Tilt-shift depth of field** on menu + estate cameras (toy diorama look).
+- **Scene-fade transitions** between menu/game/estate.
+- Part 2 (Par-side: DOF, trajectory dots, win podium) waits until the Par v2
+  builder branch merges, to avoid conflicts.
+
 ### 2026-07-04 — Estate E2a: the grounds are ALIVE
 Walkable KayKit characters on the estate (gamepad sticks move them directly;
 shared mouse: click a character to select, click ground to send them).

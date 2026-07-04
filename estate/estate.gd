@@ -239,7 +239,6 @@ func _enter_auction() -> void:
 		var pl = EstateState.players[i]
 		var b := Button.new()
 		b.text = "%s BID %d♠" % [pl.name, high_bid + 1]
-		b.add_theme_color_override("font_color", pl.color)
 		b.pressed.connect(_on_bid.bind(i))
 		row.add_child(b)
 	row.name = "BidRow"
