@@ -143,8 +143,8 @@ func _process(delta: float) -> void:
 		_update_grounds_clock()
 		if _grounds_timer <= 0.0 or (bots and _grounds_timer < GROUNDS_TIME - 1.5):
 			if bots:
-				_bots_place_bets()
 				_bots_buy_tiles()
+				_bots_place_bets()
 			_enter_tiles()
 	elif phase == Phase.AUCTION:
 		_bid_timer -= delta
@@ -245,7 +245,7 @@ func _bots_place_bets() -> void:
 
 func _bots_buy_tiles() -> void:
 	for i in EstateState.players.size():
-		if EstateState.rng.randf() < 0.4 and not _tile_buyers.has(i):
+		if EstateState.rng.randf() < 0.55 and not _tile_buyers.has(i):
 			if EstateState.spend_grudge(i, TILE_COST):
 				_tile_buyers.append(i)
 
@@ -283,6 +283,7 @@ func _place_tile(p: int, pos: Vector3) -> void:
 
 func _on_tile_tripped(victim: int, owner_idx: int) -> void:
 	var taken := EstateState.steal_grudge(victim, owner_idx, 1)
+	print("TILE_TRIP victim=%d owner=%d stole=%d" % [victim, owner_idx, taken])
 	var v = EstateState.players[victim]
 	var o = EstateState.players[owner_idx]
 	var suffix := " and steals 1♠" if taken > 0 else ""
