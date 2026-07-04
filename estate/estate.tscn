@@ -1,6 +1,7 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://estate/estate.gd" id="1"]
+[ext_resource type="Script" path="res://estate/trail.gd" id="5_trail"]
 [ext_resource type="FontFile" path="res://assets/fonts/LuckiestGuy-Regular.ttf" id="2_luckiest"]
 [ext_resource type="Texture2D" path="res://assets/textures/grass_stripes.png" id="3_grass"]
 [ext_resource type="PackedScene" path="res://assets/models/minigolf/castle.glb" id="4_castle"]
@@ -74,8 +75,29 @@ sides = 24
 use_collision = true
 material = SubResource("mat_lawn")
 
+[node name="Hill" type="CSGCylinder3D" parent="Grounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.02, -13)
+radius = 7.0
+height = 0.1
+cone = true
+sides = 20
+use_collision = true
+material = SubResource("mat_lawn")
+
+[node name="HillMound" type="CSGCylinder3D" parent="Grounds"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.05, -13)
+radius = 4.2
+height = 2.1
+cone = true
+sides = 20
+use_collision = true
+material = SubResource("mat_lawn")
+
 [node name="Castle" parent="Grounds" instance=ExtResource("4_castle")]
-transform = Transform3D(2.6, 0, 0, 0, 2.6, 0, 0, 0, 2.6, -1.5, 0, -10.5)
+transform = Transform3D(2.2, 0, 0, 0, 2.2, 0, 0, 0, 2.2, 0, 2.05, -13)
+
+[node name="Trail" type="Node3D" parent="."]
+script = ExtResource("5_trail")
 
 [node name="Walkers" type="Node3D" parent="Grounds"]
 
@@ -168,7 +190,7 @@ shadow_enabled = true
 environment = SubResource("env")
 
 [node name="Camera3D" type="Camera3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 0.798636, 0.601815, 0, -0.601815, 0.798636, 0, 8.5, 6.5)
+transform = Transform3D(1, 0, 0, 0, 0.848, 0.529, 0, -0.529, 0.848, 0, 9.6, 8.2)
 fov = 55.0
 attributes = SubResource("cam_attr")
 

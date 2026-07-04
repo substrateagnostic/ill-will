@@ -59,6 +59,7 @@ func _ready() -> void:
 	PlayerInput.auto_assign(GameState.player_count)
 	_spawn_walkers()
 	_spawn_toys()
+	$Trail.build(EstateState.players, EstateState.gate_statues)
 	_redraw_monuments()
 	_redraw_graffiti()
 	banner.visible = false
@@ -446,15 +447,57 @@ func _enter_reckoning(ticker: Array) -> void:
 	for c in phase_box.get_children():
 		if c is Label and c.modulate.a == 0.0:
 			var tw := create_tween()
-			tw.tween_interval(0.4 * i)
+			tw.tween_interval(0.35 * i)
 			tw.tween_property(c, "modulate:a", 1.0, 0.3)
 			i += 1
+	await get_tree().create_timer(0.35 * ticker.size() + 0.5).timeout
+	var summit := await _run_parade()
+	if summit >= 0:
+		_flash("%s REACHES THE MANOR!" % EstateState.players[summit].name, EstateState.players[summit].color, 3.0)
+		await get_tree().create_timer(2.0).timeout
+		_end_night(summit)
+		return
 	var btn := Button.new()
 	btn.text = "BACK TO THE GROUNDS" if EstateState.games_played < EstateState.night_length else "END THE NIGHT"
 	btn.pressed.connect(_after_reckoning)
 	phase_box.add_child(btn)
 	if bots:
-		get_tree().create_timer(2.5 + 0.4 * ticker.size()).timeout.connect(_after_reckoning)
+		get_tree().create_timer(2.0).timeout.connect(_after_reckoning)
+
+## Advances every pawn by the points just earned, worst first, winner last.
+## Handles tollgate claims/payments. Returns a summit player index or -1.
+func _run_parade() -> int:
+	var order: Array = EstateState.last_deltas.keys()
+	order.sort_custom(func(a, b): return EstateState.last_deltas[a] < EstateState.last_deltas[b])
+	var summit := -1
+	for p in order:
+		var delta: int = EstateState.last_deltas[p]
+		if delta <= 0:
+			continue
+		var from: int = EstateState.trail_pos[p]
+		var to: int = mini(from + delta, Trail.STONES - 1)
+		if to == from:
+			continue
+		var tw: Tween = $Trail.advance_pawn(p, from, to)
+		await tw.finished
+		EstateState.trail_pos[p] = to
+		for s in range(from + 1, to + 1):
+			if s in Trail.TOLLGATES:
+				if not EstateState.tollgates.has(s):
+					EstateState.tollgates[s] = p
+					_flash("%s CLAIMS THE TOLLGATE" % EstateState.players[p].name, EstateState.players[p].color, 1.6)
+					EstateState.add_graffiti("%s claimed a tollgate" % EstateState.players[p].name)
+				elif EstateState.tollgates[s] != p:
+					var owner_idx: int = EstateState.tollgates[s]
+					var taken := EstateState.steal_grudge(p, owner_idx, 1)
+					if taken > 0:
+						_flash("%s PAYS %s'S TOLL (1♠)" % [EstateState.players[p].name, EstateState.players[owner_idx].name], EstateState.players[owner_idx].color, 1.6)
+				await get_tree().create_timer(0.7).timeout
+		if to >= Trail.STONES - 1:
+			summit = p
+		_rebuild_top_bar()
+	_redraw_graffiti()
+	return summit
 
 func _after_reckoning() -> void:
 	if phase != Phase.RECKONING:
@@ -464,9 +507,10 @@ func _after_reckoning() -> void:
 	else:
 		_enter_grounds()
 
-func _end_night() -> void:
+func _end_night(champ_override := -1) -> void:
 	phase = Phase.NIGHT_END
-	var champ = EstateState.end_night()
+	var champ = EstateState.end_night(champ_override)
+	$Trail.add_statue(EstateState.gate_statues.back(), EstateState.gate_statues.size() - 1)
 	_redraw_monuments()
 	_rebuild_top_bar()
 	phase_panel.visible = false
