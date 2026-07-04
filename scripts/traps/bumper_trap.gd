@@ -21,6 +21,7 @@ func _on_body(body: Node3D) -> void:
 	if is_ghost or not body is Ball or _cooldowns.has(body):
 		return
 	_cooldowns[body] = 0.25
+	Sfx.play("bumper", -4.0)
 	var away := body.global_position - global_position
 	away.y = 0.0
 	if away.length() < 0.01:

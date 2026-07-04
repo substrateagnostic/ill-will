@@ -4,6 +4,12 @@ enum Phase { DRAFT, BUILD, PUTT, BETWEEN }
 
 const BALL_SCENE := preload("res://scenes/ball.tscn")
 const GRAVESTONE_SCENE := preload("res://scenes/gravestone.tscn")
+const CHAR_SCENES := [
+	preload("res://assets/models/kaykit/Barbarian.glb"),
+	preload("res://assets/models/kaykit/Knight.glb"),
+	preload("res://assets/models/kaykit/Mage.glb"),
+	preload("res://assets/models/kaykit/Rogue.glb"),
+]
 const BUILD_TIME_LIMIT := 25.0
 const ROYALTY := 2
 const TEE_XS := [-0.9, -0.3, 0.3, 0.9]
@@ -15,6 +21,7 @@ const AUTOBUILD_SPOTS := [
 ]
 
 var balls: Array = []
+var caddies: Array = []
 var round_manager: RoundManager
 var phase := Phase.BETWEEN
 var draft_order: Array = []
@@ -66,6 +73,13 @@ func _spawn_balls() -> void:
 		b.sunk.connect(_on_any_ball_sunk.bind(i))
 		b.died.connect(_on_ball_died.bind(i))
 		balls.append(b)
+		var c := Caddy.new()
+		add_child(c)
+		var side := -1.0 if i % 2 == 0 else 1.0
+		c.global_position = Vector3(3.85 * side, -0.4, 0.2 + floorf(i / 2.0) * 1.5)
+		c.rotation_degrees.y = 105.0 * side
+		c.setup(CHAR_SCENES[i], GameState.players[i].color)
+		caddies.append(c)
 	course.balls = balls
 
 func _tee_pos(i: int) -> Vector3:
@@ -78,6 +92,7 @@ func _start_round() -> void:
 	round_label.text = "ROUND %d / %d" % [GameState.round_num, GameState.rounds_total]
 	for i in balls.size():
 		balls[i].reset_for_round(_tee_pos(i))
+		caddies[i].revive()
 	var standings := GameState.standings()
 	draft_order = standings.duplicate()
 	draft_order.reverse()
@@ -92,6 +107,9 @@ func _begin_draft_turn() -> void:
 	var p: int = draft_order[draft_pointer]
 	var player = GameState.players[p]
 	current_hand = TrapCatalog.random_hand(GameState.rng)
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--forcetrap="):
+			current_hand[0] = arg.trim_prefix("--forcetrap=")
 	grudge_card_idx = -1
 	var is_last_place: bool = p == GameState.standings().back() and GameState.round_num > 1
 	if is_last_place:
@@ -130,7 +148,9 @@ func _on_card_picked(card_idx: int) -> void:
 	var p: int = draft_order[draft_pointer]
 	var player = GameState.players[p]
 	var id: String = current_hand[card_idx]
+	Sfx.play("card")
 	if card_idx == grudge_card_idx:
+		Sfx.play("grudge")
 		player.grudge = maxi(0, player.grudge - 1)
 	draft_panel.visible = false
 	phase = Phase.BUILD
@@ -188,12 +208,19 @@ func _update_stroke_label(p: int) -> void:
 	stroke_label.text = "STROKE %d / %d" % [mini(round_manager.strokes[p] + 1, RoundManager.STROKE_CAP), RoundManager.STROKE_CAP]
 
 func _on_any_ball_sunk(p: int) -> void:
+	Sfx.play("sink")
+	caddies[p].react("Cheer")
+	_spawn_confetti(course.get_node("CupArea").global_position + Vector3(0, 0.6, 0), GameState.players[p].color)
 	_flash_banner("%s SINKS IT!" % GameState.players[p].name, GameState.players[p].color, 1.4)
 
 func _on_ball_died(killer: Trap, victim: int) -> void:
 	var v = GameState.players[victim]
 	v.grudge += 1
 	var death_pos: Vector3 = balls[victim].global_position
+	Sfx.play("splat")
+	Sfx.play("death")
+	caddies[victim].react_death()
+	camera_rig.shake(0.35)
 	_spawn_death_fx(death_pos, v.color)
 	_spawn_gravestone(death_pos, v.color)
 	var credit := "THE COURSE"
@@ -205,6 +232,7 @@ func _on_ball_died(killer: Trap, victim: int) -> void:
 		if killer.author_index != victim:
 			a.score += ROYALTY
 			a.royalties += ROYALTY
+			caddies[killer.author_index].react("Cheer")
 			_rebuild_scoreboard()
 	elif killer != null:
 		credit = killer.display_name
@@ -265,8 +293,11 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 	GameState.round_num += 1
 	if GameState.is_match_over():
 		var champ: int = GameState.standings()[0]
+		Sfx.play("match_win")
+		caddies[champ].react("Cheer")
 		_flash_banner("%s WINS THE MATCH!" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
 		return
+	Sfx.play("round_over")
 	_flash_banner("ROUND OVER", Color(1, 0.85, 0.2), 2.6)
 	await get_tree().create_timer(3.0).timeout
 	_start_round()
@@ -275,10 +306,39 @@ func _flash_banner(text: String, color: Color, duration: float) -> void:
 	banner.text = text
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
+	banner.pivot_offset = banner.size / 2.0
+	banner.scale = Vector2(0.55, 0.55)
+	var pop := create_tween()
+	pop.tween_property(banner, "scale", Vector2.ONE, 0.28).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if duration < 100.0:
 		var tw := create_tween()
 		tw.tween_interval(duration)
 		tw.tween_callback(func(): banner.visible = false)
+
+func _spawn_confetti(pos: Vector3, color: Color) -> void:
+	for c in [color, Color(1, 0.9, 0.4), Color.WHITE]:
+		var p := CPUParticles3D.new()
+		add_child(p)
+		p.global_position = pos
+		p.one_shot = true
+		p.amount = 16
+		p.lifetime = 1.1
+		p.explosiveness = 1.0
+		p.direction = Vector3.UP
+		p.spread = 55.0
+		p.initial_velocity_min = 3.0
+		p.initial_velocity_max = 6.0
+		p.gravity = Vector3(0, -7.0, 0)
+		p.angular_velocity_min = -360.0
+		p.angular_velocity_max = 360.0
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(0.07, 0.02, 0.07)
+		p.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = c
+		p.material_override = mat
+		p.emitting = true
+		get_tree().create_timer(2.0).timeout.connect(p.queue_free)
 
 func _rebuild_scoreboard() -> void:
 	for c in score_rows.get_children():

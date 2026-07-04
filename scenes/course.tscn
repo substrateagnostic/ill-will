@@ -1,13 +1,21 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/course.gd" id="1_course"]
+[ext_resource type="Texture2D" path="res://assets/textures/grass_stripes.png" id="2_grass"]
+[ext_resource type="PackedScene" path="res://assets/models/minigolf/flag-red.glb" id="3_flag"]
 
 [sub_resource type="StandardMaterial3D" id="mat_green"]
-albedo_color = Color(0.33, 0.62, 0.31, 1)
-roughness = 0.92
+albedo_texture = ExtResource("2_grass")
+uv1_triplanar = true
+uv1_scale = Vector3(0.25, 0.25, 0.25)
+roughness = 0.95
 
 [sub_resource type="StandardMaterial3D" id="mat_wood"]
-albedo_color = Color(0.54, 0.37, 0.24, 1)
+albedo_color = Color(0.93, 0.89, 0.78, 1)
+roughness = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_wood_dark"]
+albedo_color = Color(0.5, 0.35, 0.24, 1)
 roughness = 0.8
 
 [sub_resource type="StandardMaterial3D" id="mat_red"]
@@ -71,7 +79,7 @@ material = SubResource("mat_wood")
 [node name="Bank" type="CSGBox3D" parent="Geo"]
 transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 1.9, 0.155, -7)
 size = Vector3(2.2, 0.71, 0.25)
-material = SubResource("mat_wood")
+material = SubResource("mat_wood_dark")
 
 [node name="TrapContainer" type="Node3D" parent="."]
 
@@ -91,16 +99,8 @@ shape = SubResource("cup_shape")
 [node name="Flag" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -13)
 
-[node name="Pole" type="CSGCylinder3D" parent="Flag"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.55, 0)
-radius = 0.03
-height = 1.1
-material = SubResource("mat_white")
-
-[node name="Pennant" type="CSGBox3D" parent="Flag"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.28, 0.95, 0)
-size = Vector3(0.55, 0.28, 0.03)
-material = SubResource("mat_red")
+[node name="FlagModel" parent="Flag" instance=ExtResource("3_flag")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0.28, 0, 0)
 
 [node name="TeePad" type="CSGCylinder3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.005, 0)

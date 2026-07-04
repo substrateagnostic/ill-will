@@ -1,0 +1,46 @@
+extends Node
+## Autoloaded SFX bus. Sfx.play("putt") etc. Variants picked at random,
+## slight pitch wobble so repeats never sound canned.
+
+const BANK := {
+	"putt": ["impactGeneric_light_000", "impactGeneric_light_001", "impactGeneric_light_002"],
+	"bounce": ["impactPlate_light_000", "impactPlate_light_001", "impactPlate_light_002"],
+	"bumper": ["impactBell_heavy_000", "impactBell_heavy_001"],
+	"death": ["jingles_HIT01"],
+	"crush": ["impactMining_000"],
+	"splat": ["impactPunch_heavy_000"],
+	"sink": ["jingles_NES03"],
+	"round_over": ["jingles_NES09"],
+	"match_win": ["jingles_NES13"],
+	"card": ["click_001", "click_002", "click_003"],
+	"place": ["drop_001"],
+	"confirm": ["confirmation_001"],
+	"invalid": ["error_004"],
+	"grudge": ["bong_001"],
+}
+
+var _streams := {}
+var _pool: Array = []
+var _next := 0
+
+func _ready() -> void:
+	for key in BANK:
+		var list: Array = []
+		for name in BANK[key]:
+			list.append(load("res://assets/audio/%s.ogg" % name))
+		_streams[key] = list
+	for i in 10:
+		var p := AudioStreamPlayer.new()
+		add_child(p)
+		_pool.append(p)
+
+func play(key: String, volume_db := 0.0, pitch_wobble := 0.07) -> void:
+	if not _streams.has(key):
+		return
+	var list: Array = _streams[key]
+	var p: AudioStreamPlayer = _pool[_next]
+	_next = (_next + 1) % _pool.size()
+	p.stream = list[randi() % list.size()]
+	p.volume_db = volume_db
+	p.pitch_scale = 1.0 + randf_range(-pitch_wobble, pitch_wobble)
+	p.play()

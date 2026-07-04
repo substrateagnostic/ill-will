@@ -54,8 +54,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_rotate_step(1)
 		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
 			_rotate_step(-1)
-		elif event.button_index == MOUSE_BUTTON_LEFT and _valid:
-			_confirm()
+		elif event.button_index == MOUSE_BUTTON_LEFT:
+			if _valid:
+				_confirm()
+			else:
+				Sfx.play("invalid")
 	elif event is InputEventKey and event.pressed and event.physical_keycode == KEY_R:
 		_rotate_step(1)
 
@@ -66,6 +69,7 @@ func _rotate_step(dir: int) -> void:
 		_refresh()
 
 func _confirm() -> void:
+	Sfx.play("place")
 	ghost.solidify()
 	var placed := ghost
 	ghost = null

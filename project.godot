@@ -10,12 +10,17 @@ config/features=PackedStringArray("4.6")
 [autoload]
 
 GameState="*res://scripts/game_state.gd"
+Sfx="*res://scripts/sfx.gd"
 VerifyCapture="*res://scripts/verify_capture.gd"
 
 [display]
 
 window/size/viewport_width=1280
 window/size/viewport_height=720
+
+[gui]
+
+theme/custom_font="res://assets/fonts/Fredoka.ttf"
 
 [input]
 

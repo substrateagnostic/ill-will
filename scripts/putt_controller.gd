@@ -48,6 +48,7 @@ func _fire() -> void:
 	if pull.length() < 0.25:
 		return
 	var speed := _power_for_drag(pull.length())
+	Sfx.play("putt", -8.0 + 9.0 * (speed / MAX_SPEED))
 	ball.putt(pull.normalized(), speed)
 	stroke_taken.emit()
 
@@ -114,5 +115,6 @@ func debug_putt(power: float, angle_deg: float) -> void:
 	if ball == null:
 		return
 	var dir := Vector3(0, 0, -1).rotated(Vector3.UP, deg_to_rad(angle_deg))
+	Sfx.play("putt", -8.0 + 9.0 * (power / MAX_SPEED))
 	ball.putt(dir, power)
 	stroke_taken.emit()

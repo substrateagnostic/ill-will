@@ -6,8 +6,12 @@ extends Node3D
 @export var lean_strength := 0.22
 
 var ball: Ball
+var _shake := 0.0
 
 @onready var cam: Camera3D = $Camera3D
+
+func shake(amount: float) -> void:
+	_shake = maxf(_shake, amount)
 
 func _process(delta: float) -> void:
 	var focus := course_center
@@ -15,3 +19,10 @@ func _process(delta: float) -> void:
 		focus = course_center.lerp(ball.global_position, lean_strength)
 	var target := Transform3D(Basis.looking_at(focus - cam.global_position, Vector3.UP), cam.global_position)
 	cam.global_transform = cam.global_transform.interpolate_with(target, 1.0 - exp(-6.0 * delta))
+	if _shake > 0.002:
+		cam.h_offset = randf_range(-1.0, 1.0) * _shake * 0.35
+		cam.v_offset = randf_range(-1.0, 1.0) * _shake * 0.35
+		_shake = lerpf(_shake, 0.0, 1.0 - exp(-5.0 * delta))
+	else:
+		cam.h_offset = 0.0
+		cam.v_offset = 0.0

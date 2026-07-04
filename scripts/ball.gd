@@ -20,6 +20,8 @@ var _mat: StandardMaterial3D
 @onready var mesh: MeshInstance3D = $Mesh
 
 func _ready() -> void:
+	add_to_group("balls")
+	body_entered.connect(_on_contact)
 	last_rest_position = global_position
 	_mat = StandardMaterial3D.new()
 	_mat.albedo_color = player_color
@@ -55,6 +57,11 @@ func putt(direction: Vector3, speed: float) -> void:
 	linear_velocity = dir * s
 	angular_velocity = Vector3.UP.cross(dir) * (s / 0.15)
 	_was_moving = true
+
+func _on_contact(_body: Node) -> void:
+	var speed := linear_velocity.length()
+	if speed > 1.6:
+		Sfx.play("bounce", clampf(-14.0 + speed, -12.0, 0.0))
 
 func is_stopped() -> bool:
 	return is_dead or (not _was_moving and not is_sunk)
