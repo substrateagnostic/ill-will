@@ -23,6 +23,8 @@ func _ready() -> void:
 			player_count = clampi(int(arg.trim_prefix("--players=")), 2, 4)
 		elif arg.begins_with("--seed="):
 			rng.seed = int(arg.trim_prefix("--seed="))
+		elif arg.begins_with("--rounds="):
+			rounds_total = clampi(int(arg.trim_prefix("--rounds=")), 1, 18)
 	reset_match()
 
 func reset_match() -> void:

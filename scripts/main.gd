@@ -183,7 +183,7 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("restart"):
 		GameState.reset_match()
-		get_tree().reload_current_scene()
+		get_tree().change_scene_to_file("res://scenes/menu.tscn")
 
 func _on_cup_entry(body: Node3D) -> void:
 	if body is Ball and not body.is_sunk:
@@ -221,6 +221,7 @@ func _on_ball_died(killer: Trap, victim: int) -> void:
 	Sfx.play("death")
 	caddies[victim].react_death()
 	camera_rig.shake(0.35)
+	camera_rig.focus_on(death_pos, 1.3)
 	_spawn_death_fx(death_pos, v.color)
 	_spawn_gravestone(death_pos, v.color)
 	var credit := "THE COURSE"
@@ -293,9 +294,18 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 	GameState.round_num += 1
 	if GameState.is_match_over():
 		var champ: int = GameState.standings()[0]
+		print("MATCH_OVER champ=", GameState.players[champ].name)
+		turn_label.text = ""
+		stroke_label.text = ""
+		round_label.text = "FINAL"
+		_flash_banner("THE COURSE REMEMBERS", Color(1, 0.85, 0.2), 8.0)
+		var tw: Tween = camera_rig.start_flyover(8.5)
+		await tw.finished
+		print("FLYOVER_DONE")
 		Sfx.play("match_win")
 		caddies[champ].react("Cheer")
-		_flash_banner("%s WINS THE MATCH!" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
+		_spawn_confetti(caddies[champ].global_position + Vector3(0, 1.5, 0), GameState.players[champ].color)
+		_flash_banner("%s WINS THE MATCH!\n(press R for a rematch)" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
 		return
 	Sfx.play("round_over")
 	_flash_banner("ROUND OVER", Color(1, 0.85, 0.2), 2.6)

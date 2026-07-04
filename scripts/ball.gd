@@ -16,6 +16,7 @@ var is_petrified := false
 var last_rest_position := Vector3.ZERO
 var _was_moving := false
 var _mat: StandardMaterial3D
+var _trail: CPUParticles3D
 
 @onready var mesh: MeshInstance3D = $Mesh
 
@@ -27,11 +28,36 @@ func _ready() -> void:
 	_mat.albedo_color = player_color
 	_mat.roughness = 0.35
 	mesh.set_surface_override_material(0, _mat)
+	_trail = CPUParticles3D.new()
+	_trail.emitting = false
+	_trail.amount = 22
+	_trail.lifetime = 0.4
+	_trail.local_coords = false
+	_trail.direction = Vector3.ZERO
+	_trail.spread = 0.0
+	_trail.initial_velocity_min = 0.0
+	_trail.initial_velocity_max = 0.0
+	_trail.gravity = Vector3.ZERO
+	_trail.scale_amount_min = 0.55
+	_trail.scale_amount_max = 0.9
+	_trail.scale_amount_curve = null
+	var tmesh := SphereMesh.new()
+	tmesh.radius = 0.07
+	tmesh.height = 0.14
+	_trail.mesh = tmesh
+	var tmat := StandardMaterial3D.new()
+	tmat.albedo_color = Color(player_color.r, player_color.g, player_color.b, 0.5)
+	tmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	tmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_trail.material_override = tmat
+	add_child(_trail)
 
 func _physics_process(_delta: float) -> void:
 	if is_sunk or is_petrified or is_dead:
 		return
 	var speed := linear_velocity.length()
+	if _trail:
+		_trail.emitting = speed > 3.5
 	if speed > MAX_SPEED:
 		linear_velocity = linear_velocity.normalized() * MAX_SPEED
 	if speed < 0.9 and speed > 0.0:

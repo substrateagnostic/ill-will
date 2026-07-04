@@ -3,10 +3,10 @@
 [ext_resource type="Script" path="res://scripts/traps/water_trap.gd" id="1"]
 
 [sub_resource type="BoxMesh" id="pool_mesh"]
-size = Vector3(2.2, 0.03, 1.4)
+size = Vector3(1.8, 0.03, 1.1)
 
 [sub_resource type="BoxShape3D" id="zone_shape"]
-size = Vector3(2.1, 0.4, 1.3)
+size = Vector3(1.7, 0.4, 1.0)
 
 [sub_resource type="StandardMaterial3D" id="mat_water"]
 transparency = 1

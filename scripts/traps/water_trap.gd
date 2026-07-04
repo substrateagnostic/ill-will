@@ -3,7 +3,7 @@ extends Trap
 func _init() -> void:
 	trap_id = "water"
 	display_name = "WATER HAZARD"
-	footprint_radius = 1.3
+	footprint_radius = 1.1
 
 func _ready() -> void:
 	$Zone.body_entered.connect(_on_body)
