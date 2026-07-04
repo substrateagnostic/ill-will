@@ -62,7 +62,7 @@ theme_override_font_sizes/font_size = 19
 theme_override_colors/font_color = Color(0.97, 0.97, 0.97, 1)
 theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.12, 1)
 theme_override_constants/outline_size = 6
-text = "MOVE  -  A = SHOVE  -  B = BRACE   |   FALL AND YOU RETURN AS A SEAGULL (A = BOMB)"
+text = "MOVE  -  A = SHOVE (ANSWER A SHOVE TO CLASH!)  -  B = BRACE   |   FALL AND YOU RETURN AS A SEAGULL (A = BOMB)"
 horizontal_alignment = 1
 
 [node name="ScorePanel" type="PanelContainer" parent="UI"]

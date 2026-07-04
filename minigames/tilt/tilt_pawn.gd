@@ -19,6 +19,8 @@ const SLOPE_SPEED := 0.55        # move speed +- with slope
 const BRACE_TIME := 2.0
 const BRACE_CD := 3.0
 const SHOVE_CD := 0.8
+const SHOVE_WINDUP := 0.12       # readable tell; total time-to-hit stays < 0.2s
+const CLASH_STAGGER := 0.3       # after a clash: no immediate re-shove
 const FALL_GRAV := 12.0
 
 var player_index := 0
@@ -34,6 +36,8 @@ var braced := false
 var brace_t := 0.0
 var brace_cd := 0.0
 var shove_cd := 0.0
+var windup_t := 0.0              # > 0: shove wound up, lands when it hits 0
+var shove_press_t := -999.0      # game time the current/last shove started
 var in_slip := false
 var stagger_t := 0.0             # shoved: briefly no control (knock carries)
 var fall_vel := Vector3.ZERO
@@ -48,6 +52,7 @@ var _stack: Node3D
 var _brace_ring: MeshInstance3D
 var _cur_anim := ""
 var _anim_hold := 0.0            # seconds a one-shot anim owns the body
+var _shove_release := false      # set the tick the windup completes
 
 func setup(index: int, display_name: String, color: Color, char_scene_path: String, disc: Node3D) -> void:
 	player_index = index
@@ -108,6 +113,13 @@ func tick(delta: float, move: Vector2, tilt: Vector2) -> void:
 	shove_cd = maxf(0.0, shove_cd - delta)
 	stagger_t = maxf(0.0, stagger_t - delta)
 	_anim_hold = maxf(0.0, _anim_hold - delta)
+	if windup_t > 0.0:
+		windup_t -= delta
+		if windup_t <= 0.0:
+			windup_t = 0.0
+			_shove_release = true
+			if _avatar:
+				_avatar.scale = Vector3.ONE
 	if braced:
 		brace_t -= delta
 		if brace_t <= 0.0:
@@ -162,9 +174,10 @@ func begin_fall() -> void:
 	braced = false
 	_brace_ring.visible = false
 	_anim_hold = 0.0
+	cancel_windup()
 
 func try_brace() -> bool:
-	if braced or brace_cd > 0.0 or state != PState.STANDING:
+	if braced or brace_cd > 0.0 or windup_t > 0.0 or state != PState.STANDING:
 		return false
 	braced = true
 	brace_t = BRACE_TIME
@@ -172,22 +185,57 @@ func try_brace() -> bool:
 	_brace_ring.visible = true
 	return true
 
-func try_shove() -> bool:
-	if shove_cd > 0.0 or braced or stagger_t > 0.0 or state != PState.STANDING:
+## Begins the shove WINDUP (the readable tell). The hit itself lands
+## SHOVE_WINDUP seconds later — tilt.gd polls consume_shove_release() and
+## resolves cone hits / clashes there. Cooldown counts from the press.
+func try_shove(now: float) -> bool:
+	if shove_cd > 0.0 or windup_t > 0.0 or braced or stagger_t > 0.0 \
+			or state != PState.STANDING:
 		return false
 	shove_cd = SHOVE_CD
-	slide += facing * 1.2  # little lunge
-	_one_shot("Unarmed_Melee_Attack_Punch_A", 0.5)
+	windup_t = SHOVE_WINDUP
+	shove_press_t = now
+	if _avatar:
+		_avatar.scale = Vector3.ONE * 1.06  # windup pulse (snap back on release)
+	_one_shot("Unarmed_Melee_Attack_Punch_A", SHOVE_WINDUP + 0.5)
 	return true
+
+## True exactly once, on the tick the windup completed.
+func consume_shove_release() -> bool:
+	if _shove_release:
+		_shove_release = false
+		return true
+	return false
+
+## The forward lunge that used to fire at press time — now at release.
+func release_lunge() -> void:
+	slide += facing * 1.2
+
+## Windup interrupted (hit mid-swing, clash consumed it, fell, round reset).
+func cancel_windup() -> void:
+	windup_t = 0.0
+	_shove_release = false
+	shove_press_t = -999.0
+	if _avatar:
+		_avatar.scale = Vector3.ONE
 
 func apply_knock(dir: Vector2, power: float, shover: int, now: float) -> void:
 	var factor := 0.35 if braced else 1.0
 	slide += dir * power * factor
 	if not braced:
 		stagger_t = 0.5
+		cancel_windup()  # a landed hit interrupts whatever you were winding up
 	last_shover = shover
 	last_shove_t = now
 	_one_shot("Hit_A", 0.4)
+
+## Mutual shove clash: soft push-apart, brief stagger, NO royalty credit
+## (last_shover deliberately untouched).
+func apply_clash(dir: Vector2, power: float) -> void:
+	slide += dir * power
+	stagger_t = CLASH_STAGGER
+	cancel_windup()
+	_one_shot("Hit_A", 0.35)
 
 func add_coin() -> void:
 	coins += 1
@@ -226,6 +274,7 @@ func reset_for_round(spawn: Vector2) -> void:
 	brace_t = 0.0
 	brace_cd = 0.0
 	shove_cd = 0.0
+	cancel_windup()
 	in_slip = false
 	fall_vel = Vector3.ZERO
 	last_shover = -1
