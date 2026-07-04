@@ -703,13 +703,11 @@ func _dict_max(d: Dictionary) -> int:
 # ===========================================================================
 func _update_hud() -> void:
 	# edge arrows all point at the carrier
-	if carrier_index >= 0 and arrows:
+	if carrier_index >= 0 and arrows and not cam.is_position_behind(
+			(players[carrier_index] as GreedPlayer).global_position + Vector3(0, 1.6, 0)):
 		var c: GreedPlayer = players[carrier_index]
 		var head := c.global_position + Vector3(0, 1.6, 0)
-		var behind := cam.is_position_behind(head)
 		var screen: Vector2 = cam.unproject_position(head)
-		if behind:
-			screen = ui.get_viewport().get_visible_rect().size - screen
 		var list: Array = []
 		for q in roster.size():
 			if q != carrier_index:

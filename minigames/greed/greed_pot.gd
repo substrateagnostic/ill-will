@@ -61,15 +61,15 @@ func build() -> void:
 	# huge floating value number
 	_label = Label3D.new()
 	_label.text = "5"
-	_label.font_size = 200
-	_label.pixel_size = 0.006
+	_label.font_size = 260
+	_label.pixel_size = 0.010
 	_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	_label.no_depth_test = true
 	_label.render_priority = 2
-	_label.outline_size = 40
+	_label.outline_size = 52
 	_label.outline_modulate = Color(0.15, 0.08, 0.0)
 	_label.modulate = Color(1.0, 0.92, 0.4)
-	_label.position.y = 2.5
+	_label.position.y = 2.7
 	_label.fixed_size = false
 	var lf: FontFile = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
 	if lf:

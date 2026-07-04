@@ -10,8 +10,8 @@ var carrier_active := false
 var arrows: Array = []                  # [{color: Color}] per non-carrier
 var _pulse := 0.0
 
-const MARGIN := 46.0
-const SIZE := 26.0
+const MARGIN := 54.0
+const SIZE := 34.0
 
 
 func _ready() -> void:
@@ -30,21 +30,21 @@ func update_arrows(active: bool, screen_pos: Vector2, list: Array, t: float) -> 
 func _draw() -> void:
 	if not carrier_active or arrows.is_empty():
 		return
-	var vp := size
+	# use the true viewport size — a CanvasLayer Control's own `size` can lag a
+	# layout pass and collapse the arrows to the origin
+	var vp := get_viewport_rect().size
 	var center := vp * 0.5
-	var beat := 1.0 + 0.12 * sin(_pulse * 8.0)
+	var beat := 1.0 + 0.15 * sin(_pulse * 8.0)
+	var dir := carrier_screen - center
+	if dir.length() < 1.0:
+		dir = Vector2(0, -1)
+	dir = dir.normalized()
+	var perp := Vector2(-dir.y, dir.x)
+	var edge := _edge_point(center, dir, vp)
 	for i in arrows.size():
 		var entry: Dictionary = arrows[i]
 		var col: Color = entry["color"]
-		# bearing from screen center to the carrier
-		var dir := carrier_screen - center
-		if dir.length() < 1.0:
-			dir = Vector2(0, -1)
-		dir = dir.normalized()
-		# perpendicular fan-out so multiple arrows don't stack exactly
-		var perp := Vector2(-dir.y, dir.x)
-		var spread := (float(i) - (arrows.size() - 1) * 0.5) * (SIZE * 1.6)
-		var edge := _edge_point(center, dir, vp)
+		var spread := (float(i) - (arrows.size() - 1) * 0.5) * (SIZE * 1.7)
 		var pos := edge + perp * spread
 		pos.x = clampf(pos.x, MARGIN, vp.x - MARGIN)
 		pos.y = clampf(pos.y, MARGIN, vp.y - MARGIN)
@@ -65,14 +65,14 @@ func _draw_chevron(pos: Vector2, dir: Vector2, col: Color, beat: float) -> void:
 	var s := SIZE * beat
 	var perp := Vector2(-dir.y, dir.x)
 	var tip := pos + dir * s
-	var l := pos - dir * (s * 0.4) + perp * (s * 0.85)
-	var r := pos - dir * (s * 0.4) - perp * (s * 0.85)
-	var pts := PackedVector2Array([tip, l, r])
-	# dark outline for punch, then the colored fill
-	var out := PackedVector2Array([
-		tip + dir * 3.0,
-		l + (l - pos).normalized() * 3.0,
-		r + (r - pos).normalized() * 3.0,
-	])
-	draw_colored_polygon(out, Color(0.08, 0.05, 0.02, 0.9))
-	draw_colored_polygon(pts, col)
+	var l := pos - dir * (s * 0.35) + perp * (s * 0.95)
+	var r := pos - dir * (s * 0.35) - perp * (s * 0.95)
+	# dark drop-shadow for punch, then the colored fill, then a bright core
+	var sh := PackedVector2Array([tip + dir * 4.0 + Vector2(2, 2),
+		l + Vector2(2, 2), r + Vector2(2, 2)])
+	draw_colored_polygon(sh, Color(0.05, 0.03, 0.0, 0.85))
+	draw_colored_polygon(PackedVector2Array([tip, l, r]), col)
+	var ctip := pos + dir * (s * 0.55)
+	var cl := pos - dir * (s * 0.05) + perp * (s * 0.5)
+	var cr := pos - dir * (s * 0.05) - perp * (s * 0.5)
+	draw_colored_polygon(PackedVector2Array([ctip, cl, cr]), col.lightened(0.45))
