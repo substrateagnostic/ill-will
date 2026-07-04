@@ -58,6 +58,32 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-05 (night shift) — your bedtime asks, executed
+- **5 new minigame specs written** (target roster 10):
+  GREED INC. (pot grab-and-run banking), SWAP MEET (kart race where every
+  hit swaps positions — 1st place is a bullseye), MOWER MAYHEM (Splatoon-
+  style lawn coverage in our mow-stripe language), THE THRONE (musical-
+  chairs tyranny), LAST WILL (the dead draft blessings/curses — kingmaking
+  as theater). All in docs/specs/. Builders launched for Greed/Swap/Mower;
+  Throne + Last Will queued for the next wave (balance-sensitive).
+- **Estate progression designed: THE PILGRIMAGE TRAIL** — the leaderboard
+  becomes literal terrain: stepping-stones spiral up the hill to the Manor;
+  pawns advance by POINTS EARNED (no dice, ever — the Pro-Rules lesson);
+  Reckoning becomes a watchable parade (your bio-break moment); TOLLGATE
+  stations let leaders tax passers (grudge engine); night champion's statue
+  erected at the Manor gates forever. Building it now. Your Among Us
+  instinct is sketched as THE SABOTEUR (opt-in, one bluff one vote, no
+  elimination) in the same design doc — wants your read before building:
+  docs/superpowers/specs/2026-07-05-pilgrimage-trail-design.md
+- **Echo v1.1 MERGED**: real attack anims (chop/2H-slice/blocking), charged
+  heavy with red-tint windup, parry->riposte triangle, ghosts now shatter
+  into tinted shards at their recorded death (your declutter note). Builder
+  also caught a real bug: ghost heavies were resolving as lights.
+- **Tilt v1.1 MERGED**: shove-clash counter with 0.12s windup — honest
+  balance work (measured the whiff regression, compensated with reach +
+  aim tracking). Design note to watch in human play: face-to-face duel
+  kills now clash by design, so royalties shift toward blindsides.
+
 ### 2026-07-04 — PAR v2 MERGED (your playtest changes are live) + more fleet
 - **Par v2** (Opus build, reviewed): 3 rounds + CHAOS round (golden hour,
   1.6x traps, double points, no waiting), 2 trap placements per player per

@@ -16,7 +16,12 @@ var rng := RandomNumberGenerator.new()
 var monuments: Array = []
 var graffiti: Array = []
 var ledger: Array = []
+var gate_statues: Array = []
 var nights_played := 0
+
+var trail_pos := {}
+var tollgates := {}
+var last_deltas := {}
 
 func _ready() -> void:
 	rng.randomize()
@@ -34,6 +39,11 @@ func start_night(player_count: int) -> void:
 	pot = 0
 	bets.clear()
 	players.clear()
+	trail_pos.clear()
+	tollgates.clear()
+	last_deltas.clear()
+	for i in player_count:
+		trail_pos[i] = 0
 	for i in player_count:
 		players.append({
 			"index": i,
@@ -55,10 +65,12 @@ func apply_results(results: Dictionary) -> Array:
 	var ticker: Array = []
 	var placements: Array = results.get("placements", [])
 	var pts := [5, 3, 2, 1]
+	last_deltas.clear()
 	for rank in placements.size():
 		var p: int = placements[rank]
 		var gain: int = pts[rank] if rank < pts.size() else 0
 		players[p].points += gain
+		last_deltas[p] = gain
 		ticker.append("%s finishes #%d  (+%d pts)" % [players[p].name, rank + 1, gain])
 	for ev in results.get("currency_events", []):
 		var p: int = ev.player
@@ -126,14 +138,25 @@ func add_graffiti(line: String) -> void:
 	if graffiti.size() > 24:
 		graffiti.pop_front()
 
-func end_night() -> Dictionary:
-	var champ: int = standings()[0]
+func end_night(champ_override := -1) -> Dictionary:
+	var champ: int = champ_override if champ_override >= 0 else furthest_on_trail()
 	var pl = players[champ]
+	gate_statues.append({"owner": pl.name, "color": pl.color.to_html(), "night": nights_played})
 	ledger.append({"night": nights_played, "winner": pl.name})
 	add_monument(champ, "%s — Champion of Night %d" % [pl.name, nights_played + 1])
 	nights_played += 1
 	save_estate()
 	return pl
+
+func furthest_on_trail() -> int:
+	var order := standings()
+	var best: int = order[0]
+	for p in trail_pos:
+		if trail_pos[p] > trail_pos[best]:
+			best = p
+		elif trail_pos[p] == trail_pos[best] and players[p].points > players[best].points:
+			best = p
+	return best
 
 func save_estate() -> void:
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
@@ -141,6 +164,7 @@ func save_estate() -> void:
 		f.store_string(JSON.stringify({
 			"monuments": monuments, "graffiti": graffiti,
 			"ledger": ledger, "nights_played": nights_played,
+			"gate_statues": gate_statues,
 		}, "  "))
 
 func load_estate() -> void:
@@ -152,6 +176,7 @@ func load_estate() -> void:
 		monuments = data.get("monuments", [])
 		graffiti = data.get("graffiti", [])
 		ledger = data.get("ledger", [])
+		gate_statues = data.get("gate_statues", [])
 		nights_played = int(data.get("nights_played", 0))
 
 func _wipe_save() -> void:
