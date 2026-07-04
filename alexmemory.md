@@ -6,6 +6,15 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **MORNING REVIEW MENU**: (1) The PILGRIMAGE TRAIL is built and live —
+  start an Estate Night and watch the Reckoning parade march the pawns up
+  the hill; claim a tollgate by passing it. Screenshot:
+  `verify_out/trail/shot_5800.png`. (2) Your read wanted on THE SABOTEUR
+  sketch (social-deduction spice layer) in the trail design doc. (3) Echo
+  v1.1 + Tilt v1.1 merged — feel-check the parry and the clash when you
+  play. (4) Three more minigames building overnight: Greed Inc, Swap Meet,
+  Mower Mayhem; Throne + Last Will specs ready for the next wave.
+
 - **PLAYTESTABLE: ECHO CHAMBER, TILT, and ORBITAL DODGEBALL are merged and
   live in the Estate's auction pool.** Orbital's signature moment works:
   a 45-second-old orbit killed someone and credited the original thrower. Start an Estate Night from the menu and you can win the
