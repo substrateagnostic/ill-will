@@ -78,6 +78,7 @@ var round_num := 1
 var grow_t := 0.0
 var burst_t := 0.0
 var banks_this_round := 0
+var _carry_step_t := 0.0
 
 var points := {}
 var round_bank_count := {}
@@ -374,6 +375,7 @@ func _tick_play(delta: float) -> void:
 	_tick_floor_coins()
 	if carrier_index >= 0:
 		_check_bank(carrier_index)
+		_tick_carry_footsteps(delta)
 
 	# 5. HUD / arrows
 	_update_hud()
@@ -521,6 +523,19 @@ func _drop_carrier(victim: int, tackler: int) -> void:
 	_cap_event("drop")
 	_rebuild_scoreboard()
 	_log("drop victim=%d tackler=%d scatter=%d pot=%d" % [victim, tackler, scatter, pot_value])
+
+
+## Heavy, distinct footfall while the carrier lugs the pot — the audible half of
+## "the carrier must FEEL hunted" (spec Feel targets).
+func _tick_carry_footsteps(delta: float) -> void:
+	var c: GreedPlayer = players[carrier_index]
+	if not c.can_act() or Vector2(c.velocity.x, c.velocity.z).length() < 1.0:
+		_carry_step_t = 0.0
+		return
+	_carry_step_t -= delta
+	if _carry_step_t <= 0.0:
+		_carry_step_t = 0.34
+		Sfx.play("place", -7.0, 0.12)
 
 
 func _check_bank(p: int) -> void:
