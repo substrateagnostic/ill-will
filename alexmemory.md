@@ -6,13 +6,15 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
-- **Nothing blocking.** Five builder agents are constructing minigames in
-  isolated worktrees; I review their screenshots/reports before anything
-  reaches you. Next thing I'll surface: playtest builds of whichever
-  minigames pass my review first.
-- Whenever you feel like it: **ESTATE NIGHT (beta)** is on the main menu —
-  the full night loop works with real Par matches inside. Your monuments
-  will persist between sessions (that's the point).
+- **PLAYTESTABLE: ECHO CHAMBER and TILT are merged and live in the Estate's
+  auction pool.** Start an Estate Night from the menu and you can win the
+  auction into either. (Echo needs real-time input — gamepads shine;
+  keyboard halves work for 2. Tilt same. Par stays mouse-hotseat.)
+- Reviewed and approved by me before merge: Echo's determinism proof
+  (ghosts replay exactly, error 0.000000), Tilt's stability self-tests
+  (idle + edge-slide both PASS). Screenshots reviewed as art director.
+- Still building: Orbital Dodgeball (Fable), Dead Weight (Opus), Par v2
+  (Opus — your 3+chaos/2x-hazards/3-courses changes).
 
 ## HOW TO RUN THINGS
 
@@ -45,6 +47,17 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
   board games).
 
 ## LOG
+
+### 2026-07-04 — First two fleet deliveries reviewed & MERGED
+- **ECHO CHAMBER** (Opus build): past-rounds-as-ghosts arena brawl. Live
+  players textured w/ rings; ghosts flat translucent tints — readable even
+  at 12 ghosts. Determinism asserted 0.000000 every round. Best screenshot:
+  `minigames worktree echo_r5_dense_preshrink.png` (now in repo history).
+- **TILT** (Fable build): spring-damper platter (0.4s lag, provable
+  stability), concentric-ring tilt legibility, seagull mode for the fallen,
+  "RED SHOVED BLUE OVERBOARD!" banners. Both registered in the Estate
+  auction pool alongside Par. Integration polish noted: unify both arenas
+  to the warm diorama style later.
 
 ### 2026-07-04 — Podium ceremony (core, reusable)
 Night-end now presents a podium: champion Cheers on block 1, 2nd stands

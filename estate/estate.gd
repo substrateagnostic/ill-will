@@ -6,8 +6,16 @@ enum Phase { GROUNDS, AUCTION, GAME, RECKONING, NIGHT_END }
 
 const MODULES := {
 	"par": {"name": "PAR FOR THE CURSE", "scene": "res://scenes/main.tscn", "mode": "gamestate"},
+	"echo": {"name": "ECHO CHAMBER", "scene": "res://minigames/echo_chamber/echo_chamber.tscn", "mode": "contract"},
+	"tilt": {"name": "TILT", "scene": "res://minigames/tilt/tilt.tscn", "mode": "contract"},
 	"mock": {"name": "EXHIBITION MATCH", "scene": "res://estate/mock_game.tscn", "mode": "contract"},
 }
+const CHAR_PATHS := [
+	"res://assets/models/kaykit/Barbarian.glb",
+	"res://assets/models/kaykit/Knight.glb",
+	"res://assets/models/kaykit/Mage.glb",
+	"res://assets/models/kaykit/Rogue.glb",
+]
 const GROUNDS_TIME := 20.0
 const BID_TIME := 8.0
 
@@ -220,7 +228,7 @@ func _enter_auction() -> void:
 	high_bid = 0
 	high_bidder = -1
 	_bid_timer = BID_TIME
-	var pool := ["mock", "mock", "mock"] if mockonly else ["par", "mock", "par"]
+	var pool := ["mock", "mock", "mock"] if mockonly else ["par", "echo", "tilt", "par", "echo", "tilt"]
 	auction_options.clear()
 	for k in 3:
 		auction_options.append(pool[EstateState.rng.randi_range(0, pool.size() - 1)])
@@ -323,7 +331,7 @@ func _launch_game(id: String) -> void:
 		for pl in EstateState.players:
 			roster.append({
 				"index": pl.index, "name": pl.name, "color": pl.color,
-				"char_scene": "res://assets/models/kaykit/Knight.glb",
+				"char_scene": CHAR_PATHS[pl.index],
 				"device": PlayerInput.device_of(pl.index),
 			})
 		_module.begin({
