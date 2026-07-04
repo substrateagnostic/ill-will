@@ -481,6 +481,7 @@ func _run_parade() -> int:
 		var tw: Tween = $Trail.advance_pawn(p, from, to)
 		await tw.finished
 		EstateState.trail_pos[p] = to
+		print("PARADE p=%d from=%d to=%d" % [p, from, to])
 		for s in range(from + 1, to + 1):
 			if s in Trail.TOLLGATES:
 				if not EstateState.tollgates.has(s):
@@ -494,7 +495,8 @@ func _run_parade() -> int:
 						_flash("%s PAYS %s'S TOLL (1♠)" % [EstateState.players[p].name, EstateState.players[owner_idx].name], EstateState.players[owner_idx].color, 1.6)
 				await get_tree().create_timer(0.7).timeout
 		if to >= Trail.STONES - 1:
-			summit = p
+			if summit < 0 or EstateState.players[p].points > EstateState.players[summit].points:
+				summit = p
 		_rebuild_top_bar()
 	_redraw_graffiti()
 	return summit
@@ -552,18 +554,17 @@ func _redraw_monuments() -> void:
 		var col := Color.from_string(str(m.color), Color.WHITE)
 		var obelisk := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
-		mesh.size = Vector3(0.5, 1.6, 0.5)
+		mesh.size = Vector3(0.45, 1.3, 0.45)
 		obelisk.mesh = mesh
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = col
 		obelisk.material_override = mat
-		var slot := m_idx % 10
-		obelisk.position = Vector3(-6.75 + slot * 1.5, 0.8, -6.0 - floorf(m_idx / 10.0) * 2.0)
+		obelisk.position = Vector3(-7.4 + (m_idx % 2) * 1.1, 0.65, 0.8 - floorf(m_idx / 2.0) * 1.7)
 		plinths.add_child(obelisk)
 		var tag := Label3D.new()
 		tag.text = str(m.label)
-		tag.pixel_size = 0.006
-		tag.position = obelisk.position + Vector3(0, 1.1, 0.3)
+		tag.pixel_size = 0.005
+		tag.position = obelisk.position + Vector3(0, 0.95, 0.3)
 		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		plinths.add_child(tag)
 
