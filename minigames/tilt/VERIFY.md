@@ -151,6 +151,100 @@ gain 1.6×.
 - Camera frame numbers for `--shots` require `--fixed-fps 60` to be exactly
   reproducible; without it Windows vsync may drift between 60/144 Hz.
 
+## v1.1 — SHOVE CLASH (skill counter)
+
+One mechanic added: shoves now have a **0.12s windup** (avatar 1.06x scale
+pulse + punch anim starts early + quiet card-flick tell; total time-to-hit
+0.12s, under the 0.2s budget). If two pawns shove EACH OTHER within a
+**0.25s window** — each inside the other's 55°/2.05m cone at the moment of
+landing — the shoves **CLASH** instead of resolving: both take **40%
+knockback** pushed apart along the line between them, both staggered
+**0.3s** (no instant re-shove), **no royalty for either** (`last_shover`
+untouched), gold spark burst + expanding white shock ring at the midpoint,
+`Sfx.play("bumper")` clang, rising "CLASH!" Label3D floaty (Luckiest Guy).
+Blindside shoves stay uncounterable — a defender's cone can't contain an
+attacker behind them, so the mutual-cone requirement is itself the
+backstab rule. Bots got a matching *occasional* counter-reflex: if they see
+a windup aimed at them (attacker within 105° of their facing), they square
+up and answer ~25–35% of the time (~50% when cornered past r=4.6), with a
+rare last-ditch brace at the rim when their shove is on cooldown.
+
+### Verification commands (all re-run on final code)
+
+```
+godot --headless --editor --import --quit --path .                                   # clean
+godot --headless --path . res://minigames/tilt/tilt.tscn -- --tilttest=idle --seed=1  # PASS (exit 0)
+godot --headless --path . res://minigames/tilt/tilt.tscn -- --tilttest=edge --seed=1  # PASS, off at t=0.83s (same as v1)
+godot --headless --path . --fixed-fps 60 res://minigames/tilt/tilt.tscn -- --tiltbots --seed=N --roundtime=30 --rounds=3 --quitafter=7400
+godot --path . --fixed-fps 60 res://minigames/tilt/tilt.tscn -- --tiltbots --seed=5 --roundtime=30 --rounds=3 --shots=2450,2451,2452,2456
+godot --path . --fixed-fps 60 res://minigames/tilt/tilt.tscn -- --tiltbots --seed=7 --roundtime=30 --rounds=3 --outdir=verify_out/s7 --shots=4796,4836,4845,4900
+```
+
+### Event-log evidence (TILT_EVT)
+
+Clash lines carry both radii so rim context is auditable:
+
+```
+TILT_EVT t=39.99 frame=2442 | shove_windup p0
+TILT_EVT t=39.99 frame=2442 | shove_windup p3
+TILT_EVT t=40.03 frame=2444 | shove_windup p1
+TILT_EVT t=40.11 frame=2449 | clash p3<->p1 kb=0.4 r=[4.6,4.3]     (seed 5, tilt 22.2°)
+```
+
+Headless and headed runs hit the identical frame numbers (seed 5 clash at
+frame 2449 in both), so determinism per seed survives the new mechanic.
+
+### The rim-save round (seed 7, round 3 — screenshots in verify_out/s7/)
+
+```
+t=79.04 frame=4797 | shove p0 -> p1 r=2.5 out=1.00    RED punches BLUE dead-outward from the hub
+t=79.67 frame=4835 | shove_windup p1                  BLUE, carried to r≈4.8, answers…
+t=79.72 frame=4838 | shove_windup p0                  …as RED winds up the finisher
+t=79.79 frame=4842 | clash p1<->p0 kb=0.4 r=[4.8,4.0] CLASH — the kill is defused
+t=80.67 frame=4895 | status tilt=13.1 standing=4 radii=[0.5, 4.9, 3.1, 2.5]   BLUE alive at the rim
+```
+
+| Shot | Shows |
+|---|---|
+| `verify_out/shot_2451.png` | Seed-5 clash at 22° tilt: gold sparks, CLASH! floaty, both duelists over the low-side warning lamp |
+| `verify_out/s7/shot_4796.png` | RED lining up the blindside hub punch on BLUE (uncounterable, lands normally) |
+| `verify_out/s7/shot_4836.png` | Both wound up at the blue rim marker — the tell, one beat before contact |
+| `verify_out/s7/shot_4845.png` | The rim clash: sparks + CLASH! at the edge, rim glow hot |
+| `verify_out/s7/shot_4900.png` | Aftermath: BLUE still standing at the rim, RED bounced inward — and a second clash (GOLD/MINT) firing across the disc |
+
+### Balance work (measured, not guessed)
+
+The naive windup gutted the game: first soak showed a **43% whiff rate**
+(targets walk ~0.54m during 0.12s) and near-certain bot counters converted
+every would-be royalty kill into a clash — 5-seed soak: ~0 royalty vs v1's
+1–2/match (v1 baseline re-measured by checking out the v1 files and running
+seeds 3/11/13: falls 6/4/5, royalty 2/1/2). Fixes, in order:
+1. **Reach 1.7 → 2.05** — the windup telegraphs *when*, it shouldn't
+   make you miss what you aimed at.
+2. **Release aim-tracking** — at landing, facing swings up to 25° toward
+   the nearest in-range target (fighting-game startup tracking). Whiffs
+   fell to ~25%.
+3. **Counter rate cut to "occasionally"** (~25–35%, desperate ~50%) and the
+   reflex no longer hijacks a helpless bot's flee (v1 behavior kept when it
+   can't answer); bots also value position more (less center shove spam,
+   more pressure past mid-radius).
+
+Final 5-seed profile (30s rounds ×3): 10–16 clashes, 42–66 landed hits,
+falls 1–7/match. At the shipping 60s roundtime (seed 9): all three rounds
+end in **last_stand**, 9 falls incl. a royalty kill, 10 clashes (~1 per 18s
+— present, not spammy). Royalty is structurally rarer than v1: mutual
+face-to-face duels — v1's main royalty source — now clash by design.
+Blindside and cooldown-punish kills still credit royalty.
+
+### Feel verdict on the windup
+
+0.12s windup + 2.05m reach + 25° release tracking nets out feel-neutral:
+the tell is readable (scale pulse + early punch anim + card flick) but a
+buffered A-press still connects on anything you were actually aiming at.
+0.12s was also the first number tried — it sits in the sweet spot where
+7 physics ticks are enough for a human to answer a seen windup but never
+long enough to read as input lag. The 0.2s budget was never approached.
+
 ## Wishes (assets that would elevate it)
 
 - A real seagull model + flap animation (gull is primitives; reads fine at

@@ -4,6 +4,14 @@ extends Minigame
 ## influence, worse footing); last one aboard wins; the fallen become
 ## seagulls who bomb the survivors. Best-of-5 rounds.
 ##
+## v1.1 — SHOVE CLASH: shoves have a 0.12s windup (readable tell). If two
+## pawns shove EACH OTHER within 0.25s (each inside the other's cone at the
+## moment of landing), the shoves CLASH: both take 40% knockback pushed
+## apart, both staggered 0.3s, NO royalty for either, sparks + shock ring +
+## "CLASH!" floaty + bumper clang. Answering a shove with a shove saves you
+## — rim defense is a timing mind-game. Blindside shoves stay uncounterable
+## (the victim's cone can't contain an attacker behind them).
+##
 ## Anthology module: root of minigames/tilt/tilt.tscn, extends Minigame.
 ## Runs standalone too — if begin() hasn't been called 0.5s after _ready,
 ## self-starts with a 4-player config (GameState colors/names, KayKit
@@ -486,7 +494,7 @@ func _do_clash(p: int, q: int) -> void:
 	var world: Vector3 = platter.disc.global_transform \
 			* Vector3(mid.x, TiltPlatter.PAWN_Y + 1.0, mid.y)
 	_clash_fx(world)
-	_floaty(world + Vector3(0, 0.4, 0), "CLASH!", Color(1.0, 0.9, 0.25))
+	_floaty(world + Vector3(0, 1.1, 0), "CLASH!", Color(1.0, 0.9, 0.25))
 	Sfx.play("bumper", -2.0)
 	_shake = maxf(_shake, 0.16)
 	_log("clash p%d<->p%d kb=%.1f r=[%.1f,%.1f]" % [
@@ -930,25 +938,47 @@ func _clash_fx(pos: Vector3) -> void:
 	add_child(p)
 	p.global_position = pos
 	p.one_shot = true
-	p.amount = 22
-	p.lifetime = 0.38
+	p.amount = 32
+	p.lifetime = 0.42
 	p.explosiveness = 1.0
 	p.direction = Vector3.UP
 	p.spread = 180.0
-	p.initial_velocity_min = 4.5
-	p.initial_velocity_max = 8.0
-	p.gravity = Vector3(0, -7.0, 0)
+	p.initial_velocity_min = 4.0
+	p.initial_velocity_max = 9.0
+	p.gravity = Vector3(0, -6.0, 0)
 	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.09, 0.03, 0.03)
+	mesh.size = Vector3(0.2, 0.07, 0.07)
 	p.mesh = mesh
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(1.0, 0.92, 0.45)
+	mat.albedo_color = Color(1.0, 0.78, 0.12)
 	mat.emission_enabled = true
-	mat.emission = Color(1.0, 0.8, 0.2)
-	mat.emission_energy_multiplier = 2.4
+	mat.emission = Color(1.0, 0.65, 0.06)
+	mat.emission_energy_multiplier = 1.6
 	p.material_override = mat
 	p.emitting = true
 	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
+	# expanding white shock ring: the unmistakable "shoves cancelled" read
+	var ring := MeshInstance3D.new()
+	var rm := TorusMesh.new()
+	rm.inner_radius = 0.34
+	rm.outer_radius = 0.46
+	ring.mesh = rm
+	var rmat := StandardMaterial3D.new()
+	rmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rmat.albedo_color = Color(1, 1, 1, 0.95)
+	rmat.emission_enabled = true
+	rmat.emission = Color(1, 0.95, 0.7)
+	rmat.emission_energy_multiplier = 2.0
+	ring.material_override = rmat
+	add_child(ring)
+	ring.global_transform = Transform3D(platter.disc.global_transform.basis, pos)
+	ring.scale = Vector3(0.5, 0.4, 0.5)
+	var rtw := create_tween()
+	rtw.set_parallel(true)
+	rtw.tween_property(ring, "scale", Vector3(3.2, 0.25, 3.2), 0.3) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	rtw.tween_property(rmat, "albedo_color:a", 0.0, 0.3)
+	rtw.chain().tween_callback(ring.queue_free)
 
 ## World-space floating text (Label3D billboard) that rises and fades.
 func _floaty(pos: Vector3, text: String, color: Color) -> void:
