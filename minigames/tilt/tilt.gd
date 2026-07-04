@@ -120,7 +120,7 @@ func _ready() -> void:
 		begin(_default_config())
 
 func begin(config: Dictionary) -> void:
-	if _begun and not _standalone:
+	if _begun:
 		return
 	_begun = true
 	roster = config.roster
@@ -259,12 +259,17 @@ func _tick_play(delta: float) -> void:
 		_log("status tilt=%.1f standing=%d radii=[%s]" % [
 			platter.tilt_deg(), _standing_count(), ", ".join(rr)])
 
+## Non-PLAY phases: pawns hold their footing (no fresh slide — the drama is
+## paused) and can never drift past the rim while a banner is up.
 func _tick_pawns_idle(delta: float) -> void:
 	for p in roster.size():
 		var pawn: TiltPawn = pawns[p]
 		if pawn.state == TiltPawn.PState.STANDING:
-			pawn.in_slip = _in_slip(pawn.lpos)
-			pawn.tick(delta, Vector2.ZERO, platter.tilt)
+			pawn.in_slip = false
+			pawn.tick(delta, Vector2.ZERO, Vector2.ZERO)
+			if pawn.lpos.length() > 6.4:
+				pawn.lpos = pawn.lpos.normalized() * 6.4
+				pawn.slide = Vector2.ZERO
 		elif gulls.has(p):
 			gulls[p].tick(delta, Vector2.ZERO)
 
@@ -355,6 +360,8 @@ func _process(delta: float) -> void:
 		var hot := sudden_death or remain <= 10
 		timer_label.add_theme_color_override("font_color",
 			Color(1, 0.3, 0.2) if hot else Color(1, 0.92, 0.6))
+	else:
+		timer_label.text = ""
 
 # -- input / bots -------------------------------------------------------------
 
@@ -421,8 +428,8 @@ func _separate_pawns() -> void:
 				continue
 			var d := pb.lpos - pa.lpos
 			var dist := d.length()
-			if dist < 0.75 and dist > 0.001:
-				var push := d.normalized() * (0.75 - dist) * 0.5
+			if dist < 0.9 and dist > 0.001:
+				var push := d.normalized() * (0.9 - dist) * 0.5
 				pa.lpos -= push
 				pb.lpos += push
 
@@ -515,20 +522,21 @@ func _spawn_coin() -> void:
 	var l := Vector2(cos(ang), sin(ang)) * r
 	var node := MeshInstance3D.new()
 	var m := CylinderMesh.new()
-	m.top_radius = 0.28
-	m.bottom_radius = 0.28
-	m.height = 0.1
+	m.top_radius = 0.34
+	m.bottom_radius = 0.34
+	m.height = 0.12
 	node.mesh = m
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(1.0, 0.82, 0.15)
 	mat.metallic = 0.8
 	mat.roughness = 0.25
 	mat.emission_enabled = true
-	mat.emission = Color(0.9, 0.65, 0.05)
-	mat.emission_energy_multiplier = 0.4
+	mat.emission = Color(0.95, 0.7, 0.05)
+	mat.emission_energy_multiplier = 0.9
 	node.material_override = mat
+	node.rotation.x = 0.25  # cocked so the face catches the eye while it spins
 	platter.disc.add_child(node)
-	node.position = Vector3(l.x, TiltPlatter.TOP_Y + 0.12, l.y)
+	node.position = Vector3(l.x, TiltPlatter.TOP_Y + 0.45, l.y)
 	loose_coins.append({"node": node, "l": l})
 
 func _standing_count() -> int:

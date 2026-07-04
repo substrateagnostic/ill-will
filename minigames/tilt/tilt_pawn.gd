@@ -65,13 +65,14 @@ func setup(index: int, display_name: String, color: Color, char_scene_path: Stri
 	# identity ring under the feet
 	var ring := MeshInstance3D.new()
 	var rm := TorusMesh.new()
-	rm.inner_radius = 0.34
-	rm.outer_radius = 0.5
+	rm.inner_radius = 0.4
+	rm.outer_radius = 0.62
 	ring.mesh = rm
 	var rmat := StandardMaterial3D.new()
 	rmat.albedo_color = color
 	rmat.emission_enabled = true
-	rmat.emission = color * 0.5
+	rmat.emission = color
+	rmat.emission_energy_multiplier = 1.4
 	ring.material_override = rmat
 	ring.position.y = 0.04
 	ring.scale.y = 0.35
@@ -192,19 +193,19 @@ func add_coin() -> void:
 	coins += 1
 	var c := MeshInstance3D.new()
 	var cm := CylinderMesh.new()
-	cm.top_radius = 0.16
-	cm.bottom_radius = 0.16
-	cm.height = 0.07
+	cm.top_radius = 0.22
+	cm.bottom_radius = 0.22
+	cm.height = 0.09
 	c.mesh = cm
 	var mat := StandardMaterial3D.new()
 	mat.albedo_color = Color(1.0, 0.82, 0.15)
 	mat.metallic = 0.8
 	mat.roughness = 0.25
 	mat.emission_enabled = true
-	mat.emission = Color(0.8, 0.6, 0.05)
-	mat.emission_energy_multiplier = 0.35
+	mat.emission = Color(0.9, 0.65, 0.05)
+	mat.emission_energy_multiplier = 0.6
 	c.material_override = mat
-	c.position = Vector3(0.0, 0.95 + (coins - 1) * 0.085, 0.30)
+	c.position = Vector3(0.0, 0.88 + (coins - 1) * 0.1, 0.32)
 	c.rotation.z = 0.12 * ((coins % 3) - 1)
 	_stack.add_child(c)
 

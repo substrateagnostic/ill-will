@@ -145,8 +145,8 @@ func _build() -> void:
 	# low-side warning lamp (pulsing red puddle at the downhill rim)
 	_lamp = MeshInstance3D.new()
 	var lm := CylinderMesh.new()
-	lm.top_radius = 1.7
-	lm.bottom_radius = 1.7
+	lm.top_radius = 2.2
+	lm.bottom_radius = 2.2
 	lm.height = 0.02
 	_lamp.mesh = lm
 	_lamp_mat = StandardMaterial3D.new()
@@ -205,8 +205,8 @@ func _update_glow() -> void:
 	if deg > WARN_DEG:
 		_lamp.visible = true
 		var d := downhill()
-		_lamp.position = Vector3(d.x * 5.5, TOP_Y + 0.09, d.y * 5.5)
-		var pulse := 0.30 + 0.22 * sin(_clock * 9.0)
+		_lamp.position = Vector3(d.x * 4.9, TOP_Y + 0.09, d.y * 4.9)
+		var pulse := 0.45 + 0.25 * sin(_clock * 9.0)
 		_lamp_mat.albedo_color.a = pulse
 	else:
 		_lamp.visible = false
