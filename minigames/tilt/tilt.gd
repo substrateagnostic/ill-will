@@ -413,6 +413,26 @@ func _try_shove(p: int) -> void:
 func _resolve_shove(p: int) -> void:
 	var pawn: TiltPawn = pawns[p]
 	Sfx.play("putt", -6.0)
+	# aim tracking: the windup telegraphs WHEN, it shouldn't make you whiff.
+	# At release, swing facing up to 25 deg toward the nearest opponent who
+	# is in range and near the cone edge (fighting-game startup tracking).
+	var track := -1
+	var track_d := 999.0
+	for q in roster.size():
+		if q == p:
+			continue
+		var other: TiltPawn = pawns[q]
+		if other.state != TiltPawn.PState.STANDING:
+			continue
+		var to_other := other.lpos - pawn.lpos
+		if to_other.length() < SHOVE_RANGE and to_other.length() < track_d \
+				and absf(rad_to_deg(pawn.facing.angle_to(to_other))) < SHOVE_HALF_ANGLE + 25.0:
+			track_d = to_other.length()
+			track = q
+	if track >= 0:
+		var want := ((pawns[track] as TiltPawn).lpos - pawn.lpos).normalized()
+		var off := pawn.facing.angle_to(want)
+		pawn.facing = pawn.facing.rotated(clampf(off, -deg_to_rad(25.0), deg_to_rad(25.0)))
 	_shove_fx(pawn)
 	# clash check first: nearest mutual shover wins the drama
 	var clash_q := -1
@@ -449,7 +469,8 @@ func _resolve_shove(p: int) -> void:
 				and absf(rad_to_deg(pawn.facing.angle_to(to_other))) < SHOVE_HALF_ANGLE:
 			other.apply_knock(pawn.facing, SHOVE_POWER, p, game_t)
 			hit = true
-			_log("shove p%d -> p%d" % [p, q])
+			_log("shove p%d -> p%d r=%.1f out=%.2f" % [p, q, other.lpos.length(),
+				pawn.facing.dot(other.lpos.normalized()) if other.lpos.length() > 0.1 else 0.0])
 	if hit:
 		Sfx.play("splat", -3.0)
 		_shake = maxf(_shake, 0.12)

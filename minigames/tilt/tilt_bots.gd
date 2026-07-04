@@ -70,16 +70,23 @@ func _decide_standing(p: int, g, pawn: TiltPawn, delta: float) -> Dictionary:
 		if absf(rad_to_deg(pawn.facing.angle_to(-to_me))) > 105.0:
 			continue  # didn't see it coming — eat it like it's v1
 		var face_them: Vector2 = (-to_me).normalized()
+		if pawn.windup_t > 0.0:
+			# our answer is already swinging — stay squared up for the clash
+			return {"move": face_them, "a": false, "b": false}
 		var can_answer: bool = pawn.shove_cd <= 0.0 and not pawn.braced \
-				and pawn.stagger_t <= 0.0 and pawn.windup_t <= 0.0
-		var desperation: float = 0.15 if pawn.lpos.length() > 4.6 else 0.0
-		var answer: bool = can_answer \
-				and rng.randf() < 0.06 + aggr[p] * 0.10 + desperation
-		var brace_instead: bool = not can_answer and not pawn.braced \
-				and pawn.brace_cd <= 0.0 and pawn.stagger_t <= 0.0 \
-				and pawn.windup_t <= 0.0 and pawn.lpos.length() > 4.2 \
-				and rng.randf() < 0.12
-		return {"move": face_them, "a": answer, "b": brace_instead}
+				and pawn.stagger_t <= 0.0
+		if can_answer:
+			# "occasionally": ~25-35% of seen windups get answered over the
+			# ~7-tick windup (rolled per tick), ~50% when cornered at the rim
+			var desperation: float = 0.04 if pawn.lpos.length() > 4.6 else 0.0
+			var answer: bool = rng.randf() < 0.02 + aggr[p] * 0.04 + desperation
+			if not answer and pawn.lpos.length() <= 4.6:
+				break  # not committing to the duel — v1 behavior instead
+			return {"move": face_them, "a": answer, "b": false}
+		if pawn.lpos.length() > 5.2 and not pawn.braced and pawn.brace_cd <= 0.0 \
+				and pawn.stagger_t <= 0.0 and rng.randf() < 0.05:
+			return {"move": Vector2.ZERO, "a": false, "b": true}  # last-ditch brace
+		break  # aware but helpless: keep doing whatever v1 would do (flee)
 	var my_r := pawn.lpos.length()
 	var on_low_side := pawn.lpos.dot(dh) > 0.5
 	var in_danger: bool = (tilt_deg > caution_deg[p] and on_low_side) or my_r > 5.6
@@ -123,11 +130,16 @@ func _decide_standing(p: int, g, pawn: TiltPawn, delta: float) -> Dictionary:
 		if not in_danger:
 			move = (move * 0.5 + to_v * 0.5).normalized()  # face them, keep purpose
 		if best_d < 1.55 and pawn.shove_cd <= 0.0 and not pawn.braced:
+			# v1.1: with clashes defusing center scuffles, bots value POSITION:
+			# less idle spam in the safe middle (fewer accidental clashes),
+			# more pressure the closer the victim is to the edge.
 			var kill_bonus := 0.0
 			if to_v.dot(dh) > 0.3:
 				kill_bonus += 0.25       # they're downhill of me
+			if vpawn.lpos.length() > 3.6:
+				kill_bonus += 0.18       # they're past mid-radius
 			if vpawn.lpos.length() > 4.8:
-				kill_bonus += 0.30       # they're near the rim
+				kill_bonus += 0.35       # they're near the rim
 			if g.sudden_death:
 				kill_bonus += 0.15       # no time for pleasantries
 			if rng.randf() < (aggr[p] * 0.12 + kill_bonus):
