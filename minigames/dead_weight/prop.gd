@@ -6,7 +6,7 @@ extends RigidBody3D
 ## a slow freight train. Props credit their possessor for any kill they land.
 
 # --- tunables (the ghost's lethality knobs live here) ---
-const DRIVE_FORCE := 36.0     # central force applied per physics frame while possessed
+const DRIVE_FORCE := 38.0     # central force applied per physics frame while possessed
 const HOVER_LIFT := 0.05      # 5cm hover
 const HOVER_SPRING := 42.0
 const HOVER_DAMP := 6.0

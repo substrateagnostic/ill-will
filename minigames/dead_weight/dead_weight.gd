@@ -38,10 +38,13 @@ var _spawns: Array = []               # Array[Vector3] revival points
 var _elim_order: Array = []           # indices in death order this round
 var _currency_log: Array = []
 var _highlights: Array = []
+var _last_kill_line := ""             # the kill that ended the round, if any
+var _last_kill_color := Color.WHITE
 
 var round_index := 0                  # 0-based
 var rounds_total := 3
 var round_elapsed := 0.0
+var _between_timer := 0.0             # counts down to the next round start
 var _round_resolving := false
 var _decider := "none"                # what ended the round (balance metric)
 
@@ -337,6 +340,7 @@ func _nudge_off_spawns(slot: Vector3) -> Vector3:
 
 # ---------------------------------------------------------------- round flow
 func _start_round() -> void:
+	print("DW_ROUND_START %d/%d t=%.1f ts=%.3f" % [round_index + 1, rounds_total, game_time, Engine.time_scale])
 	phase = Phase.ROUND
 	round_elapsed = 0.0
 	_round_resolving = false
@@ -412,9 +416,11 @@ func _on_fighter_fell(index: int) -> void:
 		_shake = maxf(_shake, 0.5)
 		_time_hit(0.32, 0.4)
 
-	# record what ended the round for the balance metric
+	# record what ended the round for the balance metric + banner spotlight
 	if _living_count() <= 1 and _decider == "none":
 		_decider = credit_type
+		_last_kill_line = credit_line
+		_last_kill_color = credit_color
 
 	# rise as a poltergeist for the rest of the round
 	_spawn_ghost(index, death_pos)
@@ -434,6 +440,14 @@ func _check_round_end() -> void:
 func _resolve_round() -> void:
 	_round_resolving = true
 	phase = Phase.BETWEEN
+	# stop survivors in their tracks: bot/player input is no longer applied in
+	# BETWEEN, and stale velocity must not carry anyone off the lip
+	for f in _fighters:
+		if f != null and f.alive:
+			f.move_input = Vector2.ZERO
+			f.want_shove = false
+			f.want_hop = false
+			f.linear_velocity = Vector3(0, f.linear_velocity.y, 0)
 	# finishing order: survivors first, then reverse of death order
 	var survivors: Array = []
 	for i in players.size():
@@ -470,9 +484,16 @@ func _resolve_round() -> void:
 		champ = players[survivors[0]].name
 		champ_color = players[survivors[0]].color
 	Sfx.play("round_over")
-	_flash_banner("%s SURVIVES\nROUND %d" % [champ, round_index + 1], champ_color, 2.4)
+	# if a kill ended the round, the kill line keeps the spotlight
+	var text := "%s SURVIVES\nROUND %d" % [champ, round_index + 1]
+	var text_color := champ_color
+	if _last_kill_line != "":
+		text = "%s\n%s SURVIVES ROUND %d" % [_last_kill_line, champ, round_index + 1]
+		text_color = _last_kill_color
+		_last_kill_line = ""
+	_flash_banner(text, text_color, 2.8)
 	_rebuild_scoreboard()
-	_next_round_or_finish(3.0)
+	_next_round_or_finish(3.2)
 
 func _next_round_or_finish(delay: float) -> void:
 	round_index += 1
@@ -482,9 +503,8 @@ func _next_round_or_finish(delay: float) -> void:
 	if delay <= 0.1:
 		_start_round()
 	else:
-		await get_tree().create_timer(delay).timeout
-		if phase != Phase.DONE:
-			_start_round()
+		# tick-driven (not awaited): survives any time_scale weirdness
+		_between_timer = delay
 
 func _finish_match() -> void:
 	phase = Phase.DONE
@@ -584,6 +604,11 @@ func _physics_process(delta: float) -> void:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
 
+	if phase == Phase.BETWEEN and _between_timer > 0.0:
+		_between_timer -= delta
+		if _between_timer <= 0.0:
+			_start_round()
+		return
 	if phase != Phase.ROUND:
 		return
 	round_elapsed += delta

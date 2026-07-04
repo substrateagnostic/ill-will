@@ -159,6 +159,15 @@ func _physics_process(delta: float) -> void:
 	if _shove_cd > 0.0: _shove_cd -= delta
 	if _hop_cd > 0.0: _hop_cd -= delta
 
+	# ground check + attacker-forgiveness on the PHYSICS tick so seeded runs
+	# stay reproducible (frame timing must never affect gameplay state).
+	# Whoever last hit you stays on the hook until you're genuinely safe:
+	# grounded, unstunned, AND no longer sliding — a blow that skids you off
+	# the lip still counts even though your feet never left the floor.
+	_grounded = global_position.y < 0.15 and absf(linear_velocity.y) < 1.5
+	if _stun <= 0.0 and _grounded and speed() < 2.0 and not last_attacker.is_empty():
+		last_attacker = {}
+
 	if _stun > 0.0:
 		_stun -= delta
 	else:
@@ -258,13 +267,6 @@ func hit(dir: Vector3, impulse: float, atk_type: String, atk_index: int, src_nam
 	last_attacker = {"type": atk_type, "index": atk_index, "name": src_name, "color": atk_color, "time": t}
 
 func _process(delta: float) -> void:
-	# cheap ground check for hop gating
-	_grounded = alive and global_position.y < 0.15 and absf(linear_velocity.y) < 1.5
-	# whoever last hit you stays on the hook until you're genuinely safe again:
-	# grounded, unstunned, AND no longer sliding. A blow that skids you off the
-	# lip still counts even though your feet never left the floor.
-	if alive and _stun <= 0.0 and _grounded and speed() < 2.0 and not last_attacker.is_empty():
-		last_attacker = {}
 	if alive:
 		_update_anim(delta)
 
