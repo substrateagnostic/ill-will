@@ -59,6 +59,12 @@ prints `max_err 0.000000` (ghosts report endpoint drift as they fragment).
   ECHO_RIPOSTE by=GOLD victim=BLUE +1 (parry payoff)
   ```
   (ghost-swing parries also log, e.g. `ECHO_PARRY ... ghost=true`.)
+- **Ghosts replay the new verbs** — the recorder's `fire` byte carries the
+  swing kind (2 = heavy), so past heavies replay with the wide 2-dmg 2H arc,
+  not a downgraded light. Logged the first time each round:
+  ```
+  ECHO_GHOST_HEAVY owner=BLUE src_round=1 (past heavy replays with 2H arc)
+  ```
 - **Determinism unchanged** — `ECHO_DETERMINISM round=5 ghosts=12
   max_err=0.000000 OK` (full table below), robust across seeds 1/7/42.
 

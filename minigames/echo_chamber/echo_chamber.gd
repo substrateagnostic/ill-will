@@ -90,6 +90,7 @@ var _perf_degraded := false
 # ---- determinism accounting (ghosts report their endpoint drift) ----
 var _det_max_err := 0.0
 var _det_ghost_total := 0
+var _logged_ghost_heavy := false   # log the first replayed heavy each round
 
 # ---- event-driven verify captures (heavy windup / parry / fragment) ----
 var _ev_captured: Dictionary = {}
@@ -406,6 +407,7 @@ func _enter_intro(n: int) -> void:
 	_spawn_ghosts_for_round()
 	_det_ghost_total = ghosts.size()
 	_det_max_err = 0.0
+	_logged_ghost_heavy = false
 	_reset_arena(n == ROUNDS)
 	_deaths_round.clear()
 	for pl in roster:
@@ -642,7 +644,7 @@ func _tick_play(delta: float) -> void:
 			rec["pos"].append(f.global_position)
 			rec["yaw"].append(f.yaw)
 			rec["state"].append(f.state)
-			rec["fire"].append(1 if f.consume_fire() else 0)
+			rec["fire"].append(f.consume_fire())   # 0 none / 1 light / 2 heavy
 			rec["count"] = int(rec["count"]) + 1
 		_rec_count += 1
 
@@ -762,6 +764,9 @@ func _apply_perf_degrade(ms: float) -> void:
 # Combat resolution (called by both live swings and ghost replays)
 # ===========================================================================
 func resolve_swing(origin: Vector3, yaw_a: float, owner: int, is_ghost: bool, exclude, src_round: int, is_heavy := false, is_riposte := false) -> void:
+	if is_ghost and is_heavy and not _logged_ghost_heavy:
+		_logged_ghost_heavy = true
+		print("ECHO_GHOST_HEAVY owner=%s src_round=%d (past heavy replays with 2H arc)" % [_names[owner], src_round])
 	var fwd := Vector3(sin(yaw_a), 0.0, cos(yaw_a))
 	var reach := HEAVY_RANGE if is_heavy else SWING_RANGE
 	var arc := HEAVY_HALF_ARC if is_heavy else SWING_HALF_ARC
