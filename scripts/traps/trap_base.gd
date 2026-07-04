@@ -31,6 +31,8 @@ func ghostify() -> void:
 		co.collision_mask = 0
 		if co is Area3D:
 			co.monitoring = false
+		if co is AnimatableBody3D:
+			co.sync_to_physics = false
 	for mi in find_children("*", "MeshInstance3D", true, false):
 		mi.transparency = 0.55
 
@@ -41,5 +43,7 @@ func solidify() -> void:
 		co.collision_mask = 1
 		if co is Area3D:
 			co.monitoring = true
+		if co is AnimatableBody3D:
+			co.sync_to_physics = true
 	for mi in find_children("*", "MeshInstance3D", true, false):
 		mi.transparency = 0.0

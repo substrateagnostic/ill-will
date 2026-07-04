@@ -9,6 +9,9 @@ var shot_frames: Array[int] = []
 var autoputts: Array = []
 var autoplay: Array = []
 var autobuild := false
+var placetest := false
+var _pt_frame := -1
+var _pt_done := false
 var out_dir := "verify_out"
 var frame := 0
 var active := false
@@ -37,6 +40,9 @@ func _ready() -> void:
 		elif arg == "--autobuild":
 			autobuild = true
 			active = true
+		elif arg == "--placetest":
+			placetest = true
+			active = true
 		elif arg.begins_with("--quitafter="):
 			quit_after = int(arg.trim_prefix("--quitafter="))
 			active = true
@@ -44,6 +50,46 @@ func _ready() -> void:
 			out_dir = arg.trim_prefix("--outdir=")
 	if active:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + out_dir))
+
+func _run_placetest() -> void:
+	var m := get_tree().current_scene
+	if not m.has_method("get_phase_name"):
+		return
+	if m.get_phase_name() == "DRAFT" and _pt_frame < 0:
+		m.debug_pick_card(0)
+		_pt_frame = 0
+		return
+	if m.get_phase_name() != "BUILD" or _pt_frame < 0:
+		return
+	var pc: Node = m.find_child("PlacementController", false, false)
+	if pc == null or not pc.active or pc.ghost == null:
+		return
+	_pt_frame += 1
+	var t: float = clampf(_pt_frame / 180.0, 0.0, 1.0)
+	pc.ghost.global_position = Vector3(lerpf(0.0, 1.5, t), 0.0, lerpf(-2.0, -9.0, t))
+	pc._refresh()
+	if _pt_frame % 45 == 0 or t >= 1.0:
+		_pt_report(pc.ghost, "drag t=%.2f" % t)
+	if t >= 1.0:
+		var placed: Node3D = pc.ghost
+		if pc._valid:
+			pc._confirm()
+			print("PLACETEST confirmed")
+		else:
+			print("PLACETEST INVALID at final spot")
+		get_tree().create_timer(1.0).timeout.connect(func(): _pt_report(placed, "1s after confirm"))
+		_pt_done = true
+
+func _pt_report(trap: Node3D, tag: String) -> void:
+	var parts := "PLACETEST %s | root=%s" % [tag, _v(trap.global_position)]
+	for child_name in ["Pad", "Hammer", "Body", "Sides", "BladesBody", "Model"]:
+		var c := trap.find_child(child_name, true, false)
+		if c and c is Node3D:
+			parts += " %s=%s" % [child_name, _v(c.global_position)]
+	print(parts)
+
+func _v(v: Vector3) -> String:
+	return "(%.2f,%.2f,%.2f)" % [v.x, v.y, v.z]
 
 func _process(_delta: float) -> void:
 	if not active:
@@ -59,6 +105,8 @@ func _process(_delta: float) -> void:
 					pc.debug_show_aim(ap.power, ap.angle)
 			elif pc.has_method("debug_putt"):
 				pc.debug_putt(ap.power, ap.angle)
+	if placetest and not _pt_done:
+		_run_placetest()
 	if autobuild:
 		var m := get_tree().current_scene
 		if m.has_method("get_phase_name"):

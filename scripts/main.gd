@@ -278,7 +278,11 @@ func _spawn_death_fx(pos: Vector3, color: Color) -> void:
 func _spawn_gravestone(pos: Vector3, color: Color) -> void:
 	var g := GRAVESTONE_SCENE.instantiate()
 	course.get_node("GravestoneContainer").add_child(g)
-	g.global_position = Vector3(clampf(pos.x, -2.6, 2.6), 0, clampf(pos.z, -14.6, 1.6))
+	var gx := clampf(pos.x, -2.6, 2.6)
+	var gz := clampf(pos.z, -14.6, 1.6)
+	if gz > -2.0 and absf(gx) < 1.7:
+		gz = -2.0
+	g.global_position = Vector3(gx, 0, gz)
 	g.rotation_degrees.y = GameState.rng.randf_range(-25.0, 25.0)
 	g.setup(color, GameState.round_num)
 
