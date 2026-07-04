@@ -1,0 +1,968 @@
+extends Minigame
+## ECHO CHAMBER — top-down arena brawl where every previous round replays as
+## translucent ghosts. By round 5 the arena teems with everyone's recorded
+## past selves, still fighting — and YOUR echoes earn YOU points when they
+## land hits in the present ("PAST BLUE STRIKES AGAIN").
+##
+## Determinism spine: the controller owns one physics-step update order —
+## tick live fighters, sample the 30Hz recorder from their post-move state,
+## then replay ghosts by DIRECT transform application against those fresh
+## positions. Ghost replay never touches physics, so recording->replay is
+## drift-free (asserted each round: ghost end pos == recorded final +-0.01).
+##
+## Self-contained scene; obeys the anthology module contract (core/minigame.gd).
+
+const ROUNDS := 5
+const ROUND_LEN_DEFAULT := 45.0
+const REC_HZ := 30.0
+const MAX_FRAMES := 3200
+const MAX_GHOSTS := 12
+const HP_MAX := 3
+const ARENA_R := 8.0
+const SHRINK := 0.7
+const RESPAWN_TIME := 2.0
+const TRANSITION_TIME := 2.4
+const INTRO_TIME := 1.6
+const LIVE_HIT_PTS := 2
+const GHOST_HIT_PTS := 1
+const SURVIVE_BONUS := 3
+const RESULT_HOLD := 8.5
+
+const SWING_RANGE := 1.9
+const SWING_HALF_ARC := deg_to_rad(60.0)
+
+const DEFAULT_CHARS := [
+	"res://assets/models/kaykit/Barbarian.glb",
+	"res://assets/models/kaykit/Knight.glb",
+	"res://assets/models/kaykit/Mage.glb",
+	"res://assets/models/kaykit/Rogue.glb",
+]
+
+enum St { INTRO, PLAY, TRANSITION, DONE }
+
+# ---- config / roster ----
+var _begun := false
+var _selfstarted := false
+var roster: Array = []
+var rng := RandomNumberGenerator.new()
+var _seed := 1
+var _bots := false
+var round_len := ROUND_LEN_DEFAULT
+var _cap_on := false
+var _cap_dir := "verify_out"
+var _cap_done: Dictionary = {}
+var _names: Dictionary = {}
+var _colors: Dictionary = {}
+
+# ---- match state ----
+var state := St.INTRO
+var round_no := 0
+var _round_time := 0.0
+var _rec_count := 0
+var _phase_timer := 0.0
+var _shrink_at := 999.0
+var _shrunk := false
+
+var fighters: Array = []
+var ghosts: Array = []
+var _takes: Array = []            # every stored round-recording (all rounds)
+var _samples: Array = []          # this round's in-progress recorders
+var _respawns: Array = []
+var _deaths_round: Dictionary = {}
+var points: Dictionary = {}
+var _currency: Array = []
+var _ghost_kill_notes: Array = []
+var _bounty_counts: Dictionary = {}
+
+# ---- juice / perf ----
+var _shake := 0.0
+var _cam_base := Vector3.ZERO
+var _last_hitpause := -1.0
+var _perf_accum := 0.0
+var _perf_frames := 0
+var _perf_degraded := false
+
+# ---- nodes ----
+var arena_floor: StaticBody3D
+var arena_shape: CollisionShape3D
+var _outer_disc: MeshInstance3D
+var _inner_ring: MeshInstance3D
+var camera: Camera3D
+var ui: CanvasLayer
+var round_label: Label
+var timer_label: Label
+var ghost_label: Label
+var banner: Label
+var credit_banner: Label
+var score_rows: VBoxContainer
+var _font_luckiest: FontFile
+var _font_baloo: FontFile
+
+
+# ===========================================================================
+# Lifecycle
+# ===========================================================================
+func _ready() -> void:
+	# Self-start standalone if the party shell doesn't call begin() promptly.
+	get_tree().create_timer(0.5).timeout.connect(_maybe_selfstart)
+
+
+func _maybe_selfstart() -> void:
+	if _begun:
+		return
+	_selfstarted = true
+	begin(_default_config())
+
+
+func _default_config() -> Dictionary:
+	var n := 4
+	var seed := 1
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--players="):
+			n = clampi(int(arg.trim_prefix("--players=")), 2, 4)
+		elif arg.begins_with("--seed="):
+			seed = int(arg.trim_prefix("--seed="))
+	var r: Array = []
+	for i in n:
+		r.append({
+			"index": i,
+			"name": GameState.PLAYER_NAMES[i],
+			"color": GameState.PLAYER_COLORS[i],
+			"char_scene": DEFAULT_CHARS[i],
+			"device": -99,
+		})
+	PlayerInput.auto_assign(n)
+	return {"roster": r, "rounds": ROUNDS, "rng_seed": seed, "practice": false}
+
+
+func begin(config: Dictionary) -> void:
+	if _begun:
+		return
+	_begun = true
+	roster = config.get("roster", [])
+	if roster.is_empty():
+		roster = _default_config()["roster"]
+	_seed = int(config.get("rng_seed", 1))
+	rng.seed = _seed
+	_parse_args()
+
+	for pl in roster:
+		var idx: int = pl["index"]
+		_names[idx] = pl["name"]
+		_colors[idx] = pl["color"]
+		points[idx] = 0
+		_bounty_counts[idx] = 0
+
+	_build_world()
+	_build_ui()
+	_spawn_fighters()
+	print("ECHO_BEGIN players=%d seed=%d bots=%s round_len=%.1f" % [roster.size(), _seed, str(_bots), round_len])
+	_enter_intro(1)
+
+
+func _parse_args() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--echobots":
+			_bots = true
+		elif arg.begins_with("--echofast="):
+			round_len = maxf(2.0, float(arg.trim_prefix("--echofast=")))
+		elif arg == "--echocap":
+			_cap_on = true
+		elif arg.begins_with("--outdir="):
+			_cap_dir = arg.trim_prefix("--outdir=")
+	if _cap_on:
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
+
+
+# ===========================================================================
+# World / UI construction
+# ===========================================================================
+func _build_world() -> void:
+	var env := WorldEnvironment.new()
+	var e := Environment.new()
+	var sky := Sky.new()
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color(0.18, 0.22, 0.35)
+	sky_mat.sky_horizon_color = Color(0.5, 0.45, 0.6)
+	sky_mat.ground_bottom_color = Color(0.1, 0.1, 0.14)
+	sky_mat.ground_horizon_color = Color(0.3, 0.28, 0.4)
+	sky.sky_material = sky_mat
+	e.background_mode = Environment.BG_SKY
+	e.sky = sky
+	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	e.ambient_light_energy = 0.8
+	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	e.glow_enabled = true
+	e.glow_intensity = 0.5
+	e.glow_bloom = 0.1
+	env.environment = e
+	add_child(env)
+
+	var sun := DirectionalLight3D.new()
+	sun.transform = Transform3D(Basis.from_euler(Vector3(deg_to_rad(-58.0), deg_to_rad(35.0), 0.0)), Vector3(0, 12, 0))
+	sun.light_energy = 1.15
+	sun.light_color = Color(1.0, 0.95, 0.88)
+	sun.shadow_enabled = true
+	add_child(sun)
+
+	var fill := DirectionalLight3D.new()
+	fill.transform = Transform3D(Basis.from_euler(Vector3(deg_to_rad(-30.0), deg_to_rad(-140.0), 0.0)), Vector3(0, 8, 0))
+	fill.light_energy = 0.35
+	fill.light_color = Color(0.6, 0.7, 1.0)
+	add_child(fill)
+
+	# arena floor collision (radius shrinks at round 5)
+	arena_floor = StaticBody3D.new()
+	arena_floor.collision_layer = 1
+	arena_shape = CollisionShape3D.new()
+	var cyl := CylinderShape3D.new()
+	cyl.radius = ARENA_R
+	cyl.height = 1.0
+	arena_shape.shape = cyl
+	arena_shape.position.y = -0.5
+	arena_floor.add_child(arena_shape)
+	add_child(arena_floor)
+
+	# outer disc (the ring that falls away in round 5)
+	_outer_disc = MeshInstance3D.new()
+	var omesh := CylinderMesh.new()
+	omesh.top_radius = ARENA_R
+	omesh.bottom_radius = ARENA_R - 0.3
+	omesh.height = 0.5
+	_outer_disc.mesh = omesh
+	var omat := StandardMaterial3D.new()
+	omat.albedo_color = Color(0.30, 0.30, 0.38)
+	omat.roughness = 0.85
+	_outer_disc.material_override = omat
+	_outer_disc.position.y = -0.25
+	add_child(_outer_disc)
+
+	# inner disc + bright ring marks the safe zone
+	var inner := MeshInstance3D.new()
+	var imesh := CylinderMesh.new()
+	imesh.top_radius = ARENA_R * SHRINK
+	imesh.bottom_radius = ARENA_R * SHRINK
+	imesh.height = 0.52
+	inner.mesh = imesh
+	var imat := StandardMaterial3D.new()
+	imat.albedo_color = Color(0.42, 0.40, 0.50)
+	imat.roughness = 0.8
+	inner.material_override = imat
+	inner.position.y = -0.24
+	add_child(inner)
+
+	_inner_ring = MeshInstance3D.new()
+	var ring := TorusMesh.new()
+	ring.inner_radius = ARENA_R * SHRINK - 0.12
+	ring.outer_radius = ARENA_R * SHRINK + 0.05
+	_inner_ring.mesh = ring
+	var ringmat := StandardMaterial3D.new()
+	ringmat.albedo_color = Color(1.0, 0.85, 0.3)
+	ringmat.emission_enabled = true
+	ringmat.emission = Color(1.0, 0.7, 0.2)
+	ringmat.emission_energy_multiplier = 0.6
+	_inner_ring.material_override = ringmat
+	_inner_ring.position.y = 0.02
+	add_child(_inner_ring)
+
+	_spawn_pillars()
+
+	camera = Camera3D.new()
+	camera.fov = 52.0
+	_cam_base = Vector3(0.0, 16.5, 12.5)
+	camera.position = _cam_base
+	camera.look_at_from_position(_cam_base, Vector3(0, 0.5, 0), Vector3.UP)
+	add_child(camera)
+
+
+func _spawn_pillars() -> void:
+	var spots := [Vector3(3.2, 0, 0.6), Vector3(-2.6, 0, 2.9), Vector3(-0.4, 0, -3.4)]
+	for sp in spots:
+		var body := StaticBody3D.new()
+		body.collision_layer = 1
+		body.position = sp
+		var cs := CollisionShape3D.new()
+		var shape := CylinderShape3D.new()
+		shape.radius = 0.45
+		shape.height = 3.0
+		cs.shape = shape
+		cs.position.y = 1.5
+		body.add_child(cs)
+		var mi := MeshInstance3D.new()
+		var mesh := CylinderMesh.new()
+		mesh.top_radius = 0.42
+		mesh.bottom_radius = 0.5
+		mesh.height = 3.0
+		mi.mesh = mesh
+		mi.position.y = 1.5
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(0.55, 0.5, 0.45)
+		mat.roughness = 0.9
+		mi.material_override = mat
+		body.add_child(mi)
+		add_child(body)
+
+
+func _build_ui() -> void:
+	_font_luckiest = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
+	_font_baloo = load("res://assets/fonts/Baloo2.ttf")
+	ui = CanvasLayer.new()
+	add_child(ui)
+
+	round_label = _mk_label(_font_baloo, 26, HORIZONTAL_ALIGNMENT_LEFT)
+	round_label.offset_left = 22
+	round_label.offset_top = 14
+	round_label.offset_right = 360
+	round_label.offset_bottom = 52
+	ui.add_child(round_label)
+
+	timer_label = _mk_label(_font_luckiest, 34, HORIZONTAL_ALIGNMENT_CENTER)
+	timer_label.anchor_right = 1.0
+	timer_label.offset_top = 12
+	timer_label.offset_bottom = 58
+	ui.add_child(timer_label)
+
+	ghost_label = _mk_label(_font_baloo, 20, HORIZONTAL_ALIGNMENT_LEFT)
+	ghost_label.anchor_top = 1.0
+	ghost_label.anchor_bottom = 1.0
+	ghost_label.offset_left = 22
+	ghost_label.offset_top = -44
+	ghost_label.offset_bottom = -14
+	ghost_label.offset_right = 400
+	ui.add_child(ghost_label)
+
+	credit_banner = _mk_label(_font_luckiest, 40, HORIZONTAL_ALIGNMENT_CENTER)
+	credit_banner.anchor_right = 1.0
+	credit_banner.anchor_top = 0.14
+	credit_banner.anchor_bottom = 0.14
+	credit_banner.offset_bottom = 70
+	credit_banner.visible = false
+	ui.add_child(credit_banner)
+
+	banner = _mk_label(_font_luckiest, 66, HORIZONTAL_ALIGNMENT_CENTER)
+	banner.anchor_right = 1.0
+	banner.anchor_top = 0.34
+	banner.anchor_bottom = 0.5
+	banner.add_theme_color_override("font_color", Color(1, 0.85, 0.2))
+	banner.visible = false
+	ui.add_child(banner)
+
+	var panel := PanelContainer.new()
+	panel.anchor_left = 1.0
+	panel.anchor_right = 1.0
+	panel.offset_left = -250
+	panel.offset_top = 12
+	panel.offset_right = -14
+	ui.add_child(panel)
+	score_rows = VBoxContainer.new()
+	panel.add_child(score_rows)
+
+
+func _mk_label(font: FontFile, size: int, align: int) -> Label:
+	var l := Label.new()
+	l.add_theme_font_override("font", font)
+	l.add_theme_font_size_override("font_size", size)
+	l.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.1))
+	l.add_theme_constant_override("outline_size", 7)
+	l.horizontal_alignment = align
+	return l
+
+
+func _spawn_fighters() -> void:
+	for i in roster.size():
+		var pl: Dictionary = roster[i]
+		var f := EchoFighter.new()
+		f.player_index = pl["index"]
+		f.color = pl["color"]
+		f.char_path = pl.get("char_scene", DEFAULT_CHARS[i % DEFAULT_CHARS.size()])
+		f.is_bot = _bots
+		f.main = self
+		add_child(f)
+		f.setup(_seed)
+		fighters.append(f)
+
+
+# ===========================================================================
+# Round flow
+# ===========================================================================
+func _enter_intro(n: int) -> void:
+	round_no = n
+	state = St.INTRO
+	_phase_timer = INTRO_TIME
+	round_label.text = "ROUND %d / %d" % [n, ROUNDS]
+	round_label.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
+	_spawn_ghosts_for_round()
+	_reset_arena(n == ROUNDS)
+	_deaths_round.clear()
+	for pl in roster:
+		_deaths_round[int(pl["index"])] = 0
+	_respawns.clear()
+	# reset fighters to their start rings, full HP
+	for i in fighters.size():
+		fighters[i].respawn(_start_pos(i), HP_MAX)
+	# fresh recorders for this round
+	_samples.clear()
+	for i in fighters.size():
+		_samples.append(_new_recorder(fighters[i]))
+	_round_time = 0.0
+	_rec_count = 0
+	_shrunk = false
+	_shrink_at = round_len * 0.45 if n == ROUNDS else 999.0
+	var sub := "%d GHOSTS HAUNT THE ARENA" % ghosts.size() if ghosts.size() > 0 else "NO GHOSTS YET — MAKE SOME"
+	_flash_banner("ROUND %d\n%s" % [n, sub], Color(1, 0.85, 0.2), 0.0)
+	Sfx.play("round_over")
+	print("ECHO_ROUND_START round=%d ghosts=%d frame=%d" % [n, ghosts.size(), Engine.get_process_frames()])
+	_rebuild_scoreboard()
+
+
+func _new_recorder(f: EchoFighter) -> Dictionary:
+	return {
+		"owner": f.player_index,
+		"round": round_no,
+		"color": f.color,
+		"char": f.char_path,
+		"pos": PackedVector3Array(),
+		"yaw": PackedFloat32Array(),
+		"state": PackedByteArray(),
+		"fire": PackedByteArray(),
+		"count": 0,
+	}
+
+
+func _spawn_ghosts_for_round() -> void:
+	for g in ghosts:
+		g.queue_free()
+	ghosts.clear()
+	if _takes.is_empty():
+		return
+	# newest rounds first; cap at MAX_GHOSTS by dropping OLDEST rounds
+	var pool: Array = _takes.duplicate()
+	pool.sort_custom(func(a, b):
+		var ra: int = a["round"]
+		var rb: int = b["round"]
+		if ra != rb:
+			return ra > rb
+		return int(a["owner"]) < int(b["owner"]))
+	var chosen: Array = pool.slice(0, MAX_GHOSTS)
+	# find oldest kept round for readability thinning
+	var oldest := 9999
+	var distinct := {}
+	for tk in chosen:
+		var rr: int = tk["round"]
+		oldest = mini(oldest, rr)
+		distinct[rr] = true
+	for tk in chosen:
+		var g := EchoGhost.new()
+		g.take = tk
+		g.owner_index = tk["owner"]
+		g.owner_color = tk["color"]
+		g.round_no = tk["round"]
+		g.main = self
+		# thin oldest kept round for readability when the arena is crowded
+		if int(tk["round"]) == oldest and distinct.size() > 1:
+			g.opacity = 0.4
+		add_child(g)
+		g.setup()
+		g.reset_replay()
+		ghosts.append(g)
+
+
+func _reset_arena(_is_round5: bool) -> void:
+	# arena always starts full; shrink is triggered mid-round-5
+	_outer_disc.visible = true
+	_outer_disc.position.y = -0.25
+	_outer_disc.transparency = 0.0
+	(arena_shape.shape as CylinderShape3D).radius = ARENA_R
+
+
+func _do_shrink() -> void:
+	_shrunk = true
+	(arena_shape.shape as CylinderShape3D).radius = ARENA_R * SHRINK
+	var tw := create_tween()
+	tw.tween_property(_outer_disc, "position:y", -9.0, 1.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(_outer_disc, "transparency", 1.0, 1.1)
+	Sfx.play("crush")
+	_shake = maxf(_shake, 0.9)
+	_flash_banner("THE FLOOR FALLS AWAY!", Color(1.0, 0.4, 0.3), 2.0)
+	print("ECHO_SHRINK round=%d t=%.2f" % [round_no, _round_time])
+
+
+func _end_round() -> void:
+	state = St.TRANSITION
+	_phase_timer = TRANSITION_TIME
+	# survival bonus + grudge bookkeeping
+	for pl in roster:
+		var idx: int = pl["index"]
+		var d: int = _deaths_round.get(idx, 0)
+		if d == 0:
+			points[idx] += SURVIVE_BONUS
+		if d >= 2:
+			_currency.append({"type": "grudge", "player": idx, "amount": 1,
+				"reason": "died %d times in round %d" % [d, round_no]})
+	# store this round's recordings as ghost-takes for future rounds
+	for i in fighters.size():
+		_takes.append(_samples[i])
+	_verify_determinism()
+	_rebuild_scoreboard()
+	print("ECHO_ROUND_END round=%d points=%s" % [round_no, str(points)])
+	if round_no >= ROUNDS:
+		_finish_match()
+	else:
+		Sfx.play("round_over")
+		_flash_banner("ROUND %d OVER" % round_no, Color(1, 0.85, 0.2), TRANSITION_TIME - 0.4)
+
+
+## Spec risk "Replay drift": assert each live ghost's end position equals the
+## recorded final sample within 0.01. Ghosts are driven by DIRECT transform
+## application, so this holds exactly — we measure & print to prove it.
+func _verify_determinism() -> void:
+	var max_err := 0.0
+	for g in ghosts:
+		var tk: Dictionary = g.take
+		var c: int = tk["count"]
+		if c <= 0:
+			continue
+		var parr: PackedVector3Array = tk["pos"]
+		var final_pos: Vector3 = parr[c - 1]
+		var gpos: Vector3 = g.global_position
+		var err: float = gpos.distance_to(final_pos)
+		max_err = maxf(max_err, err)
+		assert(err < 0.01, "GHOST DRIFT owner=%d round=%d err=%f" % [g.owner_index, g.round_no, err])
+	print("ECHO_DETERMINISM round=%d ghosts=%d max_err=%.6f OK" % [round_no, ghosts.size(), max_err])
+
+
+func _finish_match() -> void:
+	state = St.DONE
+	_phase_timer = RESULT_HOLD
+	var order := _placements()
+	var champ: int = order[0]
+	timer_label.text = ""
+	round_label.text = "FINAL"
+	_flash_banner("%s WINS THE ECHO!" % _names[champ], _colors[champ], 0.0)
+	Sfx.play("match_win")
+	_spawn_confetti(Vector3(0, 2.5, 0), _colors[champ])
+	_shake = maxf(_shake, 0.6)
+
+	var monuments: Array = []
+	var top_bounty := -1
+	var top_bounty_n := 0
+	for idx in _bounty_counts:
+		if int(_bounty_counts[idx]) > top_bounty_n:
+			top_bounty_n = int(_bounty_counts[idx])
+			top_bounty = int(idx)
+	if top_bounty >= 0 and top_bounty_n >= 3:
+		monuments.append({"player": top_bounty, "kind": "revenant",
+			"label": "%s, Haunted by Their Own Echo" % _names[top_bounty]})
+
+	var results := {
+		"placements": order,
+		"points": points.duplicate(),
+		"currency_events": _currency.duplicate(),
+		"highlights": _best_highlights(),
+		"monuments": monuments,
+	}
+	print("ECHO_MATCH_OVER champ=%s placements=%s" % [_names[champ], str(order)])
+	report_finished(results)
+
+
+func _placements() -> Array:
+	var idx: Array = []
+	for pl in roster:
+		idx.append(int(pl["index"]))
+	idx.sort_custom(func(a, b):
+		if int(points[a]) != int(points[b]):
+			return int(points[a]) > int(points[b])
+		return a < b)
+	return idx
+
+
+func _best_highlights() -> Array:
+	var out: Array = []
+	var seen := {}
+	for note in _ghost_kill_notes:
+		if not seen.has(note):
+			seen[note] = true
+			out.append(note)
+		if out.size() >= 3:
+			break
+	return out
+
+
+# ===========================================================================
+# Main loop
+# ===========================================================================
+func _physics_process(delta: float) -> void:
+	if not _begun:
+		return
+	match state:
+		St.INTRO:
+			_phase_timer -= delta
+			for f in fighters:
+				f.tick(delta)   # let them settle onto the floor
+			if _phase_timer <= 0.0:
+				state = St.PLAY
+				banner.visible = false
+		St.PLAY:
+			_tick_play(delta)
+		St.TRANSITION:
+			_phase_timer -= delta
+			if _phase_timer <= 0.0:
+				_enter_intro(round_no + 1)
+		St.DONE:
+			_phase_timer -= delta
+
+
+func _tick_play(delta: float) -> void:
+	_round_time += delta
+
+	# round-5 collapse telegraph
+	if not _shrunk and round_no == ROUNDS and _round_time >= _shrink_at:
+		_do_shrink()
+
+	# 1. tick live fighters in index order
+	for f in fighters:
+		f.tick(delta)
+
+	# 2. sample the recorder from post-move state, keyed to the round clock
+	var target := int(_round_time * REC_HZ)
+	while _rec_count <= target and _rec_count < MAX_FRAMES:
+		for i in fighters.size():
+			var f: EchoFighter = fighters[i]
+			var rec: Dictionary = _samples[i]
+			rec["pos"].append(f.global_position)
+			rec["yaw"].append(f.yaw)
+			rec["state"].append(f.state)
+			rec["fire"].append(1 if f.consume_fire() else 0)
+			rec["count"] = int(rec["count"]) + 1
+		_rec_count += 1
+
+	# 3. replay ghosts by direct transform application (may strike live players)
+	for g in ghosts:
+		g.replay(_round_time)
+
+	# 4. respawns + round end
+	_process_respawns(delta)
+
+	# HUD
+	var remain := maxf(0.0, round_len - _round_time)
+	timer_label.text = "%0.1f" % remain
+	timer_label.add_theme_color_override("font_color", Color(1, 0.35, 0.3) if remain < 6.0 else Color(1, 1, 1))
+	ghost_label.text = "GHOSTS: %d" % ghosts.size()
+	_rebuild_scoreboard()
+
+	if _cap_on:
+		_try_capture()
+
+	if _round_time >= round_len:
+		_end_round()
+
+
+## State-based screenshot beats (reliable regardless of framerate). Fires the
+## make-or-break round-5 density shots that frame-indexed --shots can't target.
+func _try_capture() -> void:
+	var beats := [
+		[1, 2.5, "r1_play"],
+		[2, 2.5, "r2_ghosts"],
+		[3, 2.5, "r3"],
+		[4, 2.5, "r4_full12"],
+		[5, _shrink_at - 0.25, "r5_dense_preshrink"],
+		[5, minf(_shrink_at + 1.9, round_len - 0.2), "r5_postshrink"],
+	]
+	for b in beats:
+		var rn: int = b[0]
+		var tt: float = b[1]
+		var tag: String = b[2]
+		if round_no == rn and _round_time >= tt and not _cap_done.has(tag):
+			_cap_done[tag] = true
+			_grab(tag, tag == "r5_postshrink")
+
+
+func _grab(tag: String, quit_after: bool) -> void:
+	# frame_post_draw never fires under --headless (no drawing), so only wait
+	# for it when there's a real display; otherwise capture would hang.
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+		var img := get_viewport().get_texture().get_image()
+		var path := "res://%s/echo_%s.png" % [_cap_dir, tag]
+		img.save_png(path)
+		print("ECHO_CAP ", path)
+	else:
+		print("ECHO_CAP_SKIP_HEADLESS ", tag)
+	if quit_after:
+		await get_tree().create_timer(0.3).timeout
+		print("ECHO_CAP_DONE")
+		get_tree().quit()
+
+
+func _process_respawns(delta: float) -> void:
+	var still: Array = []
+	for r in _respawns:
+		var rr: Dictionary = r
+		rr["t"] = float(rr["t"]) - delta
+		if float(rr["t"]) <= 0.0:
+			var f: EchoFighter = rr["f"]
+			var pos: Vector3 = _center_spawn() if rr["mode"] == "center" else _edge_spawn()
+			f.respawn(pos, int(rr["hp"]))
+			Sfx.play("confirm", -4.0)
+		else:
+			still.append(rr)
+	_respawns = still
+
+
+func _process(delta: float) -> void:
+	# camera shake (static rig + additive offset)
+	if camera:
+		if _shake > 0.002:
+			var off := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * _shake * 0.35
+			camera.position = _cam_base + off
+			_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
+		else:
+			camera.position = _cam_base
+	# perf watchdog (spec: >8ms -> thin oldest ghosts / drop shadows)
+	_perf_accum += Performance.get_monitor(Performance.TIME_PROCESS)
+	_perf_frames += 1
+	if _perf_frames >= 45:
+		var avg_ms := (_perf_accum / _perf_frames) * 1000.0
+		_perf_accum = 0.0
+		_perf_frames = 0
+		if avg_ms > 8.0 and not _perf_degraded:
+			_perf_degraded = true
+			_apply_perf_degrade(avg_ms)
+
+
+func _apply_perf_degrade(ms: float) -> void:
+	for g in ghosts:
+		g.set_shadows(false)
+		g.set_opacity(minf(g.opacity, 0.4))
+	print("ECHO_PERF degraded=true avg_ms=%.2f ghosts thinned" % ms)
+
+
+# ===========================================================================
+# Combat resolution (called by both live swings and ghost replays)
+# ===========================================================================
+func resolve_swing(origin: Vector3, yaw_a: float, owner: int, is_ghost: bool, exclude, src_round: int) -> void:
+	var fwd := Vector3(sin(yaw_a), 0.0, cos(yaw_a))
+	for f in fighters:
+		if f == exclude or not f.alive:
+			continue
+		var fpos: Vector3 = f.global_position
+		var to: Vector3 = fpos - origin
+		to.y = 0.0
+		var d: float = to.length()
+		if d > SWING_RANGE or d < 0.001:
+			continue
+		if fwd.angle_to(to) > SWING_HALF_ARC:
+			continue
+		var res: String = f.take_hit(1, origin, owner)
+		if res == "":
+			continue
+		if is_ghost:
+			_award_ghost_hit(owner, f.player_index, res, src_round)
+		else:
+			if owner != f.player_index:
+				points[owner] += LIVE_HIT_PTS
+		_hit_feedback(f.global_position, f.color)
+		if res == "kill":
+			_on_death(f.player_index, false)
+
+
+func _award_ghost_hit(owner: int, victim: int, res: String, src_round: int) -> void:
+	points[owner] += GHOST_HIT_PTS
+	_bounty_counts[owner] = int(_bounty_counts[owner]) + 1
+	_currency.append({"type": "royalty", "player": owner, "amount": 1,
+		"reason": "past self struck %s" % _names[victim]})
+	Sfx.play("grudge", -2.0)
+	_flash_credit("PAST %s STRIKES AGAIN" % _names[owner], _colors[owner])
+	if res == "kill":
+		var note := "ROUND-%d %s KILLED PRESENT %s" % [src_round, _names[owner], _names[victim]]
+		_ghost_kill_notes.append(note)
+		print("ECHO_BOUNTY_KILL ", note)
+
+
+func on_fall_death(idx: int) -> void:
+	var f: EchoFighter = fighters[idx]
+	if not f.alive:
+		return
+	f.kill()
+	_on_death(idx, true)
+
+
+func _on_death(victim: int, is_fall: bool) -> void:
+	_deaths_round[victim] = int(_deaths_round.get(victim, 0)) + 1
+	Sfx.play("death")
+	var mode := "edge"
+	var hp_amt := HP_MAX
+	if round_no == ROUNDS and is_fall:
+		mode = "center"
+		hp_amt = 2   # respawn center at half HP
+	_respawns.append({"f": fighters[victim], "t": RESPAWN_TIME, "hp": hp_amt, "mode": mode})
+	_shake = maxf(_shake, 0.55)
+	_spawn_death_fx(fighters[victim].global_position, _colors[victim])
+	_hitpause()
+
+
+# ===========================================================================
+# Spawns
+# ===========================================================================
+func platform_r() -> float:
+	return ARENA_R * SHRINK if _shrunk else ARENA_R
+
+
+func _start_pos(i: int) -> Vector3:
+	var n := fighters.size()
+	var ang := TAU * float(i) / float(maxi(1, n))
+	var rad := 3.6
+	return Vector3(cos(ang) * rad, 0.05, sin(ang) * rad)
+
+
+func _edge_spawn() -> Vector3:
+	var ang := rng.randf_range(0.0, TAU)
+	var rad := platform_r() * 0.82
+	return Vector3(cos(ang) * rad, 0.1, sin(ang) * rad)
+
+
+func _center_spawn() -> Vector3:
+	var ang := rng.randf_range(0.0, TAU)
+	var rad := rng.randf_range(0.4, 1.6)
+	return Vector3(cos(ang) * rad, 0.1, sin(ang) * rad)
+
+
+# ===========================================================================
+# UI / juice
+# ===========================================================================
+func _rebuild_scoreboard() -> void:
+	var order := _placements()
+	var existing := score_rows.get_child_count()
+	# rebuild only when count changes; otherwise update in place (cheap)
+	if existing != order.size():
+		for c in score_rows.get_children():
+			c.queue_free()
+		for _i in order.size():
+			var row := Label.new()
+			row.add_theme_font_override("font", _font_baloo)
+			row.add_theme_font_size_override("font_size", 22)
+			row.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.1))
+			row.add_theme_constant_override("outline_size", 5)
+			score_rows.add_child(row)
+	var rows := score_rows.get_children()
+	for i in order.size():
+		var idx: int = order[i]
+		var row := rows[i] as Label
+		var hp_txt := ""
+		for f in fighters:
+			if f.player_index == idx:
+				var pips := int(f.hp) if f.alive else 0
+				for _h in pips:
+					hp_txt += "♥"
+				for _h in (HP_MAX - pips):
+					hp_txt += "·"
+				break
+		row.text = "%s  %d  %s" % [_names[idx], int(points[idx]), hp_txt]
+		row.add_theme_color_override("font_color", _colors[idx])
+
+
+func _flash_banner(text: String, color: Color, auto_hide: float) -> void:
+	banner.text = text
+	banner.add_theme_color_override("font_color", color)
+	banner.visible = true
+	banner.pivot_offset = banner.size / 2.0
+	banner.scale = Vector2(0.5, 0.5)
+	var pop := create_tween()
+	pop.tween_property(banner, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if auto_hide > 0.0:
+		var tw := create_tween()
+		tw.tween_interval(auto_hide)
+		tw.tween_callback(func(): banner.visible = false)
+
+
+func _flash_credit(text: String, color: Color) -> void:
+	credit_banner.text = text
+	credit_banner.add_theme_color_override("font_color", color)
+	credit_banner.visible = true
+	credit_banner.pivot_offset = credit_banner.size / 2.0
+	credit_banner.scale = Vector2(0.6, 0.6)
+	var tw := create_tween()
+	tw.tween_property(credit_banner, "scale", Vector2.ONE, 0.22).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	var hide := create_tween()
+	hide.tween_interval(1.1)
+	hide.tween_callback(func(): credit_banner.visible = false)
+
+
+func _hit_feedback(pos: Vector3, color: Color) -> void:
+	Sfx.play("bumper", -6.0)
+	_shake = maxf(_shake, 0.28)
+	_spawn_death_fx(pos + Vector3(0, 0.9, 0), color, 12, 0.5)
+
+
+func _hitpause() -> void:
+	# SHOULD: brief freeze on impact; throttled so a swarm of ghosts can't
+	# lock the game into permanent slow-mo.
+	var now := Time.get_ticks_msec() / 1000.0
+	if now - _last_hitpause < 0.16:
+		return
+	_last_hitpause = now
+	Engine.time_scale = 0.2
+	get_tree().create_timer(0.05, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+
+
+func _spawn_death_fx(pos: Vector3, color: Color, amount := 24, life := 0.8) -> void:
+	var p := CPUParticles3D.new()
+	add_child(p)
+	p.global_position = pos + Vector3(0, 0.15, 0)
+	p.one_shot = true
+	p.amount = amount
+	p.lifetime = life
+	p.explosiveness = 1.0
+	p.direction = Vector3.UP
+	p.spread = 70.0
+	p.initial_velocity_min = 2.5
+	p.initial_velocity_max = 5.0
+	p.gravity = Vector3(0, -9.0, 0)
+	p.scale_amount_min = 0.4
+	p.scale_amount_max = 0.9
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.05
+	mesh.height = 0.1
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.emission_enabled = true
+	mat.emission = color
+	mat.emission_energy_multiplier = 0.6
+	p.material_override = mat
+	p.emitting = true
+	get_tree().create_timer(1.5).timeout.connect(p.queue_free)
+
+
+func _spawn_confetti(pos: Vector3, color: Color) -> void:
+	for c in [color, Color(1, 0.9, 0.4), Color.WHITE]:
+		var p := CPUParticles3D.new()
+		add_child(p)
+		p.global_position = pos
+		p.one_shot = true
+		p.amount = 22
+		p.lifetime = 1.4
+		p.explosiveness = 1.0
+		p.direction = Vector3.UP
+		p.spread = 55.0
+		p.initial_velocity_min = 3.5
+		p.initial_velocity_max = 7.0
+		p.gravity = Vector3(0, -7.0, 0)
+		p.angular_velocity_min = -360.0
+		p.angular_velocity_max = 360.0
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(0.08, 0.02, 0.08)
+		p.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = c
+		p.material_override = mat
+		p.emitting = true
+		get_tree().create_timer(2.5).timeout.connect(p.queue_free)
+
+
+# ===========================================================================
+# Standalone restart
+# ===========================================================================
+func _unhandled_input(event: InputEvent) -> void:
+	if _selfstarted and event.is_action_pressed("restart"):
+		get_tree().reload_current_scene()
