@@ -20,8 +20,10 @@ godot --headless --path . res://minigames/orbital/orbital.tscn -- --orbtest=circ
 godot --headless --path . res://minigames/orbital/orbital.tscn -- --orbbots --seed=7 --fast=10 --autoquit
 #    (repeated for seeds 1, 2, 3, 11)
 
-# 3. Headed self-play with screenshots (VerifyCapture autoload)
-godot --path . res://minigames/orbital/orbital.tscn -- --orbbots --seed=11 --shots=630,2700,4090,5910,9540,10560,11250 --outdir=verify_out
+# 3. Headed self-play with screenshots (VerifyCapture autoload); frames were
+#    chosen from the headless event log of the same seed (the sim is
+#    tick-identical between headless/headed/--fast runs, see Determinism)
+godot --path . res://minigames/orbital/orbital.tscn -- --orbbots --seed=11 --shots=630,1600,2875,6720,7480,10600,10870,11420 --outdir=verify_out
 
 # 4. Aim-preview closeup (player 0 holds a full-power aim forever)
 godot --path . res://minigames/orbital/orbital.tscn -- --orbtest=aim --seed=7 --shots=140 --outdir=verify_out
@@ -53,17 +55,35 @@ direction wraps you around the back Pac-Man style and re-emerges.
 apoapsis where proportional drag removes almost no energy (observed 111s
 flights). Two additions guarantee decay: the drag ramps +0.008/s per second
 past 38s, and restitution fades to zero between 50-65s so an old orbit's
-first graze is its last. Assert results (3-minute bot matches, 8 balls late):
+first graze is its last. Assert results (3-minute bot matches at true dt):
 
 | seed | max flight age | verdict |
 |---|---|---|
-| 1 | 64.6s | PASS |
-| 2 | 66.8s | PASS |
-| 3 | 65.4s | PASS |
-| 7 | 69.2s | PASS |
-| 11 | 58.5s | PASS |
+| 1 | 45.4s | PASS |
+| 2 | 45.9s | PASS |
+| 3 | 45.9s | PASS |
+| 7 | 46.4s | PASS |
+| 11 | 46.4s | PASS |
 
-Printed by the game as e.g. `ORBITAL_ASSERT max_flight_age=58.5s (<75s): PASS`.
+Printed by the game as e.g. `ORBITAL_ASSERT max_flight_age=46.4s (<75s): PASS`.
+
+### Determinism (found + fixed during verification)
+
+Two engine behaviors silently broke tick-determinism; both are fixed and
+proven by diffing full event logs:
+
+1. `Engine.time_scale` SCALES THE PHYSICS DELTA (`delta = time_scale /
+   physics_ticks_per_second`). A naive `--fast=10` therefore integrated at
+   10x step size - a different game. Fix: `--fast=K` scales BOTH
+   `physics_ticks_per_second` (60K) and `time_scale` (K) so dt stays exactly
+   1/60 while K ticks run per real tick.
+2. Slow-mo via `Engine.time_scale` is applied at FRAME granularity, so the
+   kill beat entered/exited on frame boundaries (machine-dependent). Fix:
+   slow-mo scales the sim's own step (`sdt = delta * 0.3`) for a
+   tick-counted budget and never touches time_scale.
+
+Proof: `diff` of THROW/KILL/CATCH/HOP logs, seed 11, real-time vs --fast=10
+-> `FAST==REALTIME tick-identical`; two identical fast runs also diff clean.
 
 ## MUST list status
 
@@ -95,15 +115,17 @@ orbit found MINT"). Monuments for ghost kills older than 25s.
 
 ## Screenshot annotations (seed 11 run)
 
-- `shot_0630` — early game: all three planets framed, pedestal balls,
-  KayKit chars radially oriented, first trails in the sky.
-- `shot_2700` — ghost-orbit kill banner (33s-old throw), corpse fling,
-  death burst.
-- `shot_4090` — "NICE CATCH — BLUE — A 12-SECOND ORBIT!" event text.
-- `shot_5910` — mid-game sky with multiple orbit ribbons.
-- `shot_9540` — 54-second ghost kill banner late game.
-- `shot_10560` — late-game spirograph sky (7-8 balls in circulation).
-- `shot_11250` — end screen: "X RULES THE VOID!", winner cheer, confetti.
+- `shot_0630` — early game (t≈10s): all three planets framed at 1280x720,
+  pedestal balls, KayKit chars radially oriented, first trails.
+- `shot_1600` — "GOLD'S GHOST ORBIT STRIKES! 23-SECOND-OLD THROW TAKES OUT
+  BLUE" banner (kill t=24.4, ball_age=23.5).
+- `shot_2875` — the 45-SECOND ghost orbit kill banner (t=46.1,
+  ball_age=45.1) with corpse fling + death burst.
+- `shot_6720` — "NICE CATCH — GOLD" event text (catch t=106.9).
+- `shot_7480` — mid-game sky with multiple orbit ribbons.
+- `shot_10600` — late-game spirograph sky (up to 8 balls in circulation).
+- `shot_10870` — 26-second ghost kill banner late game (t=173.4).
+- `shot_11420` — end screen: "X RULES THE VOID!", winner cheer, confetti.
 - `shot_0140` (aim run) — throw aim preview: dotted diamonds arcing across
   the gap to the neighboring planet with an impact blip.
 
