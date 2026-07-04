@@ -58,6 +58,19 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-04 — PAR v2 MERGED (your playtest changes are live) + more fleet
+- **Par v2** (Opus build, reviewed): 3 rounds + CHAOS round (golden hour,
+  1.6x traps, double points, no waiting), 2 trap placements per player per
+  round, and THREE COURSES — fairway / dogleg (L-shape, bank-shot corner) /
+  green (open plaza), seeded-random per match, `--course=` to force one.
+  Dogleg verified dense and gorgeous: `verify_out/dogleg/shot_5000.png`.
+- **Orbital Dodgeball merged** — the 45-second ghost-orbit kill works;
+  comet-sky endgame is beautiful. In the auction pool.
+- **AAA part 2 on Par**: tilt-shift DOF + trajectory aim dots (first bounce
+  only, fading, power-colored): `verify_out/dots2/shot_1410.png`.
+- Fixed post-merge: menu pointed at the moved course scene; scene-fade
+  transitions exposed a null-scene frame in the verify harness.
+
 ### 2026-07-04 — First two fleet deliveries reviewed & MERGED
 - **ECHO CHAMBER** (Opus build): past-rounds-as-ghosts arena brawl. Live
   players textured w/ rings; ghosts flat translucent tints — readable even

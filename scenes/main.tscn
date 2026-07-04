@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://scripts/putt_controller.gd" id="4_putt"]
@@ -59,6 +59,15 @@ albedo_color = Color(0.3, 0.9, 0.35, 1)
 emission_enabled = true
 emission = Color(0.15, 0.45, 0.17, 1)
 
+[sub_resource type="CameraAttributesPractical" id="cam_attr"]
+dof_blur_far_enabled = true
+dof_blur_far_distance = 19.0
+dof_blur_far_transition = 10.0
+dof_blur_near_enabled = true
+dof_blur_near_distance = 5.0
+dof_blur_near_transition = 3.5
+dof_blur_amount = 0.055
+
 [node name="Main" type="Node3D"]
 script = ExtResource("1_main")
 
@@ -93,6 +102,7 @@ script = ExtResource("5_cam")
 [node name="Camera3D" type="Camera3D" parent="CameraRig"]
 transform = Transform3D(1, 0, 0, 0, 0.66, 0.75, 0, -0.75, 0.66, 0, 12.5, 4.5)
 fov = 50.0
+attributes = SubResource("cam_attr")
 
 [node name="Sun" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.707107, -0.5, 0.5, 0, 0.707107, 0.707107, -0.707107, -0.5, 0.5, 6, 8, 4)

@@ -15,11 +15,70 @@ var enabled := true
 var _aiming := false
 var _drag_point := Vector3.ZERO
 
+const DOT_COUNT := 14
+const DOT_SPACING := 0.55
+const PREVIEW_CAP := 9.5
+
+var _dots: Array = []
+
 @onready var arrow: MeshInstance3D = $AimArrow
 @onready var arrow_head: MeshInstance3D = $AimArrow/Head
 
 func _ready() -> void:
 	arrow.visible = false
+	for i in DOT_COUNT:
+		var d := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = 0.075
+		mesh.height = 0.15
+		d.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(1, 1, 1, 0.8)
+		d.material_override = mat
+		d.visible = false
+		add_child(d)
+		_dots.append(d)
+
+func _hide_dots() -> void:
+	for d in _dots:
+		d.visible = false
+
+func _update_dots(dir: Vector3, speed: float) -> void:
+	var total := minf(speed * 2.0, PREVIEW_CAP)
+	var space := get_viewport().get_camera_3d().get_world_3d().direct_space_state
+	var from: Vector3 = ball.global_position
+	var q := PhysicsRayQueryParameters3D.create(from, from + dir * total, 1)
+	q.exclude = [ball.get_rid()]
+	var hit := space.intersect_ray(q)
+	var first_leg := total
+	var bounce_dir := Vector3.ZERO
+	if not hit.is_empty():
+		first_leg = from.distance_to(hit.position)
+		bounce_dir = dir.bounce(hit.normal)
+		bounce_dir.y = 0.0
+		bounce_dir = bounce_dir.normalized()
+	var t := clampf((speed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED), 0.0, 1.0)
+	var col := Color(0.3, 0.9, 0.35).lerp(Color(0.95, 0.25, 0.2), t)
+	for i in DOT_COUNT:
+		var dist := (i + 1) * DOT_SPACING
+		var d: MeshInstance3D = _dots[i]
+		if dist > total:
+			d.visible = false
+			continue
+		var pos: Vector3
+		if dist <= first_leg:
+			pos = from + dir * dist
+		elif bounce_dir != Vector3.ZERO and dist - first_leg <= 3.0 * DOT_SPACING:
+			pos = hit.position + bounce_dir * (dist - first_leg)
+		else:
+			d.visible = false
+			continue
+		d.visible = true
+		d.global_position = Vector3(pos.x, 0.12, pos.z)
+		var fade := 1.0 - float(i) / DOT_COUNT
+		d.material_override.albedo_color = Color(col.r, col.g, col.b, 0.4 + 0.5 * fade)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not enabled or ball == null or not ball.is_stopped():
@@ -43,6 +102,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _fire() -> void:
 	_aiming = false
 	arrow.visible = false
+	_hide_dots()
 	var pull := _ball_flat() - _drag_point
 	pull.y = 0.0
 	if pull.length() < 0.25:
@@ -55,6 +115,7 @@ func _fire() -> void:
 func _cancel() -> void:
 	_aiming = false
 	arrow.visible = false
+	_hide_dots()
 
 func _power_for_drag(drag: float) -> float:
 	var t: float = clampf(drag / MAX_DRAG, 0.0, 1.0)
@@ -72,6 +133,7 @@ func _update_arrow() -> void:
 	var len := pull.length()
 	if len < 0.25:
 		arrow.visible = false
+		_hide_dots()
 		return
 	arrow.visible = true
 	var t: float = clampf(len / MAX_DRAG, 0.0, 1.0)
@@ -89,6 +151,7 @@ func _update_arrow() -> void:
 	var hmat: StandardMaterial3D = arrow_head.get_surface_override_material(0)
 	if hmat:
 		hmat.albedo_color = col
+	_update_dots(dir, _power_for_drag(len))
 
 func _ball_flat() -> Vector3:
 	return ball.global_position
