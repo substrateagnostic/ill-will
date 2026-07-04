@@ -24,7 +24,7 @@ func setup(w, i: int, seed_v: int) -> void:
 	world = w
 	index = i
 	rng.seed = seed_v
-	_skill = rng.randf_range(0.94, 1.03)
+	_skill = rng.randf_range(0.93, 1.04)
 
 func think(dt: float) -> void:
 	a = false
@@ -34,10 +34,12 @@ func think(dt: float) -> void:
 		move = Vector2.ZERO
 		b = false
 		return
-	# fresh lap: coin-flip the shortcut
+	# fresh lap: decide on the shortcut - it's the catch-up tool, so the
+	# further back you are the more you want it (leaders mostly skip it)
 	if kart.laps_hw != _lap_seen:
 		_lap_seen = kart.laps_hw
-		_take_shortcut = rng.randf() < 0.55
+		var pos: int = world.position_of(index)
+		_take_shortcut = rng.randf() < [0.2, 0.5, 0.8, 0.9][clampi(pos - 1, 0, 3)]
 	# --- steering: pure pursuit -------------------------------------------
 	var target := Vector3.ZERO
 	var look := 4.5 + absf(kart.speed) * 0.55
@@ -53,7 +55,7 @@ func think(dt: float) -> void:
 		var s_now := float(q2.s)
 		var d_entry := fposmod(track.sc_entry_s - s_now, track.total_len)
 		if _take_shortcut and d_entry < 11.0:
-			target = track.sc_entry_pos if d_entry > 2.0 else Vector3(track.sc_sample_at(2.5).pos)
+			target = track.sc_entry_pos if d_entry > 4.0 else Vector3(track.sc_sample_at(3.0).pos)
 		else:
 			target = Vector3(track.sample_at(s_now + look).pos)
 	var to := target - kart.global_position
@@ -77,14 +79,16 @@ func think(dt: float) -> void:
 	_throw_check_t -= dt
 	if _throw_check_t <= 0.0:
 		_throw_check_t = 0.12
-		if kart.has_golden:
-			# fire the golden the moment it's unfair (never while leading)
-			if world.position_of(index) > 1:
-				a = true
+		if kart.has_golden and world.position_of(index) > 1:
+			# fire the golden the moment it's unfair
+			a = true
 			return
-		if kart.orb_cd <= 0.0 and rng.randf() < 0.06:
+		# leading WITH the golden: it downgrades to a normal lob, so spend
+		# it like one (below) instead of hoarding a dead item
+		if kart.orb_cd <= 0.0 and rng.randf() < (0.12 if not kart.has_golden else 0.25):
 			var my_pos: int = world.position_of(index)
-			var mischief := rng.randf() < 0.15  # sometimes swap DOWN, why not
+			# sometimes swap DOWN, why not; golden-holding leaders always may
+			var mischief := rng.randf() < 0.3 or kart.has_golden
 			for other in world.karts:
 				var ok: SwapKart = other
 				if ok.index == index or ok.finished or ok.swap_immune > 0.0:
@@ -95,8 +99,8 @@ func think(dt: float) -> void:
 				var rel: Vector3 = ok.center() + ok.vel_dir * ok.speed * 0.55 - kart.center()
 				rel.y = 0.0
 				var dist := rel.length()
-				if dist < 4.0 or dist > 11.0:
+				if dist < 3.0 or dist > 12.5:
 					continue
-				if absf(kart.heading.signed_angle_to(rel.normalized(), Vector3.UP)) < 0.32:
+				if absf(kart.heading.signed_angle_to(rel.normalized(), Vector3.UP)) < 0.4:
 					a = true
 					break

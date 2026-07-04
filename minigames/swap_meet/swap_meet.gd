@@ -222,6 +222,7 @@ func _build_static() -> void:
 	sun.rotation_degrees = Vector3(-54, 34, 0)
 	sun.light_energy = 1.3
 	sun.shadow_enabled = true
+	sun.directional_shadow_max_distance = 70.0
 	var wenv := WorldEnvironment.new()
 	var env := Environment.new()
 	env.background_mode = Environment.BG_COLOR
@@ -356,7 +357,7 @@ func _build_crown() -> void:
 	sparkle.material_override = mat
 	sparkle.emitting = true
 	_crown.add_child(sparkle)
-	_crown.scale = Vector3.ONE * 1.5
+	_crown.scale = Vector3.ONE * 2.1
 	_crown.visible = false
 	add_child(_crown)
 
@@ -476,6 +477,7 @@ func _constrain(kart: SwapKart, dt: float) -> void:
 		var s_sc := float(q.s)
 		if s_sc > track.sc_len - 0.9:
 			kart.on_shortcut = false
+			print("SC_EXIT t=%.1f p=%d" % [race_t, kart.index])
 			var qm: Dictionary = track.nearest_main(kart.global_position, -1)
 			kart.hint = int(qm.idx)
 			s_eff = float(qm.s)
@@ -487,12 +489,18 @@ func _constrain(kart: SwapKart, dt: float) -> void:
 		var q2: Dictionary = track.nearest_main(kart.global_position, kart.hint)
 		kart.hint = int(q2.idx)
 		s_eff = float(q2.s)
-		# shortcut entrance: aim at the arrow and you're on the planks
+		# shortcut entrance: near the mouth, HUGGING THE INFIELD SIDE
+		# (where the arrow is; negative lat here), and moving into the
+		# branch. Racing-line traffic keeps lat ~0 and is not captured.
 		if not kart.finished and not kart.airborne \
-				and kart.global_position.distance_to(track.sc_entry_pos) < 1.8 \
-				and kart.heading.dot(Vector3(track.sc_tans[0])) > 0.1:
-			kart.on_shortcut = true
-			kart.sc_hint = 0
+				and float(q2.lat) < -1.1 \
+				and kart.global_position.distance_to(track.sc_entry_pos) < 2.4:
+			var into := Vector3(track.sc_sample_at(2.5).pos) - kart.global_position
+			into.y = 0.0
+			if into.length() > 0.3 and kart.heading.dot(into.normalized()) > 0.3:
+				kart.on_shortcut = true
+				kart.sc_hint = 0
+				print("SC_ENTER t=%.1f p=%d" % [race_t, kart.index])
 		_apply_walls(kart, q2, 0.0, dt)
 	# progress (wrap-aware delta on the effective main-loop arclength)
 	var l := track.total_len
@@ -530,6 +538,7 @@ func _apply_walls(kart: SwapKart, q: Dictionary, floor_y: float, dt: float) -> v
 		if floor_y < kart.y - 0.5:
 			kart.launch_air(maxf(kart.speed, 0.0) * SwapKart.RAMP_LAUNCH)
 			Sfx.play("putt", -4.0)
+			print("JUMP t=%.1f p=%d v=%.1f" % [race_t, kart.index, kart.speed])
 		else:
 			kart.y = floor_y
 	kart.global_position.y = kart.y
@@ -781,9 +790,12 @@ func _golden_tick(dt: float) -> void:
 		_gold_pickup.rotate_y(dt * 2.0)
 		var bob: Node3D = _gold_pickup.get_node("Bob")
 		bob.position.y = 1.0 + 0.18 * sin(now * 3.0)
+		var lead := leader_unfinished()
 		for k in karts:
 			var kart: SwapKart = k
-			if kart.finished or kart.airborne:
+			# the leader can't claim it - the golden orb IS the bullseye
+			# pointed at them; they drive right through
+			if kart.finished or kart.airborne or kart.index == lead:
 				continue
 			if kart.global_position.distance_to(_gold_spot) < 1.25:
 				_claim_golden(kart)
@@ -867,7 +879,7 @@ func _spawn_golden() -> void:
 	_gold_pickup.add_child(pillar)
 	add_child(_gold_pickup)
 	Sfx.play("confirm", -2.0)
-	_flash_event("GOLDEN ORB ON THE TRACK - IT SWAPS YOU WITH THE LEADER", Color(1.0, 0.85, 0.25))
+	_flash_event("GOLDEN ORB ON THE TRACK - SWAPS YOU WITH THE LEADER (leaders can't grab it)", Color(1.0, 0.85, 0.25))
 	print("GOLD_SPAWN t=%.1f s=%.1f" % [race_t, frac * track.total_len])
 
 func _claim_golden(kart: SwapKart) -> void:
@@ -1024,12 +1036,23 @@ func _setup_test() -> void:
 		kart.parked = true
 	var l := track.total_len
 	if _test_mode == "immunity" or _test_mode == "moment":
-		karts[0].place_at(l - 14.5, -0.9)
-		karts[1].place_at(l - 5.0, -0.9)
+		karts[0].place_at(l * 0.26, -0.5)
+		karts[1].place_at(l * 0.34, -0.5)
 		if karts.size() > 2:
-			karts[2].place_at(l - 22.0, 0.9)
+			karts[2].place_at(l * 0.18, 0.9)
 		if karts.size() > 3:
-			karts[3].place_at(l - 26.0, -0.9)
+			karts[3].place_at(l * 0.14, -0.9)
+		# kart1 sits EXACTLY on kart0's throw line (deterministic hit)
+		var k0: SwapKart = karts[0]
+		var k1: SwapKart = karts[1]
+		k1.global_position = k0.global_position + k0.heading * 7.5
+		k1.heading = k0.heading
+		k1.vel_dir = k0.heading
+		var q: Dictionary = track.nearest_main(k1.global_position, -1)
+		k1.hint = int(q.idx)
+		k1.last_s_eff = float(q.s)
+		k1.progress = float(q.s)
+		k1._orient(1000.0)
 	_update_score_rows()
 	print("SWAPTEST %s armed" % _test_mode)
 
@@ -1069,7 +1092,7 @@ func _test_tick() -> void:
 ## --- FX -------------------------------------------------------------------------------------
 
 func _swap_fx(pos: Vector3, col_arriving: Color, col_departing: Color) -> void:
-	for cfg in [[col_departing, 0.85, 0.30], [col_arriving, 0.45, 0.55]]:
+	for cfg in [[col_departing, 0.85, 0.55], [col_arriving, 0.45, 0.95]]:
 		var col: Color = cfg[0]
 		var beam := MeshInstance3D.new()
 		var cm := CylinderMesh.new()

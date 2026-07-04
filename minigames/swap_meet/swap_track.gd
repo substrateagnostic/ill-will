@@ -51,7 +51,7 @@ const GATE_FRAC := [0.14, 0.30, 0.44, 0.79]
 
 const COL_ASPHALT := Color(0.32, 0.31, 0.36)
 const COL_CREAM := Color(0.93, 0.88, 0.78)
-const COL_RAILRED := Color(0.86, 0.30, 0.26)
+const COL_RAILRED := Color(0.78, 0.17, 0.14)
 const COL_WOOD := Color(0.42, 0.27, 0.16)
 const COL_PLANK := Color(0.52, 0.36, 0.20)
 
@@ -229,11 +229,11 @@ func sc_sample_at(s: float) -> Dictionary:
 	return {"pos": sc_pts[i].lerp(sc_pts[i + 1], t), "tangent": sc_tans[i], "hw": SC_HW}
 
 ## Floor height along the shortcut (plank ramp -> gap -> landing).
+## Linear incline - matches the single slab the visual builds.
 func sc_floor(s: float) -> float:
 	if s < SC_RAMP_START or s >= SC_RAMP_LIP:
 		return 0.0
-	var t := (s - SC_RAMP_START) / (SC_RAMP_LIP - SC_RAMP_START)
-	return RAMP_H * t * t * (3.0 - 2.0 * t)
+	return RAMP_H * (s - SC_RAMP_START) / (SC_RAMP_LIP - SC_RAMP_START)
 
 ## --- meshes -------------------------------------------------------------------
 
@@ -350,6 +350,7 @@ func _build_finish() -> void:
 	var bmat := StandardMaterial3D.new()
 	bmat.albedo_color = COL_RAILRED
 	bar.material_override = bmat
+	bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	# bar length axis = local x; align x across the track
 	add_child(bar)
 	bar.global_transform = Transform3D(Basis(right, Vector3.UP, tangent), c + Vector3(0, 2.6, 0))
@@ -367,6 +368,7 @@ func _build_finish() -> void:
 	var flag: PackedScene = load("res://assets/models/minigolf/flag-red.glb")
 	if flag != null:
 		var f: Node3D = flag.instantiate()
+		f.name = "FinishFlag"
 		f.position = c + right * (hw + 1.5)
 		add_child(f)
 
@@ -404,6 +406,7 @@ func _build_gates() -> void:
 		mat.emission = Color(0.2, 0.5, 0.8)
 		mat.emission_energy_multiplier = 0.6
 		bar.material_override = mat
+		bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(bar)
 		bar.global_transform = Transform3D(Basis(right, Vector3.UP, tangent), c + Vector3(0, 1.9, 0))
 		_gate_bars.append(bar)
@@ -433,58 +436,91 @@ func pulse_gate(gi: int, col: Color) -> void:
 	tw.tween_property(mat, "emission_energy_multiplier", 0.6, 0.6)
 
 func _build_shortcut_visual() -> void:
-	# plank bridge along the ramp + landing sections (gap left open)
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	var box := BoxMesh.new()
-	box.size = Vector3(SC_HW * 2.0, 0.16, 1.0)
-	mm.mesh = box
-	var xforms: Array = []
-	var cols: Array = []
-	var step := 0.55
-	var s := 0.0
-	while s < sc_len:
-		if s < SC_RAMP_LIP or s > SC_LAND - 0.6:
+	# flat deck sections (entry apron + landing runway) as smooth ribbons;
+	# alternating plank shades via vertex colors
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for span in [[0.0, SC_RAMP_START + 0.1], [SC_LAND - 0.8, sc_len]]:
+		var s := float(span[0])
+		var step := 0.55
+		while s < float(span[1]):
+			var s2: float = minf(s + step, float(span[1]))
 			var a := sc_sample_at(s)
-			var b := sc_sample_at(minf(s + step, sc_len))
-			var pa := Vector3(a.pos) + Vector3(0, sc_floor(s) - 0.06, 0)
-			var pb := Vector3(b.pos) + Vector3(0, sc_floor(minf(s + step, sc_len)) - 0.06, 0)
-			var shade := 1.0 + (0.10 if int(s / step) % 2 == 0 else -0.06)
-			xforms.append(_seg_xform(pa, pb, Vector3(1, 1, pa.distance_to(pb) * 1.06)))
-			cols.append(Color(COL_PLANK.r * shade, COL_PLANK.g * shade, COL_PLANK.b * shade))
-		s += step
-	mm.instance_count = xforms.size()
-	for i in xforms.size():
-		mm.set_instance_transform(i, xforms[i])
-		mm.set_instance_color(i, cols[i])
-	_mmi(mm)
-	# mini rails on the ramp
-	var mm2 := MultiMesh.new()
-	mm2.transform_format = MultiMesh.TRANSFORM_3D
-	mm2.use_colors = true
-	var rb := BoxMesh.new()
-	rb.size = Vector3(0.18, 0.24, 1.0)
-	mm2.mesh = rb
-	var x2: Array = []
-	var c2: Array = []
-	s = 0.0
-	while s < SC_RAMP_LIP:
-		for side: float in [-1.0, 1.0]:
-			var a := sc_sample_at(s)
-			var b := sc_sample_at(s + step)
+			var b := sc_sample_at(s2)
 			var ra := Vector3(a.tangent).cross(Vector3.UP)
 			var rbv := Vector3(b.tangent).cross(Vector3.UP)
-			var pa: Vector3 = Vector3(a.pos) + ra * (SC_HW + 0.1) * side + Vector3(0, sc_floor(s) + 0.1, 0)
-			var pb: Vector3 = Vector3(b.pos) + rbv * (SC_HW + 0.1) * side + Vector3(0, sc_floor(s + step) + 0.1, 0)
-			x2.append(_seg_xform(pa, pb, Vector3(1, 1, pa.distance_to(pb) * 1.1)))
-			c2.append(COL_CREAM)
-		s += step
-	mm2.instance_count = x2.size()
-	for i in x2.size():
-		mm2.set_instance_transform(i, x2[i])
-		mm2.set_instance_color(i, c2[i])
-	_mmi(mm2)
+			var y := Vector3(0, 0.025, 0)
+			var a0 := Vector3(a.pos) - ra * SC_HW + y
+			var b0 := Vector3(a.pos) + ra * SC_HW + y
+			var a1 := Vector3(b.pos) - rbv * SC_HW + y
+			var b1 := Vector3(b.pos) + rbv * SC_HW + y
+			var shade := 1.0 + (0.12 if int(s / step) % 2 == 0 else -0.08)
+			var c := Color(COL_PLANK.r * shade, COL_PLANK.g * shade, COL_PLANK.b * shade)
+			for v in [a0, b0, a1, b0, b1, a1]:
+				st.set_color(c)
+				st.set_normal(Vector3.UP)
+				st.add_vertex(v)
+			s += step
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	mi.material_override = _vc_mat
+	add_child(mi)
+	# the launch ramp: ONE smooth inclined slab up to the lip
+	var ra := Vector3(sc_sample_at(SC_RAMP_START).pos) + Vector3(0, -0.08, 0)
+	var rb := Vector3(sc_sample_at(SC_RAMP_LIP).pos) + Vector3(0, RAMP_H - 0.08, 0)
+	var slab := MeshInstance3D.new()
+	var sb := BoxMesh.new()
+	sb.size = Vector3(SC_HW * 2.0, 0.16, 1.0)
+	slab.mesh = sb
+	var smat := StandardMaterial3D.new()
+	smat.albedo_color = COL_PLANK
+	smat.roughness = 0.85
+	slab.material_override = smat
+	add_child(slab)
+	slab.global_transform = _seg_xform(ra, rb, Vector3(1, 1, ra.distance_to(rb) * 1.02))
+	# white chevron painted on the slab so it reads JUMP from above
+	var wmat := StandardMaterial3D.new()
+	wmat.albedo_color = Color(0.95, 0.94, 0.9)
+	var slope_basis := Basis.looking_at(-(rb - ra).normalized(), Vector3.UP)
+	var slab_up := slope_basis.y
+	var mid := (ra + rb) * 0.5 + slab_up * 0.12
+	for sx: float in [-1.0, 1.0]:
+		var stripe := MeshInstance3D.new()
+		var stm := BoxMesh.new()
+		stm.size = Vector3(0.16, 0.06, 1.1)
+		stripe.mesh = stm
+		stripe.material_override = wmat
+		add_child(stripe)
+		stripe.global_transform = Transform3D(
+			slope_basis.rotated(slab_up, -0.55 * sx),
+			mid + slope_basis.x * 0.42 * sx)
+	# cream side rails along the whole incline
+	var rail_dir := (rb - ra).normalized()
+	var rail_right := Vector3(rail_dir.x, 0, rail_dir.z).normalized().cross(Vector3.UP)
+	for side: float in [-1.0, 1.0]:
+		var wa := ra + rail_right * (SC_HW + 0.05) * side + Vector3(0, 0.2, 0)
+		var wb := rb + rail_right * (SC_HW + 0.05) * side + Vector3(0, 0.2, 0)
+		var rmesh := MeshInstance3D.new()
+		var rbm := BoxMesh.new()
+		rbm.size = Vector3(0.2, 0.28, 1.0)
+		rmesh.mesh = rbm
+		var rmat := StandardMaterial3D.new()
+		rmat.albedo_color = COL_CREAM
+		rmesh.material_override = rmat
+		add_child(rmesh)
+		rmesh.global_transform = _seg_xform(wa, wb, Vector3(1, 1, wa.distance_to(wb) * 1.05))
+	# trestle legs under the lip (the ramp reads as a built thing)
+	var lip := Vector3(sc_sample_at(SC_RAMP_LIP).pos)
+	for side: float in [-1.0, 1.0]:
+		var leg := MeshInstance3D.new()
+		var lm := BoxMesh.new()
+		lm.size = Vector3(0.22, RAMP_H, 0.22)
+		leg.mesh = lm
+		var lmat := StandardMaterial3D.new()
+		lmat.albedo_color = COL_WOOD
+		leg.material_override = lmat
+		leg.position = lip + rail_right * (SC_HW - 0.2) * side + Vector3(0, RAMP_H * 0.5 - 0.1, 0)
+		add_child(leg)
 	# bouncing arrow sign at the entrance
 	var arrow := MeshInstance3D.new()
 	arrow.name = "ScArrow"
