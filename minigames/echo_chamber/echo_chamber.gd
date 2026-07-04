@@ -30,6 +30,11 @@ const RESULT_HOLD := 8.5
 
 const SWING_RANGE := 1.9
 const SWING_HALF_ARC := deg_to_rad(60.0)
+const HEAVY_RANGE := SWING_RANGE + 0.4
+const HEAVY_HALF_ARC := deg_to_rad(75.0)   # 150deg total cone
+const HEAVY_HIT_PTS := 2
+const RIPOSTE_BONUS_PTS := 1
+const PARRY_STAGGER_T := 0.6
 
 const DEFAULT_CHARS := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -81,6 +86,14 @@ var _last_hitpause := -1.0
 var _perf_accum := 0.0
 var _perf_frames := 0
 var _perf_degraded := false
+
+# ---- determinism accounting (ghosts report their endpoint drift) ----
+var _det_max_err := 0.0
+var _det_ghost_total := 0
+var _logged_ghost_heavy := false   # log the first replayed heavy each round
+
+# ---- event-driven verify captures (heavy windup / parry / fragment) ----
+var _ev_captured: Dictionary = {}
 
 # ---- nodes ----
 var arena_floor: StaticBody3D
@@ -392,6 +405,9 @@ func _enter_intro(n: int) -> void:
 	round_label.text = "ROUND %d / %d" % [n, ROUNDS]
 	round_label.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
 	_spawn_ghosts_for_round()
+	_det_ghost_total = ghosts.size()
+	_det_max_err = 0.0
+	_logged_ghost_heavy = false
 	_reset_arena(n == ROUNDS)
 	_deaths_round.clear()
 	for pl in roster:
@@ -512,23 +528,19 @@ func _end_round() -> void:
 		_flash_banner("ROUND %d OVER" % round_no, Color(1, 0.85, 0.2), TRANSITION_TIME - 0.4)
 
 
-## Spec risk "Replay drift": assert each live ghost's end position equals the
-## recorded final sample within 0.01. Ghosts are driven by DIRECT transform
-## application, so this holds exactly — we measure & print to prove it.
+## Spec risk "Replay drift": each ghost, the instant it reaches its recorded
+## endpoint (death or end), reports the drift between its transform and the
+## recorded sample it snapped to. Ghosts are driven by DIRECT transform
+## application, so this holds exactly (0.000000). assert() halts on drift.
+## By round end every ghost this round has reported (recording length == round
+## length), so the accumulated max is the round's verdict.
+func _report_determinism(err: float, owner: int, rnd: int) -> void:
+	_det_max_err = maxf(_det_max_err, err)
+	assert(err < 0.01, "GHOST DRIFT owner=%d round=%d err=%f" % [owner, rnd, err])
+
+
 func _verify_determinism() -> void:
-	var max_err := 0.0
-	for g in ghosts:
-		var tk: Dictionary = g.take
-		var c: int = tk["count"]
-		if c <= 0:
-			continue
-		var parr: PackedVector3Array = tk["pos"]
-		var final_pos: Vector3 = parr[c - 1]
-		var gpos: Vector3 = g.global_position
-		var err: float = gpos.distance_to(final_pos)
-		max_err = maxf(max_err, err)
-		assert(err < 0.01, "GHOST DRIFT owner=%d round=%d err=%f" % [g.owner_index, g.round_no, err])
-	print("ECHO_DETERMINISM round=%d ghosts=%d max_err=%.6f OK" % [round_no, ghosts.size(), max_err])
+	print("ECHO_DETERMINISM round=%d ghosts=%d max_err=%.6f OK" % [round_no, _det_ghost_total, _det_max_err])
 
 
 func _finish_match() -> void:
@@ -632,13 +644,24 @@ func _tick_play(delta: float) -> void:
 			rec["pos"].append(f.global_position)
 			rec["yaw"].append(f.yaw)
 			rec["state"].append(f.state)
-			rec["fire"].append(1 if f.consume_fire() else 0)
+			rec["fire"].append(f.consume_fire())   # 0 none / 1 light / 2 heavy
 			rec["count"] = int(rec["count"]) + 1
 		_rec_count += 1
 
-	# 3. replay ghosts by direct transform application (may strike live players)
+	# 3. replay ghosts by direct transform application (may strike live players).
+	#    A ghost that reaches its recorded death/end fragments and marks itself
+	#    done; sweep those out so we stop touching freed instances.
+	var any_done := false
 	for g in ghosts:
 		g.replay(_round_time)
+		if g.done:
+			any_done = true
+	if any_done:
+		var live: Array = []
+		for g in ghosts:
+			if not g.done:
+				live.append(g)
+		ghosts = live
 
 	# 4. respawns + round end
 	_process_respawns(delta)
@@ -740,8 +763,16 @@ func _apply_perf_degrade(ms: float) -> void:
 # ===========================================================================
 # Combat resolution (called by both live swings and ghost replays)
 # ===========================================================================
-func resolve_swing(origin: Vector3, yaw_a: float, owner: int, is_ghost: bool, exclude, src_round: int) -> void:
+func resolve_swing(origin: Vector3, yaw_a: float, owner: int, is_ghost: bool, exclude, src_round: int, is_heavy := false, is_riposte := false) -> void:
+	if is_ghost and is_heavy and not _logged_ghost_heavy:
+		_logged_ghost_heavy = true
+		print("ECHO_GHOST_HEAVY owner=%s src_round=%d (past heavy replays with 2H arc)" % [_names[owner], src_round])
 	var fwd := Vector3(sin(yaw_a), 0.0, cos(yaw_a))
+	var reach := HEAVY_RANGE if is_heavy else SWING_RANGE
+	var arc := HEAVY_HALF_ARC if is_heavy else SWING_HALF_ARC
+	var dmg := HEAVY_HIT_PTS if is_heavy else 1
+	if is_riposte:
+		dmg += 1     # riposte light: +1 bonus damage
 	for f in fighters:
 		if f == exclude or not f.alive:
 			continue
@@ -749,21 +780,47 @@ func resolve_swing(origin: Vector3, yaw_a: float, owner: int, is_ghost: bool, ex
 		var to: Vector3 = fpos - origin
 		to.y = 0.0
 		var d: float = to.length()
-		if d > SWING_RANGE or d < 0.001:
+		if d > reach or d < 0.001:
 			continue
-		if fwd.angle_to(to) > SWING_HALF_ARC:
+		if fwd.angle_to(to) > arc:
 			continue
-		var res: String = f.take_hit(1, origin, owner)
+		var res: String = f.take_hit(dmg, origin, owner, is_heavy)
 		if res == "":
+			continue
+		if res == "parry":
+			_on_parry(f, owner, is_ghost, exclude, src_round)
 			continue
 		if is_ghost:
 			_award_ghost_hit(owner, f.player_index, res, src_round)
 		else:
 			if owner != f.player_index:
-				points[owner] += LIVE_HIT_PTS
-		_hit_feedback(f.global_position, f.color)
+				points[owner] += HEAVY_HIT_PTS if is_heavy else LIVE_HIT_PTS
+				if is_riposte:
+					points[owner] += RIPOSTE_BONUS_PTS
+					print("ECHO_RIPOSTE by=%s victim=%s +%d (parry payoff)" % [_names[owner], _names[f.player_index], RIPOSTE_BONUS_PTS])
+		_hit_feedback(f.global_position, f.color, is_heavy)
 		if res == "kill":
 			_on_death(f.player_index, false)
+
+
+## A parry landed: the incoming hit is negated. A LIVE attacker staggers
+## (0.6s, opening the riposte); ghosts never stagger (they already happened),
+## but their swing is still parried and the parrier still gets the riposte.
+func _on_parry(parrier, attacker_owner: int, is_ghost: bool, attacker_fighter, src_round: int) -> void:
+	Sfx.play("confirm", 0.5)
+	_spawn_death_fx(parrier.global_position + Vector3(0, 1.1, 0), Color(1, 1, 0.75), 14, 0.4)
+	_shake = maxf(_shake, 0.22)
+	if not is_ghost and attacker_fighter != null:
+		attacker_fighter.stagger(PARRY_STAGGER_T)
+	_flash_credit("%s PARRIES!" % _names[parrier.player_index], _colors[parrier.player_index])
+	print("ECHO_PARRY parrier=%s attacker=%s ghost=%s round=%d t=%.2f" % [_names[parrier.player_index], _names[attacker_owner], str(is_ghost), src_round, _round_time])
+	_event_capture("parry_moment")
+
+
+## One-shot shard burst in a ghost's tint (declutter: the ghost is despawning).
+func _spawn_fragments(pos: Vector3, color: Color) -> void:
+	_spawn_death_fx(pos, color, 20, 0.5)
+	_event_capture("ghost_fragment")
 
 
 func _award_ghost_hit(owner: int, victim: int, res: String, src_round: int) -> void:
@@ -888,10 +945,29 @@ func _flash_credit(text: String, color: Color) -> void:
 	hide.tween_callback(func(): credit_banner.visible = false)
 
 
-func _hit_feedback(pos: Vector3, color: Color) -> void:
-	Sfx.play("bumper", -6.0)
-	_shake = maxf(_shake, 0.28)
-	_spawn_death_fx(pos + Vector3(0, 0.9, 0), color, 12, 0.5)
+func _hit_feedback(pos: Vector3, color: Color, is_heavy := false) -> void:
+	Sfx.play("bumper", -4.0 if is_heavy else -6.0)
+	_shake = maxf(_shake, 0.5 if is_heavy else 0.28)
+	_spawn_death_fx(pos + Vector3(0, 0.9, 0), color, 20 if is_heavy else 12, 0.55 if is_heavy else 0.5)
+
+
+## A fighter began charging a heavy — grab the readable windup once (verify).
+func notify_charge() -> void:
+	_event_capture("heavy_windup")
+
+
+## One-shot state-driven screenshot of a transient combat beat (windup / parry
+## / ghost fragment). Fires the first time each beat happens after warmup, so
+## the required v1.1 evidence lands without frame-index guessing. Windowed only.
+func _event_capture(tag: String) -> void:
+	if not _cap_on or _ev_captured.has(tag):
+		return
+	if state != St.PLAY or _round_time < 1.0:
+		return
+	if DisplayServer.get_name() == "headless":
+		return
+	_ev_captured[tag] = true
+	_grab(tag, false)
 
 
 func _hitpause() -> void:
