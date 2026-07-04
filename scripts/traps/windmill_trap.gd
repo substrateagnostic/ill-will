@@ -15,6 +15,7 @@ func _ready() -> void:
 		_blades_visual.scale = Vector3(1.6, 1.6, 1.0)
 
 func _physics_process(delta: float) -> void:
-	$BladesBody.rotate_object_local(Vector3(0, 0, 1), spin_speed * delta)
+	var step := spin_speed * delta * speed_scale
+	$BladesBody.rotate_object_local(Vector3(0, 0, 1), step)
 	if _blades_visual:
-		_blades_visual.rotate_object_local(Vector3(0, 0, 1), spin_speed * delta)
+		_blades_visual.rotate_object_local(Vector3(0, 0, 1), step)

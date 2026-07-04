@@ -16,6 +16,7 @@ var out_dir := "verify_out"
 var frame := 0
 var active := false
 var quit_after := 0
+var trace_pos := false
 var _ap_cooldown := 0
 
 func _ready() -> void:
@@ -45,6 +46,9 @@ func _ready() -> void:
 			active = true
 		elif arg.begins_with("--quitafter="):
 			quit_after = int(arg.trim_prefix("--quitafter="))
+			active = true
+		elif arg == "--tracepos":
+			trace_pos = true
 			active = true
 		elif arg.begins_with("--outdir="):
 			out_dir = arg.trim_prefix("--outdir=")
@@ -105,6 +109,13 @@ func _process(_delta: float) -> void:
 					pc.debug_show_aim(ap.power, ap.angle)
 			elif pc.has_method("debug_putt"):
 				pc.debug_putt(ap.power, ap.angle)
+	if trace_pos and frame % 6 == 0:
+		var m := get_tree().current_scene
+		if m != null and "balls" in m and not m.balls.is_empty():
+			var parts := "TRACE f=%d" % frame
+			for b in m.balls:
+				parts += " %s" % _v(b.global_position)
+			print(parts)
 	if placetest and not _pt_done:
 		_run_placetest()
 	if autobuild:

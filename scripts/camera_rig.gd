@@ -3,7 +3,10 @@ extends Node3D
 ## lean toward the ball so motion feels tracked without losing the overview.
 
 @export var course_center := Vector3(0, 0, -6.5)
+@export var course_extent := Vector3(3.0, 0.0, 8.5)
 @export var lean_strength := 0.22
+## Where the camera parks between cinematics; main sets this from the course.
+var home_position := Vector3(0, 12.5, 4.5)
 
 var ball: Ball
 var _shake := 0.0
@@ -22,20 +25,20 @@ func focus_on(pos: Vector3, duration: float) -> void:
 
 func start_flyover(duration: float) -> Tween:
 	cinematic = true
-	var start_pos := Vector3(2.2, 1.6, 2.5)
-	var end_pos := Vector3(-2.2, 1.8, -15.5)
+	var start_pos := course_center + Vector3(course_extent.x * 0.7, 1.6, course_extent.z * 0.85 + 4.0)
+	var end_pos := course_center + Vector3(-course_extent.x * 0.7, 1.8, -course_extent.z * 1.05 - 2.5)
 	cam.global_position = start_pos
 	var tw := create_tween()
 	tw.tween_method(_flyover_step.bind(start_pos, end_pos), 0.0, 1.0, duration)
 	tw.tween_callback(func():
 		cinematic = false
-		cam.position = Vector3(0, 12.5, 4.5))
+		cam.position = home_position)
 	return tw
 
 func _flyover_step(t: float, start_pos: Vector3, end_pos: Vector3) -> void:
 	var eased := ease(t, -1.8)
 	cam.global_position = start_pos.lerp(end_pos, eased)
-	var look_target := Vector3(0, 0.3, lerpf(-2.0, -13.0, eased))
+	var look_target := course_center + Vector3(0, 0.3, lerpf(course_extent.z * 0.55, -course_extent.z * 0.55, eased))
 	cam.look_at(look_target, Vector3.UP)
 
 func _process(delta: float) -> void:

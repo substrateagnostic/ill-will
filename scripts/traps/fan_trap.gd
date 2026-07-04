@@ -16,4 +16,4 @@ func _physics_process(_delta: float) -> void:
 	wind.y = 0.0
 	for body in $Zone.get_overlapping_bodies():
 		if body is Ball and not body.is_sunk:
-			body.apply_central_force(wind.normalized() * push)
+			body.apply_central_force(wind.normalized() * push * speed_scale)

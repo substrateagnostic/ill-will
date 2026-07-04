@@ -1,7 +1,13 @@
 class_name RoundManager
 extends Node
 ## Runs one round: stroke rotation in standings order until every ball is
-## sunk or DNF (stroke cap). Waits for all balls to rest between strokes.
+## sunk or DNF (stroke cap).
+##
+## NORMAL mode: waits for all balls to rest between strokes (turn-based).
+## CHAOS mode: no rest-waiting. The next player may putt the moment the
+## previous stroke is CHAOS_TURN_GAP old, so balls stay live and collide. Each
+## turn has a CHAOS_SHOT_CLOCK to act, and the whole round hard-ends at
+## CHAOS_ROUND_TIME (any unsunk ball = DNF).
 
 signal turn_started(player_idx: int)
 signal round_finished(finish_order: Array, strokes: Dictionary)
@@ -9,25 +15,35 @@ signal ball_resolved(player_idx: int, status: String)
 
 const STROKE_CAP := 6
 const REST_TIMEOUT := 10.0
+const CHAOS_TURN_GAP := 1.5
+const CHAOS_SHOT_CLOCK := 10.0
+const CHAOS_ROUND_TIME := 75.0
 
 var balls: Array = []
 var turn_order: Array = []
 var strokes := {}
 var resolved := {}
 var finish_order: Array = []
+var chaos_mode := false
 var _turn_pointer := -1
 var _awaiting_rest := false
 var _rest_timer := 0.0
+var _turn_timer := 0.0
+var _round_timer := 0.0
 var _round_over := false
 
-func start_round(order: Array, round_balls: Array) -> void:
+func start_round(order: Array, round_balls: Array, chaos := false) -> void:
 	turn_order = order
 	balls = round_balls
+	chaos_mode = chaos
 	strokes.clear()
 	resolved.clear()
 	finish_order.clear()
 	_round_over = false
 	_awaiting_rest = false
+	_rest_timer = 0.0
+	_turn_timer = 0.0
+	_round_timer = 0.0
 	_turn_pointer = -1
 	for p in turn_order:
 		strokes[p] = 0
@@ -52,14 +68,31 @@ func is_turn_ready() -> bool:
 	return p >= 0 and not resolved.has(p) and balls[p].is_stopped()
 
 func _physics_process(delta: float) -> void:
-	if not _awaiting_rest or _round_over:
+	if _round_over:
 		return
-	_rest_timer += delta
-	if _all_at_rest() or _rest_timer > REST_TIMEOUT:
-		if _rest_timer > REST_TIMEOUT:
-			print("REST_TIMEOUT hit; ball states: ", _debug_ball_states())
-		_awaiting_rest = false
-		_post_stroke_resolution()
+	if chaos_mode:
+		_round_timer += delta
+		if _round_timer >= CHAOS_ROUND_TIME:
+			_chaos_timeout()
+			return
+	if _awaiting_rest:
+		_rest_timer += delta
+		var ready := false
+		if chaos_mode:
+			# Don't wait for balls to settle; just enforce the inter-stroke gap.
+			ready = _rest_timer >= CHAOS_TURN_GAP
+		else:
+			ready = _all_at_rest() or _rest_timer > REST_TIMEOUT
+			if _rest_timer > REST_TIMEOUT and not _all_at_rest():
+				print("REST_TIMEOUT hit; ball states: ", _debug_ball_states())
+		if ready:
+			_awaiting_rest = false
+			_post_stroke_resolution()
+	elif chaos_mode:
+		# Shot clock: if the current player can't/won't putt in time, skip them.
+		_turn_timer += delta
+		if _turn_timer >= CHAOS_SHOT_CLOCK:
+			_chaos_skip()
 
 func _debug_ball_states() -> String:
 	var parts := []
@@ -96,6 +129,19 @@ func _post_stroke_resolution() -> void:
 		ball_resolved.emit(p, "dnf")
 	_advance_turn()
 
+func _chaos_skip() -> void:
+	# Player let the shot clock expire; move on without a stroke.
+	_turn_timer = 0.0
+	_advance_turn()
+
+func _chaos_timeout() -> void:
+	for p in turn_order:
+		if not resolved.has(p):
+			resolved[p] = "dnf"
+			balls[p].petrify()
+			ball_resolved.emit(p, "dnf")
+	_finish()
+
 func _advance_turn() -> void:
 	if resolved.size() >= turn_order.size():
 		_finish()
@@ -104,6 +150,7 @@ func _advance_turn() -> void:
 		_turn_pointer = (_turn_pointer + 1) % turn_order.size()
 		var candidate: int = turn_order[_turn_pointer]
 		if not resolved.has(candidate):
+			_turn_timer = 0.0
 			turn_started.emit(candidate)
 			return
 	_finish()
