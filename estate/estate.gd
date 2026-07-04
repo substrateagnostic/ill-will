@@ -388,9 +388,22 @@ func _end_night() -> void:
 	_redraw_monuments()
 	_rebuild_top_bar()
 	phase_panel.visible = false
-	Sfx.play("match_win")
+	var podium := Podium.new()
+	add_child(podium)
+	var entries: Array = []
+	var order := EstateState.standings()
+	for rank in order.size():
+		var pl = EstateState.players[order[rank]]
+		entries.append({
+			"name": pl.name, "color": pl.color, "rank": rank,
+			"char_scene": CHAR_SCENES[order[rank]],
+		})
+	podium.present(entries)
 	_flash("%s WINS THE NIGHT\nthe estate will remember" % champ.name, champ.color, 9999.0)
 	print("NIGHT_OVER winner=", champ.name, " monuments=", EstateState.monuments.size())
+	await podium.done
+	podium.queue_free()
+	cam.current = true
 
 func _flash(text: String, color: Color, dur: float) -> void:
 	banner.text = text

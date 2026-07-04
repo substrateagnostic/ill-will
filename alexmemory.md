@@ -46,6 +46,13 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-04 — Podium ceremony (core, reusable)
+Night-end now presents a podium: champion Cheers on block 1, 2nd stands
+politely, 3rd sulks cross-legged, 4th lies flat on the floor beside the
+podium. Confetti rain, name tags, pastel blocks. `core/podium.gd` — built
+reusable so minigames can adopt it at merge. Screenshot:
+`verify_out/podium2/shot_2900.png`
+
 ### 2026-07-04 — AAA polish pass, part 1 (your standing directive)
 - **3D animated main menu**: slow-orbiting course diorama behind the UI with
   a spinning windmill and gravestones as set dressing. Screenshot:
