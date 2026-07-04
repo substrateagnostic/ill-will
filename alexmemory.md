@@ -28,6 +28,15 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## STANDING DECISIONS (agreed, in force)
 
+- **Input policy (Alex, 2026-07-04)**: assume one full control surface per
+  player (M+KB or gamepad) — no shared-surface contortions needed for
+  simultaneous games; Par keeps mouse-hotseat because it's turn-based.
+  Two-button verb budget stays fine. **Web co-op wiring is on the roadmap**
+  (later phase — Godot high-level multiplayer, likely WebRTC for browser).
+- **Animation readability > new mechanics**: Tilt's knockback and Echo's
+  attacks existed but didn't READ in tests — v1.1 builders are adding real
+  KayKit attack/parry/clash animations + windups precisely for this.
+
 - **Anthology direction**: Par for the Curse = minigame #1 of a Mario-Party-
   style anthology. Meta layer = **THE ESTATE**: board/hub/menu/trophy-room
   are one persistent place players build & scar; simultaneous between-game

@@ -25,10 +25,12 @@ must feed it.
 Use the `PlayerInput` autoload for ALL player controls (see
 core/player_input.gd): `get_move(p)`, `is_down(p,"a"|"b")`,
 `just_pressed(p,"a"|"b")`. Device assignment is the shell's job — never read
-gamepads/keys directly. Design for 2–4 players. If your spec says
-"simultaneous", assume each player may be on gamepad or half-keyboard;
-buttons available per player: move vector + A + B. That's ALL. Design within
-it.
+gamepads/keys directly. Design for 2–4 players. Input policy (2026-07-04):
+assume ONE full control surface per player (gamepad or M+KB) — keyboard
+halves are a fallback, not the design target. Verb budget per player stays
+move + A + B (tap/hold variants welcome). Design within it. Online/web
+co-op is a future phase: keep player state authoritative in one place per
+player and avoid frame-coupled input assumptions where cheap to do so.
 
 ## House style (non-negotiable)
 
