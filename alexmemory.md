@@ -67,6 +67,15 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-05 (night shift, later) — Swap Meet MERGED (game #7)
+The swap-racer works: whole tabletop circuit readable in one frame,
+windmill landmarks + shortcut ramp, leader wears a crown (bullseye), and
+the golden orb is BOTH leader-locked and trailing-spawned so the comeback
+verb lands where needed. Kart feel deliberately bumper-car pace (builder
+documented the tuning knobs at the top of swap_kart.gd if we want zip:
+TOP_SPEED 5.0->5.6 first). "SWAPPED! RED <-> MINT" banner in identity
+colors. Dead Weight builder resumed with a final-report order.
+
 ### 2026-07-05 (night shift, later) — Greed Inc. MERGED (game #6)
 The heist vault works: pot fattens center-stage, carrier glows gold and
 leaks coins while edge-chevrons hunt them, corner chutes bank. Anti-turtle
