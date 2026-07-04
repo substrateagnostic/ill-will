@@ -12,6 +12,7 @@ const MODULES := {
 	"tilt": {"name": "TILT", "scene": "res://minigames/tilt/tilt.tscn", "mode": "contract"},
 	"orbital": {"name": "ORBITAL DODGEBALL", "scene": "res://minigames/orbital/orbital.tscn", "mode": "contract"},
 	"mower": {"name": "MOWER MAYHEM", "scene": "res://minigames/mower/mower.tscn", "mode": "contract"},
+	"greed": {"name": "GREED INC.", "scene": "res://minigames/greed/greed.tscn", "mode": "contract"},
 	"mock": {"name": "EXHIBITION MATCH", "scene": "res://estate/mock_game.tscn", "mode": "contract"},
 }
 const CHAR_PATHS := [
@@ -302,7 +303,7 @@ func _enter_auction() -> void:
 	high_bid = 0
 	high_bidder = -1
 	_bid_timer = BID_TIME
-	var pool := ["mock", "mock", "mock"] if mockonly else ["par", "echo", "tilt", "orbital", "mower"]
+	var pool := ["mock", "mock", "mock"] if mockonly else ["par", "echo", "tilt", "orbital", "mower", "greed"]
 	if not pool_override.is_empty():
 		pool = pool_override
 	auction_options.clear()
