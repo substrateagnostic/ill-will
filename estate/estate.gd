@@ -22,6 +22,9 @@ var _grounds_timer := GROUNDS_TIME
 var _module: Node = null
 var _bet_targets := {}
 var _monuments_drawn := 0
+var walkers: Array = []
+var _selected_walker := -1
+var _bot_wander_timer := 0.0
 
 @onready var cam: Camera3D = $Camera3D
 @onready var top_bar: HBoxContainer = $UI/TopBar/Row
@@ -38,6 +41,9 @@ func _ready() -> void:
 		elif arg == "--mockonly":
 			mockonly = true
 	EstateState.start_night(GameState.player_count)
+	PlayerInput.auto_assign(GameState.player_count)
+	_spawn_walkers()
+	_spawn_toys()
 	_redraw_monuments()
 	_redraw_graffiti()
 	banner.visible = false
@@ -48,7 +54,74 @@ func _ready() -> void:
 func get_phase_name() -> String:
 	return Phase.keys()[phase]
 
+const CHAR_SCENES := [
+	preload("res://assets/models/kaykit/Barbarian.glb"),
+	preload("res://assets/models/kaykit/Knight.glb"),
+	preload("res://assets/models/kaykit/Mage.glb"),
+	preload("res://assets/models/kaykit/Rogue.glb"),
+]
+
+func _spawn_walkers() -> void:
+	for i in EstateState.players.size():
+		var w := EstateWalker.new()
+		$Grounds/Walkers.add_child(w)
+		w.global_position = Vector3(-1.5 + i * 1.0, 0.1, 1.0)
+		w.setup(CHAR_SCENES[i], EstateState.players[i].color, i)
+		walkers.append(w)
+
+func _spawn_toys() -> void:
+	var colors := [Color(0.95, 0.5, 0.2), Color(0.4, 0.75, 0.95), Color(0.85, 0.85, 0.3)]
+	for i in 3:
+		var b := RigidBody3D.new()
+		b.mass = 0.5
+		var shape := CollisionShape3D.new()
+		var s := SphereShape3D.new()
+		s.radius = 0.3
+		shape.shape = s
+		b.add_child(shape)
+		var m := MeshInstance3D.new()
+		var mesh := SphereMesh.new()
+		mesh.radius = 0.3
+		mesh.height = 0.6
+		m.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = colors[i]
+		m.material_override = mat
+		b.add_child(m)
+		b.linear_damp = 0.6
+		b.angular_damp = 0.4
+		$Grounds/Toys.add_child(b)
+		b.global_position = Vector3(-2.0 + i * 2.0, 0.4, -1.5)
+
+func _unhandled_input(event: InputEvent) -> void:
+	if phase == Phase.GAME or _module != null:
+		return
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var origin := cam.project_ray_origin(event.position)
+		var dir := cam.project_ray_normal(event.position)
+		var space := get_world_3d().direct_space_state
+		var q := PhysicsRayQueryParameters3D.create(origin, origin + dir * 60.0, 3)
+		var hit := space.intersect_ray(q)
+		if hit.is_empty():
+			return
+		if hit.collider is EstateWalker:
+			_select_walker(hit.collider.player_idx)
+		elif _selected_walker >= 0:
+			walkers[_selected_walker].walk_target = hit.position
+
+func _select_walker(idx: int) -> void:
+	_selected_walker = idx
+	for w in walkers:
+		w.set_selected(w.player_idx == idx)
+	Sfx.play("card", -8.0)
+
 func _process(delta: float) -> void:
+	if bots and _module == null and not walkers.is_empty():
+		_bot_wander_timer -= delta
+		if _bot_wander_timer <= 0.0:
+			_bot_wander_timer = 1.6
+			var w: EstateWalker = walkers[EstateState.rng.randi_range(0, walkers.size() - 1)]
+			w.walk_target = Vector3(EstateState.rng.randf_range(-6.0, 6.0), 0, EstateState.rng.randf_range(-7.0, 1.5))
 	if phase == Phase.GROUNDS:
 		_grounds_timer -= delta
 		_update_grounds_clock()
@@ -234,6 +307,7 @@ func _launch_game(id: String) -> void:
 	var scene: PackedScene = load(info.scene)
 	_module = scene.instantiate()
 	$Grounds.visible = false
+	$Grounds.process_mode = Node.PROCESS_MODE_DISABLED
 	plinths.visible = false
 	$GraffitiWall.visible = false
 	$UI/TopBar.visible = false
@@ -266,6 +340,7 @@ func _on_module_finished(results: Dictionary) -> void:
 		_module.queue_free()
 		_module = null
 	$Grounds.visible = true
+	$Grounds.process_mode = Node.PROCESS_MODE_INHERIT
 	plinths.visible = true
 	$GraffitiWall.visible = true
 	$UI/TopBar.visible = true

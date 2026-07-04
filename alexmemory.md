@@ -46,6 +46,14 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-04 — Estate E2a: the grounds are ALIVE
+Walkable KayKit characters on the estate (gamepad sticks move them directly;
+shared mouse: click a character to select, click ground to send them).
+Physics toy balls to shove, glowing lanterns, castle folly on the hill.
+Screenshot: `verify_out/e2/shot_0600.png` — Mage at the stall, Rogue on the
+path, auction running. Still to come in E2b: stall purchases, seeded walkway
+traps, station-proximity interactions.
+
 ### 2026-07-04 — The Estate E1 built & verified (by Claude directly)
 Night loop works end-to-end: Grounds betting → grudge auction → game module
 → Reckoning ticker → champion monument. **Cross-session persistence

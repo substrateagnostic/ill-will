@@ -1,8 +1,24 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://estate/estate.gd" id="1"]
 [ext_resource type="FontFile" path="res://assets/fonts/LuckiestGuy-Regular.ttf" id="2_luckiest"]
 [ext_resource type="Texture2D" path="res://assets/textures/grass_stripes.png" id="3_grass"]
+[ext_resource type="PackedScene" path="res://assets/models/minigolf/castle.glb" id="4_castle"]
+
+[sub_resource type="SphereMesh" id="lantern_mesh"]
+radius = 0.14
+height = 0.28
+
+[sub_resource type="StandardMaterial3D" id="mat_lantern"]
+albedo_color = Color(1, 0.9, 0.6, 1)
+emission_enabled = true
+emission = Color(1, 0.75, 0.35, 1)
+emission_energy_multiplier = 2.0
+
+[sub_resource type="CylinderMesh" id="post_mesh"]
+top_radius = 0.04
+bottom_radius = 0.05
+height = 1.1
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.2, 0.25, 0.45, 1)
@@ -46,7 +62,53 @@ transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.25, -4)
 radius = 12.0
 height = 0.5
 sides = 24
+use_collision = true
 material = SubResource("mat_lawn")
+
+[node name="Castle" parent="Grounds" instance=ExtResource("4_castle")]
+transform = Transform3D(2.6, 0, 0, 0, 2.6, 0, 0, 0, 2.6, -1.5, 0, -10.5)
+
+[node name="Walkers" type="Node3D" parent="Grounds"]
+
+[node name="Toys" type="Node3D" parent="Grounds"]
+
+[node name="Lanterns" type="Node3D" parent="Grounds"]
+
+[node name="LPost1" type="MeshInstance3D" parent="Grounds/Lanterns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 0.55, 0.5)
+mesh = SubResource("post_mesh")
+
+[node name="LGlow1" type="MeshInstance3D" parent="Grounds/Lanterns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 1.2, 0.5)
+mesh = SubResource("lantern_mesh")
+surface_material_override/0 = SubResource("mat_lantern")
+
+[node name="LPost2" type="MeshInstance3D" parent="Grounds/Lanterns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 0.55, 0.5)
+mesh = SubResource("post_mesh")
+
+[node name="LGlow2" type="MeshInstance3D" parent="Grounds/Lanterns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 1.2, 0.5)
+mesh = SubResource("lantern_mesh")
+surface_material_override/0 = SubResource("mat_lantern")
+
+[node name="LPost3" type="MeshInstance3D" parent="Grounds/Lanterns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 0.55, -4.5)
+mesh = SubResource("post_mesh")
+
+[node name="LGlow3" type="MeshInstance3D" parent="Grounds/Lanterns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 1.2, -4.5)
+mesh = SubResource("lantern_mesh")
+surface_material_override/0 = SubResource("mat_lantern")
+
+[node name="LPost4" type="MeshInstance3D" parent="Grounds/Lanterns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2, 0.55, -4.5)
+mesh = SubResource("post_mesh")
+
+[node name="LGlow4" type="MeshInstance3D" parent="Grounds/Lanterns"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2, 1.2, -4.5)
+mesh = SubResource("lantern_mesh")
+surface_material_override/0 = SubResource("mat_lantern")
 
 [node name="Path" type="CSGBox3D" parent="Grounds"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, -2)
