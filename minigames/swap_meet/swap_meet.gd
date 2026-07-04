@@ -357,6 +357,22 @@ func _build_crown() -> void:
 	sparkle.material_override = mat
 	sparkle.emitting = true
 	_crown.add_child(sparkle)
+	# gold ground halo: the "shoot me" bullseye reads even when the crown
+	# itself hides behind the name tag
+	var halo := MeshInstance3D.new()
+	var ht := TorusMesh.new()
+	ht.inner_radius = 0.52
+	ht.outer_radius = 0.62
+	halo.mesh = ht
+	var hmat := StandardMaterial3D.new()
+	hmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	hmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	hmat.albedo_color = Color(1.0, 0.82, 0.2, 0.85)
+	halo.material_override = hmat
+	halo.name = "Halo"
+	halo.position = Vector3(0, -0.62, 0)  # crown sits ~1.42 above the kart
+	halo.scale = Vector3(1, 0.2, 1)
+	_crown.add_child(halo)
 	_crown.scale = Vector3.ONE * 2.1
 	_crown.visible = false
 	add_child(_crown)
