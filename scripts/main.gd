@@ -73,6 +73,7 @@ func _ready() -> void:
 	_start_round()
 
 func _setup_course() -> void:
+	print("COURSE selected: %s" % GameState.course_id)
 	var scene: PackedScene = load("res://scenes/courses/%s.tscn" % GameState.course_id)
 	course = scene.instantiate()
 	course.name = "Course"
