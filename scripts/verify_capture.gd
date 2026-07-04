@@ -99,9 +99,12 @@ func _process(_delta: float) -> void:
 	if not active:
 		return
 	frame += 1
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
 	for ap in autoputts:
 		if ap.frame == frame:
-			var pc := get_tree().current_scene.find_child("PuttController", true, false)
+			var pc := scene.find_child("PuttController", true, false)
 			if pc == null:
 				continue
 			if ap.get("aim_only", false):
@@ -119,7 +122,7 @@ func _process(_delta: float) -> void:
 	if placetest and not _pt_done:
 		_run_placetest()
 	if autobuild:
-		var m := get_tree().current_scene
+		var m := scene
 		if m.has_method("get_phase_name"):
 			_ap_cooldown -= 1
 			if _ap_cooldown <= 0 and m.get_phase_name() == "DRAFT":
@@ -132,7 +135,7 @@ func _process(_delta: float) -> void:
 				_ap_cooldown = 40
 	if not autoplay.is_empty():
 		_ap_cooldown -= 1
-		var main := get_tree().current_scene
+		var main := scene
 		if _ap_cooldown <= 0 and main.has_method("is_turn_ready") and main.is_turn_ready():
 			var pc := main.find_child("PuttController", true, false)
 			if pc:

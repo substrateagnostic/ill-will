@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://scripts/menu.gd" id="1_menu"]
 [ext_resource type="FontFile" path="res://assets/fonts/LuckiestGuy-Regular.ttf" id="2_luckiest"]
 [ext_resource type="FontFile" path="res://assets/fonts/Baloo2.ttf" id="3_baloo"]
-[ext_resource type="PackedScene" path="res://scenes/course.tscn" id="4_course"]
+[ext_resource type="PackedScene" path="res://scenes/courses/fairway.tscn" id="4_course"]
 [ext_resource type="PackedScene" path="res://scenes/traps/windmill.tscn" id="5_windmill"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
