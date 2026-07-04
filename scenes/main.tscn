@@ -1,8 +1,7 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/course.tscn" id="2_course"]
-[ext_resource type="PackedScene" path="res://scenes/ball.tscn" id="3_ball"]
 [ext_resource type="Script" path="res://scripts/putt_controller.gd" id="4_putt"]
 [ext_resource type="Script" path="res://scripts/camera_rig.gd" id="5_cam"]
 
@@ -39,9 +38,6 @@ script = ExtResource("1_main")
 
 [node name="Course" parent="." instance=ExtResource("2_course")]
 
-[node name="Ball" parent="." instance=ExtResource("3_ball")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.15, 0)
-
 [node name="PuttController" type="Node3D" parent="."]
 script = ExtResource("4_putt")
 
@@ -72,13 +68,38 @@ environment = SubResource("env")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
+[node name="TurnLabel" type="Label" parent="UI"]
+anchor_left = 0.0
+anchor_right = 1.0
+offset_top = 14.0
+offset_bottom = 60.0
+theme_override_font_sizes/font_size = 34
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.12, 1)
+theme_override_constants/outline_size = 8
+text = ""
+horizontal_alignment = 1
+
 [node name="StrokeLabel" type="Label" parent="UI"]
+anchor_left = 0.0
+anchor_right = 1.0
+offset_top = 58.0
+offset_bottom = 92.0
+theme_override_font_sizes/font_size = 20
+theme_override_colors/font_color = Color(0.95, 0.95, 0.95, 1)
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.12, 1)
+theme_override_constants/outline_size = 6
+text = ""
+horizontal_alignment = 1
+
+[node name="RoundLabel" type="Label" parent="UI"]
 offset_left = 24.0
 offset_top = 16.0
-offset_right = 400.0
-offset_bottom = 60.0
-theme_override_font_sizes/font_size = 30
-text = "STROKES: 0"
+offset_right = 300.0
+offset_bottom = 52.0
+theme_override_font_sizes/font_size = 24
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.12, 1)
+theme_override_constants/outline_size = 6
+text = "ROUND 1 / 9"
 
 [node name="Banner" type="Label" parent="UI"]
 anchor_left = 0.0
@@ -91,3 +112,13 @@ theme_override_colors/font_outline_color = Color(0.2, 0.1, 0, 1)
 theme_override_constants/outline_size = 12
 text = "SUNK!"
 horizontal_alignment = 1
+
+[node name="ScorePanel" type="PanelContainer" parent="UI"]
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -220.0
+offset_top = 14.0
+offset_right = -16.0
+offset_bottom = 60.0
+
+[node name="ScoreRows" type="VBoxContainer" parent="UI/ScorePanel"]

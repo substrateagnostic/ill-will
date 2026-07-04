@@ -7,9 +7,12 @@ extends Node
 
 var shot_frames: Array[int] = []
 var autoputts: Array = []
+var autoplay: Array = []
 var out_dir := "verify_out"
 var frame := 0
 var active := false
+var quit_after := 0
+var _ap_cooldown := 0
 
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -25,6 +28,14 @@ func _ready() -> void:
 			var a := arg.trim_prefix("--aimshow=").split(",")
 			if a.size() >= 3:
 				autoputts.append({"power": float(a[0]), "angle": float(a[1]), "frame": int(a[2]), "aim_only": true})
+		elif arg.begins_with("--autoplay="):
+			for pair in arg.trim_prefix("--autoplay=").split(","):
+				var pa := pair.split(":")
+				autoplay.append({"power": float(pa[0]), "angle": float(pa[1]) if pa.size() > 1 else 0.0})
+			active = true
+		elif arg.begins_with("--quitafter="):
+			quit_after = int(arg.trim_prefix("--quitafter="))
+			active = true
 		elif arg.begins_with("--outdir="):
 			out_dir = arg.trim_prefix("--outdir=")
 	if active:
@@ -44,12 +55,25 @@ func _process(_delta: float) -> void:
 					pc.debug_show_aim(ap.power, ap.angle)
 			elif pc.has_method("debug_putt"):
 				pc.debug_putt(ap.power, ap.angle)
+	if not autoplay.is_empty():
+		_ap_cooldown -= 1
+		var main := get_tree().current_scene
+		if _ap_cooldown <= 0 and main.has_method("is_turn_ready") and main.is_turn_ready():
+			var pc := main.find_child("PuttController", true, false)
+			if pc:
+				var shot: Dictionary = autoplay.pop_front()
+				pc.debug_putt(shot.power, shot.angle)
+				print("VERIFY_AUTOPLAY fired p=%.1f a=%.1f frame=%d" % [shot.power, shot.angle, frame])
+				_ap_cooldown = 30
 	if frame in shot_frames:
 		await RenderingServer.frame_post_draw
 		var img := get_viewport().get_texture().get_image()
 		var path := "res://%s/shot_%04d.png" % [out_dir, frame]
 		img.save_png(path)
 		print("VERIFY_SHOT ", path)
-		if frame >= shot_frames.max():
+		if not shot_frames.is_empty() and frame >= shot_frames.max() and quit_after == 0:
 			print("VERIFY_DONE")
 			get_tree().quit()
+	if quit_after > 0 and frame >= quit_after:
+		print("VERIFY_DONE")
+		get_tree().quit()

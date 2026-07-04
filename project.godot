@@ -9,6 +9,7 @@ config/features=PackedStringArray("4.6")
 
 [autoload]
 
+GameState="*res://scripts/game_state.gd"
 VerifyCapture="*res://scripts/verify_capture.gd"
 
 [display]
