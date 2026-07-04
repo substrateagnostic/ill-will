@@ -8,6 +8,7 @@ extends Node
 var shot_frames: Array[int] = []
 var autoputts: Array = []
 var autoplay: Array = []
+var autobuild := false
 var out_dir := "verify_out"
 var frame := 0
 var active := false
@@ -33,6 +34,9 @@ func _ready() -> void:
 				var pa := pair.split(":")
 				autoplay.append({"power": float(pa[0]), "angle": float(pa[1]) if pa.size() > 1 else 0.0})
 			active = true
+		elif arg == "--autobuild":
+			autobuild = true
+			active = true
 		elif arg.begins_with("--quitafter="):
 			quit_after = int(arg.trim_prefix("--quitafter="))
 			active = true
@@ -55,6 +59,18 @@ func _process(_delta: float) -> void:
 					pc.debug_show_aim(ap.power, ap.angle)
 			elif pc.has_method("debug_putt"):
 				pc.debug_putt(ap.power, ap.angle)
+	if autobuild:
+		var m := get_tree().current_scene
+		if m.has_method("get_phase_name"):
+			_ap_cooldown -= 1
+			if _ap_cooldown <= 0 and m.get_phase_name() == "DRAFT":
+				m.debug_pick_card(0)
+				print("VERIFY_DRAFT picked frame=", frame)
+				_ap_cooldown = 40
+			elif _ap_cooldown <= 0 and m.get_phase_name() == "BUILD":
+				m.debug_place_auto()
+				print("VERIFY_BUILD placed frame=", frame)
+				_ap_cooldown = 40
 	if not autoplay.is_empty():
 		_ap_cooldown -= 1
 		var main := get_tree().current_scene

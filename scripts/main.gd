@@ -1,14 +1,26 @@
 extends Node3D
 
+enum Phase { DRAFT, BUILD, PUTT, BETWEEN }
+
 const BALL_SCENE := preload("res://scenes/ball.tscn")
 const TEE_XS := [-0.9, -0.3, 0.3, 0.9]
 const TEE_Z := 0.0
+const AUTOBUILD_SPOTS := [
+	Vector3(1.4, 0, -4.0), Vector3(-1.5, 0, -8.5), Vector3(0.6, 0, -10.5),
+	Vector3(-1.0, 0, -5.5), Vector3(1.8, 0, -11.5), Vector3(-1.8, 0, -3.0),
+	Vector3(0.0, 0, -7.5), Vector3(2.0, 0, -6.0),
+]
 
 var balls: Array = []
 var round_manager: RoundManager
-var _between_rounds := false
+var phase := Phase.BETWEEN
+var draft_order: Array = []
+var draft_pointer := 0
+var current_hand: Array = []
+var autobuild_count := 0
 
 @onready var putt_controller: Node3D = $PuttController
+@onready var placement: Node3D = $PlacementController
 @onready var camera_rig: Node3D = $CameraRig
 @onready var course: Node3D = $Course
 @onready var turn_label: Label = $UI/TurnLabel
@@ -16,6 +28,10 @@ var _between_rounds := false
 @onready var round_label: Label = $UI/RoundLabel
 @onready var banner: Label = $UI/Banner
 @onready var score_rows: VBoxContainer = $UI/ScorePanel/ScoreRows
+@onready var draft_panel: PanelContainer = $UI/DraftPanel
+@onready var draft_label: Label = $UI/DraftPanel/DraftBox/DraftLabel
+@onready var card_row: HBoxContainer = $UI/DraftPanel/DraftBox/CardRow
+@onready var build_hint: Label = $UI/BuildHint
 
 func _ready() -> void:
 	round_manager = RoundManager.new()
@@ -26,6 +42,8 @@ func _ready() -> void:
 	round_manager.ball_resolved.connect(_on_ball_resolved)
 	putt_controller.stroke_taken.connect(_on_stroke_taken)
 	course.ball_entered_cup.connect(_on_cup_entry)
+	placement.trap_container = course.get_node("TrapContainer")
+	placement.trap_placed.connect(_on_trap_placed)
 	_spawn_balls()
 	banner.visible = false
 	_rebuild_scoreboard()
@@ -50,15 +68,66 @@ func _tee_pos(i: int) -> Vector3:
 	return Vector3(offset, 0.15, TEE_Z)
 
 func _start_round() -> void:
-	_between_rounds = false
 	banner.visible = false
 	round_label.text = "ROUND %d / %d" % [GameState.round_num, GameState.rounds_total]
 	for i in balls.size():
 		balls[i].reset_for_round(_tee_pos(i))
+	var standings := GameState.standings()
+	draft_order = standings.duplicate()
+	draft_order.reverse()
+	draft_pointer = 0
+	_begin_draft_turn()
+
+func _begin_draft_turn() -> void:
+	if draft_pointer >= draft_order.size():
+		_begin_putt_phase()
+		return
+	phase = Phase.DRAFT
+	var p: int = draft_order[draft_pointer]
+	var player = GameState.players[p]
+	current_hand = TrapCatalog.random_hand(GameState.rng)
+	draft_label.text = "%s — DRAFT YOUR TRAP" % player.name
+	draft_label.add_theme_color_override("font_color", player.color)
+	for c in card_row.get_children():
+		c.queue_free()
+	for idx in current_hand.size():
+		var id: String = current_hand[idx]
+		var info: Dictionary = TrapCatalog.TRAPS[id]
+		var btn := Button.new()
+		btn.text = "%s\n\n%s" % [info.name, info.desc]
+		btn.custom_minimum_size = Vector2(240, 150)
+		btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		btn.clip_text = false
+		btn.pressed.connect(_on_card_picked.bind(idx))
+		card_row.add_child(btn)
+	draft_panel.visible = true
+	turn_label.text = "%s IS SCHEMING" % player.name
+	turn_label.add_theme_color_override("font_color", player.color)
+	stroke_label.text = ""
+
+func _on_card_picked(card_idx: int) -> void:
+	if phase != Phase.DRAFT or card_idx >= current_hand.size():
+		return
+	var p: int = draft_order[draft_pointer]
+	var player = GameState.players[p]
+	var id: String = current_hand[card_idx]
+	draft_panel.visible = false
+	phase = Phase.BUILD
+	build_hint.visible = true
+	turn_label.text = "%s PLACES: %s" % [player.name, TrapCatalog.TRAPS[id].name]
+	placement.begin(TrapCatalog.load_scene(id), p, player.color)
+
+func _on_trap_placed(_trap: Trap) -> void:
+	build_hint.visible = false
+	draft_pointer += 1
+	_begin_draft_turn()
+
+func _begin_putt_phase() -> void:
+	phase = Phase.PUTT
 	round_manager.start_round(GameState.standings(), balls)
 
 func _process(_delta: float) -> void:
-	putt_controller.enabled = not _between_rounds and round_manager.is_turn_ready()
+	putt_controller.enabled = phase == Phase.PUTT and round_manager.is_turn_ready()
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("restart"):
@@ -95,7 +164,7 @@ func _on_ball_resolved(p: int, status: String) -> void:
 		_flash_banner("%s IS OUT OF STROKES" % GameState.players[p].name, Color(0.7, 0.7, 0.7), 1.4)
 
 func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
-	_between_rounds = true
+	phase = Phase.BETWEEN
 	GameState.award_round_points(finish_order)
 	_rebuild_scoreboard()
 	GameState.round_num += 1
@@ -128,4 +197,18 @@ func _rebuild_scoreboard() -> void:
 		score_rows.add_child(row)
 
 func is_turn_ready() -> bool:
-	return round_manager.is_turn_ready() and not _between_rounds
+	return phase == Phase.PUTT and round_manager.is_turn_ready()
+
+func debug_pick_card(i: int) -> void:
+	if phase == Phase.DRAFT:
+		_on_card_picked(mini(i, current_hand.size() - 1))
+
+func debug_place_auto() -> void:
+	if phase != Phase.BUILD or not placement.active:
+		return
+	var spot: Vector3 = AUTOBUILD_SPOTS[autobuild_count % AUTOBUILD_SPOTS.size()]
+	autobuild_count += 1
+	placement.debug_place(spot, float((autobuild_count * 45) % 180))
+
+func get_phase_name() -> String:
+	return Phase.keys()[phase]

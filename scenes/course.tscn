@@ -73,6 +73,8 @@ transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 
 size = Vector3(2.2, 0.71, 0.25)
 material = SubResource("mat_wood")
 
+[node name="TrapContainer" type="Node3D" parent="."]
+
 [node name="CupLiner" type="MeshInstance3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.47, -13)
 mesh = SubResource("liner_mesh")

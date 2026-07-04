@@ -14,11 +14,15 @@ var player_count := 4
 var rounds_total := 9
 var round_num := 1
 var players: Array = []
+var rng := RandomNumberGenerator.new()
 
 func _ready() -> void:
+	rng.randomize()
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--players="):
 			player_count = clampi(int(arg.trim_prefix("--players=")), 2, 4)
+		elif arg.begins_with("--seed="):
+			rng.seed = int(arg.trim_prefix("--seed="))
 	reset_match()
 
 func reset_match() -> void:

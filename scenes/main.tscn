@@ -1,9 +1,20 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_main"]
 [ext_resource type="PackedScene" path="res://scenes/course.tscn" id="2_course"]
 [ext_resource type="Script" path="res://scripts/putt_controller.gd" id="4_putt"]
 [ext_resource type="Script" path="res://scripts/camera_rig.gd" id="5_cam"]
+[ext_resource type="Script" path="res://scripts/placement_controller.gd" id="6_place"]
+
+[sub_resource type="CylinderMesh" id="disc_mesh"]
+top_radius = 1.0
+bottom_radius = 1.0
+height = 0.01
+
+[sub_resource type="StandardMaterial3D" id="disc_mat"]
+transparency = 1
+albedo_color = Color(0.3, 0.95, 0.4, 0.35)
+shading_mode = 0
 
 [sub_resource type="Environment" id="env"]
 background_mode = 1
@@ -49,6 +60,14 @@ surface_material_override/0 = SubResource("arrow_mat")
 transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 0, 0, -1.15)
 mesh = SubResource("head_mesh")
 surface_material_override/0 = SubResource("head_mat")
+
+[node name="PlacementController" type="Node3D" parent="."]
+script = ExtResource("6_place")
+
+[node name="ValidityDisc" type="MeshInstance3D" parent="PlacementController"]
+visible = false
+mesh = SubResource("disc_mesh")
+surface_material_override/0 = SubResource("disc_mat")
 
 [node name="CameraRig" type="Node3D" parent="."]
 script = ExtResource("5_cam")
@@ -122,3 +141,38 @@ offset_right = -16.0
 offset_bottom = 60.0
 
 [node name="ScoreRows" type="VBoxContainer" parent="UI/ScorePanel"]
+
+[node name="DraftPanel" type="PanelContainer" parent="UI"]
+visible = false
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -390.0
+offset_top = -240.0
+offset_right = 390.0
+offset_bottom = -24.0
+
+[node name="DraftBox" type="VBoxContainer" parent="UI/DraftPanel"]
+
+[node name="DraftLabel" type="Label" parent="UI/DraftPanel/DraftBox"]
+theme_override_font_sizes/font_size = 28
+text = "DRAFT A TRAP"
+horizontal_alignment = 1
+
+[node name="CardRow" type="HBoxContainer" parent="UI/DraftPanel/DraftBox"]
+alignment = 1
+
+[node name="BuildHint" type="Label" parent="UI"]
+visible = false
+anchor_left = 0.0
+anchor_right = 1.0
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -60.0
+offset_bottom = -20.0
+theme_override_font_sizes/font_size = 22
+theme_override_colors/font_outline_color = Color(0.1, 0.1, 0.12, 1)
+theme_override_constants/outline_size = 6
+text = "CLICK TO PLACE  -  SCROLL / R TO ROTATE"
+horizontal_alignment = 1
