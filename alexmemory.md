@@ -67,6 +67,15 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-05 (night shift, later) — Mower Mayhem MERGED (game #5)
+Splatoon-on-the-lawn works: four grass-plausible turf tints (builder fixed
+a washout by switching to a modulate shader), flowerbed islands, gravestone
+bumpers, riders on mowers, overtime drama ("GOLD RAMMED BLUE!" at 0:10).
+Coverage math asserts exactly 100.0000%; texture path sub-millisecond.
+In the auction pool. Minor polish note: mini coverage meter label overlaps.
+Also: Trail summit tie-break made principled (same-parade arrivals resolve
+by points), monuments relocated off the hillside.
+
 ### 2026-07-05 (night shift) — your bedtime asks, executed
 - **5 new minigame specs written** (target roster 10):
   GREED INC. (pot grab-and-run banking), SWAP MEET (kart race where every
