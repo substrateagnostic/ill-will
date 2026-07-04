@@ -712,7 +712,8 @@ func _resolve_hit(orb: SwapOrb, victim: SwapKart) -> void:
 	if orb.dead:
 		return
 	var thrower: SwapKart = karts[orb.owner_idx]
-	if victim.finished or victim == thrower:
+	# a lobbed orb can outlive the race; no swaps after the flag
+	if phase != Phase.PLAY or victim.finished or victim == thrower:
 		orb.fizzle()
 		return
 	if not orb.golden and victim.swap_immune > 0.0:
