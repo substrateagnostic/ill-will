@@ -17,8 +17,9 @@ const SPEED_CAP := 13.0
 const DEADLY_SPEED := 4.0
 const REST_SPEED := 1.7
 const DRAG_BASE := 0.03       # 3% of speed lost per second (spec)
-const DRAG_OLD_RAMP := 0.004  # extra drag/s per second past DECAY_AGE
-const DECAY_AGE := 40.0
+const DRAG_OLD_RAMP := 0.008  # extra drag/s per second past DECAY_AGE
+const DECAY_AGE := 38.0
+const DEAD_BOUNCE_AGE := 50.0 # restitution fades 50s->65s: old orbits land dead
 const GHOST_AGE := 10.0
 const NEUTRAL := Color(0.88, 0.88, 0.92)
 
@@ -116,11 +117,15 @@ func step(dt: float, now: float) -> void:
 			global_position = c + n * (r + RADIUS)
 			var vn := vel.dot(n)
 			if vn < 0.0:
+				# past DEAD_BOUNCE_AGE the ball loses its spring: the decay
+				# guarantee - an old orbit's first graze is its last.
+				var life := clampf(1.0 - (a - DEAD_BOUNCE_AGE) / 15.0, 0.0, 1.0)
 				var vt := vel - n * vn
-				vel = vt * TANGENT_KEEP - n * vn * RESTITUTION
+				vel = vt * (TANGENT_KEEP * (0.55 + 0.45 * life)) - n * vn * (RESTITUTION * life)
 				if -vn > 1.5:
 					world.on_ball_bounce(self, -vn)
-				if vel.length() < REST_SPEED:
+				var rest_thresh := REST_SPEED if a < DEAD_BOUNCE_AGE else 3.5
+				if vel.length() < rest_thresh:
 					_come_to_rest(i, n)
 			break
 	if state == S.FLYING and trail != null:
