@@ -57,13 +57,13 @@ flights). Two additions guarantee decay: the drag ramps +0.008/s per second
 past 38s, and restitution fades to zero between 50-65s so an old orbit's
 first graze is its last. Assert results (3-minute bot matches at true dt):
 
-| seed | max flight age | verdict |
-|---|---|---|
-| 1 | 45.4s | PASS |
-| 2 | 45.9s | PASS |
-| 3 | 45.9s | PASS |
-| 7 | 46.4s | PASS |
-| 11 | 46.4s | PASS |
+| seed | max flight age | throws | hops | verdict |
+|---|---|---|---|---|
+| 1 | 39.6s | 57 | 55 | PASS |
+| 2 | 32.9s | 63 | 68 | PASS |
+| 3 | 33.1s | 55 | 61 | PASS |
+| 7 | 46.4s | 55 | 46 | PASS |
+| 11 | 46.4s | 54 | 59 | PASS |
 
 Printed by the game as e.g. `ORBITAL_ASSERT max_flight_age=46.4s (<75s): PASS`.
 
@@ -113,21 +113,37 @@ every kill by a ball thrown >10s ago (the accretion kill), grudge +1 per
 death. Highlights include the oldest-orbit kill with age ("BLUE's 46-second
 orbit found MINT"). Monuments for ghost kills older than 25s.
 
-## Screenshot annotations (seed 11 run)
+## Screenshot annotations (all read + art-directed during the build)
 
-- `shot_0630` — early game (t≈10s): all three planets framed at 1280x720,
-  pedestal balls, KayKit chars radially oriented, first trails.
-- `shot_1600` — "GOLD'S GHOST ORBIT STRIKES! 23-SECOND-OLD THROW TAKES OUT
-  BLUE" banner (kill t=24.4, ball_age=23.5).
-- `shot_2875` — the 45-SECOND ghost orbit kill banner (t=46.1,
-  ball_age=45.1) with corpse fling + death burst.
-- `shot_6720` — "NICE CATCH — GOLD" event text (catch t=106.9).
-- `shot_7480` — mid-game sky with multiple orbit ribbons.
-- `shot_10600` — late-game spirograph sky (up to 8 balls in circulation).
-- `shot_10870` — 26-second ghost kill banner late game (t=173.4).
-- `shot_11420` — end screen: "X RULES THE VOID!", winner cheer, confetti.
-- `shot_0140` (aim run) — throw aim preview: dotted diamonds arcing across
-  the gap to the neighboring planet with an impact blip.
+Seed-11 full match (`--shots=...` frames chosen from the headless event log
+of the same seed; this machine renders ~144fps so frame ≈ 144 * real-sec):
+
+- `shot_1600` — early game t≈10s: all three planets framed at 1280x720,
+  three deadly balls already in flight, chars radially oriented.
+- `shot_3750` — "GOLD SMACKS MINT!" plain-kill banner (kill t=24.9) with
+  MINT's corpse tumbling in the gap; four glowing balls with crossing trails.
+- `shot_6720` — THE signature frame: "GOLD'S GHOST ORBIT STRIKES!
+  45-SECOND-OLD THROW TAKES OUT MINT" (kill t=46.1, ball_age=45.1), killing
+  ball still glowing at the impact point, corpse flying, "A NEW BALL DRIFTS
+  IN" firing simultaneously, GOLD's score exactly 2x kills.
+- `shot_6890` — one beat later: the killing gold ball's orbit ring visibly
+  CONTINUES around the big planet (the ball keeps flying after a kill).
+- `shot_7480` — BLUE captured mid planet-hop in the gap; two red orbits.
+- `shot_10600` (first calibration run) — "GOLD'S GHOST ORBIT STRIKES!
+  12-SECOND-OLD THROW TAKES OUT RED" + flowing ribbon sky.
+- `shot_11420` (first calibration run) — red trail showing a full
+  bounce-zigzag between planets: readable orbit history.
+- `shot_16130` — triple evidence: "NICE CATCH — GOLD" banner (catch
+  t=106.9), RED's dotted aim-preview arc live in-match, three gold orbits.
+- `shot_25150` — late game t≈168s, red sub-15s timer, five balls with
+  comet trails across the sky.
+- `shot_2100` (short-match run) — end screen: "RED RULES THE VOID!" with
+  orbits still flying behind the banner.
+- `shot_0140` (aim run) — throw aim preview closeup: dotted diamonds
+  arcing across the gap to the neighboring planet with an impact blip.
+
+Scoreboard cross-check: at shot_10600, GOLD had 4 kills logged -> 8 points
+shown; RED/BLUE 1 kill each -> 2 points. Exact match with the event log.
 
 ## Known issues / notes
 
@@ -142,8 +158,9 @@ orbit found MINT"). Monuments for ghost kills older than 25s.
 - `--fast` sims mute the master bus and skip slow-mo so Engine.time_scale
   stays honest; headless quits at match end leak a few ObjectDB instances
   (harness-only path, the shell never quits that way).
-- Frame-indexed screenshots drift ~15 frames per kill in headed runs
-  because of the slow-mo beat; banner windows (2-2.8s) absorb it.
+- Frame-indexed screenshots are fps-dependent (VerifyCapture counts
+  rendered frames; this box runs ~144fps) and each kill's slow-mo beat
+  adds ~0.28s of wall time; banner windows (2-2.8s) absorb both.
 
 ## Wishes (assets_raw not available in worktrees)
 

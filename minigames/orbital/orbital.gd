@@ -117,6 +117,7 @@ var _hint_label: Label
 var _score_rows: VBoxContainer
 var _row_labels: Array = []
 var _event_until := 0.0
+var _banner_gen := 0
 
 func _ready() -> void:
 	_parse_args()
@@ -907,6 +908,8 @@ func _update_timer_label() -> void:
 		Color(1.0, 0.4, 0.35) if time_left < 15.0 else Color.WHITE)
 
 func _flash_banner(text: String, color: Color, duration: float) -> void:
+	_banner_gen += 1
+	var gen := _banner_gen
 	_banner.text = text
 	_banner.add_theme_color_override("font_color", color)
 	_banner.visible = true
@@ -917,7 +920,11 @@ func _flash_banner(text: String, color: Color, duration: float) -> void:
 	if duration < 100.0:
 		var tw := create_tween()
 		tw.tween_interval(duration)
-		tw.tween_callback(func() -> void: _banner.visible = false)
+		# only hide if no newer banner replaced this one (e.g. the winner
+		# banner must survive a kill banner's stale hide timer)
+		tw.tween_callback(func() -> void:
+			if _banner_gen == gen:
+				_banner.visible = false)
 
 func _flash_event(text: String, color: Color) -> void:
 	_event_label.text = text
