@@ -67,6 +67,13 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-05 (night shift, later) — Greed Inc. MERGED (game #6)
+The heist vault works: pot fattens center-stage, carrier glows gold and
+leaks coins while edge-chevrons hunt them, corner chutes bank. Anti-turtle
+interception verified 68-80% across seeds (builder built a real pursuit
+model from movement constants; first pass failed at 5% and forced a design
+fix). Money shot: greed worktree `verify_out/greed_grab.png`.
+
 ### 2026-07-05 (night shift, later) — Mower Mayhem MERGED (game #5)
 Splatoon-on-the-lawn works: four grass-plausible turf tints (builder fixed
 a washout by switching to a modulate shader), flowerbed islands, gravestone
