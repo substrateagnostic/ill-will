@@ -6,8 +6,9 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
-- **PLAYTESTABLE: ECHO CHAMBER and TILT are merged and live in the Estate's
-  auction pool.** Start an Estate Night from the menu and you can win the
+- **PLAYTESTABLE: ECHO CHAMBER, TILT, and ORBITAL DODGEBALL are merged and
+  live in the Estate's auction pool.** Orbital's signature moment works:
+  a 45-second-old orbit killed someone and credited the original thrower. Start an Estate Night from the menu and you can win the
   auction into either. (Echo needs real-time input — gamepads shine;
   keyboard halves work for 2. Tilt same. Par stays mouse-hotseat.)
 - Reviewed and approved by me before merge: Echo's determinism proof
