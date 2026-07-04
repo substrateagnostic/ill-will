@@ -1,0 +1,359 @@
+extends Node3D
+## THE ESTATE — night-loop shell: GROUNDS -> AUCTION -> GAME -> RECKONING.
+## v1 "clipboard" grounds (panel UI); walkable grounds is phase E2.
+
+enum Phase { GROUNDS, AUCTION, GAME, RECKONING, NIGHT_END }
+
+const MODULES := {
+	"par": {"name": "PAR FOR THE CURSE", "scene": "res://scenes/main.tscn", "mode": "gamestate"},
+	"mock": {"name": "EXHIBITION MATCH", "scene": "res://estate/mock_game.tscn", "mode": "contract"},
+}
+const GROUNDS_TIME := 20.0
+const BID_TIME := 8.0
+
+var phase := Phase.GROUNDS
+var bots := false
+var mockonly := false
+var auction_options: Array = []
+var high_bid := 0
+var high_bidder := -1
+var _bid_timer := 0.0
+var _grounds_timer := GROUNDS_TIME
+var _module: Node = null
+var _bet_targets := {}
+var _monuments_drawn := 0
+
+@onready var cam: Camera3D = $Camera3D
+@onready var top_bar: HBoxContainer = $UI/TopBar/Row
+@onready var phase_panel: PanelContainer = $UI/PhasePanel
+@onready var phase_box: VBoxContainer = $UI/PhasePanel/Box
+@onready var banner: Label = $UI/Banner
+@onready var plinths: Node3D = $Plinths
+@onready var wall_text: Label3D = $GraffitiWall/Lines
+
+func _ready() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--estatebots":
+			bots = true
+		elif arg == "--mockonly":
+			mockonly = true
+	EstateState.start_night(GameState.player_count)
+	_redraw_monuments()
+	_redraw_graffiti()
+	banner.visible = false
+	if EstateState.nights_played > 0:
+		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.5)
+	_enter_grounds()
+
+func get_phase_name() -> String:
+	return Phase.keys()[phase]
+
+func _process(delta: float) -> void:
+	if phase == Phase.GROUNDS:
+		_grounds_timer -= delta
+		_update_grounds_clock()
+		if _grounds_timer <= 0.0 or (bots and _grounds_timer < GROUNDS_TIME - 1.5):
+			if bots:
+				_bots_place_bets()
+			_enter_auction()
+	elif phase == Phase.AUCTION:
+		_bid_timer -= delta
+		_update_auction_clock()
+		if bots and _bid_timer < BID_TIME - 1.0 and high_bidder < 0:
+			_bots_bid()
+		if _bid_timer <= 0.0:
+			_resolve_auction()
+
+func _rebuild_top_bar() -> void:
+	for c in top_bar.get_children():
+		c.queue_free()
+	for i in EstateState.standings():
+		var pl = EstateState.players[i]
+		var l := Label.new()
+		l.text = "%s %d  ♠%d   " % [pl.name, pl.points, pl.grudge]
+		l.add_theme_font_size_override("font_size", 24)
+		l.add_theme_color_override("font_color", pl.color)
+		top_bar.add_child(l)
+	var info := Label.new()
+	info.text = "|  GAME %d/%d   POT %d♠" % [mini(EstateState.games_played + 1, EstateState.night_length), EstateState.night_length, EstateState.pot]
+	info.add_theme_font_size_override("font_size", 24)
+	top_bar.add_child(info)
+
+func _clear_panel(title: String, color := Color(1, 0.9, 0.5)) -> void:
+	for c in phase_box.get_children():
+		c.queue_free()
+	var t := Label.new()
+	t.text = title
+	t.add_theme_font_size_override("font_size", 34)
+	t.add_theme_color_override("font_color", color)
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	phase_box.add_child(t)
+	phase_panel.visible = true
+
+func _enter_grounds() -> void:
+	phase = Phase.GROUNDS
+	_grounds_timer = GROUNDS_TIME
+	_bet_targets.clear()
+	_rebuild_top_bar()
+	_clear_panel("THE GROUNDS — place your bets on the next game")
+	for i in EstateState.players.size():
+		var pl = EstateState.players[i]
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		var name_l := Label.new()
+		name_l.text = pl.name + "  "
+		name_l.add_theme_color_override("font_color", pl.color)
+		name_l.add_theme_font_size_override("font_size", 24)
+		row.add_child(name_l)
+		var target_btn := Button.new()
+		_bet_targets[i] = (i + 1) % EstateState.players.size()
+		target_btn.text = "on %s" % EstateState.players[_bet_targets[i]].name
+		target_btn.pressed.connect(func():
+			_bet_targets[i] = (_bet_targets[i] + 1) % EstateState.players.size()
+			target_btn.text = "on %s" % EstateState.players[_bet_targets[i]].name)
+		row.add_child(target_btn)
+		var bet_btn := Button.new()
+		bet_btn.text = "BET 1♠"
+		bet_btn.pressed.connect(func():
+			if EstateState.place_bet(i, _bet_targets[i]):
+				bet_btn.text = "BET PLACED"
+				bet_btn.disabled = true
+				Sfx.play("card")
+				_rebuild_top_bar())
+		row.add_child(bet_btn)
+		phase_box.add_child(row)
+	var clock := Label.new()
+	clock.name = "Clock"
+	clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	phase_box.add_child(clock)
+	var skip := Button.new()
+	skip.text = "TO THE AUCTION"
+	skip.pressed.connect(_enter_auction)
+	phase_box.add_child(skip)
+
+func _update_grounds_clock() -> void:
+	var clock := phase_box.get_node_or_null("Clock")
+	if clock:
+		clock.text = "%ds" % ceili(_grounds_timer)
+
+func _bots_place_bets() -> void:
+	for i in EstateState.players.size():
+		EstateState.place_bet(i, EstateState.rng.randi_range(0, EstateState.players.size() - 1))
+
+func _enter_auction() -> void:
+	if phase == Phase.AUCTION:
+		return
+	phase = Phase.AUCTION
+	high_bid = 0
+	high_bidder = -1
+	_bid_timer = BID_TIME
+	var pool := ["mock", "mock", "mock"] if mockonly else ["par", "mock", "par"]
+	auction_options.clear()
+	for k in 3:
+		auction_options.append(pool[EstateState.rng.randi_range(0, pool.size() - 1)])
+	_rebuild_top_bar()
+	_clear_panel("THE AUCTION — bid grudge to choose the game")
+	var opts := Label.new()
+	var names: Array = []
+	for id in auction_options:
+		names.append(MODULES[id].name)
+	opts.text = "on the block:  " + " / ".join(names)
+	opts.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	phase_box.add_child(opts)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	for i in EstateState.players.size():
+		var pl = EstateState.players[i]
+		var b := Button.new()
+		b.text = "%s BID %d♠" % [pl.name, high_bid + 1]
+		b.add_theme_color_override("font_color", pl.color)
+		b.pressed.connect(_on_bid.bind(i))
+		row.add_child(b)
+	row.name = "BidRow"
+	phase_box.add_child(row)
+	var clock := Label.new()
+	clock.name = "Clock"
+	clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	phase_box.add_child(clock)
+
+func _on_bid(p: int) -> void:
+	var pl = EstateState.players[p]
+	if pl.grudge < high_bid + 1:
+		Sfx.play("invalid")
+		return
+	high_bid += 1
+	high_bidder = p
+	_bid_timer = minf(_bid_timer + 3.0, BID_TIME)
+	Sfx.play("card")
+	var row := phase_box.get_node_or_null("BidRow")
+	if row:
+		for i in row.get_child_count():
+			var b: Button = row.get_child(i)
+			b.text = "%s BID %d♠" % [EstateState.players[i].name, high_bid + 1]
+
+func _update_auction_clock() -> void:
+	var clock := phase_box.get_node_or_null("Clock")
+	if clock:
+		var lead := "no bids — cheapest seat chooses" if high_bidder < 0 else "%s leads at %d♠" % [EstateState.players[high_bidder].name, high_bid]
+		clock.text = "%s   (%ds)" % [lead, ceili(_bid_timer)]
+
+func _bots_bid() -> void:
+	var p := EstateState.rng.randi_range(0, EstateState.players.size() - 1)
+	_on_bid(p)
+
+func _resolve_auction() -> void:
+	var chooser := high_bidder
+	if chooser >= 0:
+		EstateState.players[chooser].grudge -= high_bid
+		EstateState.pot += high_bid
+	else:
+		chooser = EstateState.standings().back()
+	var chosen: String = auction_options[0]
+	if bots:
+		chosen = auction_options[EstateState.rng.randi_range(0, auction_options.size() - 1)]
+		_launch_game(chosen)
+		return
+	_clear_panel("%s CHOOSES" % EstateState.players[chooser].name, EstateState.players[chooser].color)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	for id in auction_options:
+		var b := Button.new()
+		b.text = MODULES[id].name
+		b.custom_minimum_size = Vector2(220, 90)
+		b.pressed.connect(_launch_game.bind(id))
+		row.add_child(b)
+	phase_box.add_child(row)
+
+func _launch_game(id: String) -> void:
+	if phase == Phase.GAME:
+		return
+	phase = Phase.GAME
+	phase_panel.visible = false
+	Sfx.play("confirm")
+	var info: Dictionary = MODULES[id]
+	var scene: PackedScene = load(info.scene)
+	_module = scene.instantiate()
+	$Grounds.visible = false
+	plinths.visible = false
+	$GraffitiWall.visible = false
+	$UI/TopBar.visible = false
+	if info.mode == "gamestate":
+		GameState.player_count = EstateState.players.size()
+		GameState.reset_match()
+		get_tree().root.add_child(_module)
+		if _module.has_signal("finished"):
+			_module.finished.connect(_on_module_finished, CONNECT_ONE_SHOT)
+	else:
+		add_child(_module)
+		_module.finished.connect(_on_module_finished, CONNECT_ONE_SHOT)
+		var roster: Array = []
+		for pl in EstateState.players:
+			roster.append({
+				"index": pl.index, "name": pl.name, "color": pl.color,
+				"char_scene": "res://assets/models/kaykit/Knight.glb",
+				"device": PlayerInput.device_of(pl.index),
+			})
+		_module.begin({
+			"roster": roster,
+			"rounds": 4,
+			"rng_seed": EstateState.rng.randi(),
+			"practice": false,
+		})
+	cam.current = false
+
+func _on_module_finished(results: Dictionary) -> void:
+	if _module:
+		_module.queue_free()
+		_module = null
+	$Grounds.visible = true
+	plinths.visible = true
+	$GraffitiWall.visible = true
+	$UI/TopBar.visible = true
+	cam.current = true
+	var ticker := EstateState.apply_results(results)
+	_redraw_monuments()
+	_redraw_graffiti()
+	_enter_reckoning(ticker)
+
+func _enter_reckoning(ticker: Array) -> void:
+	phase = Phase.RECKONING
+	_rebuild_top_bar()
+	_clear_panel("THE RECKONING")
+	Sfx.play("round_over")
+	for line in ticker:
+		var l := Label.new()
+		l.text = str(line)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.modulate.a = 0.0
+		phase_box.add_child(l)
+	var i := 0
+	for c in phase_box.get_children():
+		if c is Label and c.modulate.a == 0.0:
+			var tw := create_tween()
+			tw.tween_interval(0.4 * i)
+			tw.tween_property(c, "modulate:a", 1.0, 0.3)
+			i += 1
+	var btn := Button.new()
+	btn.text = "BACK TO THE GROUNDS" if EstateState.games_played < EstateState.night_length else "END THE NIGHT"
+	btn.pressed.connect(_after_reckoning)
+	phase_box.add_child(btn)
+	if bots:
+		get_tree().create_timer(2.5 + 0.4 * ticker.size()).timeout.connect(_after_reckoning)
+
+func _after_reckoning() -> void:
+	if phase != Phase.RECKONING:
+		return
+	if EstateState.games_played >= EstateState.night_length:
+		_end_night()
+	else:
+		_enter_grounds()
+
+func _end_night() -> void:
+	phase = Phase.NIGHT_END
+	var champ = EstateState.end_night()
+	_redraw_monuments()
+	_rebuild_top_bar()
+	phase_panel.visible = false
+	Sfx.play("match_win")
+	_flash("%s WINS THE NIGHT\nthe estate will remember" % champ.name, champ.color, 9999.0)
+	print("NIGHT_OVER winner=", champ.name, " monuments=", EstateState.monuments.size())
+
+func _flash(text: String, color: Color, dur: float) -> void:
+	banner.text = text
+	banner.add_theme_color_override("font_color", color)
+	banner.visible = true
+	banner.pivot_offset = banner.size / 2.0
+	banner.scale = Vector2(0.6, 0.6)
+	var tw := create_tween()
+	tw.tween_property(banner, "scale", Vector2.ONE, 0.3).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	if dur < 100.0:
+		var tw2 := create_tween()
+		tw2.tween_interval(dur)
+		tw2.tween_callback(func(): banner.visible = false)
+
+func _redraw_monuments() -> void:
+	for c in plinths.get_children():
+		c.queue_free()
+	for m_idx in EstateState.monuments.size():
+		var m: Dictionary = EstateState.monuments[m_idx]
+		var col := Color.from_string(str(m.color), Color.WHITE)
+		var obelisk := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(0.5, 1.6, 0.5)
+		obelisk.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = col
+		obelisk.material_override = mat
+		var slot := m_idx % 10
+		obelisk.position = Vector3(-6.75 + slot * 1.5, 0.8, -6.0 - floorf(m_idx / 10.0) * 2.0)
+		plinths.add_child(obelisk)
+		var tag := Label3D.new()
+		tag.text = str(m.label)
+		tag.pixel_size = 0.006
+		tag.position = obelisk.position + Vector3(0, 1.1, 0.3)
+		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		plinths.add_child(tag)
+
+func _redraw_graffiti() -> void:
+	var lines: Array = EstateState.graffiti.slice(-10)
+	wall_text.text = "\n".join(PackedStringArray(lines))

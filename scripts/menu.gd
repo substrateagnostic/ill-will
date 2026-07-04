@@ -6,11 +6,16 @@ var player_count := 4
 
 func _ready() -> void:
 	player_count = GameState.player_count
-	for arg in OS.get_cmdline_user_args():
+	var args := OS.get_cmdline_user_args()
+	if "--estate" in args:
+		_start_estate()
+		return
+	for arg in args:
 		if arg == "--skipmenu":
 			_start()
 			return
 	$Center/Box/StartBtn.pressed.connect(_start)
+	$Center/Box/EstateBtn.pressed.connect(_start_estate)
 	for i in buttons.size():
 		buttons[i].pressed.connect(_set_players.bind(i + 2))
 	_set_players(player_count)
@@ -26,3 +31,9 @@ func _start() -> void:
 	GameState.player_count = player_count
 	GameState.reset_match()
 	get_tree().change_scene_to_file("res://scenes/main.tscn")
+
+func _start_estate() -> void:
+	Sfx.play("confirm")
+	GameState.player_count = player_count
+	GameState.reset_match()
+	get_tree().change_scene_to_file("res://estate/estate.tscn")

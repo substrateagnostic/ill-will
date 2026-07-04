@@ -98,6 +98,13 @@ theme_override_fonts/font = ExtResource("2_luckiest")
 theme_override_font_sizes/font_size = 40
 text = "TEE OFF"
 
+[node name="EstateBtn" type="Button" parent="Center/Box"]
+layout_mode = 2
+custom_minimum_size = Vector2(340, 60)
+theme_override_fonts/font = ExtResource("3_baloo")
+theme_override_font_sizes/font_size = 26
+text = "ESTATE NIGHT  (beta)"
+
 [node name="Footer" type="Label" parent="."]
 layout_mode = 1
 anchor_top = 1.0

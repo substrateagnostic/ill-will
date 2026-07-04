@@ -19,6 +19,7 @@ config/features=PackedStringArray("4.6")
 GameState="*res://scripts/game_state.gd"
 Sfx="*res://scripts/sfx.gd"
 PlayerInput="*res://core/player_input.gd"
+EstateState="*res://estate/estate_state.gd"
 VerifyCapture="*res://scripts/verify_capture.gd"
 
 [display]
