@@ -319,7 +319,8 @@ func _bot_tick(delta: float) -> void:
 	if _bot_wander_t <= 0.0 or global_position.distance_to(_bot_target) < 0.8:
 		_bot_wander_t = _bot_rng.randf_range(0.9, 2.1)
 		var ang := _bot_rng.randf_range(0.0, TAU)
-		var rad := _bot_rng.randf_range(0.0, platform_r * 0.8)
+		# roam the ring (not the middle) so ghosts spread out & stay readable
+		var rad := platform_r * _bot_rng.randf_range(0.35, 0.9)
 		_bot_target = Vector3(cos(ang) * rad, 0.0, sin(ang) * rad)
 
 	var to := _bot_target - global_position
