@@ -6,6 +6,31 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **☀️ MORNING MENU — the overnight run is COMPLETE. Start here.**
+  1. **Double-click `build\illwill.exe`** — the whole game, packed from
+     final master, verified booting (12 games, wardrobe, your migrated
+     history: the Executor greeted your ledger by name in my test).
+  2. **Playtest priorities**: a full night (the Reading now opens with
+     NEMESIS when earned — final soak produced "MINT, NEMESIS OF BLUE —
+     came for them in 3 different games tonight"); THE SÉANCE and THE
+     UNDERSTUDY at the theater (selector, "· at the theater ·" tags —
+     is the Séance chant-tap load right with a pad in hand?); Par's new
+     KILLCAM ("BLUE'S THE CRUSHER — SIGNED WORK" replay at the
+     gravestone, click/space skips, never fires in chaos; determinism
+     receipts byte-identical). Your Theater-photobomb bug: fixed and
+     screenshot-verified inside a real game.
+  3. **Music, whenever you're ready**: drop .ogg files at assets/music/
+     (lobby/grounds/auction/ceremony/game_light/game_tense.ogg). Nothing
+     else needed.
+  4. **One doc worth your read**: the Par v4 EMBODIED GOLF spec
+     (docs/superpowers/specs/2026-07-06-par-v4-embodied-golf-design.md)
+     — 5 open questions, each with my recommended default; say "go"
+     and the wave launches.
+  5. Small watch-items: monument lawn now shows the 8 newest stones
+     (older counted on a marker); Executor/Theater prop placement could
+     use your eye on the grounds; Séance/Understudy card verbs came
+     from their hint bars — correct me if they read wrong in play.
+
 - **🌙 OVERNIGHT RUN — progress ledger (updating as the night goes).**
   Everything below is merged to master and smoke-tested unless noted:
   - **ILL WILL is real**: window title, lobby title card, exe metadata.
