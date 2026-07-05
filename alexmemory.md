@@ -6,6 +6,29 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **⚙️ SETTINGS V2 SHIPPED (menus first-class, per your call).** ESC now
+  opens a tabbed overlay anywhere: SEATS / CONTROLS / AUDIO / VIDEO /
+  ACCESS. CONTROLS = full key remapping per device (WASD half, arrows
+  half, KB+MOUSE movement) with a conflict-swap rule so nothing can go
+  unbound, plus gamepad A/B swap. Your keybinds+onboarding instinct is
+  now architecture: `PlayerInput.describe_binding()` means the coming
+  How-to-Play cards render whatever is ACTUALLY bound — they can't lie.
+  AUDIO tab has Master/Music/SFX sliders; **the Music bus exists and is
+  wired, so tomorrow's soundtrack drops straight in.** 16-check keybind
+  test PASS; tab screenshots reviewed. In flight: never-color-alone
+  badge agent (shapes ● ▲ ■ ◆ beside every name in all 9 contract-game
+  HUDs). Next: Ready Room press-A-to-join + How-to-Play cards.
+- **📜 YOUR THREE IDEAS ARE ON THE BOOKS** (docs/design/
+  05-director-notes-2026-07-05.md): (1) the host is THE EXECUTOR — a
+  will needs one; Meshy butler who reads the Will, calls auctions, and
+  greets you by your ledger history ("welcome back, THE SNAKE"); (2) the
+  Theater — stage venue on the grounds for short couch-native social
+  games, needs a brainstorm with you on which 2-3 formats fit 4 seats +
+  two buttons; (3) Par v4 EMBODIED GOLF (characters walk and swing,
+  live griefing in chaos) — approved direction, sequenced AFTER v3
+  lands and you playtest it, so the waves don't collide. Meshy credits
+  noted — plenty for the butler, the stage, and bigger courses.
+
 - **🕯️ NEW CEREMONY: THE READING OF THE WILL.** After the podium, the
   night's superlatives are read like an inheritance — THE WORKHORSE (won
   the most games, still lost the night), THE ARCHITECT (most royalty
