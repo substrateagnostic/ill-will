@@ -92,6 +92,7 @@ func _ready() -> void:
 
 func _enter_lobby() -> void:
 	phase = Phase.LOBBY
+	Music.play_slot("lobby")
 	$UI/TopBar.visible = false
 	_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0)
 	_build_lobby_panel()
@@ -328,6 +329,7 @@ func _clear_panel(title: String, color := Color(1, 0.9, 0.5)) -> void:
 
 func _enter_grounds() -> void:
 	phase = Phase.GROUNDS
+	Music.play_slot("grounds")
 	_grounds_timer = GROUNDS_TIME
 	_bet_targets.clear()
 	_tile_buyers.clear()
@@ -448,6 +450,7 @@ func _enter_auction() -> void:
 	if phase == Phase.AUCTION:
 		return
 	phase = Phase.AUCTION
+	Music.play_slot("auction")
 	high_bid = 0
 	high_bidder = -1
 	_bid_timer = BID_TIME
@@ -541,6 +544,7 @@ func _launch_game(id: String) -> void:
 	if phase == Phase.GAME:
 		return
 	phase = Phase.GAME
+	Music.stop()
 	phase_panel.visible = false
 	Sfx.play("confirm")
 	var info: Dictionary = MODULES[id]
@@ -722,6 +726,7 @@ func _end_night(champ_override := -1) -> void:
 ## inheritance. Ends at the DAWN button, which returns to the lobby —
 ## the estate is the main menu, so every night must find its way home.
 func _enter_will_reading(champ) -> void:
+	Music.play_slot("ceremony")
 	var awards: Array = EstateState.night_superlatives(champ.index)
 	_clear_panel("THE READING OF THE WILL", Color(0.85, 0.75, 1.0))
 	var head := Label.new()

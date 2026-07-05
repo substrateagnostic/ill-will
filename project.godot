@@ -21,6 +21,7 @@ Sfx="*res://scripts/sfx.gd"
 PlayerInput="*res://core/player_input.gd"
 EstateState="*res://estate/estate_state.gd"
 PartySetup="*res://core/party_setup.gd"
+Music="*res://core/music.gd"
 Transition="*res://core/transition.gd"
 VerifyCapture="*res://scripts/verify_capture.gd"
 
