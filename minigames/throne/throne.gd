@@ -612,7 +612,8 @@ func _finish_match() -> void:
 		"highlights": _dedup(_highlights).slice(0, 3),
 		"monuments": monuments,
 	}
-	print("THRONE_MATCH_OVER champ=%s pts=%d" % [players[champ].name, points[champ]])
+	print("THRONE_MATCH_OVER champ=%s pts=%d placements=%s points=%s currency=%d highlights=%d monuments=%d" % [
+		players[champ].name, points[champ], str(order), str(points), _currency_log.size(), _dedup(_highlights).slice(0, 3).size(), monuments.size()])
 	if has_method("report_finished"):
 		report_finished(results)
 	else:
