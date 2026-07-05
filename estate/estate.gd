@@ -46,6 +46,7 @@ var _selected_walker := -1
 var _bot_wander_timer := 0.0
 var _tile_buyers: Array = []
 var exhibition := false
+var _practice := false
 
 @onready var cam: Camera3D = $Camera3D
 @onready var top_bar: HBoxContainer = $UI/TopBar/Row
@@ -67,6 +68,10 @@ func _ready() -> void:
 			start_night_now = true
 		elif arg.begins_with("--pool="):
 			pool_override = Array(arg.trim_prefix("--pool=").split(","))
+		elif arg == "--howtotest":
+			get_tree().create_timer(1.2).timeout.connect(func():
+				_show_howto("orbital")
+				VerifyCapture.snap("howto"))
 		elif arg == "--wardrobetest":
 			get_tree().create_timer(1.2).timeout.connect(func():
 				EstateState.legacy[0] = 50
@@ -110,6 +115,7 @@ func _build_lobby_panel() -> void:
 		var row := HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 12)
+		row.add_child(PlayerBadge.make(i, 20))
 		var name_l := Label.new()
 		name_l.text = GameState.PLAYER_NAMES[i]
 		name_l.custom_minimum_size = Vector2(80, 0)
@@ -200,9 +206,7 @@ func _enter_selector() -> void:
 		b.custom_minimum_size = Vector2(158, 84)
 		b.text = info.name
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		b.pressed.connect(func():
-			exhibition = true
-			_launch_game(id))
+		b.pressed.connect(_show_howto.bind(String(id)))
 		grid.add_child(b)
 	var center := CenterContainer.new()
 	center.add_child(grid)
@@ -211,6 +215,83 @@ func _enter_selector() -> void:
 	back.text = "BACK"
 	back.pressed.connect(_enter_lobby)
 	phase_box.add_child(back)
+
+## How-to-Play cards (UFO 50 pattern): goal + LIVE controls per seat via
+## PlayerInput.describe_binding — the card can't lie about bindings.
+const HOWTO := {
+	"par": {"goal": "Sabotage golf. Draft a trap, place it on the SHARED hole, then putt it yourself. Your trap's kills pay YOU royalties. Last round is CHAOS: everyone putts at once.", "a": "", "b": ""},
+	"echo": {"goal": "Duel beside your own GHOST — it replays your previous round. Shatter the others before the past catches up.", "a": "STRIKE", "b": "DASH (hold: PARRY)"},
+	"tilt": {"goal": "The floor is one platter and everyone's weight tilts it. Fall off and you return as a vengeful seagull.", "a": "SHOVE (answer to CLASH)", "b": "BRACE"},
+	"orbital": {"goal": "Dodgeball on a tiny planet. Throws ORBIT forever — a 45-second-old ball still kills, and its thrower still gets paid.", "a": "hold: AIM+THROW / tap: CATCH", "b": "JUMP the gap"},
+	"mower": {"goal": "Mow more lawn than anyone. Coverage is score; ramming is diplomacy.", "a": "RAM HORN", "b": "BOOST (wider cut)"},
+	"greed": {"goal": "One pot of gold, four sets of hands. Bank it down your chute; tackle whoever is richer.", "a": "GRAB / TACKLE", "b": "DASH"},
+	"swap": {"goal": "Kart race where your weapon TRADES PLACES with whoever it hits. The lead is a rumor.", "a": "THROW SWAP ORB", "b": "hold: DRIFT, release: BOOST"},
+	"deadweight": {"goal": "Sumo where the dead never leave — they possess the furniture and fling it at the living.", "a": "SHOVE", "b": "HOP"},
+	"throne": {"goal": "One throne, four claimants. Reigning scores. Decrees blast, guards defend, gravity votes last.", "a": "SHOVE / DECREE", "b": "DASH / GUARD"},
+	"lastwill": {"goal": "A brawl where dying is power: the dead stop the world for six seconds and write curses into their will.", "a": "SHOVE", "b": "HOP"},
+}
+
+func _show_howto(id: String) -> void:
+	Sfx.play("card")
+	var info: Dictionary = MODULES[id]
+	_clear_panel(String(info.name), Color(1, 0.9, 0.5))
+	var how: Dictionary = HOWTO.get(id, {"goal": "?", "a": "A", "b": "B"})
+	var goal := Label.new()
+	goal.text = String(how.goal)
+	goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	goal.custom_minimum_size = Vector2(680, 0)
+	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	phase_box.add_child(goal)
+	var ctl_title := Label.new()
+	ctl_title.text = "— CONTROLS TONIGHT (live from your settings) —"
+	ctl_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ctl_title.modulate.a = 0.7
+	ctl_title.add_theme_font_size_override("font_size", 15)
+	phase_box.add_child(ctl_title)
+	for i in 4:
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 8)
+		row.add_child(PlayerBadge.make(i, 16))
+		var l := Label.new()
+		if PlayerInput.is_bot(i):
+			l.text = "%s — bot, needs no manual" % GameState.PLAYER_NAMES[i]
+			l.modulate.a = 0.5
+		elif id == "par":
+			l.text = "%s — MOUSE: aim, hold, release to putt (hotseat — pass it on)" % GameState.PLAYER_NAMES[i]
+		else:
+			l.text = "%s — MOVE %s  ·  %s: %s  ·  %s: %s" % [
+				GameState.PLAYER_NAMES[i], PlayerInput.describe_binding(i, "move"),
+				PlayerInput.describe_binding(i, "a"), String(how.a),
+				PlayerInput.describe_binding(i, "b"), String(how.b)]
+		l.add_theme_font_size_override("font_size", 17)
+		l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
+		row.add_child(l)
+		phase_box.add_child(row)
+	var btns := HBoxContainer.new()
+	btns.alignment = BoxContainer.ALIGNMENT_CENTER
+	btns.add_theme_constant_override("separation", 16)
+	var play := Button.new()
+	play.custom_minimum_size = Vector2(220, 54)
+	play.text = "PLAY — EXHIBITION"
+	play.pressed.connect(func():
+		exhibition = true
+		_launch_game(id))
+	btns.add_child(play)
+	if id != "par":
+		var prac := Button.new()
+		prac.custom_minimum_size = Vector2(200, 54)
+		prac.text = "PRACTICE (no stakes)"
+		prac.pressed.connect(func():
+			exhibition = true
+			_launch_game(id, true))
+		btns.add_child(prac)
+	var back := Button.new()
+	back.custom_minimum_size = Vector2(120, 54)
+	back.text = "BACK"
+	back.pressed.connect(_enter_selector)
+	btns.add_child(back)
+	phase_box.add_child(btns)
 
 func get_phase_name() -> String:
 	return Phase.keys()[phase]
@@ -416,8 +497,9 @@ func _rebuild_top_bar() -> void:
 		c.queue_free()
 	for i in EstateState.standings():
 		var pl = EstateState.players[i]
+		top_bar.add_child(PlayerBadge.make(i, 18))
 		var l := Label.new()
-		l.text = "%s %d  ♠%d   " % [pl.name, pl.points, pl.grudge]
+		l.text = " %s %d  ♠%d   " % [pl.name, pl.points, pl.grudge]
 		l.add_theme_font_size_override("font_size", 24)
 		l.add_theme_color_override("font_color", pl.color)
 		top_bar.add_child(l)
@@ -650,11 +732,12 @@ func _resolve_auction() -> void:
 		row.add_child(b)
 	phase_box.add_child(row)
 
-func _launch_game(id: String) -> void:
+func _launch_game(id: String, practice := false) -> void:
 	if phase == Phase.GAME:
 		return
 	phase = Phase.GAME
 	Music.stop()
+	_practice = practice
 	phase_panel.visible = false
 	Sfx.play("confirm")
 	var info: Dictionary = MODULES[id]
@@ -688,9 +771,9 @@ func _launch_game(id: String) -> void:
 			})
 		_module.begin({
 			"roster": roster,
-			"rounds": 4,
+			"rounds": 2 if _practice else 4,
 			"rng_seed": EstateState.rng.randi(),
-			"practice": false,
+			"practice": _practice,
 		})
 	cam.current = false
 
