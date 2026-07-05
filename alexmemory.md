@@ -6,6 +6,24 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **✅ UNBLOCKED — CONTINUE YOUR TEN-GAME NIGHT (relaunch first).** All
+  three playtest issues fixed & committed: (1) Reckoning continue button
+  was pushed off-screen by long tickers — panel now grows UPWARD + ticker
+  capped at 8 lines; (2) Par back to 1 trap per round per your correction
+  (more TYPES coming instead — agent building 8 new traps + bigger courses
+  + a new large "Gauntlet" course + TRUE simultaneous chaos + OOB
+  adventure gutters); (3) ramp-stranded balls now return to their last
+  on-green lie ("X WENT EXPLORING — RETURNED").
+- **Cosmetics: your wishlist is feasible and in flight** — rather than
+  risky Meshy-rigged characters, we get 90% of the fantasy cheaply: Meshy
+  HATS/ACCESSORIES on the existing KayKit rigs' head/handslot attachment
+  bones (8 being generated + fitted now by a Fable agent). Store UI at the
+  estate stall (spend royalties/grudge) is my pass after the menu work.
+  Meshy-rigged custom characters stay on the later-experiments list.
+- **My next own-hands pass while you play: estate-as-main-menu** (boot
+  into the estate, Ready Room join seats, UFO-50-style 10-game selector
+  panel + practice, ESC settings tabs per the research MUST list).
+
 - **Menu research is IN** (`docs/design/04-menu-ux-research-digest.md`).
   Headlines: diegetic entry points + flat ESC panels for depth (no shipped
   hub game makes settings diegetic); DRG's walk-OR-hotkey dual pattern;
