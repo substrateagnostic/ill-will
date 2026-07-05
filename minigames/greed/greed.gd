@@ -86,6 +86,7 @@ var biggest_bank := {}
 var drops_caused := {}
 var royalties := {}
 var _currency: Array = []
+var _kill_events: Array = []   # {killer:int, victim:int, cause:String} per contract
 var _highlights: Array = []
 var _results := {}
 
@@ -290,8 +291,10 @@ func _finish_match() -> void:
 		"currency_events": _currency.duplicate(),
 		"highlights": _highlights.slice(0, 3),
 		"monuments": monuments,
+		"kill_events": _kill_events.duplicate(),
 	}
 	_log("match_end " + JSON.stringify(_results))
+	print("KILL_EVENTS n=", _kill_events.size(), " ", JSON.stringify(_kill_events))
 
 
 # ===========================================================================
@@ -524,6 +527,9 @@ func _drop_carrier(victim: int, tackler: int) -> void:
 		"reason": "mugged %s off the pot" % roster[victim].name})
 	_currency.append({"type": "grudge", "player": victim, "amount": 1,
 		"reason": "got mugged off the pot"})
+	# structured kill attribution (module contract): the tackle stuns the carrier
+	# (get_stunned, STUN_TIME) — a genuine down, at the exact royalty-crediting path.
+	_kill_events.append({"killer": tackler, "victim": victim, "cause": "mugged"})
 	# juice: hit-pause, shake, coin burst
 	_hit_pause()
 	_shake = maxf(_shake, 0.45)
