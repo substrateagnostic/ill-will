@@ -132,10 +132,13 @@ func begin(config: Dictionary) -> void:
 	# bots
 	bots = MowerBots.new()
 	bots.setup(int(config.rng_seed) ^ 0x30FA, roster.size())
+	# Per-player: a seat is bot-driven if the roster says so (shell sets this
+	# from estate._is_bot; standalone fills it from PlayerInput) OR the legacy
+	# --mowbots / --covtest flags force ALL bots. Decided here at begin() from
+	# roster data only - never runtime Input - so the tick sim stays reproducible.
 	bot_enabled.clear()
 	for i in roster.size():
-		var dev := int(roster[i].get("device", -99))
-		bot_enabled.append(_bots_all or _covtest or (_standalone and (dev == -3 or dev == -99)))
+		bot_enabled.append(_bots_all or _covtest or bool(roster[i].get("bot", false)))
 	# mowers
 	for i in roster.size():
 		var pl: Dictionary = roster[i]
@@ -774,6 +777,7 @@ func _default_config() -> Dictionary:
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": CHAR_FALLBACKS[i],
 			"device": PlayerInput.device_of(i),
+			"bot": PlayerInput.standalone_bot_default(i),
 		})
 	return {"roster": r, "rounds": 1, "rng_seed": _cli_seed, "practice": false}
 

@@ -163,10 +163,12 @@ func begin(config: Dictionary) -> void:
 		round_time = clampf(_cli_roundtime, 8.0, 180.0)
 	bots = GreedBots.new()
 	bots.setup(int(config.rng_seed) ^ 0x6EED, roster.size())
+	# Per-player: a seat is bot-driven if the roster says so (shell sets this
+	# from estate._is_bot; standalone fills it from PlayerInput) OR the legacy
+	# --greedbots flag forces ALL bots. Decided at begin() from roster data.
 	bot_enabled.clear()
 	for i in roster.size():
-		var dev := int(roster[i].get("device", -99))
-		bot_enabled.append(_bots_all or (_standalone and (dev == -3 or dev == -99)))
+		bot_enabled.append(_bots_all or bool(roster[i].get("bot", false)))
 	for i in roster.size():
 		var pl: Dictionary = roster[i]
 		var player := GreedPlayer.new()
@@ -1160,6 +1162,7 @@ func _default_config() -> Dictionary:
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": CHAR_FALLBACKS[i],
 			"device": PlayerInput.device_of(i),
+			"bot": PlayerInput.standalone_bot_default(i),
 		})
 	return {"roster": r, "rounds": ROUNDS, "rng_seed": _cli_seed, "practice": false}
 

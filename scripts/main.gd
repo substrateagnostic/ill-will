@@ -37,6 +37,17 @@ var _currency_log: Array = []
 var _highlights: Array = []
 var _golden_hour_done := false
 
+# --- minimal per-player bot driver (turn-based) --------------------------------
+# A seat plays itself if PlayerInput marks it a bot OR the --parbots flag forces
+# ALL seats to bots. Human seats are untouched (mouse drives draft/build/putt).
+# It drives the SAME debug entry points a verify run uses, so no gameplay/putt
+# physics is affected. All bot randomness comes from _bot_rng (seeded from
+# GameState.rng), so a --parbots match is reproducible per --seed.
+var _par_bot_all := false
+var _bot_rng := RandomNumberGenerator.new()
+var _bot_ctx := ""          # actionable-turn key; resets the think timer on change
+var _bot_think_t := 0.0
+
 @onready var putt_controller: Node3D = $PuttController
 @onready var placement: Node3D = $PlacementController
 @onready var camera_rig: Node3D = $CameraRig
@@ -54,6 +65,12 @@ var _golden_hour_done := false
 @onready var build_hint: Label = $UI/BuildHint
 
 func _ready() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--parbots":
+			_par_bot_all = true
+	# Seed the bot rng FROM GameState.rng without consuming its stream (read the
+	# seed value, don't draw), so drafting/course/trap RNG is untouched.
+	_bot_rng.seed = int(GameState.rng.seed) ^ 0x9E3779B9
 	_setup_course()
 	round_manager = RoundManager.new()
 	round_manager.name = "RoundManager"
@@ -245,7 +262,10 @@ func _begin_putt_phase() -> void:
 	round_manager.start_round(GameState.standings(), balls, GameState.is_chaos_round())
 
 func _process(delta: float) -> void:
-	putt_controller.enabled = phase == Phase.PUTT and round_manager.is_turn_ready()
+	# mouse putting is disabled on a bot's turn (the bot drives it instead)
+	var cur := round_manager.current_player()
+	putt_controller.enabled = phase == Phase.PUTT and round_manager.is_turn_ready() and not _is_bot(cur)
+	_bot_tick(delta)
 	if phase == Phase.BUILD:
 		_build_timer += delta
 		if _build_timer > BUILD_TIME_LIMIT:
@@ -477,6 +497,75 @@ func debug_place_auto() -> void:
 		placement.cancel()
 		build_hint.visible = false
 		_advance_after_placement()
+
+# --- minimal per-player bot ----------------------------------------------------
+func _is_bot(i: int) -> bool:
+	return _par_bot_all or (i >= 0 and PlayerInput.is_bot(i))
+
+## Drives whichever seat currently owns the turn, if that seat is a bot. Fires
+## once per actionable turn after a short think delay; a human seat is skipped
+## (its mouse input flows normally). Chaos rounds have no draft/build, so only
+## the PUTT branch runs there.
+func _bot_tick(delta: float) -> void:
+	var actor := -1
+	match phase:
+		Phase.DRAFT:
+			if draft_pointer < draft_order.size():
+				actor = draft_order[draft_pointer]
+		Phase.BUILD:
+			if placement.active and draft_pointer < draft_order.size():
+				actor = draft_order[draft_pointer]
+		Phase.PUTT:
+			if round_manager.is_turn_ready():
+				actor = round_manager.current_player()
+	if actor < 0 or not _is_bot(actor):
+		_bot_ctx = ""
+		_bot_think_t = 0.0
+		return
+	# ctx changes whenever the actionable turn changes; the stroke count keeps
+	# successive putts by the same bot (in one turn) as distinct think windows
+	var ctx := "%d:%d" % [phase, actor]
+	if phase == Phase.PUTT:
+		ctx += ":%d" % int(round_manager.strokes.get(actor, 0))
+	if ctx != _bot_ctx:
+		_bot_ctx = ctx
+		_bot_think_t = 0.0
+	_bot_think_t += delta
+	match phase:
+		Phase.DRAFT:
+			if _bot_think_t >= 1.0:
+				debug_pick_card(0)          # pick the first offered card
+		Phase.BUILD:
+			if _bot_think_t >= 1.0:
+				_bot_build()
+		Phase.PUTT:
+			if _bot_think_t >= 1.5 and balls[actor].is_stopped():
+				_bot_putt(actor)
+
+func _bot_build() -> void:
+	if phase != Phase.BUILD or not placement.active:
+		return
+	var rot := _bot_rng.randf_range(0.0, 360.0)
+	if not placement.debug_place_scan(rot, GameState.rng):
+		# course saturated for this footprint: skip the placement, move on
+		placement.cancel()
+		build_hint.visible = false
+		_advance_after_placement()
+
+## Aim straight at the cup with a little noise; power scales with distance.
+## Routed through the existing debug_putt entry point (no putt-feel constants
+## touched). angle 0 = -Z; debug_putt does dir = (0,0,-1).rotated(UP, angle).
+func _bot_putt(actor: int) -> void:
+	var b: Ball = balls[actor]
+	var cup := course.cup_position()
+	var to := cup - b.global_position
+	to.y = 0.0
+	var dist := to.length()
+	var dir := to.normalized() if dist > 0.001 else Vector3(0, 0, -1)
+	var angle := rad_to_deg(atan2(-dir.x, -dir.z)) + _bot_rng.randf_range(-4.0, 4.0)
+	var power := clampf(dist * 0.5 + _bot_rng.randf_range(0.0, 1.0), 2.0, 13.0)
+	putt_controller.ball = b
+	putt_controller.debug_putt(power, angle)
 
 func get_phase_name() -> String:
 	return Phase.keys()[phase]

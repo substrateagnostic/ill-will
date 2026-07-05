@@ -213,6 +213,7 @@ func _default_config() -> Dictionary:
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": "",
 			"device": PlayerInput.device_of(i),
+			"bot": PlayerInput.standalone_bot_default(i),
 		})
 	# roles: default all living; balance = last player is a permanent ghost;
 	# --dwghosts=N starts the last N players as ghosts.
@@ -250,7 +251,10 @@ func _begin(config: Dictionary) -> void:
 			"name": str(r.get("name", "P%d" % i)),
 			"color": r.get("color", Color.WHITE),
 			"device": int(r.get("device", -99)),
-			"is_bot": _all_bots,
+			# Per-player: bot-driven if the roster marks this seat a bot (shell
+			# sets it from estate._is_bot; standalone from PlayerInput) OR the
+			# legacy --dwbots / --dwbalance flags force ALL bots.
+			"is_bot": _all_bots or bool(r.get("bot", false)),
 			"role": role,
 			"total": 0,
 			"ghost_kills": 0,

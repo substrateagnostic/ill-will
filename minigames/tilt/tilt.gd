@@ -148,10 +148,14 @@ func begin(config: Dictionary) -> void:
 		round_time = clampf(_cli_roundtime, 8.0, 120.0)
 	bots = TiltBots.new()
 	bots.setup(int(config.rng_seed) ^ 0x5EA9, roster.size())
+	# Per-player: a seat is bot-driven if the roster says so (shell sets this
+	# from estate._is_bot; standalone fills it from PlayerInput) OR the legacy
+	# --tiltbots flag forces ALL bots. Test modes force all seats to bots (their
+	# input is overridden to zero anyway). Decided here at begin() from roster
+	# data only - never from runtime Input reads - so the sim stays reproducible.
 	bot_enabled.clear()
 	for i in roster.size():
-		var dev := int(roster[i].get("device", -99))
-		bot_enabled.append(_bots_all or _test_mode != "" or (_standalone and (dev == -3 or dev == -99)))
+		bot_enabled.append(_bots_all or _test_mode != "" or bool(roster[i].get("bot", false)))
 	for i in roster.size():
 		var pl: Dictionary = roster[i]
 		var pawn := TiltPawn.new()
@@ -803,6 +807,7 @@ func _default_config() -> Dictionary:
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": CHAR_FALLBACKS[i],
 			"device": PlayerInput.device_of(i),
+			"bot": PlayerInput.standalone_bot_default(i),
 		})
 	return {"roster": r, "rounds": 5, "rng_seed": _cli_seed, "practice": false}
 
