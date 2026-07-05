@@ -67,6 +67,7 @@ var bots_enabled := false        # legacy --swapbots flag: force ALL seats to bo
 
 var _points := {}
 var _currency: Array = []
+var _kill_events: Array = []     # {killer:int, victim:int, cause:String}; a swap heist "wrecks" the victim's race
 var _names: Array = []
 var _colors: Array = []
 var _finish_count := 0
@@ -789,8 +790,10 @@ func _do_swap(a: SwapKart, b: SwapKart, golden: bool) -> void:
 		if gain >= 1:
 			_currency.append({"type": "royalty", "player": who.index, "amount": 1,
 				"reason": "swap heist (+%d places)" % gain})
-			if who == a:  # the thrower stole it: pickpocket credit
+			if who == a:  # the thrower stole it: pickpocket credit + a kart_wreck kill
 				_gaining_swaps[who.index] = int(_gaining_swaps[who.index]) + 1
+				_kill_events.append({"killer": a.index, "victim": other.index,
+					"cause": "golden_swap" if golden else "kart_wreck"})
 			if gain > _cruel_delta:
 				_cruel_delta = gain
 				_cruel_txt = "%s pickpocketed %d place%s from %s" % [who.pname, gain, "s" if gain > 1 else "", other.pname]
@@ -1022,6 +1025,7 @@ func _end_race() -> void:
 		"placements": order,
 		"points": _points.duplicate(),
 		"currency_events": _currency.duplicate(),
+		"kill_events": _kill_events.duplicate(),
 		"highlights": highlights.slice(0, 3),
 		"monuments": monuments,
 	}
@@ -1031,6 +1035,7 @@ func _end_race() -> void:
 		_reported = true
 		report_finished(results)
 		print("SWAPMEET_RESULTS ", JSON.stringify(results))
+		print("KILL_EVENTS n=%d %s" % [_kill_events.size(), JSON.stringify(_kill_events)])
 		_print_sim_summary()
 		if _autoquit:
 			get_tree().create_timer(1.5, true, false, true).timeout.connect(func() -> void: get_tree().quit()))

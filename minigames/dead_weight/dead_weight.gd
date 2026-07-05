@@ -37,6 +37,7 @@ var _props: Array = []                # Array[DWProp]
 var _spawns: Array = []               # Array[Vector3] revival points
 var _elim_order: Array = []           # indices in death order this round
 var _currency_log: Array = []
+var _kill_events: Array = []          # {killer:int, victim:int, cause:String}; killer -1 = void
 var _highlights: Array = []
 var _last_kill_line := ""             # the kill that ended the round, if any
 var _last_kill_color := Color.WHITE
@@ -82,42 +83,54 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- stage
 func _build_stage() -> void:
+	# House diorama look (matches mower/greed): warm dim "attic room" surround,
+	# soft warm ambient, filmic tonemap, gentle glow. No void-black, no cold fog.
 	var we: WorldEnvironment = $WorldEnvironment
 	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.05, 0.045, 0.08)
+	# dark warm room (like greed's vault): the surround recedes so the lit arena
+	# is the hero, not a flat brown flood.
+	var sky_mat := ProceduralSkyMaterial.new()
+	sky_mat.sky_top_color = Color(0.09, 0.07, 0.07)
+	sky_mat.sky_horizon_color = Color(0.17, 0.12, 0.09)
+	sky_mat.ground_horizon_color = Color(0.13, 0.09, 0.07)
+	sky_mat.ground_bottom_color = Color(0.08, 0.06, 0.05)
+	sky_mat.sun_angle_max = 30.0
+	sky_mat.energy_multiplier = 1.0
+	var sky := Sky.new()
+	sky.sky_material = sky_mat
+	env.background_mode = Environment.BG_SKY
+	env.sky = sky
+	# soft warm ambient (was cool purple); COLOR source keeps it controllable
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.52, 0.5, 0.62)
-	env.ambient_light_energy = 0.85
+	env.ambient_light_color = Color(0.55, 0.47, 0.40)
+	env.ambient_light_energy = 0.62
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.glow_enabled = true
-	env.glow_intensity = 0.7
-	env.glow_bloom = 0.18
-	env.glow_hdr_threshold = 0.9
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.09, 0.08, 0.14)
-	env.fog_density = 0.02
-	env.fog_sky_affect = 0.0
+	env.glow_intensity = 0.55
+	env.glow_bloom = 0.12
+	env.glow_hdr_threshold = 0.95
 	we.environment = env
 
 	cam.global_position = Vector3(0, 13.5, 11.5)
 	cam.look_at(Vector3(0, 0.3, -0.4), Vector3.UP)
 	cam.fov = 52.0
 
+	# warm directional sun with shadows (house key light)
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
 	add_child(sun)
 	sun.rotation_degrees = Vector3(-56.0, -34.0, 0.0)
-	sun.light_energy = 1.15
-	sun.light_color = Color(1.0, 0.92, 0.8)
+	sun.light_energy = 1.25
+	sun.light_color = Color(1.0, 0.93, 0.8)
 	sun.shadow_enabled = true
 
+	# warm bounce fill (was cool blue — the last cold accent)
 	var fill := DirectionalLight3D.new()
 	fill.name = "Fill"
 	add_child(fill)
 	fill.rotation_degrees = Vector3(-24.0, 140.0, 0.0)
-	fill.light_energy = 0.4
-	fill.light_color = Color(0.55, 0.68, 1.0)
+	fill.light_energy = 0.35
+	fill.light_color = Color(0.92, 0.76, 0.58)
 
 	# floor: 12x12 platform with nothing beyond the lip — walk off, you fall
 	var floor_body := StaticBody3D.new()
@@ -156,11 +169,45 @@ func _build_stage() -> void:
 	rug.material_override = rmat
 	$Arena.add_child(rug)
 
+	_build_surround()
 	_build_void_ring()
 
+func _build_surround() -> void:
+	# The diorama sits on a warm table in a warm room instead of floating in a
+	# void. Purely decorative (no collision), placed BELOW / INSIDE the ±6 lip so
+	# gameplay dimensions are untouched — a shoved fighter still falls clear of it
+	# into the drop. This is what lets dead_weight read at the same party as mower.
+	var room := MeshInstance3D.new()
+	room.name = "RoomFloor"
+	var rmesh := BoxMesh.new()
+	rmesh.size = Vector3(64.0, 0.5, 64.0)
+	room.mesh = rmesh
+	room.position = Vector3(0, -6.75, 0)
+	var rmat := StandardMaterial3D.new()
+	rmat.albedo_color = Color(0.15, 0.10, 0.075)  # dark warm room floorboards (recedes)
+	rmat.roughness = 0.95
+	room.material_override = rmat
+	$Arena.add_child(room)
+
+	# a chunky warm table the arena rests on (footprint inside the lip so it never
+	# catches a falling fighter); top tucks just under the play slab
+	var table := MeshInstance3D.new()
+	table.name = "Table"
+	var tmesh := BoxMesh.new()
+	tmesh.size = Vector3(9.6, 3.6, 9.6)
+	table.mesh = tmesh
+	table.position = Vector3(0, -4.65, 0)         # top ~-2.85, base rests on room floor
+	var tmat := StandardMaterial3D.new()
+	tmat.albedo_color = Color(0.24, 0.16, 0.10)   # warm table wood, catches a little sun
+	tmat.roughness = 0.72
+	table.material_override = tmat
+	$Arena.add_child(table)
+
 func _build_void_ring() -> void:
-	# a glowing gutter at the very lip of the floor: fall past it and you die
-	var glow := Color(0.2, 0.95, 1.0)
+	# a glowing gutter at the very lip of the floor: fall past it and you die.
+	# warm hazard amber (was neon cyan) so the lethal edge still reads loudly
+	# while belonging to the warm house palette.
+	var glow := Color(1.0, 0.55, 0.16)
 	var bars := [
 		{"size": Vector3(12.4, 0.08, 0.3), "pos": Vector3(0, 0.04, 5.95)},
 		{"size": Vector3(12.4, 0.08, 0.3), "pos": Vector3(0, 0.04, -5.95)},
@@ -420,6 +467,9 @@ func _on_fighter_fell(index: int) -> void:
 	var credit_type := "void"
 	var credit_line := "THE VOID CLAIMS %s" % players[index].name
 	var credit_color := Color(0.6, 0.85, 1.0)
+	# kill attribution (reporting only): killer -1 = the void / an accident.
+	var kill_killer := -1
+	var kill_cause := "void"
 	if atk.size() > 0 and (game_time - float(atk.get("time", -99.0))) <= KILL_CREDIT_WINDOW:
 		var ai: int = int(atk.get("index", -1))
 		if atk.get("type", "") == "ghost" and ai >= 0 and ai != index:
@@ -431,11 +481,16 @@ func _on_fighter_fell(index: int) -> void:
 			_currency_log.append({"type": "royalty", "player": ai, "amount": ROYALTY,
 				"reason": "poltergeist kill on %s" % players[index].name})
 			_highlights.append(credit_line)
+			kill_killer = ai
+			kill_cause = "furniture"
 		elif atk.get("type", "") == "player" and ai >= 0 and ai != index:
 			credit_type = "player"
 			credit_color = atk.get("color", Color.WHITE)
 			credit_line = "%s BOOTS %s INTO THE VOID" % [players[ai].name, players[index].name]
 			_highlights.append(credit_line)
+			kill_killer = ai
+			kill_cause = "shove"
+	_kill_events.append({"killer": kill_killer, "victim": index, "cause": kill_cause})
 
 	print("DW_DEATH round=%d t=%.1fs %s (%s)" % [round_index + 1, round_elapsed, credit_line, credit_type])
 	if _balance_rounds == 0:
@@ -538,6 +593,7 @@ func _next_round_or_finish(delay: float) -> void:
 
 func _finish_match() -> void:
 	phase = Phase.DONE
+	print("KILL_EVENTS n=%d %s" % [_kill_events.size(), JSON.stringify(_kill_events)])
 	if _balance_rounds > 0:
 		_print_balance()
 		get_tree().quit()
@@ -574,6 +630,7 @@ func _finish_match() -> void:
 		"placements": order,
 		"points": points,
 		"currency_events": _currency_log.duplicate(),
+		"kill_events": _kill_events.duplicate(),
 		"highlights": _dedup(_highlights).slice(0, 3),
 		"monuments": monuments,
 	}
