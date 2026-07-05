@@ -5,9 +5,11 @@ extends Node3D
 ## node where to sit (on the pedestal, on the carrier, or loose on the floor)
 ## and how big the number is. Also fires the +5 burst "coin geyser".
 
-var _bowl: MeshInstance3D
-var _pile: MeshInstance3D
-var _pile_mat: StandardMaterial3D
+const POT_GLB := "res://assets/models/meshy/gilded_pot.glb"
+const POT_HEIGHT := 1.25       # ornate cauldron height on the pedestal
+
+var _model: Node3D             # the gilded_pot GLB (replaces bowl + coin pile)
+var _model_base_scale := Vector3.ONE
 var _label: Label3D
 var _glow: OmniLight3D
 var _geyser: CPUParticles3D
@@ -15,40 +17,14 @@ var _spin := 0.0
 
 
 func build() -> void:
-	# golden bowl
-	_bowl = MeshInstance3D.new()
-	var bm := CylinderMesh.new()
-	bm.top_radius = 0.62
-	bm.bottom_radius = 0.42
-	bm.height = 0.5
-	_bowl.mesh = bm
-	var bmat := StandardMaterial3D.new()
-	bmat.albedo_color = Color(0.95, 0.75, 0.18)
-	bmat.metallic = 0.9
-	bmat.roughness = 0.25
-	bmat.emission_enabled = true
-	bmat.emission = Color(0.8, 0.55, 0.05)
-	bmat.emission_energy_multiplier = 0.35
-	_bowl.material_override = bmat
-	_bowl.position.y = 0.35
-	add_child(_bowl)
-
-	# heaped coins (grows subtly with value)
-	_pile = MeshInstance3D.new()
-	var pm := SphereMesh.new()
-	pm.radius = 0.5
-	pm.height = 0.5
-	_pile.mesh = pm
-	_pile_mat = StandardMaterial3D.new()
-	_pile_mat.albedo_color = Color(1.0, 0.85, 0.22)
-	_pile_mat.metallic = 0.85
-	_pile_mat.roughness = 0.22
-	_pile_mat.emission_enabled = true
-	_pile_mat.emission = Color(1.0, 0.72, 0.1)
-	_pile_mat.emission_energy_multiplier = 0.6
-	_pile.material_override = _pile_mat
-	_pile.position.y = 0.62
-	add_child(_pile)
+	# Custom Meshy gilded cauldron (dark pot, gold trim, coins heaped on top with
+	# spill around the base) replacing the procedural bowl + coin sphere. Purely
+	# visual — the controller still owns the pot value/state and its position.
+	# Normalized so the base is seated at this node's origin (on the pedestal).
+	_model = MeshyProp.instance(POT_GLB, POT_HEIGHT)
+	_model.name = "PotModel"
+	add_child(_model)
+	_model_base_scale = _model.scale   # swell (update_value) multiplies this
 
 	# glow so the pot reads as the object of desire
 	_glow = OmniLight3D.new()
@@ -88,7 +64,7 @@ func build() -> void:
 	_geyser.gravity = Vector3(0, -11.0, 0)
 	_geyser.initial_velocity_min = 5.0
 	_geyser.initial_velocity_max = 8.5
-	_geyser.position.y = 0.6
+	_geyser.position.y = 0.95        # erupt from the coin heap on the cauldron mouth
 	var gmesh := CylinderMesh.new()
 	gmesh.top_radius = 0.11
 	gmesh.bottom_radius = 0.11
@@ -107,9 +83,9 @@ func build() -> void:
 
 func update_value(value: int) -> void:
 	_label.text = str(value)
-	# pile swells with the hoard (clamped so it never dwarfs the bowl)
-	var s := clampf(0.6 + float(value) * 0.012, 0.6, 1.7)
-	_pile.scale = Vector3(s, minf(s, 1.25), s)
+	# the whole hoard swells subtly with value (base stays planted on the pedestal)
+	var swell := clampf(1.0 + float(value) * 0.004, 1.0, 1.35)
+	_model.scale = _model_base_scale * swell
 	# the fatter the pot, the hotter it glows
 	_glow.light_energy = clampf(1.2 + float(value) * 0.03, 1.2, 3.4)
 
@@ -127,6 +103,6 @@ func geyser() -> void:
 
 func tick(delta: float) -> void:
 	_spin += delta
-	_bowl.rotation.y = _spin * 0.8
-	_pile.rotation.y = -_spin * 0.6
+	# slow turntable spin so the hoard reads as the object of desire
+	_model.rotation.y = _spin * 0.5
 	_label.position.y += sin(_spin * 3.0) * delta * 0.15

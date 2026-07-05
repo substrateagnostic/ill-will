@@ -905,61 +905,20 @@ func _build_dais() -> void:
 		body.add_child(mi)
 		idx += 1
 
+const THRONE_GLB := "res://assets/models/meshy/throne.glb"
+const THRONE_HEIGHT := 2.55       # base->crest height on the dais (was ~2.4 primitive)
+const THRONE_YAW := 180.0         # seat opening faces +Z (toward the camera/king)
+
 func _build_throne() -> void:
-	var gold := StandardMaterial3D.new()
-	gold.albedo_color = Color(0.95, 0.75, 0.3)
-	gold.metallic = 0.85
-	gold.roughness = 0.3
-	gold.emission_enabled = true
-	gold.emission = Color(0.95, 0.66, 0.16)
-	gold.emission_energy_multiplier = 0.6
+	# Custom Meshy throne (red tufted high back, gold ornate frame) replacing the
+	# box-built throne. Purely visual — no collision here in either version; the
+	# king's per-player identity still rides on the Royal body (ring + rim). The
+	# GLB is normalized (scaled to THRONE_HEIGHT, base seated at the dais top).
 	var base_y := DAIS_TOP_Y
-	var throne := Node3D.new()
+	var throne := MeshyProp.instance(THRONE_GLB, THRONE_HEIGHT, THRONE_YAW)
 	throne.name = "ThroneModel"
 	throne.position = Vector3(0, base_y, -0.5)
 	arena.add_child(throne)
-	# seat block
-	_add_box(throne, Vector3(1.2, 0.6, 1.0), Vector3(0, 0.3, 0), gold)
-	# towering back
-	_add_box(throne, Vector3(1.2, 2.4, 0.22), Vector3(0, 1.5, -0.4), gold)
-	# ornamental crest atop the back (a pointed finial)
-	var finial := MeshInstance3D.new()
-	var fm := CylinderMesh.new()
-	fm.top_radius = 0.0
-	fm.bottom_radius = 0.3
-	fm.height = 0.55
-	finial.mesh = fm
-	finial.position = Vector3(0, 2.95, -0.4)
-	finial.material_override = gold
-	throne.add_child(finial)
-	# side spires flanking the back
-	for sx in [0.62, -0.62]:
-		var spire := MeshInstance3D.new()
-		var sm := CylinderMesh.new()
-		sm.top_radius = 0.0
-		sm.bottom_radius = 0.16
-		sm.height = 0.7
-		spire.mesh = sm
-		spire.position = Vector3(sx, 2.55, -0.4)
-		spire.material_override = gold
-		throne.add_child(spire)
-	# armrests
-	_add_box(throne, Vector3(0.2, 0.6, 1.0), Vector3(0.55, 0.75, 0), gold)
-	_add_box(throne, Vector3(0.2, 0.6, 1.0), Vector3(-0.55, 0.75, 0), gold)
-	# cushion (neutral crimson; the king's own color rim comes from their body)
-	var cushion := StandardMaterial3D.new()
-	cushion.albedo_color = Color(0.55, 0.1, 0.12)
-	cushion.roughness = 0.85
-	_add_box(throne, Vector3(1.02, 0.14, 0.86), Vector3(0, 0.62, 0), cushion)
-
-func _add_box(parent: Node3D, size: Vector3, pos: Vector3, mat: Material) -> void:
-	var mi := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = size
-	mi.mesh = bm
-	mi.position = pos
-	mi.material_override = mat
-	parent.add_child(mi)
 
 func _build_pillars_and_torches() -> void:
 	var stone := StandardMaterial3D.new()
