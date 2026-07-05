@@ -116,6 +116,15 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-05 — MESHY PROPS LIVE IN-GAME (wave closed)
+The tufted golden throne sits on the dais, the gilded cauldron anchors the
+vault, mowers/karts carry their riders with tinted identity rings, and the
+seagull has a player-color collar. All visual-only; every legacy check
+re-run and passing (throne re-verified across 5 seeds). New reusable
+helper `scripts/meshy_prop.gd` normalizes any future Meshy GLB. Proofs in
+`docs/verify/shots/prop_*.png`. Estate set (gate/lanterns/podium/pot) was
+already in. ALL AGENTS HOME — the field is quiet until your notes.
+
 ### 2026-07-05 — MOUSE AIM MERGED (KB+MOUSE cursor combat live)
 Echo swings, Orbital throws (preview follows), Greed tackle-pounces, and
 Dead Weight shoves + poltergeist furniture-flings all go toward YOUR
