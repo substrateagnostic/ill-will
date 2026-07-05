@@ -89,6 +89,16 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-05 — MESHY CUSTOM PROPS MERGED (10/10 keepers)
+Your Meshy API paid for itself in one run: wardrobe, table lamp, riding
+mower, go-kart, seagull, gilded coin-pot, tufted throne, stone lantern,
+manor gate, auction podium — all chunky-lowpoly on-style, zero retries.
+Probe lineup: `docs/verify/shots/meshy_probe_overview.png`; per-asset
+prompts/AABBs in `docs/verify/meshy-assets-VERIFY.md`. Reusable probe tool
+at `tools/asset_probe.tscn` (drop any GLB in assets/models/meshy/ and
+re-run). Not yet wired into scenes — that's my integration pass, queued
+behind your playtest. Key never touched the repo (verified).
+
 ### 2026-07-05 (night shift, later) — Swap Meet MERGED (game #7)
 The swap-racer works: whole tabletop circuit readable in one frame,
 windmill landmarks + shortcut ramp, leader wears a crown (bullseye), and
