@@ -919,8 +919,14 @@ func _update_score_rows() -> void:
 	if _row_labels.is_empty():
 		var lg: Font = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
 		for i in _points:
+			var hb := HBoxContainer.new()
+			hb.add_theme_constant_override("separation", 6)
+			var badge := PlayerBadge.make(int(i), 26)
+			badge.color = pawn_color(int(i))
+			hb.add_child(badge)
 			var l := _mk_label(lg, 26, 7)
-			_score_rows.add_child(l)
+			hb.add_child(l)
+			_score_rows.add_child(hb)
 			_row_labels.append({"label": l, "player": int(i)})
 	for row in _row_labels:
 		var i: int = row.player

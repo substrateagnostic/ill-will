@@ -109,7 +109,7 @@ func setup(p_index: int, p_color: Color, p_name: String, char_scene: PackedScene
 				anim.play(wanted)
 
 	var nm := Label3D.new()
-	nm.text = pname
+	nm.text = PlayerBadge.glyph(index) + " " + pname
 	nm.font_size = 40
 	nm.pixel_size = 0.006
 	nm.modulate = Color(color.r, color.g, color.b, 0.85)

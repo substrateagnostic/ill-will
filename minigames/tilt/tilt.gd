@@ -1074,9 +1074,17 @@ func _rebuild_scoreboard() -> void:
 	for i in roster.size():
 		var pl: Dictionary = roster[i]
 		var pawn: TiltPawn = pawns[i]
+		var standing: bool = pawn.state == TiltPawn.PState.STANDING
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 6)
+		var badge := PlayerBadge.make(i, 24)
+		badge.color = pl.color
+		if not standing:
+			badge.dim = 0.45
+		hb.add_child(badge)
 		var row := Label.new()
 		var extras := ""
-		if pawn.state == TiltPawn.PState.STANDING:
+		if standing:
 			if pawn.coins > 0:
 				extras = "  x%d coins" % pawn.coins
 		else:
@@ -1086,7 +1094,8 @@ func _rebuild_scoreboard() -> void:
 		row.add_theme_color_override("font_color", pl.color)
 		row.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.12))
 		row.add_theme_constant_override("outline_size", 5)
-		score_rows.add_child(row)
+		hb.add_child(row)
+		score_rows.add_child(hb)
 
 func _log(msg: String) -> void:
 	var f := -1

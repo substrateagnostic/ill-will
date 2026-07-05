@@ -738,6 +738,11 @@ func _rebuild_scoreboard() -> void:
 		var p: int = order[i]
 		var mu: MowerUnit = mowers[p] if p < mowers.size() else null
 		var fuel := int(round((mu.fuel if mu else 0.0) * 100.0))
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 6)
+		var badge := PlayerBadge.make(p, 22)
+		badge.color = roster[p].color
+		hb.add_child(badge)
 		var row := Label.new()
 		var tag := ""
 		if mu and mu.spin_t > 0.0:
@@ -749,7 +754,8 @@ func _rebuild_scoreboard() -> void:
 		row.add_theme_color_override("font_color", roster[p].color)
 		row.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.1))
 		row.add_theme_constant_override("outline_size", 5)
-		score_rows.add_child(row)
+		hb.add_child(row)
+		score_rows.add_child(hb)
 
 # -- config / args ------------------------------------------------------------
 

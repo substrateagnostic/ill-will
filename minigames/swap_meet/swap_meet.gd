@@ -1320,13 +1320,23 @@ func _update_score_rows() -> void:
 	if _row_labels.is_empty():
 		var lg: Font = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
 		for i in karts.size():
+			# Row is an HBox: [PlayerBadge, Label]. Slots are ranked by race
+			# position, so the badge's player is reassigned each frame below.
+			var hb := HBoxContainer.new()
+			hb.add_theme_constant_override("separation", 6)
+			hb.add_child(PlayerBadge.make(0, 24))
 			var l := _mk_label(lg, 24, 7)
-			_score_rows.add_child(l)
+			hb.add_child(l)
+			_score_rows.add_child(hb)
 			_row_labels.append(l)
 	var order := _positions_list()
 	for pi in order.size():
 		var kart: SwapKart = karts[order[pi]]
 		var l: Label = _row_labels[pi]
+		var badge := l.get_parent().get_child(0) as PlayerBadge
+		badge.player_index = kart.index
+		badge.color = kart.color
+		badge.dim = 1.0 if not kart.finished else 0.6
 		var extra := ""
 		if kart.finished:
 			extra = "  FIN"

@@ -1806,13 +1806,21 @@ func _rebuild_scoreboard() -> void:
 				tags += "  +"
 			if pawns[i].curse_kind != "":
 				tags += "  −"
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 6)
+		var badge := PlayerBadge.make(i, 24)
+		badge.color = p.color
+		if not p.alive:
+			badge.dim = 0.45
+		hb.add_child(badge)
 		var row := Label.new()
 		row.text = "%s  %d%s" % [p.name, p.total, tags]
 		row.add_theme_font_size_override("font_size", 24)
 		row.add_theme_color_override("font_color", p.color)
 		row.add_theme_color_override("font_outline_color", Color(0.08, 0.07, 0.1))
 		row.add_theme_constant_override("outline_size", 5)
-		score_rows.add_child(row)
+		hb.add_child(row)
+		score_rows.add_child(hb)
 
 func _spawn_burst(pos: Vector3, color: Color, amount: int) -> void:
 	if _tally:

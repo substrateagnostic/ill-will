@@ -369,7 +369,7 @@ func _build_kart() -> void:
 
 func _build_tag() -> void:
 	_tag = Label3D.new()
-	_tag.text = pname
+	_tag.text = PlayerBadge.glyph(index) + " " + pname
 	_tag.font = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
 	_tag.font_size = 84
 	_tag.pixel_size = 0.0058
