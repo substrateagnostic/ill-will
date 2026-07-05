@@ -85,6 +85,7 @@ var gull_hits := {}
 var round_wins := {}
 var elim_order: Array = []     # current round, in fall order
 var _currency: Array = []
+var _kill_events: Array = []   # optional contract: {killer,victim,cause} per fall
 var _highlights: Array = []
 var _results := {}
 var _begun := false
@@ -536,6 +537,10 @@ func _on_edge_fall(p: int) -> void:
 	if pawn.last_shover >= 0 and pawn.last_shover != p \
 			and game_t - pawn.last_shove_t <= ROYALTY_WINDOW:
 		shover = pawn.last_shover
+	# Optional contract reporting: one kill_event per overboard fall. killer is
+	# the crediting shover (same test as the royalty below) or -1 for a solo
+	# fall. Pure bookkeeping — the sim is untouched by this line.
+	_kill_events.append({"killer": shover, "victim": p, "cause": "ring_out"})
 	Sfx.play("death")
 	_shake = maxf(_shake, 0.3)
 	_slow_mo()
@@ -763,7 +768,9 @@ func _finish_match() -> void:
 		"currency_events": _currency.duplicate(),
 		"highlights": _highlights.slice(0, 3),
 		"monuments": monuments,
+		"kill_events": _kill_events.duplicate(),
 	}
+	print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
 	_log("match_end " + JSON.stringify(_results))
 
 func _dict_max(d: Dictionary) -> int:
@@ -860,27 +867,42 @@ func _tick_test(delta: float) -> void:
 # -- world & juice -------------------------------------------------------------
 
 func _build_world() -> void:
-	# sky + ambient
+	# sky + ambient — warm golden-hour diorama (greed/mower family): warm sun
+	# with shadows, warm peach sky + soft ambient, filmic, gentle glow so the
+	# platter's bright target rings and gold coins bloom. The ocean stays the
+	# sea it always was, just warmed by the low sun.
 	var env := Environment.new()
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.33, 0.57, 0.85)
-	sky_mat.sky_horizon_color = Color(0.92, 0.93, 0.86)
-	sky_mat.ground_bottom_color = Color(0.08, 0.28, 0.36)
-	sky_mat.ground_horizon_color = Color(0.72, 0.84, 0.85)
+	sky_mat.sky_top_color = Color(0.36, 0.30, 0.38)
+	sky_mat.sky_horizon_color = Color(0.98, 0.74, 0.48)
+	sky_mat.ground_bottom_color = Color(0.15, 0.17, 0.18)
+	sky_mat.ground_horizon_color = Color(0.66, 0.48, 0.34)
 	var sky := Sky.new()
 	sky.sky_material = sky_mat
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	env.glow_enabled = true
+	env.glow_intensity = 0.45
+	env.glow_bloom = 0.1
+	env.glow_hdr_threshold = 0.95
 	var we := WorldEnvironment.new()
 	we.environment = env
 	add_child(we)
-	# sun (casts the platter's tilt shadow on the ocean)
-	sun.rotation_degrees = Vector3(-52, 38, 0)
+	# sun (casts the platter's tilt shadow on the ocean) — warm, low, golden
+	sun.rotation_degrees = Vector3(-40, 40, 0)
 	sun.shadow_enabled = true
-	sun.light_energy = 1.35
-	# ocean
+	sun.light_energy = 1.45
+	sun.light_color = Color(1.0, 0.84, 0.60)
+	# a soft cool bounce from the sea keeps warm shadows from going flat
+	var fill := DirectionalLight3D.new()
+	fill.rotation_degrees = Vector3(-24, -132, 0)
+	fill.light_energy = 0.26
+	fill.light_color = Color(0.64, 0.72, 0.80)
+	add_child(fill)
+	# ocean — deepened a touch so it reads as evening sea under the warm sun
 	var ocean := MeshInstance3D.new()
 	var om := CylinderMesh.new()
 	om.top_radius = 70.0
@@ -888,9 +910,9 @@ func _build_world() -> void:
 	om.height = 0.3
 	ocean.mesh = om
 	var omat := StandardMaterial3D.new()
-	omat.albedo_color = Color(0.10, 0.36, 0.44)
-	omat.roughness = 0.15
-	omat.metallic = 0.2
+	omat.albedo_color = Color(0.11, 0.24, 0.25)   # warm evening sea-green
+	omat.roughness = 0.07                          # mirror-calm: catches the golden sky
+	omat.metallic = 0.35
 	ocean.material_override = omat
 	ocean.position.y = OCEAN_Y - 0.15
 	add_child(ocean)

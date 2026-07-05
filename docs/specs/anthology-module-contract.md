@@ -20,6 +20,26 @@ Always include every roster player in `placements`. Report `currency_events`
 suffering; "grudge" = you suffered) is the anthology's signature; your game
 must feed it.
 
+### Optional results field: `kill_events`
+
+If your game has discrete eliminations/KOs/deaths, you MAY additionally report:
+
+```
+kill_events: Array of { killer: int, victim: int, cause: String }
+```
+
+- `killer` — player index who caused it, or `-1` for environment/self-inflicted
+  (a fall nobody pushed, a timer crush, walking off the edge unaided).
+- `victim` — player index who died/was KO'd.
+- `cause` — a short slug for the manner of death: `"shatter"`, `"ring_out"`,
+  `"crush"`, etc. Keep it lowercase, one word.
+
+Emit exactly ONE entry per elimination/KO/death event, appended in the order
+they happen, and include the accumulated array in the finished results dict.
+This is **pure reporting** — building it must not alter bot behavior, scoring,
+physics, or RNG in any way. The shell treats it as optional; games without
+discrete deaths simply omit it.
+
 ## Input
 
 Use the `PlayerInput` autoload for ALL player controls (see
