@@ -58,10 +58,20 @@ dethrone fling are unchanged and still fire (see the dethrone in the proof run).
 
 - Legacy check (mandatory balance probe, real gameplay, no bot > 55% throne time):
   ```
-  for s in 1 4; do godot --headless --path . minigames/throne/throne.tscn -- --thronebalance --seed=$s; done
+  for s in 1 2 3 4 5; do godot --headless --path . minigames/throne/throne.tscn -- --thronebalance --seed=$s; done
   ```
-  `seed 1 max_share=29.6% PASS`, `seed 4 max_share=26.9% PASS` (both ≪ 55% cap;
-  visual-only change cannot affect throne-time shares).
+  Full 5-seed suite re-run post-swap:
+
+  | seed | max share | verdict |
+  |-----:|----------:|---------|
+  | 1 | 29.6% | PASS |
+  | 2 | 26.4% | PASS |
+  | 3 | 29.5% | PASS |
+  | 4 | 26.9% | PASS |
+  | 5 | 30.9% | PASS |
+
+  All ≪ the 55% cap and in line with the pre-swap table in
+  `minigames/throne/VERIFY.md` (visual-only change; shares unaffected).
 - Proof: `docs/verify/shots/prop_throne.png` — 4 challengers (RED/BLUE/GOLD/MINT
   rings) ringed around the grand red/gold throne, "SEIZE THE THRONE" banner.
 
