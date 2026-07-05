@@ -70,8 +70,9 @@ var time_left := MATCH_LEN
 var planets: Array = []   # [{center, radius, mu, col}]
 var pawns: Array = []     # [OrbPawn]
 var balls: Array = []     # [OrbBall]
-var bots: Array = []      # [OrbBot]
-var bots_enabled := false
+var bots: Array = []      # per player index: OrbBot or null (human seat)
+var bot_enabled: Array = []  # per player index: bool, decided at begin()
+var bots_enabled := false    # legacy --orbbots flag: force ALL seats to bots
 
 var kills := {}
 var catches := {}
@@ -162,6 +163,7 @@ func _default_config() -> Dictionary:
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": "res://assets/models/kaykit/%s.glb" % KAYKIT_CHARS[i],
 			"device": PlayerInput.device_of(i),
+			"bot": PlayerInput.standalone_bot_default(i),
 		})
 	return {"roster": roster, "rounds": 1, "rng_seed": _cli_seed, "practice": false}
 
@@ -197,11 +199,19 @@ func begin(cfg: Dictionary) -> void:
 		var spot: Dictionary = START_SPOTS[i % START_SPOTS.size()]
 		pawn.place_on(spot.planet, Vector3(spot.n).normalized())
 		pawns.append(pawn)
-	if bots_enabled:
-		for i in roster.size():
+	# Per-player bots: a seat is bot-driven if the roster marks it a bot (shell
+	# sets it from estate._is_bot; standalone from PlayerInput) OR the legacy
+	# --orbbots flag forces ALL bots. Human seats get a null slot and read
+	# PlayerInput. Seeds are per index, so the all-bots path is bit-identical to
+	# before. Scripted --orbtest modes drive pawn 0 directly - no bot brains.
+	bot_enabled.resize(roster.size())
+	bots.resize(roster.size())
+	for i in roster.size():
+		bot_enabled[i] = bots_enabled or bool(roster[i].get("bot", false))
+		if bot_enabled[i] and _test_mode == "":
 			var bot := OrbBot.new()
 			bot.setup(self, i, int(cfg.rng_seed) * 977 + i * 131)
-			bots.append(bot)
+			bots[i] = bot
 	phase = Phase.PLAY
 	_update_score_rows()
 	if _test_mode == "circ":
@@ -419,9 +429,10 @@ func _physics_process(delta: float) -> void:
 		_slowmo_left -= delta
 		sdt = delta * 0.3
 	now += sdt
-	if phase == Phase.PLAY and bots_enabled:
+	if phase == Phase.PLAY:
 		for bot in bots:
-			bot.think(sdt, now)
+			if bot != null:
+				bot.think(sdt, now)
 	var neutral := {"move": Vector2.ZERO, "a": false, "b": false}
 	for p in pawns:
 		var pw: OrbPawn = p
@@ -461,7 +472,7 @@ func _input_for(p: int) -> Dictionary:
 		return {"move": Vector2(1, 0) if p == 0 else Vector2.ZERO, "a": false, "b": false}
 	if _test_mode == "aim":
 		return {"move": Vector2.ZERO, "a": p == 0, "b": false}
-	if bots_enabled:
+	if p < bots.size() and bots[p] != null:
 		var bot: OrbBot = bots[p]
 		return {"move": bot.move, "a": bot.a, "b": bot.b}
 	return {

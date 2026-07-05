@@ -135,6 +135,7 @@ func _default_config() -> Dictionary:
 			n = clampi(int(arg.trim_prefix("--players=")), 2, 4)
 		elif arg.begins_with("--seed="):
 			seed = int(arg.trim_prefix("--seed="))
+	PlayerInput.auto_assign(n)
 	var r: Array = []
 	for i in n:
 		r.append({
@@ -142,9 +143,9 @@ func _default_config() -> Dictionary:
 			"name": GameState.PLAYER_NAMES[i],
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": DEFAULT_CHARS[i],
-			"device": -99,
+			"device": PlayerInput.device_of(i),
+			"bot": PlayerInput.standalone_bot_default(i),
 		})
-	PlayerInput.auto_assign(n)
 	return {"roster": r, "rounds": ROUNDS, "rng_seed": seed, "practice": false}
 
 
@@ -388,7 +389,11 @@ func _spawn_fighters() -> void:
 		f.player_index = pl["index"]
 		f.color = pl["color"]
 		f.char_path = pl.get("char_scene", DEFAULT_CHARS[i % DEFAULT_CHARS.size()])
-		f.is_bot = _bots
+		# Per-player: bot-driven if the roster marks this seat a bot (shell sets
+		# it from estate._is_bot; standalone from PlayerInput) OR the legacy
+		# --echobots flag forces ALL bots. A human seat reads PlayerInput as
+		# normal; the ghost-replay determinism assertion is unaffected.
+		f.is_bot = _bots or bool(pl.get("bot", false))
 		f.main = self
 		add_child(f)
 		f.setup(_seed)

@@ -38,6 +38,19 @@ func set_bot(p: int, v: bool) -> void:
 func is_bot(p: int) -> bool:
 	return _bots.get(p, false)
 
+## True if a saved PartySetup file exists (seat choices persisted via the ESC
+## overlay). Used to decide standalone bot defaults.
+func has_setup() -> bool:
+	return FileAccess.file_exists(SETUP_PATH)
+
+## Standalone default for whether player p is bot-driven when a minigame
+## self-starts with no shell roster. With NO saved PartySetup, everyone is a
+## bot so the scene self-plays as a demo; once seats have been configured in
+## the ESC overlay (party_setup.json exists), honor the HUMAN/BOT choice.
+## The shell path never calls this - it sets roster[i].bot from estate._is_bot.
+func standalone_bot_default(p: int) -> bool:
+	return is_bot(p) or not has_setup()
+
 func save_setup() -> void:
 	var f := FileAccess.open(SETUP_PATH, FileAccess.WRITE)
 	if f:

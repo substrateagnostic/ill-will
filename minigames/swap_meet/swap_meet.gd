@@ -60,9 +60,10 @@ var time_cap := RACE_CAP
 
 var track: SwapTrack
 var karts: Array = []            # SwapKart, array pos == player index
-var bots: Array = []
+var bots: Array = []             # per player index: SwapBot or null (human seat)
+var bot_enabled: Array = []      # per player index: bool, decided at begin()
 var orbs: Array = []
-var bots_enabled := false
+var bots_enabled := false        # legacy --swapbots flag: force ALL seats to bots
 
 var _points := {}
 var _currency: Array = []
@@ -161,6 +162,7 @@ func _default_config() -> Dictionary:
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": "res://assets/models/kaykit/%s.glb" % KAYKIT_CHARS[i],
 			"device": PlayerInput.device_of(i),
+			"bot": PlayerInput.standalone_bot_default(i),
 		})
 	return {"roster": roster, "rounds": 1, "rng_seed": _cli_seed, "practice": false}
 
@@ -194,11 +196,19 @@ func begin(cfg: Dictionary) -> void:
 		var col := i % 2
 		kart.place_at(track.total_len - 2.2 - row * 1.9, -1.05 + 2.1 * col)
 		karts.append(kart)
-	if bots_enabled:
-		for i in roster.size():
+	# Per-player bots: a seat is bot-driven if the roster marks it a bot (shell
+	# sets it from estate._is_bot; standalone from PlayerInput) OR the legacy
+	# --swapbots flag forces ALL bots. Human seats get a null slot and read
+	# PlayerInput. Seeds are per index, so the all-bots path is bit-identical to
+	# before. Scripted --swaptest modes park the karts - no bot brains there.
+	bot_enabled.resize(roster.size())
+	bots.resize(roster.size())
+	for i in roster.size():
+		bot_enabled[i] = bots_enabled or bool(roster[i].get("bot", false))
+		if bot_enabled[i] and _test_mode == "":
 			var bot := SwapBot.new()
 			bot.setup(self, i, int(cfg.rng_seed) * 977 + i * 131)
-			bots.append(bot)
+			bots[i] = bot
 	_build_crown()
 	if _test_mode != "":
 		_setup_test()
@@ -392,9 +402,10 @@ func _physics_process(delta: float) -> void:
 		_intro_tick(sdt)
 	if phase == Phase.PLAY:
 		race_t += sdt
-	if sdt > 0.0 and bots_enabled:
+	if sdt > 0.0:
 		for bot in bots:
-			bot.think(sdt)
+			if bot != null:
+				bot.think(sdt)
 	# karts
 	for k in karts:
 		var kart: SwapKart = k
@@ -473,11 +484,11 @@ func _intro_tick(sdt: float) -> void:
 func _input_for(p: int) -> Dictionary:
 	if phase != Phase.PLAY and phase != Phase.END:
 		return {"move": Vector2.ZERO, "a": false, "b": false}
-	if bots_enabled:
-		var bot: SwapBot = bots[p]
-		return {"move": bot.move, "a": bot.a, "b": bot.b}
 	if _test_mode != "":
 		return {"move": Vector2.ZERO, "a": false, "b": false}
+	if p < bots.size() and bots[p] != null:
+		var bot: SwapBot = bots[p]
+		return {"move": bot.move, "a": bot.a, "b": bot.b}
 	return {
 		"move": PlayerInput.get_move(p),
 		"a": PlayerInput.just_pressed(p, "a"),
