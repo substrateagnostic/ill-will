@@ -67,6 +67,13 @@ func _ready() -> void:
 			start_night_now = true
 		elif arg.begins_with("--pool="):
 			pool_override = Array(arg.trim_prefix("--pool=").split(","))
+		elif arg == "--wardrobetest":
+			get_tree().create_timer(1.2).timeout.connect(func():
+				EstateState.legacy[0] = 50
+				_build_wardrobe_panel()
+				_wardrobe_tap("viking_helm")
+				print("WARDROBETEST legacy=%d owned=%s worn=%s" % [EstateState.legacy_of(0), str(EstateState.owned_cosmetics(0)), str(Cosmetics.get_player_cosmetics(0))])
+				VerifyCapture.snap("wardrobe"))
 	if "--skipmenu" in args:
 		Transition.change_scene("res://scenes/main.tscn")
 		return
@@ -150,6 +157,11 @@ func _build_lobby_panel() -> void:
 	sel_btn.text = "MINIGAMES (10)"
 	sel_btn.pressed.connect(_enter_selector)
 	btn_row.add_child(sel_btn)
+	var ward_btn := Button.new()
+	ward_btn.custom_minimum_size = Vector2(180, 56)
+	ward_btn.text = "WARDROBE"
+	ward_btn.pressed.connect(_build_wardrobe_panel)
+	btn_row.add_child(ward_btn)
 	phase_box.add_child(btn_row)
 	var hint := Label.new()
 	hint.text = "ESC = players & controls anytime  ·  the estate remembers everything"
@@ -227,7 +239,105 @@ func _spawn_walkers() -> void:
 		$Grounds/Walkers.add_child(w)
 		w.global_position = Vector3(-1.5 + i * 1.0, 0.1, 1.0)
 		w.setup(CHAR_SCENES[i], EstateState.players[i].color, i)
+		Cosmetics.apply_to_character(w, i)
 		walkers.append(w)
+
+## ----- THE WARDROBE (cosmetics store; LEGACY buys vanity) -----
+
+const WARDROBE_PRICES := {
+	"propeller_beanie": 10, "party_cone": 12, "chef_hat": 14,
+	"flower_crown": 15, "jester_cap": 18, "viking_helm": 20,
+	"tophat_monocle": 25, "halo": 30,
+}
+const WARDROBE_TAGLINES := {
+	"propeller_beanie": "dignity optional", "party_cone": "mandatory fun",
+	"chef_hat": "you cooked", "flower_crown": "gentle menace",
+	"jester_cap": "you will be mocked", "viking_helm": "heritage item",
+	"tophat_monocle": "old money", "halo": "earned innocence",
+}
+var _wardrobe_player := 0
+
+func _build_wardrobe_panel() -> void:
+	_clear_panel("THE WARDROBE — legacy buys vanity", Color(0.95, 0.85, 1.0))
+	var seat_row := HBoxContainer.new()
+	seat_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	seat_row.add_theme_constant_override("separation", 10)
+	for i in EstateState.players.size():
+		var pb := Button.new()
+		pb.custom_minimum_size = Vector2(150, 44)
+		pb.text = "%s  %d LEGACY" % [GameState.PLAYER_NAMES[i], EstateState.legacy_of(i)]
+		pb.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
+		pb.disabled = i == _wardrobe_player
+		pb.pressed.connect(func():
+			_wardrobe_player = i
+			Sfx.play("card")
+			_build_wardrobe_panel())
+		seat_row.add_child(pb)
+	phase_box.add_child(seat_row)
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	var worn: Dictionary = Cosmetics.get_player_cosmetics(_wardrobe_player)
+	for id in WARDROBE_PRICES:
+		var owned: bool = id in EstateState.owned_cosmetics(_wardrobe_player)
+		var wearing: bool = id in worn.values()
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(190, 74)
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		var nice: String = str(id).replace("_", " ").to_upper()
+		if wearing:
+			b.text = "%s\nWEARING — tap to doff" % nice
+		elif owned:
+			b.text = "%s\nOWNED — tap to wear" % nice
+		else:
+			b.text = "%s\n%d LEGACY — %s" % [nice, WARDROBE_PRICES[id], WARDROBE_TAGLINES[id]]
+			b.disabled = EstateState.legacy_of(_wardrobe_player) < WARDROBE_PRICES[id]
+		b.pressed.connect(_wardrobe_tap.bind(String(id)))
+		grid.add_child(b)
+	var center := CenterContainer.new()
+	center.add_child(grid)
+	phase_box.add_child(center)
+	var back := Button.new()
+	back.text = "BACK TO THE GATES"
+	back.pressed.connect(func():
+		Sfx.play("card")
+		_build_lobby_panel())
+	phase_box.add_child(back)
+	var hint := Label.new()
+	hint.text = "LEGACY = the estate's memory of your points, paid at each dawn. It buys nothing but respect."
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.modulate.a = 0.65
+	phase_box.add_child(hint)
+
+func _wardrobe_tap(id: String) -> void:
+	var p := _wardrobe_player
+	var worn: Dictionary = Cosmetics.get_player_cosmetics(p)
+	if id in EstateState.owned_cosmetics(p):
+		if id in worn.values():
+			var slot: String = Cosmetics.REGISTRY[id].get("slot", "head")
+			Cosmetics.remove_player_cosmetic(p, slot)
+			Sfx.play("card")
+		else:
+			Cosmetics.set_player_cosmetic(p, id)
+			Sfx.play("confirm")
+	elif EstateState.buy_cosmetic(p, id, WARDROBE_PRICES[id]):
+		Cosmetics.set_player_cosmetic(p, id)
+		Sfx.play("grudge", -4.0)
+		_flash("%s BUYS %s" % [EstateState.players[p].name, id.replace("_", " ").to_upper()], EstateState.players[p].color, 2.0)
+	else:
+		Sfx.play("invalid")
+		return
+	_refresh_walker_cosmetics(p)
+	_build_wardrobe_panel()
+
+func _refresh_walker_cosmetics(p: int) -> void:
+	if p >= walkers.size() or not is_instance_valid(walkers[p]):
+		return
+	for slot in Cosmetics.SLOT_ATTACHMENTS:
+		Cosmetics.unequip(walkers[p], slot)
+	Cosmetics.apply_to_character(walkers[p], p)
 
 func _spawn_toys() -> void:
 	var colors := [Color(0.95, 0.5, 0.2), Color(0.4, 0.75, 0.95), Color(0.85, 0.85, 0.3)]
@@ -712,6 +822,7 @@ func _end_night(champ_override := -1) -> void:
 		entries.append({
 			"name": pl.name, "color": pl.color, "rank": rank,
 			"char_scene": CHAR_SCENES[order[rank]],
+			"player": order[rank],
 		})
 	podium.present(entries)
 	_flash("%s WINS THE NIGHT\nthe estate will remember" % champ.name, champ.color, 9999.0)

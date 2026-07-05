@@ -78,6 +78,8 @@ func present(entries: Array) -> void:
 		inst.scale = Vector3(0.9, 0.9, 0.9)
 		add_child(inst)
 		inst.global_position = global_position + pos
+		if entry.has("player"):
+			Cosmetics.apply_to_character(inst, entry.player)
 		if rank >= 3:
 			inst.rotation_degrees.y = 200.0
 		var anim: AnimationPlayer = inst.find_child("AnimationPlayer", true, false)

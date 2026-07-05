@@ -18,6 +18,10 @@ var graffiti: Array = []
 var ledger: Array = []
 var gate_statues: Array = []
 var nights_played := 0
+# Persistent per-player wallet + owned cosmetics. LEGACY is earned at
+# night's end (your points + champion bonus) and only buys vanity.
+var legacy := {}
+var wardrobe := {}
 
 var trail_pos := {}
 var tollgates := {}
@@ -212,9 +216,28 @@ func end_night(champ_override := -1) -> Dictionary:
 		var top: Dictionary = awards[0]
 		add_graffiti("N%d: %s was %s" % [nights_played + 1, players[top.player].name, top.title])
 	add_monument(champ, "%s — Champion of Night %d" % [pl.name, nights_played + 1])
+	for pl2 in players:
+		legacy[int(pl2.index)] = int(legacy.get(int(pl2.index), 0)) + int(pl2.points)
+	legacy[champ] = int(legacy.get(champ, 0)) + 5
 	nights_played += 1
 	save_estate()
 	return pl
+
+func legacy_of(p: int) -> int:
+	return int(legacy.get(p, 0))
+
+func owned_cosmetics(p: int) -> Array:
+	if not wardrobe.has(p):
+		wardrobe[p] = []
+	return wardrobe[p]
+
+func buy_cosmetic(p: int, id: String, price: int) -> bool:
+	if id in owned_cosmetics(p) or legacy_of(p) < price:
+		return false
+	legacy[p] = legacy_of(p) - price
+	owned_cosmetics(p).append(id)
+	save_estate()
+	return true
 
 func furthest_on_trail() -> int:
 	var order := standings()
@@ -229,10 +252,17 @@ func furthest_on_trail() -> int:
 func save_estate() -> void:
 	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
 	if f:
+		var leg := {}
+		var ward := {}
+		for k in legacy:
+			leg[str(k)] = legacy[k]
+		for k in wardrobe:
+			ward[str(k)] = wardrobe[k]
 		f.store_string(JSON.stringify({
 			"monuments": monuments, "graffiti": graffiti,
 			"ledger": ledger, "nights_played": nights_played,
 			"gate_statues": gate_statues,
+			"legacy": leg, "wardrobe": ward,
 		}, "  "))
 
 func load_estate() -> void:
@@ -246,6 +276,15 @@ func load_estate() -> void:
 		ledger = data.get("ledger", [])
 		gate_statues = data.get("gate_statues", [])
 		nights_played = int(data.get("nights_played", 0))
+		for k in data.get("legacy", {}):
+			legacy[int(k)] = int(data.legacy[k])
+		for k in data.get("wardrobe", {}):
+			wardrobe[int(k)] = Array(data.wardrobe[k])
+		# Grandfather clause: saves from before the wardrobe existed get
+		# credit for prior service, so nobody starts the store broke.
+		if not data.has("legacy") and nights_played > 0:
+			for i in 4:
+				legacy[i] = nights_played * 15
 
 func _wipe_save() -> void:
 	if FileAccess.file_exists(SAVE_PATH):
