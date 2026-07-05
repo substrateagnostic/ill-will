@@ -21,6 +21,11 @@ var last_rest_position := Vector3.ZERO
 var _was_moving := false
 var _mat: StandardMaterial3D
 var _trail: CPUParticles3D
+## KILLCAM ring buffer: this ball's global_transform sampled every LIVE physics
+## tick (dead/sunk/resting-frozen frames are skipped so the tail is always real
+## motion). ~2.6s at 60Hz. Pure presentation feed — never read by game logic.
+const REPLAY_CAP := 160
+var _replay_buf: Array[Transform3D] = []
 
 @onready var mesh: MeshInstance3D = $Mesh
 
@@ -59,6 +64,10 @@ func _ready() -> void:
 func _physics_process(_delta: float) -> void:
 	if is_sunk or is_petrified or is_dead or in_transit:
 		return
+	# KILLCAM: record this live frame into the ring buffer (cheap, capped).
+	_replay_buf.append(global_transform)
+	if _replay_buf.size() > REPLAY_CAP:
+		_replay_buf.remove_at(0)
 	var speed := linear_velocity.length()
 	if _trail:
 		_trail.emitting = speed > 3.5
@@ -95,6 +104,15 @@ func _on_contact(_body: Node) -> void:
 
 func is_stopped() -> bool:
 	return is_dead or (not _was_moving and not is_sunk)
+
+## KILLCAM: the last `seconds` of recorded live transforms (oldest→newest).
+## Returns a fresh Array of Transform3D (never the live buffer). Presentation only.
+func get_replay_samples(seconds: float) -> Array:
+	var want := int(ceil(seconds * 60.0))
+	var n := mini(_replay_buf.size(), want)
+	if n <= 0:
+		return []
+	return _replay_buf.slice(_replay_buf.size() - n)
 
 func die(killer: Trap) -> void:
 	if is_sunk or is_dead:
@@ -137,6 +155,7 @@ func reset_for_round(tee_pos: Vector3) -> void:
 	is_dead = false
 	is_petrified = false
 	_was_moving = false
+	_replay_buf.clear()
 	visible = true
 	freeze = true
 	global_position = tee_pos
