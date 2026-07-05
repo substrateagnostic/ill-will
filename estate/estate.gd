@@ -2,7 +2,7 @@ extends Node3D
 ## THE ESTATE — night-loop shell: GROUNDS -> AUCTION -> GAME -> RECKONING.
 ## v1 "clipboard" grounds (panel UI); walkable grounds is phase E2.
 
-enum Phase { GROUNDS, TILES, AUCTION, CHOOSING, GAME, RECKONING, NIGHT_END }
+enum Phase { LOBBY, SELECTOR, GROUNDS, TILES, AUCTION, CHOOSING, GAME, RECKONING, NIGHT_END }
 
 const TILE_COST := 2
 
@@ -45,6 +45,7 @@ var _saved_env: Environment = null
 var _selected_walker := -1
 var _bot_wander_timer := 0.0
 var _tile_buyers: Array = []
+var exhibition := false
 
 @onready var cam: Camera3D = $Camera3D
 @onready var top_bar: HBoxContainer = $UI/TopBar/Row
@@ -55,15 +56,24 @@ var _tile_buyers: Array = []
 @onready var wall_text: Label3D = $GraffitiWall/Lines
 
 func _ready() -> void:
-	for arg in OS.get_cmdline_user_args():
+	var start_night_now := false
+	var args := OS.get_cmdline_user_args()
+	for arg in args:
 		if arg == "--estatebots":
 			bots = true
 		elif arg == "--mockonly":
 			mockonly = true
+		elif arg == "--estate":
+			start_night_now = true
 		elif arg.begins_with("--pool="):
 			pool_override = Array(arg.trim_prefix("--pool=").split(","))
-	EstateState.start_night(GameState.player_count)
-	PlayerInput.auto_assign(GameState.player_count)
+	if "--skipmenu" in args:
+		Transition.change_scene("res://scenes/main.tscn")
+		return
+	GameState.player_count = 4
+	GameState.reset_match()
+	EstateState.start_night(4)
+	PlayerInput.auto_assign(4)
 	_spawn_walkers()
 	_spawn_toys()
 	$Trail.build(EstateState.players, EstateState.gate_statues)
@@ -71,9 +81,123 @@ func _ready() -> void:
 	_redraw_graffiti()
 	banner.visible = false
 	_saved_env = $WorldEnvironment.environment
+	if start_night_now:
+		if EstateState.nights_played > 0:
+			_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.5)
+		_enter_grounds()
+	else:
+		_enter_lobby()
+
+## ----- LOBBY (the estate IS the main menu) -----
+
+func _enter_lobby() -> void:
+	phase = Phase.LOBBY
+	$UI/TopBar.visible = false
+	_flash("THE UN-PARTY", Color(1, 0.85, 0.2), 9999.0)
+	_build_lobby_panel()
+
+func _build_lobby_panel() -> void:
+	_clear_panel("who's on the couch?", Color(0.9, 0.95, 0.9))
+	for i in 4:
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 12)
+		var name_l := Label.new()
+		name_l.text = GameState.PLAYER_NAMES[i]
+		name_l.custom_minimum_size = Vector2(80, 0)
+		name_l.add_theme_font_size_override("font_size", 24)
+		name_l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
+		row.add_child(name_l)
+		var bot_btn := Button.new()
+		bot_btn.custom_minimum_size = Vector2(120, 44)
+		bot_btn.text = "BOT" if PlayerInput.is_bot(i) else "HUMAN"
+		bot_btn.pressed.connect(func():
+			PlayerInput.set_bot(i, not PlayerInput.is_bot(i))
+			bot_btn.text = "BOT" if PlayerInput.is_bot(i) else "HUMAN"
+			Sfx.play("card"))
+		row.add_child(bot_btn)
+		var dev_btn := Button.new()
+		dev_btn.custom_minimum_size = Vector2(210, 44)
+		dev_btn.text = PartySetup.DEVICE_NAMES.get(PlayerInput.device_of(i), "UNASSIGNED")
+		dev_btn.pressed.connect(func():
+			var cur := PartySetup.DEVICE_CYCLE.find(PlayerInput.device_of(i))
+			var nxt: int = PartySetup.DEVICE_CYCLE[(cur + 1) % PartySetup.DEVICE_CYCLE.size()]
+			PlayerInput.assign(i, nxt)
+			dev_btn.text = PartySetup.DEVICE_NAMES.get(nxt, "UNASSIGNED")
+			Sfx.play("card"))
+		row.add_child(dev_btn)
+		phase_box.add_child(row)
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 16)
+	var len_btn := Button.new()
+	len_btn.custom_minimum_size = Vector2(170, 56)
+	len_btn.text = "NIGHT: %d GAMES" % EstateState.night_length
+	len_btn.pressed.connect(func():
+		var opts := [3, 5, 7]
+		EstateState.night_length = opts[(opts.find(EstateState.night_length) + 1) % opts.size()]
+		len_btn.text = "NIGHT: %d GAMES" % EstateState.night_length
+		Sfx.play("card"))
+	btn_row.add_child(len_btn)
+	var start_btn := Button.new()
+	start_btn.custom_minimum_size = Vector2(240, 56)
+	start_btn.text = "START THE NIGHT"
+	start_btn.pressed.connect(_start_night_from_lobby)
+	btn_row.add_child(start_btn)
+	var sel_btn := Button.new()
+	sel_btn.custom_minimum_size = Vector2(220, 56)
+	sel_btn.text = "MINIGAMES (10)"
+	sel_btn.pressed.connect(_enter_selector)
+	btn_row.add_child(sel_btn)
+	phase_box.add_child(btn_row)
+	var hint := Label.new()
+	hint.text = "ESC = players & controls anytime  ·  the estate remembers everything"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 15)
+	hint.modulate.a = 0.7
+	phase_box.add_child(hint)
+
+func _start_night_from_lobby() -> void:
+	PlayerInput.save_setup()
+	GameState.reset_match()
+	EstateState.start_night(4)
+	$Trail.reset_pawns()
+	banner.visible = false
+	$UI/TopBar.visible = true
+	Sfx.play("confirm")
 	if EstateState.nights_played > 0:
 		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.5)
 	_enter_grounds()
+
+## ----- MINIGAME SELECTOR (flat grid per UFO 50 pattern) -----
+
+func _enter_selector() -> void:
+	phase = Phase.SELECTOR
+	Sfx.play("card")
+	_clear_panel("PICK A GAME — exhibition match, no stakes", Color(0.9, 0.95, 0.9))
+	var grid := GridContainer.new()
+	grid.columns = 5
+	grid.add_theme_constant_override("h_separation", 10)
+	grid.add_theme_constant_override("v_separation", 10)
+	for id in MODULES:
+		if id == "mock":
+			continue
+		var info: Dictionary = MODULES[id]
+		var b := Button.new()
+		b.custom_minimum_size = Vector2(158, 84)
+		b.text = info.name
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.pressed.connect(func():
+			exhibition = true
+			_launch_game(id))
+		grid.add_child(b)
+	var center := CenterContainer.new()
+	center.add_child(grid)
+	phase_box.add_child(center)
+	var back := Button.new()
+	back.text = "BACK"
+	back.pressed.connect(_enter_lobby)
+	phase_box.add_child(back)
 
 func get_phase_name() -> String:
 	return Phase.keys()[phase]
@@ -470,6 +594,17 @@ func _on_module_finished(results: Dictionary) -> void:
 	$GraffitiWall.visible = true
 	$UI/TopBar.visible = true
 	cam.current = true
+	if exhibition:
+		exhibition = false
+		$UI/TopBar.visible = false
+		var champ_line := "EXHIBITION OVER"
+		var placements: Array = results.get("placements", [])
+		if not placements.is_empty():
+			var w = EstateState.players[placements[0]]
+			champ_line = "EXHIBITION: %s TAKES IT" % w.name
+		_flash(champ_line, Color(0.9, 0.95, 0.9), 3.0)
+		_enter_selector()
+		return
 	var ticker := EstateState.apply_results(results)
 	_redraw_monuments()
 	_redraw_graffiti()

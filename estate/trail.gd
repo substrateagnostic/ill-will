@@ -117,6 +117,10 @@ func advance_pawn(p: int, from_stone: int, to_stone: int) -> Tween:
 		tw.tween_callback(Sfx.play.bind("card", -12.0, 0.15))
 	return tw
 
+func reset_pawns() -> void:
+	for p in pawns:
+		_seat_pawn(p, 0)
+
 func add_statue(st: Dictionary, idx: int) -> void:
 	var col := Color.from_string(str(st.color), Color.WHITE)
 	var statue := _make_pawn(col, str(st.owner))
