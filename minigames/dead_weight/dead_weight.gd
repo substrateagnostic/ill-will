@@ -37,6 +37,7 @@ var _props: Array = []                # Array[DWProp]
 var _spawns: Array = []               # Array[Vector3] revival points
 var _elim_order: Array = []           # indices in death order this round
 var _currency_log: Array = []
+var _kill_events: Array = []          # {killer:int, victim:int, cause:String}; killer -1 = void
 var _highlights: Array = []
 var _last_kill_line := ""             # the kill that ended the round, if any
 var _last_kill_color := Color.WHITE
@@ -420,6 +421,9 @@ func _on_fighter_fell(index: int) -> void:
 	var credit_type := "void"
 	var credit_line := "THE VOID CLAIMS %s" % players[index].name
 	var credit_color := Color(0.6, 0.85, 1.0)
+	# kill attribution (reporting only): killer -1 = the void / an accident.
+	var kill_killer := -1
+	var kill_cause := "void"
 	if atk.size() > 0 and (game_time - float(atk.get("time", -99.0))) <= KILL_CREDIT_WINDOW:
 		var ai: int = int(atk.get("index", -1))
 		if atk.get("type", "") == "ghost" and ai >= 0 and ai != index:
@@ -431,11 +435,16 @@ func _on_fighter_fell(index: int) -> void:
 			_currency_log.append({"type": "royalty", "player": ai, "amount": ROYALTY,
 				"reason": "poltergeist kill on %s" % players[index].name})
 			_highlights.append(credit_line)
+			kill_killer = ai
+			kill_cause = "furniture"
 		elif atk.get("type", "") == "player" and ai >= 0 and ai != index:
 			credit_type = "player"
 			credit_color = atk.get("color", Color.WHITE)
 			credit_line = "%s BOOTS %s INTO THE VOID" % [players[ai].name, players[index].name]
 			_highlights.append(credit_line)
+			kill_killer = ai
+			kill_cause = "shove"
+	_kill_events.append({"killer": kill_killer, "victim": index, "cause": kill_cause})
 
 	print("DW_DEATH round=%d t=%.1fs %s (%s)" % [round_index + 1, round_elapsed, credit_line, credit_type])
 	if _balance_rounds == 0:
@@ -538,6 +547,7 @@ func _next_round_or_finish(delay: float) -> void:
 
 func _finish_match() -> void:
 	phase = Phase.DONE
+	print("KILL_EVENTS n=%d %s" % [_kill_events.size(), JSON.stringify(_kill_events)])
 	if _balance_rounds > 0:
 		_print_balance()
 		get_tree().quit()
@@ -574,6 +584,7 @@ func _finish_match() -> void:
 		"placements": order,
 		"points": points,
 		"currency_events": _currency_log.duplicate(),
+		"kill_events": _kill_events.duplicate(),
 		"highlights": _dedup(_highlights).slice(0, 3),
 		"monuments": monuments,
 	}
