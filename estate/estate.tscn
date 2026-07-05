@@ -1,7 +1,11 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://estate/estate.gd" id="1"]
 [ext_resource type="Script" path="res://estate/trail.gd" id="5_trail"]
+[ext_resource type="PackedScene" path="res://assets/models/meshy/manor_gate.glb" id="6_gate"]
+[ext_resource type="PackedScene" path="res://assets/models/meshy/stone_lantern.glb" id="7_lantern"]
+[ext_resource type="PackedScene" path="res://assets/models/meshy/auction_podium.glb" id="8_podium"]
+[ext_resource type="PackedScene" path="res://assets/models/meshy/gilded_pot.glb" id="9_pot"]
 [ext_resource type="FontFile" path="res://assets/fonts/LuckiestGuy-Regular.ttf" id="2_luckiest"]
 [ext_resource type="Texture2D" path="res://assets/textures/grass_stripes.png" id="3_grass"]
 [ext_resource type="PackedScene" path="res://assets/models/minigolf/castle.glb" id="4_castle"]
@@ -105,51 +109,51 @@ script = ExtResource("5_trail")
 
 [node name="Lanterns" type="Node3D" parent="Grounds"]
 
-[node name="LPost1" type="MeshInstance3D" parent="Grounds/Lanterns"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 0.55, 0.5)
-mesh = SubResource("post_mesh")
+[node name="Lantern1" parent="Grounds/Lanterns" instance=ExtResource("7_lantern")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 2.2, 0, 0.5)
 
 [node name="LGlow1" type="MeshInstance3D" parent="Grounds/Lanterns"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 1.2, 0.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.2, 0.95, 0.5)
 mesh = SubResource("lantern_mesh")
 surface_material_override/0 = SubResource("mat_lantern")
 
-[node name="LPost2" type="MeshInstance3D" parent="Grounds/Lanterns"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 0.55, 0.5)
-mesh = SubResource("post_mesh")
+[node name="Lantern2" parent="Grounds/Lanterns" instance=ExtResource("7_lantern")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, -2.2, 0, 0.5)
 
 [node name="LGlow2" type="MeshInstance3D" parent="Grounds/Lanterns"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 1.2, 0.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.2, 0.95, 0.5)
 mesh = SubResource("lantern_mesh")
 surface_material_override/0 = SubResource("mat_lantern")
 
-[node name="LPost3" type="MeshInstance3D" parent="Grounds/Lanterns"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 0.55, -4.5)
-mesh = SubResource("post_mesh")
+[node name="Lantern3" parent="Grounds/Lanterns" instance=ExtResource("7_lantern")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, 5.2, 0, -4.5)
 
 [node name="LGlow3" type="MeshInstance3D" parent="Grounds/Lanterns"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 1.2, -4.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.2, 0.95, -4.5)
 mesh = SubResource("lantern_mesh")
 surface_material_override/0 = SubResource("mat_lantern")
 
-[node name="LPost4" type="MeshInstance3D" parent="Grounds/Lanterns"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2, 0.55, -4.5)
-mesh = SubResource("post_mesh")
+[node name="Lantern4" parent="Grounds/Lanterns" instance=ExtResource("7_lantern")]
+transform = Transform3D(1.2, 0, 0, 0, 1.2, 0, 0, 0, 1.2, -5.2, 0, -4.5)
 
 [node name="LGlow4" type="MeshInstance3D" parent="Grounds/Lanterns"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2, 1.2, -4.5)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.2, 0.95, -4.5)
 mesh = SubResource("lantern_mesh")
 surface_material_override/0 = SubResource("mat_lantern")
+
+[node name="ManorGate" parent="Grounds" instance=ExtResource("6_gate")]
+transform = Transform3D(1.87939, 0, 0.68404, 0, 2.0, 0, -0.68404, 0, 1.87939, -0.6, 1.05, -11.2)
 
 [node name="Path" type="CSGBox3D" parent="Grounds"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.01, -2)
 size = Vector3(2.5, 0.04, 9)
 material = SubResource("mat_path")
 
-[node name="Podium" type="CSGBox3D" parent="Grounds"]
-transform = Transform3D(0.866025, 0, -0.5, 0, 1, 0, 0.5, 0, 0.866025, 3.5, 0.4, -2.5)
-size = Vector3(1.2, 0.8, 1.2)
-material = SubResource("mat_path")
+[node name="Podium" parent="Grounds" instance=ExtResource("8_podium")]
+transform = Transform3D(1.29904, 0, -0.75, 0, 1.5, 0, 0.75, 0, 1.29904, 3.5, 0, -2.5)
+
+[node name="StallPot" parent="Grounds" instance=ExtResource("9_pot")]
+transform = Transform3D(0.6, 0, 0, 0, 0.6, 0, 0, 0, 0.6, -3.0, 0, -2.2)
 
 [node name="Stall" type="CSGBox3D" parent="Grounds"]
 transform = Transform3D(0.866025, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866025, -3.8, 0.65, -3)
