@@ -27,6 +27,7 @@ var _strip: MeshInstance3D
 var _strip_mat: StandardMaterial3D
 var _bang: Label3D
 var _roll_axis := Vector3.FORWARD
+var _fall_v := 0.0
 
 func setup(angle_deg: float, offset: float, p_owner: Node) -> void:
 	owner_game = p_owner
@@ -114,11 +115,13 @@ func tick(delta: float) -> void:
 			_traveled += step
 			_rock.position += Vector3(dir.x, 0, dir.y) * step
 			_rock_mesh.rotate(_roll_axis.normalized(), -step / RADIUS)
-			# fall off past the platform edge
+			# fall off the FAR edge only (spawn side is also off-platform,
+			# and the rock must arrive at deck height, not under it)
 			var flat_r := Vector2(_rock.position.x, _rock.position.z).length()
 			var plat_r: float = owner_game.platform_radius if owner_game != null else 7.0
-			if flat_r > plat_r + RADIUS * 0.4:
-				_rock.position.y -= 9.0 * delta * clampf((flat_r - plat_r) * 0.6, 0.2, 1.2)
+			if _traveled > TRAVEL * 0.5 and flat_r > plat_r + RADIUS * 0.4:
+				_fall_v += 18.0 * delta
+				_rock.position.y -= _fall_v * delta
 			_check_squish()
 			if _traveled >= TRAVEL or _rock.position.y < -8.0:
 				state = BState.DONE

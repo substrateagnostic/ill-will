@@ -51,6 +51,7 @@ const CHAR_FALLBACKS := [
 const R_FULL := 7.0
 const R_MID := 5.1
 const R_CORE := 3.2
+const R_LAST := 1.8      # sudden death: the yard becomes a lonely pillar
 const ROUND_TIME := 60.0
 const HARD_CAP := 78.0
 const DRAFT_BUDGET := 6.0
@@ -92,8 +93,9 @@ var _floor_shape: CylinderShape3D
 var _ring_segs: Array = []         # per ring: Array[MeshInstance3D]
 var _ring_mats: Array = []
 var _ring_roots: Array = []
-var _shrink_stage := 0             # 0 full, 1 outer gone, 2 mid gone
+var _shrink_stage := 0             # 0 full, 1 outer gone, 2 mid gone, 3 pillar
 var _tele_ring := -1
+var _pillar_disc: MeshInstance3D
 
 var round_index := 0
 var rounds_total := 3
@@ -134,6 +136,9 @@ var _forced_kills: Array = []      # {t, p}
 var _cli_players := 4
 var _cli_seed := 1
 var _rounds_override := 0
+var _test_mode := ""               # --willtest=squish|gust
+var _test_fired := false
+var _delta_cache := 0.016
 
 # fx
 var _shake := 0.0
@@ -182,6 +187,8 @@ func _parse_args() -> void:
 				var kv := pair.split(":")
 				if kv.size() == 2:
 					_forced_kills.append({"t": float(kv[0]), "p": int(kv[1])})
+		elif arg.begins_with("--willtest="):
+			_test_mode = arg.trim_prefix("--willtest=")
 	if _tally:
 		# faster-than-realtime with dt pinned to exactly 1/60 (Swap Meet trick)
 		var fast := 8.0
@@ -446,6 +453,9 @@ func _build_platform() -> void:
 		if is_instance_valid(r):
 			r.queue_free()
 	_ring_roots.clear()
+	if _pillar_disc != null and is_instance_valid(_pillar_disc):
+		_pillar_disc.queue_free()
+		_pillar_disc = null
 	_ring_segs = [[], [], []]
 	_ring_mats = [[], [], []]
 	_shrink_stage = 0
@@ -456,8 +466,9 @@ func _build_platform() -> void:
 	_floor_shape.radius = R_FULL
 
 	# ring definitions: [inner_r, outer_r, seg_count, ring_id]
-	# ring_id 2 = outer (falls first), 1 = mid, 0 = core (never falls)
-	var defs := [[R_MID, R_FULL, 30, 2], [R_CORE, R_MID, 22, 1], [0.0, R_CORE, 14, 0]]
+	# ring_id 2 = outer (falls at 20s), 1 = mid (40s), 0 = core ring (falls
+	# at SUDDEN DEATH — only the r=1.8 pillar disc endures)
+	var defs := [[R_MID, R_FULL, 30, 2], [R_CORE, R_MID, 22, 1], [R_LAST, R_CORE, 12, 0]]
 	for d in defs:
 		var inner: float = d[0]
 		var outer: float = d[1]
@@ -468,19 +479,21 @@ func _build_platform() -> void:
 		$Arena.add_child(root)
 		_ring_roots.append(root)
 		if ring_id == 0:
-			# core: solid disc under the flagstones
+			# the last pillar: a disc that never falls, parented to Arena
+			# (NOT this ring root) so the sudden-death crumble spares it
 			var disc := MeshInstance3D.new()
 			var dm := CylinderMesh.new()
-			dm.top_radius = R_CORE
-			dm.bottom_radius = R_CORE * 0.82
-			dm.height = 1.5
+			dm.top_radius = R_LAST + 0.06
+			dm.bottom_radius = R_LAST * 0.62
+			dm.height = 2.6
 			disc.mesh = dm
 			var dmat := StandardMaterial3D.new()
-			dmat.albedo_color = Color(0.4, 0.38, 0.44)
+			dmat.albedo_color = Color(0.42, 0.4, 0.46)
 			dmat.roughness = 0.95
 			disc.material_override = dmat
-			disc.position.y = -0.76
-			root.add_child(disc)
+			disc.position.y = -1.31
+			$Arena.add_child(disc)
+			_pillar_disc = disc
 		var rm := (inner + outer) / 2.0
 		for i in n:
 			var a := TAU * i / n + (0.11 * ring_id)
@@ -602,6 +615,8 @@ func _start_round() -> void:
 func _build_schedule() -> void:
 	_schedule.clear()
 	_sched_i = 0
+	if _test_mode != "":
+		return   # self-tests drive their own hazards
 	var pend_a := rng.randf_range(0.0, 180.0)
 	_schedule = [
 		{"t": 5.0, "k": "boulder"},
@@ -618,8 +633,9 @@ func _build_schedule() -> void:
 		{"t": 49.0, "k": "pendulum", "a": rng.randf_range(0.0, 180.0), "swings": 4},
 		{"t": 55.0, "k": "boulder"},
 		{"t": 55.8, "k": "boulder"},
+		{"t": 58.0, "k": "shrink_tele", "ring": 0},
 		{"t": 60.0, "k": "sudden"},
-		{"t": 61.0, "k": "pendulum", "a": rng.randf_range(0.0, 180.0), "swings": 6},
+		{"t": 60.05, "k": "shrink", "ring": 0},
 		{"t": 63.0, "k": "boulder"},
 		{"t": 66.5, "k": "boulder"},
 		{"t": 70.0, "k": "boulder"},
@@ -643,7 +659,7 @@ func _process_schedule() -> void:
 			"shrink_tele":
 				_tele_ring = int(ev.ring)
 				_shrink_pending = true
-				_next_radius = R_MID if int(ev.ring) == 2 else R_CORE
+				_next_radius = R_MID if int(ev.ring) == 2 else (R_CORE if int(ev.ring) == 1 else R_LAST)
 				Sfx.play("grudge", -6.0)
 				if not _tally:
 					_flash_sub("THE YARD IS CRUMBLING!", Color(1.0, 0.45, 0.3), 1.8)
@@ -652,7 +668,7 @@ func _process_schedule() -> void:
 			"sudden":
 				_sudden_death_announced = true
 				if not _tally:
-					_flash_banner("SUDDEN DEATH", Color(1.0, 0.35, 0.25), 1.6)
+					_flash_banner("SUDDEN DEATH\nONLY THE PILLAR REMAINS", Color(1.0, 0.35, 0.25), 2.0)
 					Sfx.play("grudge", -2.0)
 
 func _spawn_boulder() -> void:
@@ -670,7 +686,7 @@ func _do_shrink(ring: int) -> void:
 	_tele_ring = -1
 	_shrink_pending = false
 	_shrink_stage = 3 - ring
-	platform_radius = R_MID if ring == 2 else R_CORE
+	platform_radius = R_MID if ring == 2 else (R_CORE if ring == 1 else R_LAST)
 	_floor_shape.radius = platform_radius
 	Sfx.play("crush", -2.0)
 	_shake = maxf(_shake, 0.5)
@@ -782,9 +798,13 @@ func _tick_round(delta: float) -> void:
 	for i in players.size():
 		if players[i].alive:
 			pawns[i].tick_effects(delta)
-			_drive_pawn(i, delta)
+			if _test_mode == "":
+				_drive_pawn(i, delta)
 		elif ghosts.has(i):
 			_drive_ghost(i, delta)
+
+	if _test_mode != "":
+		_tick_test(delta)
 
 	if phase != Phase.ROUND:
 		return  # a death mid-loop flipped us into WILL
@@ -907,7 +927,7 @@ func _tick_gusts(delta: float) -> void:
 		g.traveled += step.length()
 		var node: Node3D = g.node
 		node.global_position = g.pos
-		var fade := 1.0 - g.traveled / GUST_RANGE
+		var fade: float = 1.0 - float(g.traveled) / GUST_RANGE
 		for c in node.get_children():
 			if c is MeshInstance3D:
 				var m: StandardMaterial3D = c.material_override
@@ -933,8 +953,44 @@ func _tick_wisps(delta: float) -> void:
 			if k < pawns.size() and pawns[k].curse_kind == "haunted":
 				pawns[k].clear_curse()
 
+# ================================================================ self-tests
+func _tick_test(_delta: float) -> void:
+	_delta_cache = _delta
+	match _test_mode:
+		"squish":
+			# a stationary pawn 0 must be flattened by a boulder aimed down
+			# its row — proves the squish path end to end
+			if not _test_fired and round_elapsed >= 1.0:
+				_test_fired = true
+				var b := LWBoulder.new()
+				spawn_root.add_child(b)
+				b.setup(0.0, pawns[0].global_position.z, self)
+				boulders.append(b)
+				print("WILLTEST squish: boulder launched at pawn0 z=%.2f" % pawns[0].global_position.z)
+			if _test_fired and boulders.size() > 0 and int(round_elapsed * 2.0) != int((round_elapsed - _delta_cache) * 2.0):
+				var rp: Vector3 = boulders[0].rock_pos()
+				print("WILLTEST trace rock=(%.2f,%.2f,%.2f) state=%d pawn=(%.2f,%.2f,%.2f) grounded=%s" % [
+					rp.x, rp.y, rp.z, boulders[0].state,
+					pawns[0].global_position.x, pawns[0].global_position.y, pawns[0].global_position.z,
+					str(pawns[0].is_grounded())])
+			if round_elapsed > 12.0:
+				print("WILLTEST squish RESULT: FAIL (pawn survived)")
+				get_tree().quit(1)
+
+func _test_note_death(cause: String) -> void:
+	if _test_mode == "squish":
+		if cause == "squish":
+			print("WILLTEST squish RESULT: PASS (t=%.2f)" % round_elapsed)
+			get_tree().quit(0)
+		else:
+			print("WILLTEST squish RESULT: FAIL (died of %s)" % cause)
+			get_tree().quit(1)
+
 # ================================================================ death
 func _on_pawn_died(index: int, cause: String) -> void:
+	if _test_mode != "":
+		_test_note_death(cause)
+		return
 	if phase == Phase.MATCH_END or phase == Phase.ROUND_END:
 		return
 	players[index].alive = false
@@ -1384,7 +1440,7 @@ func _end_round() -> void:
 			players[finishing[pos]].total += pts[pos]
 	var winner: int = finishing[0] if finishing.size() > 0 else 0
 
-	var champ_name := players[winner].name
+	var champ_name: String = players[winner].name
 	var champ_color: Color = players[winner].color
 	if survivors.is_empty():
 		champ_name = "NOBODY"

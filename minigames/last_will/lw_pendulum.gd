@@ -177,7 +177,7 @@ func _check_hits(half_idx: int) -> void:
 	if float(info.y) > HIT_Y:
 		return
 	for pawn in owner_game.living_pawns():
-		var memo_key := pawn.index
+		var memo_key: int = pawn.index
 		if _hit_memo.get(memo_key, -1) == half_idx:
 			continue
 		var p := Vector2(pawn.global_position.x, pawn.global_position.z)

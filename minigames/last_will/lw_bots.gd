@@ -57,9 +57,9 @@ func decide_living(p: int, g, pawn: LWPawn, delta: float) -> Dictionary:
 			move += lane_perp * signf(perp_d if absf(perp_d) > 0.05 else 1.0) * 1.4
 			danger = true
 			continue
-		var rp := b.rock_pos()
+		var rp: Vector3 = b.rock_pos()
 		var to_me := here - Vector2(rp.x, rp.z)
-		var closing := to_me.dot(b.dir)   # >0 means the rock is behind, rolling at us
+		var closing: float = to_me.dot(b.dir)   # >0 means the rock is behind, rolling at us
 		var dist := to_me.length()
 		if closing > -0.5 and dist < 4.6:
 			danger = true
@@ -114,12 +114,17 @@ func decide_living(p: int, g, pawn: LWPawn, delta: float) -> Dictionary:
 			move += (tp - here)
 		else:
 			move += (approach - here).limit_length(1.0)
-		if best_d < LWPawn.SHOVE_RANGE + 0.05 and pawn.curse_kind != "butterfingers":
-			var kill_bonus := 0.0
-			if tp.length() > g.platform_radius - 1.6:
-				kill_bonus += 0.3
-			if rng.randf() < aggr[p] * 0.14 + kill_bonus:
-				press_a = true
+	# shove opportunism runs even while fleeing — on the last pillar there
+	# is no "safe", only whoever swings first
+	if target != null and best_d < LWPawn.SHOVE_RANGE + 0.05 and pawn.curse_kind != "butterfingers":
+		var tp2 := Vector2(target.global_position.x, target.global_position.z)
+		var kill_bonus := 0.0
+		if tp2.length() > g.platform_radius - 1.6:
+			kill_bonus += 0.3
+		if g.platform_radius < 2.5:
+			kill_bonus += 0.4   # pillar brawl: swing constantly
+		if rng.randf() < aggr[p] * 0.14 + kill_bonus:
+			press_a = true
 
 	# -- 5) seeded wander so mirror bots diverge
 	wander_a[p] += rng.randf_range(-0.8, 0.8) * delta
@@ -131,7 +136,7 @@ func decide_living(p: int, g, pawn: LWPawn, delta: float) -> Dictionary:
 
 ## Ghost brain: {aim: Vector2, fire: bool}
 func decide_ghost(p: int, g, ghost: LWGhostSeat, delta: float) -> Dictionary:
-	var leader := g.round_leader_alive()
+	var leader: int = g.round_leader_alive()
 	if leader < 0:
 		return {"aim": ghost.aim_dir, "fire": false}
 	var pawn = g.pawn_of(leader)
