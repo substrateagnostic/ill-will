@@ -47,6 +47,25 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
   - Cache: you were right — Max plans get the 1h TTL; a 48-min
     self-tick keeps my cache warm and drives the overnight loop.
 
+- **🕯️ THE SÉANCE IS MERGED (the Theater's first social deduction,
+  research pitch #1 — and it is gorgeous).** Four
+  sitters share one planchette to spell a word only the Executor knows;
+  one of them was paid 2 grudge to kill the sitting without getting
+  caught. Eyes-closed casting, rhythm-chant focus meter (tealights snuff
+  as it dies), anonymous B-surges, stick+A portrait vote, public unmask
+  every time. Balance verified across 8 bot seeds: 4 fail / 4 success
+  WITH the saboteur, 4/4 clean success when the saboteur bot plays
+  honest — the paid hand IS the difference. Caught = one kill_event for
+  NEMESIS (cause "seance"). Worth your playtest eyes: is the chant-tap
+  load right with a real pad in hand? Shots:
+  `docs/verify/shots/seance_*.png`; evidence:
+  `docs/verify/seance-VERIFY.md`. Live in the selector under
+  "· at the theater ·" alongside THE UNDERSTUDY (also merged — the
+  eyes-down casting and NAME THE PRETENDER vote both passed review;
+  its distributed scoring provably resolves 1-1-1-1 deadlocks).
+  Sample clue from the Séance board: "Five letters. The estate's most
+  permanent guest room." The Executor, at the verdict: "The word, for
+  the record, was GRAVE."
 - **⚙️ SETTINGS V2 SHIPPED (menus first-class, per your call).** ESC now
   opens a tabbed overlay anywhere: SEATS / CONTROLS / AUDIO / VIDEO /
   ACCESS. CONTROLS = full key remapping per device (WASD half, arrows
