@@ -51,6 +51,7 @@ var _ot_pulse := 0.0
 var _score_t := 0.0
 
 var _currency: Array = []
+var _kill_events: Array = []   # {killer:int, victim:int, cause:String} per contract
 var _results := {}
 var _begun := false
 var _reported := false
@@ -404,6 +405,9 @@ func _do_ram(attacker: int, victim: int, impact: Vector2, n: Vector2) -> void:
 	ma.ram_spinouts += 1
 	_currency.append({"type": "royalty", "player": attacker, "amount": 1,
 		"reason": "rammed %s and stole their turf" % mv.pname})
+	# structured kill attribution (module contract): the ram spins the victim out
+	# (SPINOUT_TIME loss of control) — a down at the exact royalty-crediting path.
+	_kill_events.append({"killer": attacker, "victim": victim, "cause": "mowed"})
 	# juice (banner/particles/tween/node-creation) is deferred so it lands in
 	# idle time, keeping the physics step itself cheap (perf: <12ms/frame).
 	call_deferred("_ram_juice", ma.pname, mv.pname, ma.pcolor, impact)
@@ -474,6 +478,7 @@ func _end_round() -> void:
 			mowers[p].best_stripe, mowers[p].ram_spinouts])
 	print("MOWER_PERF grid_path: paint_worst=%.3fms commit_worst=%.3fms (the batched texture path) | sim_step worst=%.2fms over12=%d | full_frame worst=%.2fms over12=%d of %d frames | total_rams=%d" % [
 		_paint_worst_ms, _commit_worst_ms, _worst_step_ms, _over12, _worst_frame_ms, _frames_over_12, _frame_count, _ram_count])
+	print("KILL_EVENTS n=", _kill_events.size(), " ", JSON.stringify(_kill_events))
 	_build_results()
 	# celebrate the winner
 	var winner: int = _results.placements[0]
@@ -525,6 +530,7 @@ func _build_results() -> void:
 		"currency_events": _currency.duplicate(),
 		"highlights": highlights.slice(0, 3),
 		"monuments": monuments,
+		"kill_events": _kill_events.duplicate(),
 	}
 	_log("results " + JSON.stringify(_results))
 

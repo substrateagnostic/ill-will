@@ -79,6 +79,7 @@ var catches := {}
 var deaths := {}
 var _points := {}
 var _currency: Array = []
+var _kill_events: Array = []   # {killer:int, victim:int, cause:String} per contract
 var _respawn_queue: Array = []
 var _oldest_kill_age := 0.0
 var _oldest_kill_txt := ""
@@ -558,6 +559,9 @@ func _do_kill(pw: OrbPawn, bb: OrbBall) -> void:
 	var victim := pw.index
 	var killer := bb.owner_idx
 	var ball_age := bb.age(now)
+	# structured kill attribution (module contract): killer = last thrower
+	# (-1 = environment/never-thrown ball; == victim = self-orbit), victim = pawn.
+	_kill_events.append({"killer": killer, "victim": victim, "cause": "orbit_hit"})
 	deaths[victim] += 1
 	_currency.append({"type": "grudge", "player": victim, "amount": 1, "reason": "orbital dodgeball to the face"})
 	if pw.held != null:
@@ -715,9 +719,11 @@ func _end_match() -> void:
 		"currency_events": _currency.duplicate(),
 		"highlights": highlights.slice(0, 3),
 		"monuments": monuments,
+		"kill_events": _kill_events.duplicate(),
 	}
 	report_finished(results)
 	print("ORBITAL_RESULTS ", JSON.stringify(results))
+	print("KILL_EVENTS n=", _kill_events.size(), " ", JSON.stringify(_kill_events))
 	var verdict := "PASS" if (not _age_fail and _max_flight_age < MAX_FLIGHT_AGE_ASSERT) else "FAIL"
 	print("ORBITAL_SIM throws=%d hops=%d kills=%s catches=%s deaths=%s" % [_throws, _hops, str(kills), str(catches), str(deaths)])
 	print("ORBITAL_ASSERT max_flight_age=%.1fs (<%.0fs): %s" % [_max_flight_age, MAX_FLIGHT_AGE_ASSERT, verdict])
