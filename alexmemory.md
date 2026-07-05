@@ -6,6 +6,20 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🕯️ THE SÉANCE IS BUILT (game #11 — the Theater's first social
+  deduction, your bluff-&-sabotage pick, research pitch #1).** Four
+  sitters share one planchette to spell a word only the Executor knows;
+  one of them was paid 2 grudge to kill the sitting without getting
+  caught. Eyes-closed casting, rhythm-chant focus meter (tealights snuff
+  as it dies), anonymous B-surges, stick+A portrait vote, public unmask
+  every time. Balance verified across 8 bot seeds: 4 fail / 4 success
+  WITH the saboteur, 4/4 clean success when the saboteur bot plays
+  honest — the paid hand IS the difference. Caught = one kill_event for
+  NEMESIS (cause "seance"). Worth your playtest eyes: is the chant-tap
+  load right with a real pad in hand? Shots:
+  `docs/verify/shots/seance_*.png`; evidence:
+  `docs/verify/seance-VERIFY.md`. Awaiting director merge + Theater
+  wiring into MODULES.
 - **⚙️ SETTINGS V2 SHIPPED (menus first-class, per your call).** ESC now
   opens a tabbed overlay anywhere: SEATS / CONTROLS / AUDIO / VIDEO /
   ACCESS. CONTROLS = full key remapping per device (WASD half, arrows
