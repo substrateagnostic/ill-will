@@ -49,84 +49,36 @@ func can_bomb() -> bool:
 func drop() -> void:
 	bomb_cd = BOMB_CD
 
+const SEAGULL_GLB := "res://assets/models/meshy/seagull.glb"
+const SEAGULL_HEIGHT := 0.58
+const SEAGULL_YAW := -90.0      # rotate so the beak points -Z (the flight-forward axis)
+
 func _build() -> void:
-	var white := StandardMaterial3D.new()
-	white.albedo_color = Color(0.97, 0.97, 0.95)
-	white.roughness = 0.8
+	# Custom Meshy seagull (standing, wings folded, white body / grey wings /
+	# orange beak+legs) replacing the primitive bird. The model is static, so the
+	# wing-flap code drives two harmless empty pivots; identity survives death via
+	# an added player-color collar ring. Beak faces -Z so the flight-orientation
+	# math (rotation.y = atan2(-v.x,-v.y)) still points the bird where it flies.
+	var gull := MeshyProp.instance(SEAGULL_GLB, SEAGULL_HEIGHT, SEAGULL_YAW)
+	gull.name = "GullModel"
+	add_child(gull)
+	# player-color collar ring (identity read)
 	var tint := StandardMaterial3D.new()
 	tint.albedo_color = pcolor
 	tint.emission_enabled = true
 	tint.emission = pcolor * 0.6
-	var orange := StandardMaterial3D.new()
-	orange.albedo_color = Color(0.95, 0.55, 0.1)
-	# body (capsule laid along -Z = forward)
-	var body := MeshInstance3D.new()
-	var bm := CapsuleMesh.new()
-	bm.radius = 0.18
-	bm.height = 0.75
-	body.mesh = bm
-	body.rotation.x = PI / 2.0
-	body.material_override = white
-	add_child(body)
-	# head
-	var head := MeshInstance3D.new()
-	var hm := SphereMesh.new()
-	hm.radius = 0.14
-	hm.height = 0.28
-	head.mesh = hm
-	head.position = Vector3(0.0, 0.14, -0.36)
-	head.material_override = white
-	add_child(head)
-	# beak
-	var beak := MeshInstance3D.new()
-	var km := CylinderMesh.new()
-	km.top_radius = 0.0
-	km.bottom_radius = 0.05
-	km.height = 0.2
-	beak.mesh = km
-	beak.position = Vector3(0.0, 0.13, -0.52)
-	beak.rotation.x = -PI / 2.0
-	beak.material_override = orange
-	add_child(beak)
-	# neck ring in player color
-	var ring := MeshInstance3D.new()
+	var collar := MeshInstance3D.new()
 	var rm := TorusMesh.new()
-	rm.inner_radius = 0.13
-	rm.outer_radius = 0.20
-	ring.mesh = rm
-	ring.position = Vector3(0.0, 0.09, -0.26)
-	ring.rotation.x = PI / 2.0
-	ring.material_override = tint
-	add_child(ring)
-	# tail
-	var tail := MeshInstance3D.new()
-	var tm := BoxMesh.new()
-	tm.size = Vector3(0.16, 0.03, 0.22)
-	tail.mesh = tm
-	tail.position = Vector3(0.0, 0.03, 0.42)
-	tail.material_override = white
-	add_child(tail)
-	# wings (pivot at shoulder so they flap)
-	_wing_l = _wing(white, tint, -1.0)
-	_wing_r = _wing(white, tint, 1.0)
+	rm.inner_radius = 0.10
+	rm.outer_radius = 0.17
+	collar.mesh = rm
+	collar.position = Vector3(0.0, 0.36, 0.0)
+	collar.rotation.x = PI / 2.0
+	collar.material_override = tint
+	add_child(collar)
+	# empty wing pivots: the static model has no separate wings, but tick() still
+	# rotates these each frame — harmless, keeps the flap code untouched.
+	_wing_l = Node3D.new()
+	_wing_r = Node3D.new()
 	add_child(_wing_l)
 	add_child(_wing_r)
-
-func _wing(white: StandardMaterial3D, tint: StandardMaterial3D, side: float) -> Node3D:
-	var pivot := Node3D.new()
-	pivot.position = Vector3(0.14 * side, 0.06, 0.0)
-	var wing := MeshInstance3D.new()
-	var wm := BoxMesh.new()
-	wm.size = Vector3(0.75, 0.03, 0.3)
-	wing.mesh = wm
-	wing.position.x = 0.38 * side
-	wing.material_override = white
-	pivot.add_child(wing)
-	var tip := MeshInstance3D.new()
-	var tm2 := BoxMesh.new()
-	tm2.size = Vector3(0.16, 0.032, 0.3)
-	tip.mesh = tm2
-	tip.position.x = 0.83 * side
-	tip.material_override = tint
-	pivot.add_child(tip)
-	return pivot
