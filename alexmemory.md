@@ -6,11 +6,15 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
-- **AGREED DIRECTION (2026-07-05): the Estate becomes the MAIN MENU**, with
-  a minigame selector for direct/practice play. Research agent is gathering
-  2026 best practices (hub-as-menu patterns, player-join flows, minigame
-  selectors, the settings checklist, future online-lobby norms); design doc
-  comes to you after your ten-game night. Menus stay as-is until then.
+- **Menu research is IN** (`docs/design/04-menu-ux-research-digest.md`).
+  Headlines: diegetic entry points + flat ESC panels for depth (no shipped
+  hub game makes settings diegetic); DRG's walk-OR-hotkey dual pattern;
+  UFO 50's one-screen grid + How-to-Play card is the selector gold
+  standard; press-A-to-join Ready Room seats with HUMAN/BOT/EMPTY
+  tri-state; and one CRITICAL accessibility note — our player identity is
+  pure color, so we need never-color-alone icons across all HUDs. Full
+  design doc for estate-as-main-menu comes to you WITH your playtest notes
+  folded in.
 - **🏆 THE ROSTER IS COMPLETE: TEN GAMES.** Last Will just merged — the
   will-drafting freeze is the best screen in the anthology ("THE LAST WILL
   OF GOLD / six seconds of posthumous power / now... curse whom?" with a
