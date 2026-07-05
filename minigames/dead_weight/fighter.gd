@@ -28,6 +28,7 @@ var last_attacker := {}        # {type, index, name, color, time}
 var move_input := Vector2.ZERO
 var want_shove := false
 var want_hop := false
+var aim_face := Vector3.ZERO   # KBM cursor dir; ZERO => use walk-facing (bots/non-KBM)
 
 var _stun := 0.0
 var _shove_cd := 0.0
@@ -213,6 +214,13 @@ func _do_shove() -> void:
 	if _shove_cd > 0.0 or owner_game == null:
 		return
 	_shove_cd = SHOVE_CD
+	# KBM humans shove toward the cursor: point _face at the aim (so the cone AND
+	# the body face it) for this shove. Bots / non-KBM leave aim_face ZERO and
+	# keep their walk-derived _face exactly as before.
+	if aim_face != Vector3.ZERO:
+		_face = aim_face.normalized()
+		if model_pivot:
+			model_pivot.rotation.y = atan2(_face.x, _face.z)
 	Sfx.play("bumper", -4.0)
 	_cur_anim = "Interact"
 	if anim and anim.has_animation("Interact"):

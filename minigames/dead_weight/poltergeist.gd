@@ -19,6 +19,7 @@ var owner_game: Node = null
 var move_input := Vector2.ZERO
 var want_possess := false      # A held
 var want_release := false      # B pressed
+var aim_drive := Vector3.ZERO  # KBM cursor dir; while possessing, flings the prop toward it
 
 var possessing: DWProp = null
 var hover_target: DWProp = null
@@ -131,7 +132,13 @@ func _drive_possession(delta: float) -> void:
 		# the prop fell into the void; let go
 		release()
 		return
+	# Throw the furniture AT the mouse: a KBM human drives the possessed prop
+	# toward the cursor. Free-flying (unpossessed) hunting stays WASD; only the
+	# fling -- the dead player's whole action -- follows the aim. Bots / non-KBM
+	# leave aim_drive ZERO and steer with move_input exactly as before.
 	var dir := Vector3(move_input.x, 0.0, move_input.y)
+	if aim_drive != Vector3.ZERO:
+		dir = aim_drive
 	possessing.apply_drive(dir)
 	# the wisp rides the prop
 	global_position = global_position.lerp(possessing.global_position + Vector3(0, 0.4, 0), 1.0 - exp(-12.0 * delta))

@@ -51,6 +51,10 @@ var _decider := "none"                # what ended the round (balance metric)
 # modes
 var _started := false
 var _all_bots := false
+var _aim_probe_on := false
+var _aim_probe_deg := 0.0
+var _probe_shove := false        # false => poltergeist fling probe, true => living shove
+var _dw_probe_manual := false    # skip driving p0 (fling probe steers it directly)
 var _balance_rounds := 0
 var _balance_tally := {"living": 0, "ghost": 0, "void": 0}
 var _dbg := {"possess": 0, "ghost_hits": 0, "round_len": 0.0}
@@ -186,6 +190,17 @@ func _parse_args() -> void:
 			_all_bots = true
 		elif arg.begins_with("--dwrounds="):
 			rounds_total = clampi(int(arg.trim_prefix("--dwrounds=")), 1, 9)
+		elif arg.begins_with("--aimprobe="):
+			_aim_probe_on = true
+			_probe_shove = false
+			_aim_probe_deg = float(arg.trim_prefix("--aimprobe="))
+		elif arg.begins_with("--aimshove="):
+			_aim_probe_on = true
+			_probe_shove = true
+			_aim_probe_deg = float(arg.trim_prefix("--aimshove="))
+	if _aim_probe_on:
+		_dw_probe_manual = not _probe_shove
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
 
 func _seed_from_args() -> int:
 	for arg in OS.get_cmdline_user_args():
@@ -204,8 +219,15 @@ func _default_config() -> Dictionary:
 			dwghosts = int(arg.trim_prefix("--dwghosts="))
 	if _balance_rounds > 0:
 		count = 3
+	if _aim_probe_on:
+		count = 2   # p0 = KBM human, p1 = inert stand-in (victim / bystander)
 	var roster: Array = []
 	PlayerInput.auto_assign(count)
+	if _aim_probe_on:
+		PlayerInput.assign(0, -4)
+		PlayerInput.assign(1, -99)
+		var av := deg_to_rad(_aim_probe_deg)
+		PlayerInput.set_debug_aim(0, Vector3(sin(av), 0.0, cos(av)))
 	for i in count:
 		roster.append({
 			"index": i,
@@ -213,7 +235,7 @@ func _default_config() -> Dictionary:
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": "",
 			"device": PlayerInput.device_of(i),
-			"bot": PlayerInput.standalone_bot_default(i),
+			"bot": false if _aim_probe_on else PlayerInput.standalone_bot_default(i),
 		})
 	# roles: default all living; balance = last player is a permanent ghost;
 	# --dwghosts=N starts the last N players as ghosts.
@@ -224,6 +246,8 @@ func _default_config() -> Dictionary:
 	for i in range(count - dwghosts, count):
 		if i >= 0:
 			roles[i] = "ghost"
+	if _aim_probe_on and not _probe_shove:
+		roles[0] = "ghost"   # p0 rises as a poltergeist to fling furniture
 	return {"roster": roster, "rounds": rounds_total, "rng_seed": _seed_from_args(),
 		"practice": false, "roles": roles}
 
@@ -283,6 +307,8 @@ func _begin(config: Dictionary) -> void:
 	hint_label.text = "A = SHOVE   B = HOP   ·   THE DEAD POSSESS THE FURNITURE"
 	round_index = 0
 	_start_round()
+	if _aim_probe_on:
+		_run_dw_probe()
 
 func _layout_spawns(count: int) -> void:
 	_spawns.clear()
@@ -619,6 +645,8 @@ func _physics_process(delta: float) -> void:
 	_update_timer_label()
 
 	for i in players.size():
+		if _dw_probe_manual and i == 0:
+			continue   # the fling probe steers p0's ghost directly
 		if _ghosts.has(i):
 			_drive_ghost(i)
 		elif _fighters[i] != null and _fighters[i].alive:
@@ -636,6 +664,7 @@ func _drive_fighter(i: int) -> void:
 		_bot_living(f)
 	else:
 		f.move_input = PlayerInput.get_move(i)
+		f.aim_face = PlayerInput.get_aim_dir(i, f.global_position, cam)   # ZERO for non-KBM
 		if PlayerInput.just_pressed(i, "a"):
 			f.want_shove = true
 		if PlayerInput.just_pressed(i, "b"):
@@ -647,6 +676,12 @@ func _drive_ghost(i: int) -> void:
 		_bot_ghost(g)
 	else:
 		g.move_input = PlayerInput.get_move(i)
+		# while possessing, fling the prop toward the cursor (anchor on the prop);
+		# free-flying stays WASD. ZERO for non-KBM => unchanged move_input drive.
+		if g.possessing != null:
+			g.aim_drive = PlayerInput.get_aim_dir(i, g.possessing.global_position, cam)
+		else:
+			g.aim_drive = Vector3.ZERO
 		g.want_possess = PlayerInput.is_down(i, "a")
 		g.want_release = PlayerInput.just_pressed(i, "b")
 
@@ -908,6 +943,117 @@ func _spawn_confetti(pos: Vector3, color: Color) -> void:
 		p.material_override = mat
 		p.emitting = true
 		get_tree().create_timer(2.0).timeout.connect(p.queue_free)
+
+# ---------------------------------------------------------------- mouse-aim probe
+# --aimprobe=<deg>: poltergeist flings a possessed crate toward the cursor.
+# --aimshove=<deg>: a living fighter's shove cone points at the cursor.
+# Each writes two shots to verify_out/ proving the action follows the CYAN aim
+# ray, not the WHITE baseline (WASD-drive dir / walk-facing).
+func _run_dw_probe() -> void:
+	while phase != Phase.ROUND:
+		await get_tree().physics_frame
+	if _probe_shove:
+		await _dw_probe_shove()
+	else:
+		await _dw_probe_fling()
+	await get_tree().create_timer(0.2).timeout
+	print("DW_AIMPROBE_DONE")
+	get_tree().quit()
+
+
+func _dw_probe_fling() -> void:
+	var g: DWGhost = _ghosts[0]
+	var prop: DWProp = _props[2]   # a lamp: light enough to hurl fast and read as thrown
+	var aim_yaw := deg_to_rad(_aim_probe_deg)
+	var wasd_dir := Vector3(1, 0, 0)                    # baseline: "WASD" drives it +X
+	prop.global_position = Vector3(0, prop.rest_height() + 0.1, 0)
+	prop.linear_velocity = Vector3.ZERO
+	prop.angular_velocity = Vector3.ZERO
+	g.global_position = Vector3(0, DWGhost.HOVER_Y, 0)
+	g._begin_possession(prop)
+	g.aim_drive = Vector3.ZERO
+	g.move_input = Vector2(wasd_dir.x, wasd_dir.z)
+	_dw_probe_arrow(Vector3.ZERO, atan2(wasd_dir.x, wasd_dir.z), Color(1, 1, 1), 3.0)     # WASD (white)
+	_dw_probe_arrow(Vector3.ZERO, aim_yaw, Color(0.2, 0.95, 1.0), 3.0)                    # cursor (cyan)
+	await get_tree().create_timer(0.45).timeout
+	await _dw_grab("fling_facing")
+	print("DW_AIMPROBE fling baseline prop_vel=%s (WASD +X)" % str(prop.linear_velocity))
+	prop.global_position = Vector3(0, prop.rest_height() + 0.1, 0)
+	prop.linear_velocity = Vector3.ZERO
+	g.global_position = Vector3(0, DWGhost.HOVER_Y, 0)
+	g.move_input = Vector2.ZERO
+	g.aim_drive = Vector3(sin(aim_yaw), 0.0, cos(aim_yaw))
+	await get_tree().create_timer(0.85).timeout
+	await _dw_grab("fling_acting")
+	var vdir := rad_to_deg(atan2(prop.linear_velocity.x, prop.linear_velocity.z))
+	print("DW_AIMPROBE fling prop_vel=%s dir=%.0fdeg aim=%.0fdeg matches=%s" % [
+		str(prop.linear_velocity), vdir, _aim_probe_deg, str(absf(vdir - _aim_probe_deg) < 25.0)])
+
+
+func _dw_probe_shove() -> void:
+	var f: DWFighter = _fighters[0]
+	var victim: DWFighter = _fighters[1]
+	var aim_yaw := deg_to_rad(_aim_probe_deg)
+	var face_yaw := aim_yaw + PI * 0.5
+	var aim_dir := Vector3(sin(aim_yaw), 0.0, cos(aim_yaw))
+	f.global_position = Vector3(0, 0.1, 0)
+	f.linear_velocity = Vector3.ZERO
+	f._face = Vector3(sin(face_yaw), 0.0, cos(face_yaw))
+	if f.model_pivot:
+		f.model_pivot.rotation.y = face_yaw
+	victim.global_position = Vector3(0, 0.1, 0) + aim_dir * (DWFighter.SHOVE_RANGE - 0.4)
+	victim.linear_velocity = Vector3.ZERO
+	_dw_probe_arrow(Vector3.ZERO, face_yaw, Color(1, 1, 1), 3.0)                          # facing (white)
+	_dw_probe_arrow(Vector3.ZERO, aim_yaw, Color(0.2, 0.95, 1.0), 3.0)                    # cursor (cyan)
+	await get_tree().create_timer(0.5).timeout
+	await _dw_grab("shove_facing")
+	var v_before := victim.global_position
+	print("DW_AIMSHOVE face=%.0fdeg aim=%.0fdeg victim_before=(%.2f,%.2f)" % [
+		rad_to_deg(face_yaw), _aim_probe_deg, v_before.x, v_before.z])
+	f.want_shove = true
+	await get_tree().create_timer(0.25).timeout
+	await _dw_grab("shove_acting")
+	var knocked := victim.global_position - v_before
+	var kdir := rad_to_deg(atan2(knocked.x, knocked.z))
+	print("DW_AIMSHOVE victim moved %.2fm dir=%.0fdeg aim=%.0fdeg matches=%s" % [
+		knocked.length(), kdir, _aim_probe_deg,
+		str(knocked.length() > 0.2 and absf(kdir - _aim_probe_deg) < 35.0)])
+
+
+func _dw_probe_arrow(origin: Vector3, yaw_a: float, col: Color, length: float) -> void:
+	var dir := Vector3(sin(yaw_a), 0.0, cos(yaw_a))
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = col
+	mat.emission_enabled = true
+	mat.emission = col
+	mat.emission_energy_multiplier = 1.8
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.16, 0.16, length)
+	mi.mesh = bm
+	mi.material_override = mat
+	mi.position = origin + dir * (length * 0.5) + Vector3(0, 0.9, 0)
+	mi.rotation.y = yaw_a
+	add_child(mi)
+	var tip := MeshInstance3D.new()
+	var tm := BoxMesh.new()
+	tm.size = Vector3(0.42, 0.42, 0.42)
+	tip.mesh = tm
+	tip.material_override = mat
+	tip.position = origin + dir * length + Vector3(0, 0.9, 0)
+	add_child(tip)
+
+
+func _dw_grab(tag: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		print("DW_AIMPROBE_SKIP_HEADLESS ", tag)
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := "res://verify_out/dead_weight_aim_%s.png" % tag
+	img.save_png(path)
+	print("DW_AIMPROBE_CAP ", path)
+
 
 # ---------------------------------------------------------------- verify hooks
 func get_phase_name() -> String:
