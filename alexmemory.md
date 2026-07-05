@@ -6,6 +6,15 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **HANDOFF NOTE (context compaction imminent)**: the director instance
+  that built this run is at the edge of its window. Everything needed to
+  continue is in project memory + this file. In flight: Par v3 agent
+  (traps/courses/gauntlet/chaos/gutters) and Cosmetics agent (Meshy hats
+  + wardrobe) — the next instance reviews their screenshots and merges
+  exactly as before. If anything seems forgotten after compaction, point
+  the new instance at `alexmemory.md` + the project memory + this line:
+  *the review culture is the soul; the estate is the thesis.*
+
 - **🏰 THE ESTATE IS NOW THE MAIN MENU (relaunch again!).** Boot lands on
   the grounds under a "THE UN-PARTY" title card: seat cards (HUMAN/BOT +
   device, persisted), night length, START THE NIGHT, and a MINIGAMES(10)
