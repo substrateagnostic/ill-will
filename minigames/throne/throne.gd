@@ -39,13 +39,13 @@ const CRISIS_TIME := 30.0          # last 30s: throne scores double
 const CRISIS_RATE := 2.0
 const NORMAL_RATE := 1.0
 
-const SEAT_RADIUS := 1.45          # touch this close to the seat to claim it
+const SEAT_RADIUS := 1.7           # touch this close to the seat to claim it
 const CEREMONY := 0.4              # coronation delay before the reign is live
 const RE_SIT_CD := 2.0
 
 const GRIP_MAX := 3
 const GRIP_REGEN := 8.0            # +1 grip every 8s while seated
-const LAUNCH_FORCE := 13.0
+const LAUNCH_FORCE := 17.0
 
 const DECREE_CD_BASE := 1.8
 const DECREE_FATIGUE := 0.2        # each decree while seated is 0.2s slower
@@ -137,6 +137,12 @@ func _parse_args() -> void:
 		if arg == "--thronebots":
 			_all_bots = true
 		elif arg == "--thronebalance":
+			# official fairness probe: real gameplay (FX + slow-mo ON) at
+			# time_scale 1, print per-player throne-time shares, then quit
+			_balance = true
+			_all_bots = true
+		elif arg == "--thronebalancefast":
+			# reproducible no-FX variant for quick iteration (no slow-mo beats)
 			_balance = true
 			_all_bots = true
 			_fx = false
@@ -526,8 +532,8 @@ func _dethrone(slayer: int, dir: Vector3) -> void:
 		Sfx.play("splat")
 		Sfx.play("death", -3.0)
 		_flash_banner("%s DETHRONES %s" % [players[slayer].name, players[fallen].name], players[slayer].color, 1.8)
-		_shake = maxf(_shake, 0.7)
-		_time_hit(0.25, 0.5)     # slow-mo beat as the crown tumbles down the steps
+		_shake = maxf(_shake, 0.95)
+		_time_hit(0.2, 0.6)      # slow-mo beat as the crown tumbles down the steps
 	print("THRONE_DETHRONE t=%.1f %s dethroned %s (reign %.1fs)" % [game_time, players[slayer].name, players[fallen].name, reign_len])
 	_rebuild_scoreboard()
 
@@ -696,6 +702,7 @@ func _attach_crown(r: Royal) -> void:
 		c.queue_free()
 	var crown := _make_crown_mesh()
 	crown.name = "Crown"
+	crown.scale = Vector3(1.35, 1.35, 1.35)
 	r.crown_anchor.add_child(crown)
 
 func _detach_crown_to_physics(r: Royal, dir: Vector3) -> void:
@@ -723,10 +730,12 @@ func _detach_crown_to_physics(r: Royal, dir: Vector3) -> void:
 	sph.radius = 0.2
 	cs.shape = sph
 	body.add_child(cs)
-	body.add_child(_make_crown_mesh())
+	var cm := _make_crown_mesh()
+	cm.scale = Vector3(1.4, 1.4, 1.4)
+	body.add_child(cm)
 	var d := dir.normalized() if dir.length() > 0.05 else Vector3(0, 0, 1)
-	body.apply_central_impulse(d * 3.2 + Vector3.UP * 3.0)
-	body.apply_torque_impulse(Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)) * 0.6)
+	body.apply_central_impulse(d * 4.6 + Vector3.UP * 5.2)
+	body.apply_torque_impulse(Vector3(rng.randf_range(-1, 1), rng.randf_range(-1, 1), rng.randf_range(-1, 1)) * 0.9)
 	get_tree().create_timer(4.5).timeout.connect(func():
 		if is_instance_valid(body):
 			body.queue_free())
@@ -787,9 +796,9 @@ func _build_stage() -> void:
 	env.fog_sky_affect = 0.0
 	we.environment = env
 
-	cam.global_position = Vector3(0, 11.6, 12.4)
-	cam.look_at(Vector3(0, 1.0, -0.3), Vector3.UP)
-	cam.fov = 50.0
+	cam.global_position = Vector3(0, 10.6, 11.3)
+	cam.look_at(Vector3(0, 1.15, -0.35), Vector3.UP)
+	cam.fov = 49.0
 
 	var sun := DirectionalLight3D.new()
 	sun.name = "Sun"
@@ -1062,7 +1071,7 @@ func _update_throne_hud() -> void:
 		throne_hud.visible = false
 		return
 	var r: Royal = _royals[king]
-	var head := r.global_position + Vector3(0, 2.15, 0)
+	var head := r.global_position + Vector3(0, 2.55, 0)
 	if not cam.is_position_behind(head):
 		var sp := cam.unproject_position(head)
 		throne_hud.position = sp - Vector2(throne_hud.size.x * 0.5, 0)

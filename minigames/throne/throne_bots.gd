@@ -60,11 +60,30 @@ func decide(p: int, g, delta: float) -> Dictionary:
 			# just got launched: circle back toward the dais, ready to re-enter
 			out["move"] = _approach_seat(my_pos, seat, p, g, delta, 0.6)
 			return out
-		var to_seat := seat - my_pos
-		out["move"] = to_seat.normalized() if to_seat.length() > 0.15 else Vector2.ZERO
-		# dash to win the scramble when there's ground to cover
-		if to_seat.length() > 2.6 and me._dash_cd <= 0.0 and ambition[p] > 0.5:
-			out["b"] = true
+		# Only the challenger nearest the empty seat commits to dead-centre;
+		# the rest hold a standoff ring, poised to gang the instant someone
+		# sits. This keeps the scramble lively AND stops four bodies from
+		# jamming the dead-centre so hard that nobody can actually sit.
+		var my_d := my_pos.distance_to(seat)
+		var am_closest := true
+		for r in g.royals():
+			if r.index == p or r.is_king or r.re_sit_cd > 0.0:
+				continue
+			if Vector2(r.global_position.x, r.global_position.z).distance_to(seat) < my_d - 0.1:
+				am_closest = false
+				break
+		if am_closest:
+			var to_seat := seat - my_pos
+			out["move"] = to_seat.normalized() if to_seat.length() > 0.12 else Vector2.ZERO
+			if to_seat.length() > 2.6 and me._dash_cd <= 0.0:
+				out["b"] = true
+		else:
+			var away := my_pos - seat
+			if away.length() < 0.1:
+				away = Vector2(cos(wander_ang[p]), sin(wander_ang[p]))
+			var hold := seat + away.normalized() * 2.15
+			var to_hold := hold - my_pos
+			out["move"] = to_hold.normalized() if to_hold.length() > 0.35 else Vector2.ZERO
 		return out
 
 	# ------------------------------------------------------- someone reigns: gang up
