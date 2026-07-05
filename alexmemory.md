@@ -109,6 +109,15 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-05 — MOUSE AIM MERGED (KB+MOUSE cursor combat live)
+Echo swings, Orbital throws (preview follows), Greed tackle-pounces, and
+Dead Weight shoves + poltergeist furniture-flings all go toward YOUR
+CURSOR on the KB+MOUSE device. Movement stays WASD; bots untouched (all
+four legacy determinism/balance harnesses re-verified byte-identical).
+Echo ghosts now record your true aim, so your past selves swing where
+you really swung. Dual-ray screenshot proofs in the aim worktree;
+VERIFY-AIM.md committed.
+
 ### 2026-07-05 — THE THRONE MERGED (game #9)
 Musical-chairs tyranny works: golden score-stream from the seated king,
 grip pips + TYRANNY fatigue bar, dethrone fling with physics crown
