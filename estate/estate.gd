@@ -674,6 +674,7 @@ func _run_parade() -> int:
 					var owner_idx: int = EstateState.tollgates[s]
 					var taken := EstateState.steal_grudge(p, owner_idx, 1)
 					if taken > 0:
+						EstateState.record_toll(owner_idx, taken)
 						_flash("%s PAYS %s'S TOLL (1♠)" % [EstateState.players[p].name, EstateState.players[owner_idx].name], EstateState.players[owner_idx].color, 1.6)
 				await get_tree().create_timer(0.7).timeout
 		if to >= Trail.STONES - 1:
@@ -714,6 +715,58 @@ func _end_night(champ_override := -1) -> void:
 	await podium.done
 	podium.queue_free()
 	cam.current = true
+	banner.visible = false
+	_enter_will_reading(champ)
+
+## After the podium: the night's superlatives, read aloud like an
+## inheritance. Ends at the DAWN button, which returns to the lobby —
+## the estate is the main menu, so every night must find its way home.
+func _enter_will_reading(champ) -> void:
+	var awards: Array = EstateState.night_superlatives(champ.index)
+	_clear_panel("THE READING OF THE WILL", Color(0.85, 0.75, 1.0))
+	var head := Label.new()
+	head.text = "Night %d is settled. %s takes the manor." % [EstateState.nights_played, champ.name]
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_color_override("font_color", champ.color)
+	phase_box.add_child(head)
+	for aw in awards:
+		var pl = EstateState.players[aw.player]
+		var l := Label.new()
+		l.text = "%s, %s — %s" % [pl.name, aw.title, aw.line]
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.add_theme_color_override("font_color", pl.color)
+		l.modulate.a = 0.0
+		phase_box.add_child(l)
+	var i := 0
+	for c in phase_box.get_children():
+		if c is Label and c.modulate.a == 0.0:
+			var tw := create_tween()
+			tw.tween_interval(0.45 * i)
+			tw.tween_property(c, "modulate:a", 1.0, 0.3)
+			i += 1
+	print("WILL_READ night=%d awards=%d" % [EstateState.nights_played, awards.size()])
+	await get_tree().create_timer(0.45 * i + 0.6).timeout
+	VerifyCapture.snap("will_reading")
+	if phase != Phase.NIGHT_END:
+		return
+	var btn := Button.new()
+	btn.text = "DAWN — BACK TO THE GATES"
+	btn.pressed.connect(_return_to_lobby)
+	phase_box.add_child(btn)
+	if _all_bots():
+		get_tree().create_timer(2.5).timeout.connect(_return_to_lobby)
+
+func _return_to_lobby() -> void:
+	if phase != Phase.NIGHT_END:
+		return
+	Sfx.play("confirm")
+	GameState.reset_match()
+	EstateState.start_night(4)
+	$Trail.reset_pawns()
+	_rebuild_top_bar()
+	banner.visible = false
+	print("DAWN back to lobby")
+	_enter_lobby()
 
 func _flash(text: String, color: Color, dur: float) -> void:
 	banner.text = text

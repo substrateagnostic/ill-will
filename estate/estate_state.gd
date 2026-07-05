@@ -22,6 +22,7 @@ var nights_played := 0
 var trail_pos := {}
 var tollgates := {}
 var last_deltas := {}
+var night_stats := {}
 
 func _ready() -> void:
 	rng.randomize()
@@ -42,8 +43,11 @@ func start_night(player_count: int) -> void:
 	trail_pos.clear()
 	tollgates.clear()
 	last_deltas.clear()
+	night_stats.clear()
 	for i in player_count:
 		trail_pos[i] = 0
+		night_stats[i] = {"wins": 0, "lasts": 0, "royalties": 0,
+			"grudge_earned": 0, "bets_won": 0, "tolls": 0}
 	for i in player_count:
 		players.append({
 			"index": i,
@@ -72,13 +76,18 @@ func apply_results(results: Dictionary) -> Array:
 		players[p].points += gain
 		last_deltas[p] = gain
 		ticker.append("%s finishes #%d  (+%d pts)" % [players[p].name, rank + 1, gain])
+	if placements.size() >= 2:
+		night_stats[placements[0]].wins += 1
+		night_stats[placements.back()].lasts += 1
 	for ev in results.get("currency_events", []):
 		var p: int = ev.player
 		if ev.type == "grudge":
 			players[p].grudge += ev.amount
+			if ev.amount > 0:
+				night_stats[p].grudge_earned += ev.amount
 			ticker.append("%s +%d♠  (%s)" % [players[p].name, ev.amount, ev.get("reason", "")])
 		elif ev.type == "royalty":
-			players[p].points += 0
+			night_stats[p].royalties += 1
 			ticker.append("%s royalty: %s" % [players[p].name, ev.get("reason", "")])
 	if not placements.is_empty():
 		var winner: int = placements[0]
@@ -88,6 +97,7 @@ func apply_results(results: Dictionary) -> Array:
 				var payout: int = mini(2, pot)
 				pot -= payout
 				players[p].grudge += payout
+				night_stats[p].bets_won += 1
 				paid += 1
 				ticker.append("%s's bet pays out (+%d♠)" % [players[p].name, payout])
 		if paid == 0 and pot > 0:
@@ -103,6 +113,56 @@ func apply_results(results: Dictionary) -> Array:
 		pl.grudge += 1
 	games_played += 1
 	return ticker
+
+func record_toll(owner_idx: int, amount: int) -> void:
+	night_stats[owner_idx].tolls += amount
+
+## End-of-night superlatives from night_stats. Skips zero-data awards.
+## champ is excluded from WORKHORSE (their glory is the podium).
+func night_superlatives(champ: int) -> Array:
+	var awards: Array = []
+	var order := standings()
+	var work := _stat_leader("wins", order)
+	if work >= 0 and work != champ:
+		awards.append({"player": work, "title": "THE WORKHORSE",
+			"line": "won %s and still lost the night" % _plural(night_stats[work].wins, "game")})
+	var arch := _stat_leader("royalties", order)
+	if arch >= 0:
+		awards.append({"player": arch, "title": "THE ARCHITECT",
+			"line": "their handiwork claimed %s" % _plural(night_stats[arch].royalties, "victim")})
+	var snake := _stat_leader("bets_won", order)
+	if snake >= 0:
+		awards.append({"player": snake, "title": "THE SNAKE",
+			"line": "cashed %s against their friends" % _plural(night_stats[snake].bets_won, "bet")})
+	var lord := _stat_leader("tolls", order)
+	if lord >= 0:
+		awards.append({"player": lord, "title": "THE LANDLORD",
+			"line": "bled %d♠ out of the tollgates" % night_stats[lord].tolls})
+	var mat := _stat_leader("lasts", order, true)
+	if mat >= 0:
+		awards.append({"player": mat, "title": "THE DOORMAT",
+			"line": "finished dead last %s. forgive them." % _plural(night_stats[mat].lasts, "time")})
+	var hoard := _stat_leader("grudge_earned", order)
+	if hoard >= 0:
+		awards.append({"player": hoard, "title": "THE HOARDER",
+			"line": "amassed %d♠ of pure spite" % night_stats[hoard].grudge_earned})
+	return awards.slice(0, 5)
+
+func _plural(n: int, word: String) -> String:
+	return "%d %s" % [n, word if n == 1 else word + "s"]
+
+## Strict-max leader for a stat; ties go to the better-placed player
+## (worse-placed when reversed — the DOORMAT deserves it more).
+func _stat_leader(key: String, order: Array, rev := false) -> int:
+	var seq: Array = order.duplicate()
+	if rev:
+		seq.reverse()
+	var best := -1
+	for p in seq:
+		var v: int = night_stats[p][key]
+		if v > 0 and (best < 0 or v > night_stats[best][key]):
+			best = p
+	return best
 
 func steal_grudge(victim: int, thief: int, amount := 1) -> int:
 	var taken: int = mini(amount, players[victim].grudge)
@@ -141,8 +201,16 @@ func add_graffiti(line: String) -> void:
 func end_night(champ_override := -1) -> Dictionary:
 	var champ: int = champ_override if champ_override >= 0 else furthest_on_trail()
 	var pl = players[champ]
+	var awards := night_superlatives(champ)
+	var award_log: Array = []
+	for aw in awards:
+		award_log.append({"who": players[aw.player].name,
+			"title": aw.title, "line": aw.line})
 	gate_statues.append({"owner": pl.name, "color": pl.color.to_html(), "night": nights_played})
-	ledger.append({"night": nights_played, "winner": pl.name})
+	ledger.append({"night": nights_played, "winner": pl.name, "awards": award_log})
+	if not awards.is_empty():
+		var top: Dictionary = awards[0]
+		add_graffiti("N%d: %s was %s" % [nights_played + 1, players[top.player].name, top.title])
 	add_monument(champ, "%s — Champion of Night %d" % [pl.name, nights_played + 1])
 	nights_played += 1
 	save_estate()

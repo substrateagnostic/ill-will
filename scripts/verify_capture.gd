@@ -60,6 +60,17 @@ func _ready() -> void:
 	if active:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + out_dir))
 
+## Event-driven capture: game code calls this at moments worth a picture
+## (e.g. the will reading). Inert unless the harness is active.
+func snap(tag: String) -> void:
+	if not active:
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := "res://%s/snap_%s_%04d.png" % [out_dir, tag, frame]
+	img.save_png(path)
+	print("VERIFY_SNAP ", path)
+
 func _run_placetest() -> void:
 	var m := get_tree().current_scene
 	if not m.has_method("get_phase_name"):
