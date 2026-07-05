@@ -31,6 +31,12 @@ var _down := {}
 var _prev_down := {}
 var _bots := {}
 
+# Verification-only aim injection (populated by minigame --aimprobe modes). Empty
+# in all normal play, so get_aim_dir/get_aim_screen behave byte-identically for
+# real KBM cursors, gamepads, keyboard halves and bots. Keyed by player index.
+var _dbg_aim := {}          # p -> Vector3  (world-space horizontal dir)
+var _dbg_aim_screen := {}   # p -> Vector2  (x = screen right, y = screen UP)
+
 func assign(p: int, device: int) -> void:
 	_devices[p] = device
 
@@ -120,7 +126,11 @@ func is_down(p: int, action: String) -> bool:
 ## cursor projected on the horizontal plane at from_pos.y. Returns ZERO for
 ## non-KBM devices (caller falls back to facing/move direction).
 func get_aim_dir(p: int, from_pos: Vector3, cam: Camera3D) -> Vector3:
-	if device_of(p) != -4 or cam == null:
+	if device_of(p) != -4:
+		return Vector3.ZERO
+	if _dbg_aim.has(p):
+		return _dbg_aim[p]
+	if cam == null:
 		return Vector3.ZERO
 	var mp := cam.get_viewport().get_mouse_position()
 	var hit = Plane(Vector3.UP, from_pos.y).intersects_ray(cam.project_ray_origin(mp), cam.project_ray_normal(mp))
@@ -129,6 +139,41 @@ func get_aim_dir(p: int, from_pos: Vector3, cam: Camera3D) -> Vector3:
 	var dir: Vector3 = hit - from_pos
 	dir.y = 0.0
 	return dir.normalized() if dir.length() > 0.05 else Vector3.ZERO
+
+## Screen-space aim for games whose action plane is not the world horizontal
+## (Orbital's spheres): a unit vector (x = screen right, y = screen UP) pointing
+## from `world_anchor`'s projected screen position toward the mouse cursor. The
+## caller maps this into its own screen-relative control frame. Returns ZERO for
+## non-KBM devices, a null/absent camera, an anchor behind the camera, or a
+## cursor essentially on top of the anchor.
+func get_aim_screen(p: int, world_anchor: Vector3, cam: Camera3D) -> Vector2:
+	if device_of(p) != -4:
+		return Vector2.ZERO
+	if _dbg_aim_screen.has(p):
+		return _dbg_aim_screen[p]
+	if cam == null or cam.is_position_behind(world_anchor):
+		return Vector2.ZERO
+	var anchor2d := cam.unproject_position(world_anchor)
+	var d := cam.get_viewport().get_mouse_position() - anchor2d
+	if d.length() < 4.0:
+		return Vector2.ZERO
+	return Vector2(d.x, -d.y).normalized()   # screen y is down; flip to y-up
+
+## Verification hook (--aimprobe): pin a synthetic world-space aim for player p.
+## Pass Vector3.ZERO to clear. Never called during normal play.
+func set_debug_aim(p: int, world_dir: Vector3) -> void:
+	if world_dir == Vector3.ZERO:
+		_dbg_aim.erase(p)
+	else:
+		_dbg_aim[p] = world_dir.normalized()
+
+## Verification hook (--aimprobe): pin a synthetic screen-space aim (x = right,
+## y = up) for player p. Pass Vector2.ZERO to clear. Never called in normal play.
+func set_debug_aim_screen(p: int, screen_dir: Vector2) -> void:
+	if screen_dir == Vector2.ZERO:
+		_dbg_aim_screen.erase(p)
+	else:
+		_dbg_aim_screen[p] = screen_dir.normalized()
 
 func just_pressed(p: int, action: String) -> bool:
 	var key := "%d_%s" % [p, action]

@@ -354,7 +354,23 @@ func _resolve_player_buttons(delta: float) -> void:
 	_b_prev = b_down
 
 
+## Mouse aim (KBM humans only): a light/heavy swing faces + fires toward the
+## cursor instead of the walk-derived facing. We overwrite `yaw` at swing start —
+## the fighter is _busy() for the whole swing so movement never touches yaw
+## again, the arc (resolve_swing reads yaw), the model rotation, AND the 30Hz
+## recorder (samples yaw) all consume this one honest value, so ghost replays
+## stay drift-free. Bots / non-KBM / no-cursor keep their current yaw.
+func _aim_yaw(fallback: float) -> float:
+	if is_bot or main == null:
+		return fallback
+	var aim: Vector3 = PlayerInput.get_aim_dir(player_index, global_position, main.camera)
+	if aim.length() > 0.05:
+		return atan2(aim.x, aim.z)
+	return fallback
+
+
 func _start_light() -> void:
+	yaw = _aim_yaw(yaw)
 	_swing_t = 0.0
 	_swing_cd = SWING_CD
 	_swing_did_strike = false
@@ -366,6 +382,7 @@ func _start_light() -> void:
 
 
 func _start_heavy() -> void:
+	yaw = _aim_yaw(yaw)
 	_heavy_t = 0.0
 	_heavy_cd = HEAVY_CD
 	_heavy_did_strike = false
@@ -502,6 +519,13 @@ func consume_fire() -> int:
 	var f := _fire_val
 	_fire_val = 0
 	return f
+
+
+## Verification hook (--aimprobe): fire a light swing straight through the real
+## aim path (_start_light -> _aim_yaw), so the probe proves the cursor overrides
+## the walk-facing without reaching into internals.
+func debug_probe_light() -> void:
+	_start_light()
 
 
 func _forward() -> Vector3:

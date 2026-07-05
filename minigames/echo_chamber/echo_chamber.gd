@@ -56,6 +56,8 @@ var round_len := ROUND_LEN_DEFAULT
 var _cap_on := false
 var _cap_dir := "verify_out"
 var _cap_done: Dictionary = {}
+var _aim_probe_on := false
+var _aim_probe_deg := 0.0
 var _names: Dictionary = {}
 var _colors: Dictionary = {}
 
@@ -130,12 +132,23 @@ func _maybe_selfstart() -> void:
 func _default_config() -> Dictionary:
 	var n := 4
 	var seed := 1
+	var probe := false
+	var probe_deg := 0.0
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--players="):
 			n = clampi(int(arg.trim_prefix("--players=")), 2, 4)
 		elif arg.begins_with("--seed="):
 			seed = int(arg.trim_prefix("--seed="))
+		elif arg.begins_with("--aimprobe="):
+			probe = true
+			probe_deg = float(arg.trim_prefix("--aimprobe="))
+	if probe:
+		n = 2   # p0 = KBM human under the cursor, p1 = a bot parked off to the side
 	PlayerInput.auto_assign(n)
+	if probe:
+		PlayerInput.assign(0, -4)
+		var av := deg_to_rad(probe_deg)
+		PlayerInput.set_debug_aim(0, Vector3(sin(av), 0.0, cos(av)))
 	var r: Array = []
 	for i in n:
 		r.append({
@@ -144,7 +157,7 @@ func _default_config() -> Dictionary:
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": DEFAULT_CHARS[i],
 			"device": PlayerInput.device_of(i),
-			"bot": PlayerInput.standalone_bot_default(i),
+			"bot": false if (probe and i == 0) else PlayerInput.standalone_bot_default(i),
 		})
 	return {"roster": r, "rounds": ROUNDS, "rng_seed": seed, "practice": false}
 
@@ -172,6 +185,8 @@ func begin(config: Dictionary) -> void:
 	_spawn_fighters()
 	print("ECHO_BEGIN players=%d seed=%d bots=%s round_len=%.1f" % [roster.size(), _seed, str(_bots), round_len])
 	_enter_intro(1)
+	if _aim_probe_on:
+		_run_aim_probe()
 
 
 func _parse_args() -> void:
@@ -182,9 +197,12 @@ func _parse_args() -> void:
 			round_len = maxf(2.0, float(arg.trim_prefix("--echofast=")))
 		elif arg == "--echocap":
 			_cap_on = true
+		elif arg.begins_with("--aimprobe="):
+			_aim_probe_on = true
+			_aim_probe_deg = float(arg.trim_prefix("--aimprobe="))
 		elif arg.begins_with("--outdir="):
 			_cap_dir = arg.trim_prefix("--outdir=")
-	if _cap_on:
+	if _cap_on or _aim_probe_on:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
 
 
@@ -1047,3 +1065,72 @@ func _spawn_confetti(pos: Vector3, color: Color) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _selfstarted and event.is_action_pressed("restart"):
 		get_tree().reload_current_scene()
+
+
+# ===========================================================================
+# Mouse-aim verification (--aimprobe=<deg>): pin player 0 (a KBM human) at
+# centre facing 90° off a synthetic cursor, screenshot it, fire a real light
+# swing, screenshot again. The body + arc snap to the CYAN aim ray, not the
+# WHITE facing ray. Two shots: verify_out/echo_aim_{facing,acting}.png.
+# ===========================================================================
+func _run_aim_probe() -> void:
+	while state != St.PLAY:
+		await get_tree().physics_frame
+	var f: EchoFighter = fighters[0]
+	var aim_yaw := deg_to_rad(_aim_probe_deg)
+	var face_yaw := aim_yaw + PI * 0.5           # deliberately perpendicular
+	# park the bot far off so it can't interfere with the framed shot
+	if fighters.size() > 1:
+		fighters[1].global_position = Vector3(40, 0.05, 40)
+	f.global_position = Vector3(0, 0.05, 0)
+	f.yaw = face_yaw
+	var origin := Vector3(0, 0.05, 0)
+	_probe_arrow(origin, face_yaw, Color(1, 1, 1), 3.2)                 # facing (white)
+	_probe_arrow(origin, aim_yaw, Color(0.2, 0.95, 1.0), 3.2)          # cursor aim (cyan)
+	await get_tree().create_timer(0.45).timeout
+	await _probe_grab("facing")
+	print("ECHO_AIMPROBE face=%.0fdeg aim=%.0fdeg body_before=%.0fdeg" % [
+		rad_to_deg(face_yaw), _aim_probe_deg, rad_to_deg(f.yaw)])
+	f.debug_probe_light()
+	await get_tree().create_timer(0.12).timeout                        # mid-swing
+	await _probe_grab("acting")
+	print("ECHO_AIMPROBE body_after=%.0fdeg matches_aim=%s" % [
+		rad_to_deg(f.yaw), str(absf(rad_to_deg(f.yaw) - _aim_probe_deg) < 5.0)])
+	await get_tree().create_timer(0.25).timeout
+	get_tree().quit()
+
+
+func _probe_arrow(origin: Vector3, yaw_a: float, col: Color, length: float) -> void:
+	var dir := Vector3(sin(yaw_a), 0.0, cos(yaw_a))
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.16, 0.16, length)
+	mi.mesh = bm
+	var m := StandardMaterial3D.new()
+	m.albedo_color = col
+	m.emission_enabled = true
+	m.emission = col
+	m.emission_energy_multiplier = 1.4
+	mi.material_override = m
+	mi.position = origin + dir * (length * 0.5) + Vector3(0, 1.1, 0)
+	mi.rotation.y = yaw_a
+	add_child(mi)
+	# a fat tip so the arrow reads directionally, not as a bar
+	var tip := MeshInstance3D.new()
+	var tm := BoxMesh.new()
+	tm.size = Vector3(0.42, 0.42, 0.42)
+	tip.mesh = tm
+	tip.material_override = m
+	tip.position = origin + dir * length + Vector3(0, 1.1, 0)
+	add_child(tip)
+
+
+func _probe_grab(tag: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		print("ECHO_AIMPROBE_SKIP_HEADLESS ", tag)
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := "res://%s/echo_aim_%s.png" % [_cap_dir, tag]
+	img.save_png(path)
+	print("ECHO_AIMPROBE_CAP ", path)
