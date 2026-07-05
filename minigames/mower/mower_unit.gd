@@ -64,59 +64,39 @@ func setup(index: int, display_name: String, color: Color, char_scene_path: Stri
 	_build_clippings(color)
 	_build_engine(index)
 
+const MOWER_GLB := "res://assets/models/meshy/riding_mower.glb"
+const MOWER_HEIGHT := 1.05      # base(wheels)->top height; seat lands ~0.55
+const MOWER_YAW := 90.0         # rotate the GLB so its cutting deck faces +Z (travel dir)
+
 func _build_chassis(color: Color) -> void:
 	_body_pivot = Node3D.new()
 	_body_pivot.name = "Chassis"
 	add_child(_body_pivot)
-	# rear body block (player color)
-	var body := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = Vector3(0.9, 0.5, 1.15)
-	body.mesh = bm
-	body.material_override = _lit(color)
-	body.position = Vector3(0, 0.42, -0.18)
-	_body_pivot.add_child(body)
-	# hood / cutting deck (darker, wider, up front)
-	var deck := MeshInstance3D.new()
-	var dm := BoxMesh.new()
-	dm.size = Vector3(1.06, 0.16, 0.62)
-	deck.mesh = dm
-	deck.material_override = _lit(color.darkened(0.45))
-	deck.position = Vector3(0, 0.16, 0.62)
-	_body_pivot.add_child(deck)
-	# engine cowl
-	var cowl := MeshInstance3D.new()
-	var cm := BoxMesh.new()
-	cm.size = Vector3(0.7, 0.34, 0.5)
-	cowl.mesh = cm
-	cowl.material_override = _lit(Color(0.18, 0.18, 0.2))
-	cowl.position = Vector3(0, 0.66, 0.28)
-	_body_pivot.add_child(cowl)
-	# steering column
-	var col := MeshInstance3D.new()
-	var colm := CylinderMesh.new()
-	colm.top_radius = 0.04
-	colm.bottom_radius = 0.04
-	colm.height = 0.42
-	col.mesh = colm
-	col.material_override = _lit(Color(0.1, 0.1, 0.12))
-	col.position = Vector3(0, 0.72, 0.02)
-	col.rotation_degrees = Vector3(-24, 0, 0)
-	_body_pivot.add_child(col)
-	var wheel_ring := MeshInstance3D.new()
-	var wr := TorusMesh.new()
-	wr.inner_radius = 0.08
-	wr.outer_radius = 0.15
-	wheel_ring.mesh = wr
-	wheel_ring.material_override = _lit(Color(0.08, 0.08, 0.1))
-	wheel_ring.position = Vector3(0, 0.92, 0.14)
-	wheel_ring.rotation_degrees = Vector3(66, 0, 0)
-	_body_pivot.add_child(wheel_ring)
-	# wheels: small front, big rear
-	for sx in [-1.0, 1.0]:
-		_add_wheel(Vector3(sx * 0.5, 0.2, 0.62), 0.2)
-		_add_wheel(Vector3(sx * 0.52, 0.28, -0.42), 0.28)
-	# identity flag on a pole
+	# custom Meshy riding mower (green body, chunky wheels, cutting deck, empty
+	# seat) as the chassis visual, replacing the box-built chassis. Purely visual;
+	# gameplay geometry (deck footprint, collision radius) lives in constants.
+	# Normalized so the wheels sit at y=0 and the deck faces +Z (travel forward).
+	var mower := MeshyProp.instance(MOWER_GLB, MOWER_HEIGHT, MOWER_YAW)
+	mower.name = "MowerModel"
+	_body_pivot.add_child(mower)
+	# --- per-player identity (the model is green, so identity is ADDED) ---
+	# ground identity ring (top-down readability, matching the house pattern)
+	var gring := MeshInstance3D.new()
+	var gt := TorusMesh.new()
+	gt.inner_radius = 0.60
+	gt.outer_radius = 0.76
+	gring.mesh = gt
+	var grmat := StandardMaterial3D.new()
+	grmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	grmat.albedo_color = color
+	grmat.emission_enabled = true
+	grmat.emission = color
+	grmat.emission_energy_multiplier = 0.7
+	gring.material_override = grmat
+	gring.position = Vector3(0, 0.05, 0)
+	gring.scale = Vector3(1, 0.2, 1)
+	_body_pivot.add_child(gring)
+	# identity flag on a pole (player color)
 	var pole := MeshInstance3D.new()
 	var pm := CylinderMesh.new()
 	pm.top_radius = 0.02
@@ -124,31 +104,19 @@ func _build_chassis(color: Color) -> void:
 	pm.height = 0.8
 	pole.mesh = pm
 	pole.material_override = _lit(Color(0.12, 0.12, 0.14))
-	pole.position = Vector3(0.38, 1.0, -0.5)
+	pole.position = Vector3(0.34, 1.0, -0.5)
 	_body_pivot.add_child(pole)
 	var flag := MeshInstance3D.new()
 	var fm := BoxMesh.new()
-	fm.size = Vector3(0.02, 0.22, 0.34)
+	fm.size = Vector3(0.02, 0.24, 0.36)
 	flag.mesh = fm
 	var fmat := _lit(color)
 	fmat.emission_enabled = true
 	fmat.emission = color
-	fmat.emission_energy_multiplier = 0.7
+	fmat.emission_energy_multiplier = 0.8
 	flag.material_override = fmat
-	flag.position = Vector3(0.38, 1.28, -0.66)
+	flag.position = Vector3(0.34, 1.30, -0.68)
 	_body_pivot.add_child(flag)
-
-func _add_wheel(at: Vector3, r: float) -> void:
-	var w := MeshInstance3D.new()
-	var wm := CylinderMesh.new()
-	wm.top_radius = r
-	wm.bottom_radius = r
-	wm.height = 0.16
-	w.mesh = wm
-	w.material_override = _lit(Color(0.09, 0.09, 0.1))
-	w.rotation_degrees = Vector3(0, 0, 90)
-	w.position = at
-	_body_pivot.add_child(w)
 
 func _seat_rider(char_scene_path: String, color: Color) -> void:
 	var ps := load(char_scene_path) as PackedScene
