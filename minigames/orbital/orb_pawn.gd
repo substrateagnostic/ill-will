@@ -18,6 +18,7 @@ extends Node3D
 const WALK_SPEED := 4.0
 const JUMP_SPEED := 7.6
 const AIM_TIME := 0.8          # hold A: power 0 -> 1 over this
+const AIM_TURN_MOUSE := 12.0   # rad/s the throw heading chases the mouse cursor
 const THROW_MIN := 5.5
 const THROW_MAX := 13.0
 const THROW_LOFT_MIN_DEG := 20.0  # taps: flat, close-range
@@ -49,6 +50,7 @@ var invuln := 0.0
 
 var _prev_a := false
 var _prev_b := false
+var _aim_screen := Vector2.ZERO   # KBM cursor dir in screen space (x=right, y=up), ZERO otherwise
 var _throw_lock := 0.0
 var _air_t := 0.0
 var _corpse_vel := Vector3.ZERO
@@ -130,7 +132,8 @@ func _project_cam_right(n: Vector3) -> Vector3:
 
 ## --- per-tick simulation (driven by the world; no _physics_process) ------
 
-func step(dt: float, now: float, mv: Vector2, a_down: bool, b_down: bool) -> void:
+func step(dt: float, now: float, mv: Vector2, a_down: bool, b_down: bool, aim_screen := Vector2.ZERO) -> void:
+	_aim_screen = aim_screen
 	var a_pressed := a_down and not _prev_a
 	var a_released := (not a_down) and _prev_a
 	var b_pressed := b_down and not _prev_b
@@ -149,7 +152,12 @@ func step(dt: float, now: float, mv: Vector2, a_down: bool, b_down: bool) -> voi
 		_update_frame(dt)
 		if held != null and charge >= 0.0 and a_down:
 			charge = minf(1.0, charge + dt / AIM_TIME)
-			_aim_turn(dt, mv)
+			# KBM: the throw heading chases the cursor (mapped into this planet's
+			# screen-relative frame); otherwise the stick aims as before.
+			if _aim_screen != Vector2.ZERO:
+				_aim_turn_mouse(dt)
+			else:
+				_aim_turn(dt, mv)
 		else:
 			_walk(dt, mv)
 		if held != null and a_pressed and _throw_lock <= 0.0:
@@ -219,6 +227,23 @@ func _aim_turn(dt: float, mv: Vector2) -> void:
 		return
 	var ang := heading.signed_angle_to(dir, srf_n)
 	heading = heading.rotated(srf_n, clampf(ang, -7.0 * dt, 7.0 * dt)).normalized()
+
+## KBM aim: turn the throw heading toward the mouse cursor. The cursor arrives
+## as a screen-space unit vector (x = right, y = up); we map it into the SAME
+## screen-relative tangent basis the stick uses (frame_r = screen right,
+## up_t = screen up on the visible hemisphere), so "point there" means the same
+## thing for mouse and stick. The dotted preview follows heading automatically.
+func _aim_turn_mouse(dt: float) -> void:
+	walking = false
+	var n := srf_n
+	var up_t := n.cross(frame_r)
+	var dir := frame_r * _aim_screen.x + up_t * _aim_screen.y
+	dir = dir - n * dir.dot(n)
+	if dir.length_squared() < 0.0005:
+		return
+	dir = dir.normalized()
+	var ang := heading.signed_angle_to(dir, srf_n)
+	heading = heading.rotated(srf_n, clampf(ang, -AIM_TURN_MOUSE * dt, AIM_TURN_MOUSE * dt)).normalized()
 
 func throw_vector() -> Dictionary:
 	var c := maxf(charge, 0.0)

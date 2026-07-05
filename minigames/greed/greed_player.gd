@@ -253,6 +253,22 @@ func do_tackle_swing() -> void:
 	Sfx.play("putt", -3.0)
 
 
+## Mouse aim (KBM humans only): a tackle pounces toward the cursor. We face the
+## aim and ride an existing knock impulse — the fighter is rooted by tackle_lock
+## so the decaying _knock is the whole lunge, sliding the body toward the cursor
+## for the ~0.28s the swing animates. Bots / non-KBM never call this, so their
+## tackle (and the balance model) is byte-identical.
+const TACKLE_LUNGE := 7.0
+func lunge_toward(dir: Vector3) -> void:
+	var d := dir
+	d.y = 0.0
+	if d.length() < 0.01:
+		return
+	d = d.normalized()
+	yaw = atan2(d.x, d.z)
+	apply_knock(d, TACKLE_LUNGE)
+
+
 func get_stunned() -> void:
 	stun_t = STUN_TIME
 	immune_t = maxf(immune_t, STUN_TIME)   # 1s tackle immunity after drop (spec)

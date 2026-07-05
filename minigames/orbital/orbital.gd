@@ -100,6 +100,10 @@ var _fast := 1.0
 var _autoquit := false
 var _match_override := -1.0
 var _test_mode := ""
+var _aim_probe_deg := 0.0
+var _orb_probe_release := false
+var _orb_probe_armed := false
+var _orb_probe_line: Line2D = null
 var _shake := 0.0
 var _slowmo_left := 0.0  # game-seconds of slow-mo remaining (tick-driven)
 var _circ := {}
@@ -143,6 +147,10 @@ func _parse_args() -> void:
 			_match_override = float(arg.trim_prefix("--matchsec="))
 		elif arg.begins_with("--orbtest="):
 			_test_mode = arg.trim_prefix("--orbtest=")
+		elif arg.begins_with("--aimprobe="):
+			_test_mode = "aimprobe"
+			_aim_probe_deg = float(arg.trim_prefix("--aimprobe="))
+			DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
 	if _fast > 1.01:
 		# Faster-than-realtime WITHOUT changing the integration step:
 		# Godot passes delta = time_scale / physics_ticks_per_second to
@@ -221,6 +229,8 @@ func begin(cfg: Dictionary) -> void:
 			var b: OrbBall = balls[0]
 			b.pick_up(0)
 			pawns[0].held = b
+	elif _test_mode == "aimprobe":
+		_run_orb_probe()
 	else:
 		_flash_banner("ORBITAL DODGEBALL", Color(1.0, 0.85, 0.25), 2.2)
 		_flash_event("BALLS NEVER DESPAWN. OLD ORBITS STILL KILL.", Color(0.85, 0.88, 1.0))
@@ -437,7 +447,7 @@ func _physics_process(delta: float) -> void:
 	for p in pawns:
 		var pw: OrbPawn = p
 		var inp: Dictionary = _input_for(pw.index) if phase == Phase.PLAY else neutral
-		pw.step(sdt, now, inp.move, inp.a, inp.b)
+		pw.step(sdt, now, inp.move, inp.a, inp.b, inp.get("aim", Vector2.ZERO))
 		if pw.held != null:
 			pw.held.global_position = pw.body_center() + pw.up_dir() * 0.5 + pw.heading * 0.25
 	for b in balls:
@@ -472,6 +482,12 @@ func _input_for(p: int) -> Dictionary:
 		return {"move": Vector2(1, 0) if p == 0 else Vector2.ZERO, "a": false, "b": false}
 	if _test_mode == "aim":
 		return {"move": Vector2.ZERO, "a": p == 0, "b": false}
+	if _test_mode == "aimprobe":
+		# hold A on pawn 0 (charge + aim); the synthetic cursor is fed once the
+		# probe driver arms it (device -4 + set_debug_aim_screen), so the first
+		# capture shows the fixed heading and the second shows the aimed one.
+		return {"move": Vector2.ZERO, "a": p == 0 and not _orb_probe_release, "b": false,
+			"aim": PlayerInput.get_aim_screen(p, pawns[p].body_center(), _cam) if (p == 0 and _orb_probe_armed) else Vector2.ZERO}
 	if p < bots.size() and bots[p] != null:
 		var bot: OrbBot = bots[p]
 		return {"move": bot.move, "a": bot.a, "b": bot.b}
@@ -479,6 +495,7 @@ func _input_for(p: int) -> Dictionary:
 		"move": PlayerInput.get_move(p),
 		"a": PlayerInput.is_down(p, "a"),
 		"b": PlayerInput.is_down(p, "b"),
+		"aim": PlayerInput.get_aim_screen(p, pawns[p].body_center(), _cam),
 	}
 
 func _resolve_pickups() -> void:
@@ -759,6 +776,8 @@ func _process(delta: float) -> void:
 		if bb.trail != null:
 			bb.trail.render(now, _cam.global_position)
 	_draw_aim_previews()
+	if _orb_probe_line != null:
+		_update_probe_line()
 	_update_timer_label()
 	if _hint_label.visible and now > 7.0:
 		_hint_label.visible = false
@@ -942,6 +961,63 @@ func _flash_event(text: String, color: Color) -> void:
 	_event_label.add_theme_color_override("font_color", color)
 	_event_label.visible = true
 	_event_until = now + 2.2
+
+## --- mouse-aim verification (--aimprobe=<deg>) -------------------------------
+## Pawn 0 (a KBM human) holds a ball with a FIXED screen-right heading. Shot 1
+## captures that baseline. Then a synthetic cursor at <deg> (screen space,
+## 0=right, 90=up) is armed; the throw heading — and the dotted preview that
+## reads off it — chase the cursor into this planet's screen-relative frame.
+## Shot 2 captures the aimed preview. A cyan on-screen ray marks the cursor.
+func _run_orb_probe() -> void:
+	var pw: OrbPawn = pawns[0]
+	pw.place_on(0, Vector3(0, 0, 1))          # near point, facing camera
+	pw.frame_r = _cam.global_basis.x          # screen right
+	pw.heading = pw.frame_r
+	if balls.size() > 0:
+		var b: OrbBall = balls[0]
+		b.pick_up(0)
+		pw.held = b
+	var ov := CanvasLayer.new()
+	add_child(ov)
+	_orb_probe_line = Line2D.new()
+	_orb_probe_line.width = 5.0
+	_orb_probe_line.default_color = Color(0.2, 0.95, 1.0)
+	ov.add_child(_orb_probe_line)
+	await get_tree().create_timer(0.7).timeout
+	await _orb_probe_grab("facing")
+	print("ORB_AIMPROBE heading_before=(%.2f,%.2f,%.2f)" % [pw.heading.x, pw.heading.y, pw.heading.z])
+	var rad := deg_to_rad(_aim_probe_deg)
+	PlayerInput.assign(0, -4)
+	PlayerInput.set_debug_aim_screen(0, Vector2(cos(rad), sin(rad)))
+	_orb_probe_armed = true
+	print("ORB_AIMPROBE armed cursor deg=%.0f (screen x=right y=up)" % _aim_probe_deg)
+	await get_tree().create_timer(1.0).timeout
+	await _orb_probe_grab("acting")
+	print("ORB_AIMPROBE heading_after=(%.2f,%.2f,%.2f)" % [pw.heading.x, pw.heading.y, pw.heading.z])
+	_orb_probe_release = true                  # release A -> throw toward cursor
+	await get_tree().create_timer(0.5).timeout
+	print("ORB_AIMPROBE_DONE thrown; ball vel=%s" % (str(balls[0].vel) if balls.size() > 0 else "n/a"))
+	get_tree().quit()
+
+
+func _update_probe_line() -> void:
+	var pw: OrbPawn = pawns[0]
+	var anchor := _cam.unproject_position(pw.body_center())
+	var rad := deg_to_rad(_aim_probe_deg)
+	var scr := Vector2(cos(rad), -sin(rad))    # screen y is down, so up = -sin
+	_orb_probe_line.points = PackedVector2Array([anchor, anchor + scr * 240.0])
+
+
+func _orb_probe_grab(tag: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		print("ORB_AIMPROBE_SKIP_HEADLESS ", tag)
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := "res://verify_out/orbital_aim_%s.png" % tag
+	img.save_png(path)
+	print("ORB_AIMPROBE_CAP ", path)
+
 
 ## --- debug/verify surface ------------------------------------------------------
 
