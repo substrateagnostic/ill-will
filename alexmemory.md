@@ -426,3 +426,20 @@ shared mouse). Par retrofitted to emit contract results.
 Playable 2–4P hotseat sabotage golf: draft/build/putt, killers, gravestones,
 royalties, CURSED deck, KayKit caddies (author cheers when their trap
 kills), flyover ending. Budget: $0, all CC0.
+
+### 2026-07-05 — THE KILLCAM shipped (commit ef23010)
+When a ball dies to a trap in a NORMAL round, the table freezes ~1.6s and the
+victim's final ~2s replays from a low camera near the killing trap: author-
+colored vignette border + "AUTHOR'S TRAP — SIGNED WORK" banner (the sabotage-
+authorship flex). Self-kills: "SELF-INFLICTED. THE ESTATE APPLAUDS." (no border,
+Executor's register). CHAOS never pauses — credit banner only. Skippable (click/
+space), bots auto-skip at 0.4s so soaks stay fast; one killcam per stroke.
+- How it's cheap + safe: each ball keeps a per-tick global_transform ring buffer
+  (~2.6s); replay is transform playback on a throwaway clone — real balls/traps/
+  round state untouched. Windowed play holds the turn with get_tree().paused,
+  which inserts ZERO physics ticks, so moving-trap phase (and thus outcomes) are
+  identical. Headless/autoplay/--nokillcam make it a pure timeline no-op.
+- Determinism proven both ways: same seed, killcam x2 == --nokillcam, 11/11
+  gameplay-receipt lines byte-identical — headless AND windowed (with 2 real
+  pauses executed). New flags: --nokillcam; verify-only --parquit, --killcamtest.
+- Evidence: docs/verify/killcam-VERIFY.md + shots/killcam_{signed,self,chaos}.png.

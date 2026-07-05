@@ -20,6 +20,12 @@ const ROYALTY := 2
 ## verdict (Alex): 1 placement, MORE TRAP TYPES — density saturates maps.
 const TRAPS_PER_BUILD := 1
 const CHAOS_TRAP_SPEED := 1.6
+## THE KILLCAM: a normal-round death freezes the table for this long while the
+## victim's final seconds replay from a low angle near the killing trap. Hard cap;
+## any player input skips it, bot-only matches auto-skip much faster. Chaos never
+## pauses. The table is frozen via get_tree().paused, so the turn resumes exactly
+## KILLCAM_DURATION later and NO physics advances — determinism is untouched.
+const KILLCAM_DURATION := 1.6
 
 var balls: Array = []
 var caddies: Array = []
@@ -55,6 +61,17 @@ var _chaos_banner_tween: Tween = null
 # physics is affected. All bot randomness comes from _bot_rng (seeded from
 # GameState.rng), so a --parbots match is reproducible per --seed.
 var _par_bot_all := false
+## KILLCAM state. _killcam is the presentation node; _nokillcam disables the
+## feature (CLI + timing-sensitive harness paths); _killcam_claimed enforces ONE
+## killcam per stroke resolution (extra deaths on the same putt only get a banner).
+var _killcam: Killcam = null
+var _nokillcam := false
+var _killcam_claimed := false
+var _killcam_test_mode := ""
+var _killcam_t0 := 0
+## Verify-only: quit right after MATCH_OVER (skipping the winner flyover) so
+## headless determinism soaks self-terminate fast. Never set in real play.
+var _par_quit := false
 var _bot_rng := RandomNumberGenerator.new()
 var _bot_ctx := ""          # actionable-turn key; resets the think timer on change
 var _bot_think_t := 0.0
@@ -79,6 +96,12 @@ func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--parbots":
 			_par_bot_all = true
+		elif arg == "--nokillcam":
+			_nokillcam = true
+		elif arg == "--parquit":
+			_par_quit = true
+		elif arg.begins_with("--killcamtest="):
+			_killcam_test_mode = arg.trim_prefix("--killcamtest=")
 	# Seed the bot rng FROM GameState.rng without consuming its stream (read the
 	# seed value, don't draw), so drafting/course/trap RNG is untouched.
 	_bot_rng.seed = int(GameState.rng.seed) ^ 0x9E3779B9
@@ -96,10 +119,18 @@ func _ready() -> void:
 	placement.course = course
 	placement.trap_placed.connect(_on_trap_placed)
 	_apply_course_camera()
+	_killcam = Killcam.new()
+	_killcam.name = "Killcam"
+	add_child(_killcam)
+	_killcam.finished.connect(_on_killcam_finished)
 	_spawn_balls()
 	banner.visible = false
+	if _killcam_test_mode == "chaos":
+		GameState.round_num = GameState.rounds_total
 	_rebuild_scoreboard()
 	_start_round()
+	if _killcam_test_mode != "":
+		call_deferred("_run_killcam_test", _killcam_test_mode)
 
 func _setup_course() -> void:
 	print("COURSE selected: %s" % GameState.course_id)
@@ -401,6 +432,8 @@ func _on_turn_started(p: int) -> void:
 	_update_stroke_label(p)
 
 func _on_stroke_taken() -> void:
+	# A fresh stroke opens a new resolution window -> the next death may claim a killcam.
+	_killcam_claimed = false
 	round_manager.notify_stroke()
 	_update_stroke_label(round_manager.current_player())
 
@@ -460,16 +493,119 @@ func _on_ball_died(killer: Trap, victim: int) -> void:
 	print("DEATH: %s by %s (round %d)" % [v.name, credit, GameState.round_num])
 	_flash_banner("%s DIED!\nDEATH BY: %s" % [v.name, credit], credit_color, 2.4)
 	round_manager.on_ball_died(victim)
-	_slow_mo()
+	_resolve_death_cinematics(victim, killer, death_pos, credit, credit_color)
 
 func _slow_mo() -> void:
 	Engine.time_scale = 0.3
 	await get_tree().create_timer(0.4, true, false, true).timeout
 	Engine.time_scale = 1.0
 
+# --- THE KILLCAM ---------------------------------------------------------------
+## Decide what a death looks like: a full replay (normal round, first death of the
+## stroke), a credit banner (chaos, or an already-claimed stroke), or a
+## timeline-neutral no-op (headless / determinism harness / --nokillcam). Builds
+## the authorship credit once and hands it to whichever path runs.
+func _resolve_death_cinematics(victim: int, killer: Trap, death_pos: Vector3, credit: String, credit_color: Color) -> void:
+	var self_kill := killer != null and killer.author_index == victim
+	var has_author := killer != null and killer.author_index >= 0 and not self_kill
+	var border_color := credit_color
+	var show_border := has_author
+	var banner_text := ""
+	if self_kill:
+		# The Executor's dry register; no author to credit, so no border.
+		banner_text = "SELF-INFLICTED.\nTHE ESTATE APPLAUDS."
+		show_border = false
+	elif has_author:
+		banner_text = "%s\n— SIGNED WORK" % credit
+	else:
+		banner_text = "%s\n— UNSIGNED" % credit
+		border_color = Color(0.78, 0.74, 0.67)
+		show_border = true
+	var banner_color: Color = border_color if show_border else Color(0.95, 0.9, 0.78)
+
+	# CHAOS never pauses — play stays live; the authorship gets a banner only.
+	if GameState.is_chaos_round():
+		_flash_banner(banner_text, banner_color, 1.6)
+		print("KILLCAM chaos-banner victim=%d" % victim)
+		return
+
+	# One killcam per stroke resolution. Extra deaths on the same putt just banner.
+	if _killcam_claimed:
+		_flash_banner(banner_text, banner_color, 1.4)
+		print("KILLCAM already-claimed victim=%d -> banner-only" % victim)
+		_slow_mo()
+		return
+	_killcam_claimed = true
+
+	# Determinism-sensitive contexts: the killcam must not touch the timeline.
+	if not _killcam_timeline_active():
+		print("KILLCAM neutral skip=%s victim=%d author=%d" % [_killcam_skip_reason(), victim, killer.author_index if killer != null else -1])
+		_slow_mo()
+		return
+
+	_start_killcam(victim, death_pos, border_color, show_border, banner_text)
+
+## The killcam pauses/holds only when it can be seen AND won't corrupt a
+## determinism diff. When this is false the death path stays a pure no-op on the
+## physics timeline (identical to --nokillcam), so autoplay/headless receipts hold.
+func _killcam_timeline_active() -> bool:
+	if _nokillcam:
+		return false
+	if DisplayServer.get_name() == "headless":
+		return false
+	if VerifyCapture.autobuild or not VerifyCapture.autoplay.is_empty():
+		return false
+	return true
+
+func _killcam_skip_reason() -> String:
+	if _nokillcam:
+		return "nokillcam"
+	if DisplayServer.get_name() == "headless":
+		return "headless"
+	if VerifyCapture.autobuild or not VerifyCapture.autoplay.is_empty():
+		return "autoplay"
+	return "none"
+
+## A bot-only match (all seats bots, or --parbots) auto-skips the killcam fast so
+## soaks/demos never drag.
+func _is_bot_only_match() -> bool:
+	if _par_bot_all:
+		return true
+	for i in GameState.players.size():
+		if not PlayerInput.is_bot(i):
+			return false
+	return true
+
+## Freeze the table and hand the victim's recorded final motion to the killcam.
+## The pause holds round_manager (no turn advance, no next putt) until the replay
+## ends; because the tree is paused, ZERO physics steps elapse — the moving traps
+## resume at the exact phase they were frozen at, so outcomes are unchanged.
+func _start_killcam(victim: int, death_pos: Vector3, border_color: Color, show_border: bool, banner_text: String) -> void:
+	var vb: Ball = balls[victim]
+	var samples: Array = vb.get_replay_samples(2.0)
+	var approach := Vector3.ZERO
+	if samples.size() >= 2:
+		var last: Transform3D = samples[samples.size() - 1]
+		var earlier: Transform3D = samples[maxi(0, samples.size() - 10)]
+		approach = last.origin - earlier.origin
+	# Hide the real (dead) ball so only the replay clone shows during the freeze.
+	vb.visible = false
+	var ball_color: Color = GameState.players[victim].color
+	var restore_cam: Camera3D = camera_rig.get_node("Camera3D")
+	get_tree().paused = true
+	_killcam_t0 = Time.get_ticks_msec()
+	print("KILLCAM play victim=%d samples=%d dur=%.2f botonly=%s" % [victim, samples.size(), KILLCAM_DURATION, str(_is_bot_only_match())])
+	_killcam.play(samples, death_pos, approach, ball_color, border_color, show_border, banner_text, KILLCAM_DURATION, _is_bot_only_match(), restore_cam)
+
+func _on_killcam_finished() -> void:
+	get_tree().paused = false
+	print("KILLCAM done held_ms=%d" % (Time.get_ticks_msec() - _killcam_t0))
+
 func _spawn_death_fx(pos: Vector3, color: Color) -> void:
 	var p := CPUParticles3D.new()
 	add_child(p)
+	# Keep bursting while a killcam has the table paused, so the splat reads.
+	p.process_mode = Node.PROCESS_MODE_ALWAYS
 	p.global_position = pos + Vector3(0, 0.15, 0)
 	p.emitting = false
 	p.one_shot = true
@@ -515,6 +651,28 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 	if GameState.is_match_over():
 		var champ: int = GameState.standings()[0]
 		print("MATCH_OVER champ=", GameState.players[champ].name)
+		var points := {}
+		var monuments: Array = []
+		for i in GameState.players.size():
+			points[i] = GameState.players[i].score
+			if GameState.players[i].royalties >= 6:
+				monuments.append({"player": i, "kind": "butcher", "label": "%s, Architect of Ruin" % GameState.players[i].name})
+		print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
+		# Determinism receipt: killcam is presentation-only, so this line must be
+		# byte-identical across killcam-on / --nokillcam runs of the same seed.
+		print("FINAL_RESULT placements=%s points=%s" % [str(GameState.standings()), str(points)])
+		var results := {
+			"placements": GameState.standings(),
+			"points": points,
+			"currency_events": _currency_log.duplicate(),
+			"kill_events": _kill_events.duplicate(),
+			"highlights": _highlights.slice(0, 3),
+			"monuments": monuments,
+		}
+		if _par_quit:
+			finished.emit(results)
+			get_tree().quit()
+			return
 		_stop_chaos_turn_banner()
 		turn_label.text = ""
 		stroke_label.text = ""
@@ -527,21 +685,7 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 		caddies[champ].react("Cheer")
 		_spawn_confetti(caddies[champ].global_position + Vector3(0, 1.5, 0), GameState.players[champ].color)
 		_flash_banner("%s WINS THE MATCH!\n(press R for a rematch)" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
-		var points := {}
-		var monuments: Array = []
-		for i in GameState.players.size():
-			points[i] = GameState.players[i].score
-			if GameState.players[i].royalties >= 6:
-				monuments.append({"player": i, "kind": "butcher", "label": "%s, Architect of Ruin" % GameState.players[i].name})
-		print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
-		finished.emit({
-			"placements": GameState.standings(),
-			"points": points,
-			"currency_events": _currency_log.duplicate(),
-			"kill_events": _kill_events.duplicate(),
-			"highlights": _highlights.slice(0, 3),
-			"monuments": monuments,
-		})
+		finished.emit(results)
 		return
 	Sfx.play("round_over")
 	_flash_banner("ROUND OVER", Color(1, 0.85, 0.2), 2.6)
@@ -705,3 +849,59 @@ func _bot_putt(actor: int) -> void:
 
 func get_phase_name() -> String:
 	return Phase.keys()[phase]
+
+# --- KILLCAM screenshot harness (--killcamtest=signed|self|chaos) --------------
+## Drives any draft/build to completion, then stages a controlled kill on ball 0
+## so the killcam (signed/self) or the chaos credit banner can be captured
+## deterministically. Verification-only; never runs in normal play.
+func _run_killcam_test(mode: String) -> void:
+	var guard := 0
+	while (phase == Phase.DRAFT or phase == Phase.BUILD) and guard < 400:
+		guard += 1
+		if phase == Phase.DRAFT:
+			debug_pick_card(0)
+		elif phase == Phase.BUILD:
+			debug_place_auto()
+		await get_tree().create_timer(0.1).timeout
+	await get_tree().create_timer(0.3).timeout
+	await _stage_kill("signed" if mode == "skip" else mode)
+	if mode == "skip":
+		# Prove player-skip: inject a SPACE press mid-replay; the killcam must end
+		# early (held_ms far below the 1600ms cap).
+		await get_tree().create_timer(0.25, true, false, true).timeout
+		var ev := InputEventKey.new()
+		ev.physical_keycode = KEY_SPACE
+		ev.keycode = KEY_SPACE
+		ev.pressed = true
+		Input.parse_input_event(ev)
+		await get_tree().create_timer(0.4, true, false, true).timeout
+		get_tree().quit()
+		return
+	# Snap late in the replay (ball has arrived at the trap) while the killcam
+	# still holds the table paused (process_always timer keeps ticking).
+	await get_tree().create_timer(1.05, true, false, true).timeout
+	VerifyCapture.snap("killcam_%s" % mode)
+	# Let the replay finish naturally so the hard-cap held_ms is logged too.
+	await get_tree().create_timer(0.75, true, false, true).timeout
+	get_tree().quit()
+
+func _stage_kill(mode: String) -> void:
+	var vb: Ball = balls[0]
+	var crusher: Trap = TrapCatalog.load_scene("crusher").instantiate()
+	course.get_node("TrapContainer").add_child(crusher)
+	var kill_at: Vector3 = vb.global_position + Vector3(0, 0, -2.0)
+	crusher.global_position = Vector3(kill_at.x, 0.0, kill_at.z)
+	if mode == "self":
+		crusher.set_author(0, GameState.players[0].color)
+	else:
+		crusher.set_author(1, GameState.players[1].color)
+	crusher.solidify()
+	putt_controller.ball = vb
+	putt_controller.debug_putt(6.0, 0.0)          # angle 0 = -Z, straight at the trap
+	await get_tree().create_timer(0.85).timeout
+	# In real play the ball dies AT the trap; stage that here so the low camera
+	# frames both the crusher and the incoming ball.
+	crusher.global_position = Vector3(vb.global_position.x, 0.0, vb.global_position.z)
+	if crusher.has_node("Hammer"):
+		crusher.get_node("Hammer").position.y = 0.28   # freeze the hammer mid-slam
+	vb.die(crusher)
