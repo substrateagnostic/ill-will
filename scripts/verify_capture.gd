@@ -58,6 +58,8 @@ func _ready() -> void:
 		elif arg.begins_with("--outdir="):
 			out_dir = arg.trim_prefix("--outdir=")
 	if active:
+		# Keep counting/capturing while the tree is paused (ESC settings shots).
+		process_mode = Node.PROCESS_MODE_ALWAYS
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + out_dir))
 
 ## Event-driven capture: game code calls this at moments worth a picture

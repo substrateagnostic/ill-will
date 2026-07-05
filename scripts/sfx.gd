@@ -24,6 +24,8 @@ var _pool: Array = []
 var _next := 0
 
 func _ready() -> void:
+	_ensure_bus("Music")
+	_ensure_bus("SFX")
 	for key in BANK:
 		var list: Array = []
 		for name in BANK[key]:
@@ -31,8 +33,17 @@ func _ready() -> void:
 		_streams[key] = list
 	for i in 10:
 		var p := AudioStreamPlayer.new()
+		p.bus = "SFX"
 		add_child(p)
 		_pool.append(p)
+
+## Runtime bus creation so the AUDIO settings sliders have something to
+## drive; Music bus sits empty until the soundtrack lands.
+func _ensure_bus(bus_name: String) -> void:
+	if AudioServer.get_bus_index(bus_name) == -1:
+		AudioServer.add_bus()
+		AudioServer.set_bus_name(AudioServer.bus_count - 1, bus_name)
+		AudioServer.set_bus_send(AudioServer.bus_count - 1, "Master")
 
 func play(key: String, volume_db := 0.0, pitch_wobble := 0.07) -> void:
 	if not _streams.has(key):

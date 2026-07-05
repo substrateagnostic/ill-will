@@ -31,6 +31,12 @@ var _down := {}
 var _prev_down := {}
 var _bots := {}
 
+# Custom key remaps, keyed by DEVICE id (-1/-2/-4), not player — a keyboard
+# half means the same keys no matter who sits there. Absent device = defaults.
+var _custom_maps := {}
+# Per-gamepad A/B swap (pad id -> bool).
+var _pad_swap := {}
+
 # Verification-only aim injection (populated by minigame --aimprobe modes). Empty
 # in all normal play, so get_aim_dir/get_aim_screen behave byte-identically for
 # real KBM cursors, gamepads, keyboard halves and bots. Keyed by player index.
@@ -64,11 +70,18 @@ func save_setup() -> void:
 	if f:
 		var dev := {}
 		var bot := {}
+		var maps := {}
+		var swaps := {}
 		for k in _devices:
 			dev[str(k)] = _devices[k]
 		for k in _bots:
 			bot[str(k)] = _bots[k]
-		f.store_string(JSON.stringify({"devices": dev, "bots": bot}))
+		for k in _custom_maps:
+			maps[str(k)] = _custom_maps[k]
+		for k in _pad_swap:
+			swaps[str(k)] = _pad_swap[k]
+		f.store_string(JSON.stringify({"devices": dev, "bots": bot,
+			"keymaps": maps, "pad_swap": swaps}))
 
 func load_setup() -> bool:
 	if not FileAccess.file_exists(SETUP_PATH):
@@ -80,7 +93,71 @@ func load_setup() -> bool:
 		_devices[int(k)] = int(data.devices[k])
 	for k in data.get("bots", {}):
 		_bots[int(k)] = bool(data.bots[k])
+	for k in data.get("keymaps", {}):
+		var m := {}
+		for act in data.keymaps[k]:
+			m[str(act)] = int(data.keymaps[k][act])
+		_custom_maps[int(k)] = m
+	for k in data.get("pad_swap", {}):
+		_pad_swap[int(k)] = bool(data.pad_swap[k])
 	return true
+
+## ----- custom keybinds (device-keyed; see docs/design/05-director-notes) -----
+
+## Rebind one action on a keyboard device. If the key is already bound to
+## another action on that device, the two actions swap keys (classic rule,
+## no dead actions possible).
+func set_key_binding(device: int, action: String, keycode: int) -> void:
+	if not _custom_maps.has(device):
+		var def := KEY_LEFT_MAP if device != -2 else KEY_RIGHT_MAP
+		_custom_maps[device] = def.duplicate()
+	var m: Dictionary = _custom_maps[device]
+	for other in m:
+		if other != action and int(m[other]) == keycode:
+			m[other] = m[action]
+	m[action] = keycode
+
+func reset_key_bindings(device: int) -> void:
+	_custom_maps.erase(device)
+
+func has_custom_bindings(device: int) -> bool:
+	return _custom_maps.has(device)
+
+## Current keycode bound to an action on a keyboard device (-1 if n/a).
+func binding_of(device: int, action: String) -> int:
+	var m := _keymap(device)
+	return int(m[action]) if m.has(action) else -1
+
+func set_pad_swap(pad: int, v: bool) -> void:
+	_pad_swap[pad] = v
+
+func pad_swapped(pad: int) -> bool:
+	return _pad_swap.get(pad, false)
+
+## Human-readable binding for player p's action, from the LIVE maps — the
+## How-to-Play cards call this so onboarding always reflects real settings.
+## Actions: "a", "b", "move".
+func describe_binding(p: int, action: String) -> String:
+	var d := device_of(p)
+	if d == -99:
+		return "—"
+	if d >= 0:
+		if action == "move":
+			return "LEFT STICK"
+		var swapped := pad_swapped(d)
+		if action == "a":
+			return "(B)" if swapped else "(A)"
+		return "(A)" if swapped else "(B)"
+	if d == -3:
+		return "MOUSE"
+	if d == -4 and action == "a":
+		return "LEFT CLICK"
+	if d == -4 and action == "b":
+		return "RIGHT CLICK"
+	var m := _keymap(d)
+	if action == "move":
+		return "%s/%s/%s/%s" % [OS.get_keycode_string(m.up), OS.get_keycode_string(m.left), OS.get_keycode_string(m.down), OS.get_keycode_string(m.right)]
+	return OS.get_keycode_string(m[action]) if m.has(action) else "—"
 
 func device_of(p: int) -> int:
 	return _devices.get(p, -99)
@@ -116,7 +193,8 @@ func get_move(p: int) -> Vector2:
 func is_down(p: int, action: String) -> bool:
 	var d := device_of(p)
 	if d >= 0:
-		return Input.is_joy_button_pressed(d, JOY_BUTTON_A if action == "a" else JOY_BUTTON_B)
+		var want_a := (action == "a") != pad_swapped(d)
+		return Input.is_joy_button_pressed(d, JOY_BUTTON_A if want_a else JOY_BUTTON_B)
 	if d == -4:
 		return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT if action == "a" else MOUSE_BUTTON_RIGHT)
 	var m := _keymap(d)
@@ -186,6 +264,8 @@ func _physics_process(_delta: float) -> void:
 			_down["%d_%s" % [p, action]] = is_down(p, action)
 
 func _keymap(d: int) -> Dictionary:
+	if _custom_maps.has(d):
+		return _custom_maps[d]
 	if d == -1 or d == -4:
 		return KEY_LEFT_MAP
 	if d == -2:
