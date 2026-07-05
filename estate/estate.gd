@@ -339,10 +339,13 @@ func _spawn_walkers() -> void:
 const EXECUTOR_GLB := "res://assets/models/meshy/executor_butler.glb"
 const THEATER_GLB := "res://assets/models/meshy/theater_stage.glb"
 
+## Everything spawned here parents under $Grounds — the module-launch
+## cleanup hides Grounds, so props must live there or they leak into
+## minigame frames (Alex caught the Theater photobombing a game).
 func _spawn_executor() -> void:
 	if ResourceLoader.exists(THEATER_GLB):
 		var th := MeshyProp.instance(THEATER_GLB, 3.2, 205.0)
-		add_child(th)
+		$Grounds.add_child(th)
 		th.global_position = Vector3(6.4, 0.0, -5.6)
 		var ttag := Label3D.new()
 		ttag.text = "THE THEATER"
@@ -351,12 +354,12 @@ func _spawn_executor() -> void:
 		ttag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		ttag.modulate = Color(1.0, 0.75, 0.75)
 		ttag.outline_size = 12
-		add_child(ttag)
+		$Grounds.add_child(ttag)
 		ttag.global_position = th.global_position + Vector3(0, 3.6, 0)
 	if not ResourceLoader.exists(EXECUTOR_GLB):
 		return
 	var ex := MeshyProp.instance(EXECUTOR_GLB, 1.9, 25.0)
-	add_child(ex)
+	$Grounds.add_child(ex)
 	ex.global_position = Vector3(2.6, 0.0, -3.4)
 	var tag := Label3D.new()
 	tag.text = "THE EXECUTOR"
@@ -365,7 +368,7 @@ func _spawn_executor() -> void:
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	tag.modulate = Color(0.85, 0.8, 0.95)
 	tag.outline_size = 10
-	add_child(tag)
+	$Grounds.add_child(tag)
 	tag.global_position = ex.global_position + Vector3(0, 2.15, 0)
 
 ## One Saki-voiced line for the lobby, drawn from the ledger's memory.

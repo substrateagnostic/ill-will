@@ -87,17 +87,18 @@ func apply_results(results: Dictionary) -> Array:
 	if placements.size() >= 2:
 		night_stats[placements[0]].wins += 1
 		night_stats[placements.back()].lasts += 1
+	# NEMESIS counts each hunter>prey pair AT MOST ONCE PER GAME — dense
+	# contact games (mower: 82 events/match) must not own the matrix.
+	# The award reads as cross-game persistence: they came for you again.
+	var pairs_this_game := {}
 	for ke in results.get("kill_events", []):
 		var killer: int = int(ke.get("killer", -1))
 		var victim: int = int(ke.get("victim", -1))
-		# Swap Meet reports position-swap heists as events; they're theft,
-		# not kills, and 20/match would swamp the NEMESIS matrix.
-		if str(ke.get("cause", "")) in ["kart_wreck", "golden_swap"]:
-			continue
 		if killer >= 0 and victim >= 0 and killer != victim:
 			night_stats[killer].kills += 1
-			var pair := "%d>%d" % [killer, victim]
-			kill_matrix[pair] = int(kill_matrix.get(pair, 0)) + 1
+			pairs_this_game["%d>%d" % [killer, victim]] = true
+	for pair in pairs_this_game:
+		kill_matrix[pair] = int(kill_matrix.get(pair, 0)) + 1
 	for ev in results.get("currency_events", []):
 		var p: int = ev.player
 		if ev.type == "grudge":
@@ -150,7 +151,7 @@ func night_superlatives(champ: int) -> Array:
 	if best_pair != "":
 		var kp := best_pair.split(">")
 		awards.append({"player": int(kp[0]), "title": "NEMESIS OF %s" % players[int(kp[1])].name,
-			"line": "hunted them down %d times tonight" % best_n})
+			"line": "came for them in %d different games tonight" % best_n})
 	var work := _stat_leader("wins", order)
 	if work >= 0 and work != champ:
 		awards.append({"player": work, "title": "THE WORKHORSE",
