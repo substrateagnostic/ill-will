@@ -6,6 +6,14 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🏰 THE ESTATE IS NOW THE MAIN MENU (relaunch again!).** Boot lands on
+  the grounds under a "THE UN-PARTY" title card: seat cards (HUMAN/BOT +
+  device, persisted), night length, START THE NIGHT, and a MINIGAMES(10)
+  selector that launches exhibition matches (no stakes, returns to the
+  selector). Screenshot: `verify_out/lobby/shot_0150.png`. Anthology title
+  "THE UN-PARTY" is my placeholder — rename freely. Coming in later
+  passes: Ready-Room press-A-to-join seats, How-to-Play cards + practice
+  doors, full ESC settings tabs (research MUST list).
 - **✅ UNBLOCKED — CONTINUE YOUR TEN-GAME NIGHT (relaunch first).** All
   three playtest issues fixed & committed: (1) Reckoning continue button
   was pushed off-screen by long tickers — panel now grows UPWARD + ticker
