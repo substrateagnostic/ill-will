@@ -35,11 +35,18 @@ var autobuild_count := 0
 var _picks_this_turn := 0
 var _build_timer := 0.0
 var _currency_log: Array = []
+## Anthology kill ledger (module contract results.kill_events). Each entry is
+## {killer: int, victim: int, cause: String}; killer == -1 means environment or
+## self-inflicted (no OTHER player to credit), cause is the trap_id slug. Pure
+## reporting — appended alongside the existing royalty/grudge attribution.
+var _kill_events: Array = []
 var _highlights: Array = []
 var _golden_hour_done := false
 ## Chaos concurrency telemetry: peak number of balls in motion at once. Printed
 ## each time a new peak is reached so a verify run can prove true overlap.
 var _chaos_peak_movers := 0
+## Looping heat-color pulse on the chaos turn banner (presentation only).
+var _chaos_banner_tween: Tween = null
 
 # --- minimal per-player bot driver (turn-based) --------------------------------
 # A seat plays itself if PlayerInput marks it a bot OR the --parbots flag forces
@@ -166,6 +173,31 @@ func _enter_chaos_round() -> void:
 	_apply_golden_hour()
 	Sfx.play("match_win", -4.0)
 	_flash_banner("CHAOS ROUND\nNO WAITING — ALL LIVE", Color(1.0, 0.55, 0.2), 2.8)
+	_set_chaos_turn_banner()
+
+## Chaos is simultaneous: a per-player "X'S TURN" banner lies. Replace the turn
+## label with a persistent, heat-pulsing "CHAOS — EVERYONE AT ONCE" (same
+## Luckiest Guy label, so it matches the existing banner style). Stroke counters
+## keep updating for whoever the shot clock is on. Presentation only — no
+## gameplay/timing change.
+func _set_chaos_turn_banner() -> void:
+	turn_label.text = "CHAOS — EVERYONE AT ONCE"
+	if _chaos_banner_tween != null and _chaos_banner_tween.is_valid():
+		_chaos_banner_tween.kill()
+	_chaos_banner_tween = create_tween().set_loops()
+	_chaos_banner_tween.tween_method(_set_turn_label_color, 0.0, 1.0, 0.55)
+	_chaos_banner_tween.tween_method(_set_turn_label_color, 1.0, 0.0, 0.55)
+
+## Alternate the chaos banner between two heat colors (gold-orange <-> ember red).
+func _set_turn_label_color(t: float) -> void:
+	var hot := Color(1.0, 0.82, 0.22)
+	var ember := Color(1.0, 0.33, 0.13)
+	turn_label.add_theme_color_override("font_color", hot.lerp(ember, t))
+
+func _stop_chaos_turn_banner() -> void:
+	if _chaos_banner_tween != null and _chaos_banner_tween.is_valid():
+		_chaos_banner_tween.kill()
+	_chaos_banner_tween = null
 
 func _apply_golden_hour() -> void:
 	if _golden_hour_done:
@@ -358,6 +390,12 @@ func _on_turn_started(p: int) -> void:
 	var player = GameState.players[p]
 	putt_controller.ball = balls[p]
 	camera_rig.ball = balls[p]
+	if GameState.is_chaos_round():
+		# Simultaneous play: keep the persistent CHAOS banner (set on round
+		# entry) instead of a misleading per-player turn line. The stroke
+		# counter still tracks whoever the shot clock is currently on.
+		_update_stroke_label(p)
+		return
 	turn_label.text = "%s'S TURN" % player.name
 	turn_label.add_theme_color_override("font_color", player.color)
 	_update_stroke_label(p)
@@ -391,6 +429,16 @@ func _on_ball_died(killer: Trap, victim: int) -> void:
 	_spawn_death_fx(death_pos, v.color)
 	_spawn_gravestone(death_pos, v.color)
 	_currency_log.append({"type": "grudge", "player": victim, "amount": 1, "reason": "died"})
+	# Anthology kill attribution (reporting only; behavior below is unchanged).
+	# killer -1 = environment/self (authorless course trap OR a player's own
+	# trap); a real killer (>=0) mirrors exactly who earns the royalty.
+	var kev_killer := -1
+	var kev_cause := "course"
+	if killer != null:
+		kev_cause = killer.trap_id
+		if killer.author_index >= 0 and killer.author_index != victim:
+			kev_killer = killer.author_index
+	_kill_events.append({"killer": kev_killer, "victim": victim, "cause": kev_cause})
 	var credit := "THE COURSE"
 	var credit_color := Color(0.9, 0.9, 0.9)
 	if killer != null and killer.author_index >= 0:
@@ -467,6 +515,7 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 	if GameState.is_match_over():
 		var champ: int = GameState.standings()[0]
 		print("MATCH_OVER champ=", GameState.players[champ].name)
+		_stop_chaos_turn_banner()
 		turn_label.text = ""
 		stroke_label.text = ""
 		round_label.text = "FINAL"
@@ -484,10 +533,12 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 			points[i] = GameState.players[i].score
 			if GameState.players[i].royalties >= 6:
 				monuments.append({"player": i, "kind": "butcher", "label": "%s, Architect of Ruin" % GameState.players[i].name})
+		print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
 		finished.emit({
 			"placements": GameState.standings(),
 			"points": points,
 			"currency_events": _currency_log.duplicate(),
+			"kill_events": _kill_events.duplicate(),
 			"highlights": _highlights.slice(0, 3),
 			"monuments": monuments,
 		})
@@ -540,6 +591,13 @@ func _rebuild_scoreboard() -> void:
 		c.queue_free()
 	for i in GameState.standings():
 		var player = GameState.players[i]
+		# Shape+color identity chip (never-color-alone), matching every other
+		# game's scoreboard: PlayerBadge left of the name.
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 6)
+		var badge := PlayerBadge.make(i, 24)
+		badge.color = player.color
+		hb.add_child(badge)
 		var row := Label.new()
 		var extras := ""
 		if player.royalties > 0:
@@ -549,7 +607,8 @@ func _rebuild_scoreboard() -> void:
 		row.text = "%s  %d%s" % [player.name, player.score, extras]
 		row.add_theme_font_size_override("font_size", 26)
 		row.add_theme_color_override("font_color", player.color)
-		score_rows.add_child(row)
+		hb.add_child(row)
+		score_rows.add_child(hb)
 
 func is_turn_ready() -> bool:
 	return phase == Phase.PUTT and round_manager.is_turn_ready()

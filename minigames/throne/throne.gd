@@ -90,6 +90,10 @@ var dethronings: Dictionary = {}   # index -> int (kingslayings)
 var longest_reign: Dictionary = {} # index -> float (best single reign)
 var _last_coin: Dictionary = {}    # index -> int (coin-tick tracking)
 var _currency_log: Array = []
+## Anthology kill ledger (module contract results.kill_events): each entry
+## {killer: int, victim: int, cause: String}. A dethroning IS the kill here —
+## the kingslayer flings the seated king down the steps. Reporting only.
+var _kill_events: Array = []
 var _highlights: Array = []
 var _next_pity_at := 60.0
 
@@ -518,6 +522,7 @@ func _dethrone(slayer: int, dir: Vector3) -> void:
 	dethronings[slayer] += 1
 	_currency_log.append({"type": "royalty", "player": slayer, "amount": 1,
 		"reason": "dethroned %s" % players[fallen].name})
+	_kill_events.append({"killer": slayer, "victim": fallen, "cause": "dethroned"})
 	if _fx:
 		_highlights.append("%s DETHRONED %s" % [players[slayer].name, players[fallen].name])
 
@@ -614,9 +619,11 @@ func _finish_match() -> void:
 		"placements": order,
 		"points": points,
 		"currency_events": _currency_log.duplicate(),
+		"kill_events": _kill_events.duplicate(),
 		"highlights": _dedup(_highlights).slice(0, 3),
 		"monuments": monuments,
 	}
+	print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
 	print("THRONE_MATCH_OVER champ=%s pts=%d placements=%s points=%s currency=%d highlights=%d monuments=%d" % [
 		players[champ].name, points[champ], str(order), str(points), _currency_log.size(), _dedup(_highlights).slice(0, 3).size(), monuments.size()])
 	if has_method("report_finished"):
