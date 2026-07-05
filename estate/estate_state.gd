@@ -90,6 +90,10 @@ func apply_results(results: Dictionary) -> Array:
 	for ke in results.get("kill_events", []):
 		var killer: int = int(ke.get("killer", -1))
 		var victim: int = int(ke.get("victim", -1))
+		# Swap Meet reports position-swap heists as events; they're theft,
+		# not kills, and 20/match would swamp the NEMESIS matrix.
+		if str(ke.get("cause", "")) in ["kart_wreck", "golden_swap"]:
+			continue
 		if killer >= 0 and victim >= 0 and killer != victim:
 			night_stats[killer].kills += 1
 			var pair := "%d>%d" % [killer, victim]
