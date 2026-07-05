@@ -121,6 +121,11 @@ var _ui: LWWillUI
 var _claims: Array = []            # {from, target, round}
 var _carry: Array = []             # {kind, effect, from, target}
 var _currency: Array = []
+## Anthology kill ledger (module contract results.kill_events): each entry
+## {killer: int, victim: int, cause: String}. killer -1 = environment/self (void
+## fall with no shover, boulder squish, pendulum); a shove/gust into the dusk
+## credits the attacker. Reporting only — mirrors the banner attribution.
+var _kill_events: Array = []
 var _highlights: Array = []
 var _monument_counts: Dictionary = {}
 var _last_kill_line := ""
@@ -1105,6 +1110,23 @@ func _on_pawn_died(index: int, cause: String) -> void:
 				lcolor = Color(1.0, 0.5, 0.4)
 	if pawn.curse_kind != "" and pawn.curse_from >= 0 and pawn.curse_from != index:
 		_highlights.append("%s's curse dragged %s to the grave" % [players[pawn.curse_from].name, players[index].name])
+	# Anthology kill ledger (reporting only; mirrors the banner attribution
+	# above without altering it). killer -1 = environment/self.
+	var kev_killer := -1
+	var kev_cause := cause      # "void" | "squish"
+	if cause != "squish" and atk.size() > 0 and (game_time - float(atk.get("time", -99.0))) <= 3.0:
+		var kai := int(atk.get("index", -1))
+		match str(atk.get("type", "")):
+			"shove":
+				if kai >= 0 and kai != index:
+					kev_killer = kai
+			"gust":
+				if kai >= 0 and kai != index:
+					kev_killer = kai
+					kev_cause = "gust"
+			"pendulum":
+				kev_cause = "pendulum"
+	_kill_events.append({"killer": kev_killer, "victim": index, "cause": kev_cause})
 	print("LW_DEATH round=%d t=%.1f %s cause=%s" % [round_index + 1, round_elapsed, line, cause])
 
 	# clear their outgoing wisp target state / incoming wisp
@@ -1613,9 +1635,11 @@ func _finish_match() -> void:
 		"placements": order,
 		"points": points,
 		"currency_events": _currency.duplicate(),
+		"kill_events": _kill_events.duplicate(),
 		"highlights": _dedup(_highlights).slice(0, 3),
 		"monuments": monuments,
 	}
+	print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
 	print("LW_MATCH_OVER champ=%s pts=%d" % [players[champ].name, players[champ].total])
 	print("LW_RESULTS ", JSON.stringify(results))
 	if _tally:
