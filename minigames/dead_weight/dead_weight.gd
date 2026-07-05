@@ -878,6 +878,14 @@ func _rebuild_scoreboard() -> void:
 		return a < b)
 	for i in order:
 		var p: Dictionary = players[i]
+		var dead: bool = (p.role == "ghost" or _ghosts.has(i)) or (_fighters[i] != null and not _fighters[i].alive)
+		var hb := HBoxContainer.new()
+		hb.add_theme_constant_override("separation", 6)
+		var badge := PlayerBadge.make(i, 24)
+		badge.color = p.color
+		if dead:
+			badge.dim = 0.45
+		hb.add_child(badge)
 		var row := Label.new()
 		var tag := ""
 		if p.role == "ghost" or _ghosts.has(i):
@@ -892,7 +900,8 @@ func _rebuild_scoreboard() -> void:
 		row.add_theme_color_override("font_color", p.color)
 		row.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.12))
 		row.add_theme_constant_override("outline_size", 5)
-		score_rows.add_child(row)
+		hb.add_child(row)
+		score_rows.add_child(hb)
 
 func _spawn_death_fx(pos: Vector3, color: Color) -> void:
 	var p := CPUParticles3D.new()

@@ -123,7 +123,7 @@ func setup(p_index: int, p_color: Color, p_name: String, char_scene: PackedScene
 		_set_anim("Idle")
 
 	_name_label = Label3D.new()
-	_name_label.text = p_name
+	_name_label.text = PlayerBadge.glyph(index) + " " + p_name
 	_name_label.font_size = 42
 	_name_label.pixel_size = 0.006
 	_name_label.modulate = color

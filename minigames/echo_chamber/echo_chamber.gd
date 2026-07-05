@@ -918,25 +918,41 @@ func _rebuild_scoreboard() -> void:
 		for c in score_rows.get_children():
 			c.queue_free()
 		for _i in order.size():
+			# Row is an HBox: [PlayerBadge, Label] so shape+color+name travel
+			# together. Slots reorder by placement, so the badge's player is
+			# reassigned in the update pass below.
+			var hb := HBoxContainer.new()
+			hb.add_theme_constant_override("separation", 6)
+			hb.add_child(PlayerBadge.make(0, 22))
 			var row := Label.new()
 			row.add_theme_font_override("font", _font_baloo)
 			row.add_theme_font_size_override("font_size", 22)
 			row.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.1))
 			row.add_theme_constant_override("outline_size", 5)
-			score_rows.add_child(row)
+			hb.add_child(row)
+			score_rows.add_child(hb)
 	var rows := score_rows.get_children()
 	for i in order.size():
 		var idx: int = order[i]
-		var row := rows[i] as Label
+		var hb := rows[i] as HBoxContainer
+		var badge := hb.get_child(0) as PlayerBadge
+		var row := hb.get_child(1) as Label
+		var found := false
+		var alive := true
 		var hp_txt := ""
 		for f in fighters:
 			if f.player_index == idx:
+				found = true
+				alive = f.alive
 				var pips := int(f.hp) if f.alive else 0
 				for _h in pips:
 					hp_txt += "♥"
 				for _h in (HP_MAX - pips):
 					hp_txt += "·"
 				break
+		badge.player_index = idx
+		badge.color = _colors[idx]
+		badge.dim = 1.0 if (not found or alive) else 0.45
 		row.text = "%s  %d  %s" % [_names[idx], int(points[idx]), hp_txt]
 		row.add_theme_color_override("font_color", _colors[idx])
 
