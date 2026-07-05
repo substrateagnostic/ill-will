@@ -105,6 +105,8 @@ var _test_mode := ""
 var _cap_on := false
 var _cap_dir := "verify_out"
 var _cap_done := {}
+var _aim_probe_on := false
+var _aim_probe_deg := 0.0
 
 # juice
 var _shake := 0.0
@@ -185,6 +187,8 @@ func begin(config: Dictionary) -> void:
 	_log("begin players=%d seed=%d rounds=%d bots=%s" % [
 		roster.size(), int(config.rng_seed), rounds_total, str(bot_enabled)])
 	_start_round()
+	if _aim_probe_on:
+		_run_greed_probe()
 
 
 # ===========================================================================
@@ -479,6 +483,12 @@ func _attempt_tackle(p: int) -> void:
 	var me: GreedPlayer = players[p]
 	var cp: GreedPlayer = players[carrier_index]
 	me.do_tackle_swing()
+	# KBM humans lunge toward the cursor (grab unchanged, dash stays move-directed).
+	# Non-KBM / bots get ZERO aim -> no lunge -> identical to before.
+	if not bot_enabled[p]:
+		var aim := PlayerInput.get_aim_dir(p, me.global_position, cam)
+		if aim != Vector3.ZERO:
+			me.lunge_toward(aim)
 	if not cp.can_be_tackled():
 		# whiffed into i-frames / immunity — escape was priced but it paid off
 		Sfx.play("invalid", -8.0)
@@ -1148,21 +1158,32 @@ func _parse_args() -> void:
 			_cap_dir = arg.trim_prefix("--outdir=")
 		elif arg.begins_with("--greedtest="):
 			_test_mode = arg.trim_prefix("--greedtest=")
-	if _cap_on:
+		elif arg.begins_with("--aimprobe="):
+			_aim_probe_on = true
+			_aim_probe_deg = float(arg.trim_prefix("--aimprobe="))
+	if _cap_on or _aim_probe_on:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
 
 
 func _default_config() -> Dictionary:
-	PlayerInput.auto_assign(_cli_players)
+	var n := _cli_players
+	if _aim_probe_on:
+		n = 2   # p0 = KBM human under the cursor, p1 = an inert stand-in carrier
+	PlayerInput.auto_assign(n)
+	if _aim_probe_on:
+		PlayerInput.assign(0, -4)     # KBM human
+		PlayerInput.assign(1, -99)    # inert: no input, stands still as the carrier
+		var av := deg_to_rad(_aim_probe_deg)
+		PlayerInput.set_debug_aim(0, Vector3(sin(av), 0.0, cos(av)))
 	var r: Array = []
-	for i in _cli_players:
+	for i in n:
 		r.append({
 			"index": i,
 			"name": GameState.PLAYER_NAMES[i],
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": CHAR_FALLBACKS[i],
 			"device": PlayerInput.device_of(i),
-			"bot": PlayerInput.standalone_bot_default(i),
+			"bot": false if _aim_probe_on else PlayerInput.standalone_bot_default(i),
 		})
 	return {"roster": r, "rounds": ROUNDS, "rng_seed": _cli_seed, "practice": false}
 
@@ -1320,3 +1341,80 @@ func _log(msg: String) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if _standalone and event.is_action_pressed("restart"):
 		get_tree().reload_current_scene()
+
+
+# ===========================================================================
+# Mouse-aim verification (--aimprobe=<deg>): p0 (a KBM human) stands next to an
+# inert carrier facing 90 deg off a synthetic cursor. Shot 1 is the baseline;
+# then a REAL tackle (_attempt_tackle) fires -> p0 faces + pounces toward the
+# cyan aim ray. Shot 2 shows the lunge going to the cursor, not the white face.
+# ===========================================================================
+func _run_greed_probe() -> void:
+	while phase != Phase.PLAY:
+		await get_tree().physics_frame
+	var me: GreedPlayer = players[0]
+	var cp: GreedPlayer = players[1]
+	var aim_yaw := deg_to_rad(_aim_probe_deg)
+	var face_yaw := aim_yaw + PI * 0.5
+	me.global_position = Vector3(0, 0.1, 0)
+	me.yaw = face_yaw
+	me.velocity = Vector3.ZERO
+	cp.global_position = Vector3(1.1, 0.1, 0.5)      # within TACKLE_RANGE of p0
+	cp.immune_t = 0.0
+	carrier_index = 1
+	cp.set_carrier(true)
+	pot_state = PotState.CARRIED
+	pot.set_carried(true)
+	pot_value = 20
+	var origin := Vector3(0, 0.1, 0)
+	_probe_arrow(origin, face_yaw, Color(1, 1, 1), 3.0)                 # facing (white)
+	_probe_arrow(origin, aim_yaw, Color(0.2, 0.95, 1.0), 3.0)          # cursor aim (cyan)
+	await get_tree().create_timer(0.5).timeout
+	await _probe_grab("facing")
+	var p0_before := me.global_position
+	print("GREED_AIMPROBE face=%.0fdeg aim=%.0fdeg body_before=%.0fdeg pos=(%.2f,%.2f)" % [
+		rad_to_deg(face_yaw), _aim_probe_deg, rad_to_deg(me.yaw), p0_before.x, p0_before.z])
+	_attempt_tackle(0)
+	await get_tree().create_timer(0.16).timeout                        # mid-lunge
+	await _probe_grab("acting")
+	var moved := me.global_position - p0_before
+	var move_yaw := atan2(moved.x, moved.z)
+	print("GREED_AIMPROBE body_after=%.0fdeg lunge_dir=%.0fdeg matches_aim=%s (moved %.2fm)" % [
+		rad_to_deg(me.yaw), rad_to_deg(move_yaw), str(absf(rad_to_deg(move_yaw) - _aim_probe_deg) < 20.0), moved.length()])
+	await get_tree().create_timer(0.2).timeout
+	get_tree().quit()
+
+
+func _probe_arrow(origin: Vector3, yaw_a: float, col: Color, length: float) -> void:
+	var dir := Vector3(sin(yaw_a), 0.0, cos(yaw_a))
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = col
+	mat.emission_enabled = true
+	mat.emission = col
+	mat.emission_energy_multiplier = 1.6
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.16, 0.16, length)
+	mi.mesh = bm
+	mi.material_override = mat
+	mi.position = origin + dir * (length * 0.5) + Vector3(0, 1.1, 0)
+	mi.rotation.y = yaw_a
+	add_child(mi)
+	var tip := MeshInstance3D.new()
+	var tm := BoxMesh.new()
+	tm.size = Vector3(0.42, 0.42, 0.42)
+	tip.mesh = tm
+	tip.material_override = mat
+	tip.position = origin + dir * length + Vector3(0, 1.1, 0)
+	add_child(tip)
+
+
+func _probe_grab(tag: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		print("GREED_AIMPROBE_SKIP_HEADLESS ", tag)
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := "res://%s/greed_aim_%s.png" % [_cap_dir, tag]
+	img.save_png(path)
+	print("GREED_AIMPROBE_CAP ", path)
