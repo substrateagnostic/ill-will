@@ -6,6 +6,22 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **YOUR TWO PLAYTEST ISSUES: FIXED (pull/relaunch).** (1) Auction bug
+  root-caused: the resolve step re-fired every frame (no phase change),
+  re-draining grudge and rebuilding the chooser buttons before clicks
+  registered — now single-fire with a proper CHOOSING phase. (2) **ESC now
+  opens the PLAYERS & CONTROLS menu anywhere**: set each player
+  HUMAN/BOT + device (mouse / WASD / arrows / gamepads 1-4); persists
+  between sessions; estate honors it live (bot rows dim, bots auto-act,
+  reckoning waits for humans). Minigames honor the bot flags after the
+  retrofit agent lands (in flight — Par gets a full bot too, so you can
+  solo-test everything vs 3 bots).
+- **In flight now**: per-player-bot retrofit (all 8 games), THE THRONE
+  (Opus), LAST WILL (Fable), and a **Meshy asset agent** generating 10
+  custom props from builder wishlists (wardrobe, lamp, mower, kart,
+  seagull, gilded pot, throne, lanterns, gate, podium) — I review before
+  any integration.
+
 - **THE FLEET IS HOME: EIGHT GAMES LIVE.** Par for the Curse (3 courses +
   chaos round), Echo Chamber (parry triangle + ghost shatter), Tilt (shove
   clash), Orbital Dodgeball, Mower Mayhem, Greed Inc., Swap Meet, and Dead
