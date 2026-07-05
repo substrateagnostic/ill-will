@@ -82,12 +82,12 @@ func setup(angle_deg: float, offset: float, p_owner: Node) -> void:
 	rm.height = RADIUS * 2.0
 	_rock_mesh.mesh = rm
 	var rmat := StandardMaterial3D.new()
-	rmat.albedo_color = Color(0.44, 0.42, 0.4)
+	rmat.albedo_color = Color(0.58, 0.54, 0.5)
 	rmat.roughness = 0.95
 	_rock_mesh.material_override = rmat
 	_rock.add_child(_rock_mesh)
 	var lump_mat := StandardMaterial3D.new()
-	lump_mat.albedo_color = Color(0.36, 0.34, 0.33)
+	lump_mat.albedo_color = Color(0.46, 0.43, 0.41)
 	lump_mat.roughness = 1.0
 	for lp in [Vector3(0.5, 0.45, 0.3), Vector3(-0.4, -0.3, 0.5), Vector3(0.15, 0.6, -0.5), Vector3(-0.5, 0.2, -0.45)]:
 		var lump := MeshInstance3D.new()

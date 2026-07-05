@@ -1,9 +1,10 @@
 class_name LWHand
 extends Node3D
 ## The skeletal hand target cursor (spec: "target selection with a pointing
-## skeletal hand cursor"). Bone-white boxes: tattered dark sleeve, palm,
-## three curled fingers, a thumb, and a long index finger pointing DOWN at
-## the chosen survivor. Bobs and sways above the candidate's head.
+## skeletal hand cursor"). Unshaded bone-white boxes — palm, knuckles, a
+## thumb, and a long index finger pointing DOWN at the chosen survivor —
+## pitched hard toward the 3/4 couch camera so the FINGER is what reads
+## from above, not a shroud (v1 had a dark sleeve that ate the silhouette).
 
 var _bob_t := 0.0
 var _root: Node3D
@@ -13,115 +14,98 @@ func _ready() -> void:
 	add_child(_root)
 
 	var bone := StandardMaterial3D.new()
-	bone.albedo_color = Color(0.95, 0.92, 0.82)
+	bone.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bone.albedo_color = Color(0.97, 0.94, 0.84)
 	bone.emission_enabled = true
-	bone.emission = Color(0.95, 0.9, 0.75)
-	bone.emission_energy_multiplier = 1.1
-	bone.roughness = 0.6
+	bone.emission = Color(0.9, 0.86, 0.7)
+	bone.emission_energy_multiplier = 0.35
 
-	var sleeve_mat := StandardMaterial3D.new()
-	sleeve_mat.albedo_color = Color(0.32, 0.27, 0.45)
-	sleeve_mat.emission_enabled = true
-	sleeve_mat.emission = Color(0.3, 0.25, 0.45)
-	sleeve_mat.emission_energy_multiplier = 0.4
-	sleeve_mat.roughness = 1.0
+	var shadow_bone := StandardMaterial3D.new()
+	shadow_bone.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shadow_bone.albedo_color = Color(0.62, 0.58, 0.5)
 
-	# tattered sleeve cuff above the wrist
-	var sleeve := MeshInstance3D.new()
-	var svm := CylinderMesh.new()
-	svm.top_radius = 0.34
-	svm.bottom_radius = 0.22
-	svm.height = 0.5
-	sleeve.mesh = svm
-	sleeve.material_override = sleeve_mat
-	sleeve.position = Vector3(0, 0.62, -0.1)
-	sleeve.rotation_degrees = Vector3(15, 0, 0)
-	_root.add_child(sleeve)
-	# ragged sleeve tips (fixed jitter — no global RNG, determinism law)
-	var rag_jit := [Vector2(8, -7), Vector2(-6, 10), Vector2(4, 5), Vector2(-9, -4), Vector2(2, 11)]
-	for i in 5:
-		var rag := MeshInstance3D.new()
+	# small dark cuff where the arm "ends" — just enough wrist, no shroud
+	var cuff := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.12
+	cm.bottom_radius = 0.1
+	cm.height = 0.1
+	cuff.mesh = cm
+	var cuff_mat := StandardMaterial3D.new()
+	cuff_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cuff_mat.albedo_color = Color(0.45, 0.38, 0.62)
+	cuff.material_override = cuff_mat
+	cuff.position = Vector3(0, 0.4, -0.05)
+	_root.add_child(cuff)
+
+	# wrist bones: two thin parallel rods (radius/ulna silhouette)
+	for wx in [-0.05, 0.05]:
+		var rod := MeshInstance3D.new()
 		var rm := BoxMesh.new()
-		rm.size = Vector3(0.12, 0.22, 0.06)
-		rag.mesh = rm
-		rag.material_override = sleeve_mat
-		var a := i * TAU / 5.0
-		rag.position = Vector3(cos(a) * 0.24, 0.4, -0.1 + sin(a) * 0.24)
-		var jit: Vector2 = rag_jit[i]
-		rag.rotation_degrees = Vector3(15 + jit.x, 0, jit.y)
-		_root.add_child(rag)
+		rm.size = Vector3(0.06, 0.24, 0.07)
+		rod.mesh = rm
+		rod.material_override = shadow_bone
+		rod.position = Vector3(wx, 0.3, -0.03)
+		_root.add_child(rod)
 
-	# wrist
-	var wrist := MeshInstance3D.new()
-	var wm := BoxMesh.new()
-	wm.size = Vector3(0.2, 0.28, 0.2)
-	wrist.mesh = wm
-	wrist.material_override = bone
-	wrist.position = Vector3(0, 0.38, -0.02)
-	_root.add_child(wrist)
-
-	# palm, tilted so the index reads as POINTING
+	# palm: broad bone plate
 	var palm := MeshInstance3D.new()
 	var pm := BoxMesh.new()
-	pm.size = Vector3(0.34, 0.3, 0.16)
+	pm.size = Vector3(0.4, 0.3, 0.15)
 	palm.mesh = pm
 	palm.material_override = bone
-	palm.position = Vector3(0, 0.16, 0.02)
-	palm.rotation_degrees = Vector3(18, 0, 0)
+	palm.position = Vector3(0, 0.12, 0.02)
+	palm.rotation_degrees = Vector3(14, 0, 0)
 	_root.add_child(palm)
 
-	# index finger: two bone segments + a slightly darker nail tip
+	# index finger: two long segments + a darker tip, pointing DOWN
 	var seg1 := MeshInstance3D.new()
 	var s1m := BoxMesh.new()
-	s1m.size = Vector3(0.09, 0.3, 0.09)
+	s1m.size = Vector3(0.11, 0.34, 0.11)
 	seg1.mesh = s1m
 	seg1.material_override = bone
-	seg1.position = Vector3(0.08, -0.1, 0.08)
+	seg1.position = Vector3(0.1, -0.15, 0.09)
 	_root.add_child(seg1)
 	var seg2 := MeshInstance3D.new()
 	var s2m := BoxMesh.new()
-	s2m.size = Vector3(0.08, 0.28, 0.08)
+	s2m.size = Vector3(0.1, 0.32, 0.1)
 	seg2.mesh = s2m
 	seg2.material_override = bone
-	seg2.position = Vector3(0.08, -0.36, 0.1)
+	seg2.position = Vector3(0.1, -0.46, 0.12)
 	_root.add_child(seg2)
 	var tip := MeshInstance3D.new()
 	var tpm := BoxMesh.new()
-	tpm.size = Vector3(0.09, 0.1, 0.09)
+	tpm.size = Vector3(0.11, 0.12, 0.11)
 	tip.mesh = tpm
-	var tip_mat := StandardMaterial3D.new()
-	tip_mat.albedo_color = Color(0.8, 0.75, 0.6)
-	tip.mesh = tpm
-	tip.material_override = tip_mat
-	tip.position = Vector3(0.08, -0.53, 0.1)
+	tip.material_override = shadow_bone
+	tip.position = Vector3(0.1, -0.66, 0.13)
 	_root.add_child(tip)
 
-	# three curled fingers (stubby knuckle boxes on the palm's lower edge)
+	# three curled knuckle stubs
 	for i in 3:
 		var kn := MeshInstance3D.new()
 		var km := BoxMesh.new()
-		km.size = Vector3(0.09, 0.14, 0.12)
+		km.size = Vector3(0.1, 0.16, 0.13)
 		kn.mesh = km
 		kn.material_override = bone
-		kn.position = Vector3(-0.1 + i * 0.09 - 0.045, -0.02, 0.12)
-		kn.rotation_degrees = Vector3(35, 0, 0)
+		kn.position = Vector3(-0.13 + i * 0.1, -0.06, 0.11)
+		kn.rotation_degrees = Vector3(38, 0, 0)
 		_root.add_child(kn)
 
 	# thumb off the side
 	var thumb := MeshInstance3D.new()
 	var thm := BoxMesh.new()
-	thm.size = Vector3(0.2, 0.09, 0.09)
+	thm.size = Vector3(0.22, 0.1, 0.1)
 	thumb.mesh = thm
 	thumb.material_override = bone
-	thumb.position = Vector3(-0.2, 0.1, 0.06)
-	thumb.rotation_degrees = Vector3(0, 0, -25)
+	thumb.position = Vector3(-0.24, 0.06, 0.05)
+	thumb.rotation_degrees = Vector3(0, 0, -28)
 	_root.add_child(thumb)
 
-	scale = Vector3(1.55, 1.55, 1.55)
-	# pitch the whole hand toward the 3/4 camera so the pointing finger —
-	# not the sleeve — is what the couch sees from above
-	_root.rotation_degrees.x = 38.0
-	_root.position.z = 0.35
+	scale = Vector3(1.7, 1.7, 1.7)
+	# pitch hard toward the camera: the couch must see FINGER, not wrist
+	_root.rotation_degrees.x = 52.0
+	_root.position.z = 0.45
 
 func _process(delta: float) -> void:
 	_bob_t += delta

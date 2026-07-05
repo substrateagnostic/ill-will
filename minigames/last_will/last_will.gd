@@ -144,6 +144,8 @@ var _skip_to := 0.0                # --willskip=T: screenshot aid, round 1 only
 # fx
 var _shake := 0.0
 var _time_token := 0
+var _banner_token := 0
+var _sub_token := 0
 var _cam_base_fov := 52.0
 
 @onready var cam: Camera3D = $CameraRig/Camera3D
@@ -700,8 +702,11 @@ func _build_schedule() -> void:
 		{"t": 60.05, "k": "shrink", "ring": 0},
 		{"t": 63.0, "k": "boulder"},
 		{"t": 66.5, "k": "boulder"},
-		{"t": 70.0, "k": "boulder"},
-		{"t": 73.5, "k": "boulder"},
+		{"t": 68.8, "k": "boulder"},
+		{"t": 71.0, "k": "pendulum", "a": rng.randf_range(0.0, 180.0), "swings": 4},
+		{"t": 72.4, "k": "boulder"},
+		{"t": 74.6, "k": "boulder"},
+		{"t": 76.4, "k": "boulder"},
 	]
 
 func _process_schedule() -> void:
@@ -1345,7 +1350,9 @@ func _show_target(idx: int) -> void:
 func _point_hand_at(idx: int) -> void:
 	var pawn: LWPawn = pawns[idx]
 	_hand.visible = true
-	_hand.global_position = pawn.global_position + Vector3(0, 2.7, 0)
+	# hover just over the head, biased toward the camera so the finger
+	# reads instead of hiding behind the target-name label
+	_hand.global_position = pawn.global_position + Vector3(0, 2.25, 0.55)
 	_target_ring.visible = true
 	_target_ring.global_position = Vector3(pawn.global_position.x, 0.1, pawn.global_position.z)
 	var mat: StandardMaterial3D = _target_ring.material_override
@@ -1511,6 +1518,14 @@ func _end_round() -> void:
 			pawn.set_world_frozen(true)
 
 	var survivors: Array = _alive_indices()
+	# multi-survivor timeout: closest to the pillar's heart wins (earned
+	# position, not player index)
+	survivors.sort_custom(func(a, b):
+		var da := Vector2(pawns[a].global_position.x, pawns[a].global_position.z).length()
+		var db := Vector2(pawns[b].global_position.x, pawns[b].global_position.z).length()
+		if absf(da - db) > 0.01:
+			return da < db
+		return a < b)
 	var finishing: Array = survivors.duplicate()
 	var dead_desc := _elim_order.duplicate()
 	dead_desc.reverse()
@@ -1748,10 +1763,21 @@ func _flash_banner(text: String, color: Color, duration: float) -> void:
 	banner.scale = Vector2(0.6, 0.6)
 	var pop := create_tween()
 	pop.tween_property(banner, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_banner_token += 1
+	var my := _banner_token
 	if duration < 100.0:
 		var tw := create_tween()
 		tw.tween_interval(duration)
-		tw.tween_callback(func(): banner.visible = false)
+		# a newer banner owns the label now — never hide someone else's line
+		tw.tween_callback(Callable(self, "_hide_banner_if").bind(my))
+
+func _hide_banner_if(token: int) -> void:
+	if token == _banner_token:
+		banner.visible = false
+
+func _hide_sub_if(token: int) -> void:
+	if token == _sub_token:
+		sub_banner.visible = false
 
 func _flash_sub(text: String, color: Color, duration: float) -> void:
 	if _tally:
@@ -1759,9 +1785,11 @@ func _flash_sub(text: String, color: Color, duration: float) -> void:
 	sub_banner.text = text
 	sub_banner.add_theme_color_override("font_color", color)
 	sub_banner.visible = true
+	_sub_token += 1
+	var my := _sub_token
 	var tw := create_tween()
 	tw.tween_interval(duration)
-	tw.tween_callback(func(): sub_banner.visible = false)
+	tw.tween_callback(Callable(self, "_hide_sub_if").bind(my))
 
 func _rebuild_scoreboard() -> void:
 	for c in score_rows.get_children():
