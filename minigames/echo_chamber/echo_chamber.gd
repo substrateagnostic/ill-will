@@ -79,6 +79,7 @@ var _deaths_round: Dictionary = {}
 var points: Dictionary = {}
 var _currency: Array = []
 var _ghost_kill_notes: Array = []
+var _kill_events: Array = []      # optional contract: {killer,victim,cause} per KO
 var _bounty_counts: Dictionary = {}
 
 # ---- juice / perf ----
@@ -210,38 +211,45 @@ func _parse_args() -> void:
 # World / UI construction
 # ===========================================================================
 func _build_world() -> void:
+	# Warm diorama house style (matches greed/mower): warm-dark vault surround,
+	# warm sun + shadows, soft ambient, filmic, gentle glow so the neon ghosts /
+	# gold ring / parry flashes bloom BETTER against the warmth.
 	var env := WorldEnvironment.new()
 	var e := Environment.new()
 	var sky := Sky.new()
 	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.18, 0.22, 0.35)
-	sky_mat.sky_horizon_color = Color(0.5, 0.45, 0.6)
-	sky_mat.ground_bottom_color = Color(0.1, 0.1, 0.14)
-	sky_mat.ground_horizon_color = Color(0.3, 0.28, 0.4)
+	sky_mat.sky_top_color = Color(0.11, 0.10, 0.13)
+	sky_mat.sky_horizon_color = Color(0.30, 0.22, 0.17)
+	sky_mat.ground_bottom_color = Color(0.06, 0.05, 0.05)
+	sky_mat.ground_horizon_color = Color(0.22, 0.17, 0.13)
 	sky.sky_material = sky_mat
 	e.background_mode = Environment.BG_SKY
 	e.sky = sky
 	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	e.ambient_light_energy = 0.8
+	e.ambient_light_energy = 0.55
 	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	e.glow_enabled = true
-	e.glow_intensity = 0.5
-	e.glow_bloom = 0.1
+	e.glow_intensity = 0.55
+	e.glow_bloom = 0.12
+	e.glow_hdr_threshold = 0.95
 	env.environment = e
 	add_child(env)
 
 	var sun := DirectionalLight3D.new()
 	sun.transform = Transform3D(Basis.from_euler(Vector3(deg_to_rad(-58.0), deg_to_rad(35.0), 0.0)), Vector3(0, 12, 0))
-	sun.light_energy = 1.15
-	sun.light_color = Color(1.0, 0.95, 0.88)
+	sun.light_energy = 1.25
+	sun.light_color = Color(1.0, 0.92, 0.78)
 	sun.shadow_enabled = true
 	add_child(sun)
 
+	# soft warm bounce so shadows stay warm, not cold-blue
 	var fill := DirectionalLight3D.new()
 	fill.transform = Transform3D(Basis.from_euler(Vector3(deg_to_rad(-30.0), deg_to_rad(-140.0), 0.0)), Vector3(0, 8, 0))
-	fill.light_energy = 0.35
-	fill.light_color = Color(0.6, 0.7, 1.0)
+	fill.light_energy = 0.30
+	fill.light_color = Color(0.96, 0.82, 0.64)
 	add_child(fill)
+
+	_build_surround()
 
 	# arena floor collision (radius shrinks at round 5)
 	arena_floor = StaticBody3D.new()
@@ -263,7 +271,7 @@ func _build_world() -> void:
 	omesh.height = 0.5
 	_outer_disc.mesh = omesh
 	var omat := StandardMaterial3D.new()
-	omat.albedo_color = Color(0.30, 0.30, 0.38)
+	omat.albedo_color = Color(0.30, 0.21, 0.14)   # warm brown table apron
 	omat.roughness = 0.85
 	_outer_disc.material_override = omat
 	_outer_disc.position.y = -0.25
@@ -277,7 +285,7 @@ func _build_world() -> void:
 	imesh.height = 0.52
 	inner.mesh = imesh
 	var imat := StandardMaterial3D.new()
-	imat.albedo_color = Color(0.42, 0.40, 0.50)
+	imat.albedo_color = Color(0.44, 0.33, 0.22)   # warm tabletop the fight sits on
 	imat.roughness = 0.8
 	inner.material_override = imat
 	inner.position.y = -0.24
@@ -328,11 +336,47 @@ func _spawn_pillars() -> void:
 		mi.mesh = mesh
 		mi.position.y = 1.5
 		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.55, 0.5, 0.45)
+		mat.albedo_color = Color(0.52, 0.42, 0.30)   # warm carved-wood pillars
 		mat.roughness = 0.9
 		mi.material_override = mat
 		body.add_child(mi)
 		add_child(body)
+
+
+## Warm surround so the arena reads as a lit diorama on a table (greed/mower
+## family) instead of a cold disc in a void. PURELY DECORATIVE — no collision,
+## and the tabletop sits below the round-5 death line (fighters die at y<-3,
+## the floor fades out as it drops to y=-9), so gameplay/physics are untouched.
+func _build_surround() -> void:
+	# the warm room floor / tabletop the whole diorama rests above
+	var table := MeshInstance3D.new()
+	var tm := CylinderMesh.new()
+	tm.top_radius = 30.0
+	tm.bottom_radius = 30.0
+	tm.height = 1.0
+	table.mesh = tm
+	var tmat := StandardMaterial3D.new()
+	tmat.albedo_color = Color(0.26, 0.17, 0.11)
+	tmat.roughness = 0.95
+	table.material_override = tmat
+	table.position.y = -9.8
+	add_child(table)
+	# a warm brown well-wall ringing the arena edge (like greed's vault walls),
+	# hung a touch outside the play radius so nothing ever collides with it.
+	var wall := MeshInstance3D.new()
+	var wm := CylinderMesh.new()
+	wm.top_radius = ARENA_R + 1.3
+	wm.bottom_radius = ARENA_R + 1.3
+	wm.height = 8.6
+	wm.rings = 1
+	wall.mesh = wm
+	var wmat := StandardMaterial3D.new()
+	wmat.albedo_color = Color(0.23, 0.16, 0.11)
+	wmat.roughness = 0.95
+	wmat.cull_mode = BaseMaterial3D.CULL_FRONT   # see the inner face of the well
+	wall.material_override = wmat
+	wall.position.y = -5.0
+	add_child(wall)
 
 
 func _build_ui() -> void:
@@ -595,8 +639,10 @@ func _finish_match() -> void:
 		"currency_events": _currency.duplicate(),
 		"highlights": _best_highlights(),
 		"monuments": monuments,
+		"kill_events": _kill_events.duplicate(),
 	}
 	print("ECHO_MATCH_OVER champ=%s placements=%s" % [_names[champ], str(order)])
+	print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
 	report_finished(results)
 
 
@@ -823,7 +869,9 @@ func resolve_swing(origin: Vector3, yaw_a: float, owner: int, is_ghost: bool, ex
 					print("ECHO_RIPOSTE by=%s victim=%s +%d (parry payoff)" % [_names[owner], _names[f.player_index], RIPOSTE_BONUS_PTS])
 		_hit_feedback(f.global_position, f.color, is_heavy)
 		if res == "kill":
-			_on_death(f.player_index, false)
+			# killer = attacking OWNER (a player index for BOTH live and ghost
+			# swings — ghosts credit their owner, matching the royalty above).
+			_on_death(f.player_index, false, owner, "crush" if is_heavy else "shatter")
 
 
 ## A parry landed: the incoming hit is negated. A LIVE attacker staggers
@@ -864,10 +912,15 @@ func on_fall_death(idx: int) -> void:
 	if not f.alive:
 		return
 	f.kill()
-	_on_death(idx, true)
+	# fell off the platform — no attacker is credited, so killer = -1.
+	_on_death(idx, true, -1, "ring_out")
 
 
-func _on_death(victim: int, is_fall: bool) -> void:
+func _on_death(victim: int, is_fall: bool, killer: int = -1, cause: String = "shatter") -> void:
+	# Optional contract reporting: one kill_event per KO. Every death funnels
+	# through here (swing kills + fall deaths), so this is the single sink.
+	# Pure bookkeeping — nothing below the sim depends on it.
+	_kill_events.append({"killer": killer, "victim": victim, "cause": cause})
 	_deaths_round[victim] = int(_deaths_round.get(victim, 0)) + 1
 	Sfx.play("death")
 	var mode := "edge"
