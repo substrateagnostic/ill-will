@@ -81,6 +81,7 @@ var decree_uses := 0               # fatigue counter, reset each reign
 var guard_cd := 0.0
 var active_guard: StaticBody3D = null
 var reign_start := 0.0
+var _last_dethrone_t := -99.0     # keeps the DETHRONES banner its beat vs a fast re-seat
 
 # ---- scoring / stats
 var score_accum: Dictionary = {}   # index -> float (crisis-weighted points)
@@ -343,7 +344,10 @@ func _begin_coronation(i: int) -> void:
 	print("THRONE_CROWN t=%.1f %s takes the seat" % [game_time, players[i].name])
 	if _fx:
 		Sfx.play("sink", -2.0)
-		_flash_banner("%s TAKES THE THRONE" % players[i].name, players[i].color, 1.6)
+		# don't stomp a just-fired DETHRONES banner on an instant re-seat — the
+		# fling deserves its slow-mo beat before the next coronation is announced
+		if game_time - _last_dethrone_t > 1.1:
+			_flash_banner("%s TAKES THE THRONE" % players[i].name, players[i].color, 1.6)
 	_rebuild_scoreboard()
 
 func _crown(i: int) -> void:
@@ -509,6 +513,7 @@ func on_king_shoved(attacker: int, dir: Vector3) -> void:
 func _dethrone(slayer: int, dir: Vector3) -> void:
 	var fallen := king
 	var reign_len := game_time - reign_start
+	_last_dethrone_t = game_time
 	longest_reign[fallen] = maxf(longest_reign[fallen], reign_len)
 	dethronings[slayer] += 1
 	_currency_log.append({"type": "royalty", "player": slayer, "amount": 1,

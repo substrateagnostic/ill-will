@@ -180,8 +180,9 @@ arena walls 3.4m; rescue net at `|x|,|z|>7` or `y<-2`.
   the back walls are shorter than in the other shots.)
 - `shots/screen_dethrone_fling.png` — **the make-or-break fling**: the dethroned
   BLUE ragdolls down the dais steps during the slow-mo beat, the crown popped off
-  and airborne above the throne, while GOLD is instantly crowned in the same
-  breath — the "betray each other for the empty seat" moment made literal.
+  and airborne above the throne, under the "MINT DETHRONES BLUE" banner (which now
+  holds its beat instead of being stomped by the instant re-seat), while GOLD is
+  already scrambling into the empty seat.
 - `shots/screen_coronation_banner.png` — "GOLD TAKES THE THRONE" coronation banner
   as the seat changes hands.
 - `shots/screen_succession_crisis.png` — the last-30s crisis: red timer, persistent
