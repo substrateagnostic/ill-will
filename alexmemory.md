@@ -6,6 +6,13 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🏆 THE ROSTER IS COMPLETE: TEN GAMES.** Last Will just merged — the
+  will-drafting freeze is the best screen in the anthology ("THE LAST WILL
+  OF GOLD / six seconds of posthumous power / now... curse whom?" with a
+  live memorial portrait). 3.00 wills/round across all seeds; the dead own
+  the pause while ghosts sway on pews. Your "aim for 10+" is fulfilled:
+  par, echo, tilt, orbital, mower, greed, swap, dead weight, throne,
+  last will — all in the auction pool, all reviewed.
 - **🎯 BOT-MIX IS MERGED — GO PLAY.** All eight minigames now honor
   per-seat HUMAN/BOT from the ESC menu (roster-driven, determinism
   receipts unchanged). Par included: bots draft/place/putt on their turns
