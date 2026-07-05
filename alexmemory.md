@@ -6,14 +6,29 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
-- **HANDOFF NOTE (context compaction imminent)**: the director instance
-  that built this run is at the edge of its window. Everything needed to
-  continue is in project memory + this file. In flight: Par v3 agent
-  (traps/courses/gauntlet/chaos/gutters) and Cosmetics agent (Meshy hats
-  + wardrobe) — the next instance reviews their screenshots and merges
-  exactly as before. If anything seems forgotten after compaction, point
-  the new instance at `alexmemory.md` + the project memory + this line:
-  *the review culture is the soul; the estate is the thesis.*
+- **🕯️ NEW CEREMONY: THE READING OF THE WILL.** After the podium, the
+  night's superlatives are read like an inheritance — THE WORKHORSE (won
+  the most games, still lost the night), THE ARCHITECT (most royalty
+  kills), THE SNAKE (bets cashed against friends), THE LANDLORD (tollgate
+  income), THE DOORMAT ("finished dead last 2 times. forgive them."),
+  THE HOARDER (most spite amassed). Awards persist to the estate ledger
+  and the top one is carved into the graffiti wall — the estate now tells
+  the night's story back. Also fixed on the way: the night used to
+  DEAD-END on the winner banner; "DAWN — BACK TO THE GATES" now returns
+  you to the lobby. Screenshot: `verify_out/will/snap_will_reading_7002.png`.
+- **🎩 COSMETICS ARE MERGED (relaunch to get them).** 8 Meshy hats fitted
+  to all four characters — viking helm, tophat+monocle, halo, chef hat,
+  party cone, jester cap, propeller beanie, flower crown. Stock headwear
+  (Mage's wizard hat etc.) hides convincingly while a hat is worn; halo
+  deliberately floats OVER the wizard hat. 16-check headless test PASS
+  post-merge. Look at `docs/verify/shots/cosmetics_combo.png` — the
+  monocle chain alone justifies the API bill. Store UI at the estate
+  stall (prices in royalties/grudge, agent suggested a menu topping out
+  at halo 300 — "earned innocence") is my next own-hands pass.
+- **HANDOFF COMPLETE**: I'm the new director post-compaction; the thread
+  held. Still in flight: Par v3 agent (8 new trap types, bigger courses,
+  the Gauntlet, TRUE simultaneous chaos, OOB adventure gutters). Review
+  culture unchanged — its screenshots get read before any merge.
 
 - **🏰 THE ESTATE IS NOW THE MAIN MENU (relaunch again!).** Boot lands on
   the grounds under a "THE UN-PARTY" title card: seat cards (HUMAN/BOT +
