@@ -159,7 +159,7 @@ func night_superlatives(champ: int) -> Array:
 	var arch := _stat_leader("royalties", order)
 	if arch >= 0:
 		awards.append({"player": arch, "title": "THE ARCHITECT",
-			"line": "their handiwork claimed %s" % _plural(night_stats[arch].royalties, "victim")})
+			"line": "collected %s in blood money" % _plural(night_stats[arch].royalties, "royalty payment")})
 	var snake := _stat_leader("bets_won", order)
 	if snake >= 0:
 		awards.append({"player": snake, "title": "THE SNAKE",
