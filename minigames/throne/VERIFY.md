@@ -72,18 +72,23 @@ fast variant only), plus the global `--shots` / `--outdir` / `--quitafter`.
 
 | seed | RED | BLUE | GOLD | MINT | max share | throne occupied |
 |-----:|----:|-----:|-----:|-----:|----------:|----------------:|
-| 1 | 30.2% | 33.0% | 6.7%  | 30.1% | **33.0%** | 127.0 / 150s |
-| 2 | 26.1% | 23.8% | 27.7% | 22.4% | **27.7%** | 120.1 / 150s |
-| 3 | 28.4% | 22.8% | 21.9% | 26.8% | **28.4%** | 118.5 / 150s |
-| 4 | 26.8% | 21.4% | 28.6% | 23.2% | **28.6%** | 121.5 / 150s |
-| 5 | 20.5% | 29.5% | 30.1% | 19.9% | **30.1%** | 120.1 / 150s |
+| 1 | 26.4% | 25.1% | 23.3% | 25.3% | **26.4%** | 120.2 / 150s |
+| 2 | 27.1% | 23.1% | 20.8% | 29.0% | **29.0%** | 119.2 / 150s |
+| 3 | 27.3% | 22.8% | 20.3% | 29.5% | **29.5%** | 120.1 / 150s |
+| 4 | 15.9% | 29.3% | 23.7% | 31.1% | **31.1%** | 118.6 / 150s |
+| 5 | 24.9% | 20.5% | 30.3% | 24.3% | **30.3%** | 120.0 / 150s |
 
-**Worst single-bot share across all 5 seeds = 33.0% (seed 1, BLUE) << 55% cap.
-All 5 seeds PASS.** The throne is contested constantly (occupied ~80-85% of the
-match; 40-70 dethronings per match spread across all four bots — e.g. seed 2:
-RED 15 / BLUE 15 / GOLD 14 / MINT 12). The low outlier (seed 1 GOLD 6.7%) is a
-*loser* being starved, not a bot *dominating* — exactly what the cap guards
-against, and it is nowhere near tripping it.
+**Worst single-bot share across all 5 seeds = 31.1% (seed 4, MINT) << 55% cap.
+All 5 seeds PASS.** The throne is contested constantly (occupied ~79-80% of the
+match; 40-55 dethronings per match spread across all four bots — e.g. seed 1:
+RED 13 / BLUE 13 / GOLD 15 / MINT 13). Shares are tight (15.9%-31.1%); no bot
+comes close to dominating.
+
+(Earlier probe runs showed one starved outlier per seed — e.g. seed 1 GOLD at
+6.7% — which turned out to be a *bug*, not balance: a hard dethrone launch could
+fling a body clean over the old 2.6m walls into the void, permanently removing
+that player. Raising the walls to 3.4m + the launch/rescue changes below fixed
+it; the outlier recovered to 23.3% and the table tightened.)
 
 Reproduce:
 ```
@@ -125,12 +130,21 @@ fix — both documented here because they are load-bearing:
    seat radius went 1.45 → 1.70. Post-fix: 10-14 coronations per 40s at every
    seed, no stalls.
 
-Other deliberate values: `LAUNCH_FORCE 13 → 17` so the dethroned king sprawls
-clear off the dais (reads as a real fling, not a nudge); slow-mo beat
-`time_scale 0.2 for 0.6s` on each dethrone.
+3. **Launch strength vs the walls (the seed-1 GOLD "starve").** `LAUNCH_FORCE`
+   went 13 → 17 for drama, but at 17 a body could sail over the 2.6m walls into
+   the void and be lost — that was the real cause of the lopsided outliers. Fix:
+   **walls raised 2.6 → 3.4m**, `LAUNCH_FORCE` settled at **15** (a "down the
+   steps" tumble, per spec, rather than a room-crossing launch), plus a
+   **rescue safety net** in `royal.gd` that snaps any escapee back inside. With
+   3.4m walls the net now fires **zero times across all 5x150s probe matches** —
+   it is pure belt-and-suspenders — and every player stays in play (see the
+   tightened table above).
+
+Other deliberate values: slow-mo beat `time_scale 0.2 for 0.6s` on each dethrone.
 
 Final knobs (printed by the probe): `GRIP_MAX=3  GRIP_REGEN=8.0s  DECREE_CD_BASE=1.8s
-DECREE_FATIGUE=0.20  DECREE_FORCE=11  LAUNCH=17  RE_SIT=2.0s  SEAT_RADIUS=1.7`.
+DECREE_FATIGUE=0.20  DECREE_FORCE=11  LAUNCH=15  RE_SIT=2.0s  SEAT_RADIUS=1.7`;
+arena walls 3.4m; rescue net at `|x|,|z|>7` or `y<-2`.
 
 ## Results contract — verified for 2 / 3 / 4 players (no validation warnings)
 
@@ -160,11 +174,14 @@ DECREE_FATIGUE=0.20  DECREE_FORCE=11  LAUNCH=17  RE_SIT=2.0s  SEAT_RADIUS=1.7`.
   the GOLDEN SCORE-STREAM rising from the seat, crown on the throne, the floating
   GRIP pips + orange "TYRANNY" fatigue bar above the king, a mint-colored GUARD
   WALL planted on one approach, and RED dash-charging in to gang the seat.
-- `shots/screen_decree_blast.png` — DECREE BLAST: the big cyan shockwave ring
+- `shots/screen_decree_blast.png` — DECREE BLAST: the big blue shockwave ring
   expanding off the dais as the king knocks challengers back down the steps.
+  (Captured before the wall-height bump — the ring/mechanic are unchanged; only
+  the back walls are shorter than in the other shots.)
 - `shots/screen_dethrone_fling.png` — **the make-or-break fling**: the dethroned
-  BLUE ragdolls clear across the arena to the far corner during the slow-mo beat,
-  the detached crown arcing above the throne, "MINT DETHRONES BLUE" banner.
+  BLUE ragdolls down the dais steps during the slow-mo beat, the crown popped off
+  and airborne above the throne, while GOLD is instantly crowned in the same
+  breath — the "betray each other for the empty seat" moment made literal.
 - `shots/screen_coronation_banner.png` — "GOLD TAKES THE THRONE" coronation banner
   as the seat changes hands.
 - `shots/screen_succession_crisis.png` — the last-30s crisis: red timer, persistent

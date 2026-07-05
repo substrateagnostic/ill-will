@@ -45,7 +45,7 @@ const RE_SIT_CD := 2.0
 
 const GRIP_MAX := 3
 const GRIP_REGEN := 8.0            # +1 grip every 8s while seated
-const LAUNCH_FORCE := 17.0
+const LAUNCH_FORCE := 15.0
 
 const DECREE_CD_BASE := 1.8
 const DECREE_FATIGUE := 0.2        # each decree while seated is 0.2s slower
@@ -998,10 +998,10 @@ func _build_walls() -> void:
 	wmat.albedo_color = Color(0.2, 0.17, 0.18)
 	wmat.roughness = 0.95
 	var defs := [
-		{"size": Vector3(12.6, 2.6, 0.4), "pos": Vector3(0, 1.3, -6.2)},
-		{"size": Vector3(12.6, 2.6, 0.4), "pos": Vector3(0, 1.3, 6.2)},
-		{"size": Vector3(0.4, 2.6, 12.6), "pos": Vector3(-6.2, 1.3, 0)},
-		{"size": Vector3(0.4, 2.6, 12.6), "pos": Vector3(6.2, 1.3, 0)},
+		{"size": Vector3(12.6, 3.4, 0.4), "pos": Vector3(0, 1.7, -6.2)},
+		{"size": Vector3(12.6, 3.4, 0.4), "pos": Vector3(0, 1.7, 6.2)},
+		{"size": Vector3(0.4, 3.4, 12.6), "pos": Vector3(-6.2, 1.7, 0)},
+		{"size": Vector3(0.4, 3.4, 12.6), "pos": Vector3(6.2, 1.7, 0)},
 	]
 	for d in defs:
 		var body := StaticBody3D.new()

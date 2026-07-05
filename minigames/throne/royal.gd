@@ -238,6 +238,18 @@ func _physics_process(delta: float) -> void:
 		want_dash = false
 		_do_dash()
 
+	# safety net: a hard dethrone launch must never lose a body over the wall
+	# or under the floor. Catch any escapee and set it back inside the arena.
+	if global_position.y < -2.0 or absf(global_position.x) > 7.0 or absf(global_position.z) > 7.0:
+		print("THRONE_RESCUE royal=%d from=(%.1f,%.1f,%.1f)" % [index, global_position.x, global_position.y, global_position.z])
+		global_position = Vector3(clampf(global_position.x, -5.0, 5.0), 0.5, clampf(global_position.z, -5.0, 5.0))
+		linear_velocity = Vector3.ZERO
+		angular_velocity = Vector3.ZERO
+		_tumble_t = 0.0
+		_stun = 0.0
+		_lock_upright()
+		rotation = Vector3.ZERO
+
 func _process(delta: float) -> void:
 	_update_anim(delta)
 
