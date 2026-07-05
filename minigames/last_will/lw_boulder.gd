@@ -39,17 +39,20 @@ func setup(angle_deg: float, offset: float, p_owner: Node) -> void:
 	_start = Vector3(start2.x, RADIUS, start2.y)
 	_roll_axis = Vector3(perp.x, 0, perp.y)
 
-	# lane telegraph strip
+	# lane telegraph strip — clipped to the CURRENT yard so it never reads
+	# as a glowing bridge floating over the void
+	var plat_r: float = p_owner.platform_radius if p_owner != null else 7.0
+	var chord := 2.0 * sqrt(maxf(plat_r * plat_r - offset * offset, 1.0)) + 2.2
 	_strip = MeshInstance3D.new()
 	var sm := BoxMesh.new()
-	sm.size = Vector3(TRAVEL, 0.05, RADIUS * 2.1)
+	sm.size = Vector3(chord, 0.05, RADIUS * 2.1)
 	_strip.mesh = sm
 	_strip_mat = StandardMaterial3D.new()
 	_strip_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_strip_mat.albedo_color = Color(1.0, 0.62, 0.15, 0.3)
+	_strip_mat.albedo_color = Color(1.0, 0.58, 0.12, 0.25)
 	_strip_mat.emission_enabled = true
-	_strip_mat.emission = Color(1.0, 0.55, 0.1)
-	_strip_mat.emission_energy_multiplier = 1.2
+	_strip_mat.emission = Color(1.0, 0.5, 0.1)
+	_strip_mat.emission_energy_multiplier = 0.9
 	_strip_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_strip.material_override = _strip_mat
 	_strip.position = Vector3(perp.x * offset, 0.04, perp.y * offset)
@@ -102,7 +105,7 @@ func tick(delta: float) -> void:
 		BState.TELEGRAPH:
 			_t += delta
 			var pulse := 0.5 + 0.5 * sin(_t * 12.0)
-			_strip_mat.albedo_color.a = 0.12 + 0.3 * pulse
+			_strip_mat.albedo_color.a = 0.09 + 0.19 * pulse
 			_bang.modulate.a = 0.4 + 0.6 * pulse
 			if _t >= TELEGRAPH_T:
 				state = BState.ROLLING

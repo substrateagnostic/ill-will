@@ -139,6 +139,7 @@ var _rounds_override := 0
 var _test_mode := ""               # --willtest=squish|gust
 var _test_fired := false
 var _delta_cache := 0.016
+var _skip_to := 0.0                # --willskip=T: screenshot aid, round 1 only
 
 # fx
 var _shake := 0.0
@@ -189,6 +190,8 @@ func _parse_args() -> void:
 					_forced_kills.append({"t": float(kv[0]), "p": int(kv[1])})
 		elif arg.begins_with("--willtest="):
 			_test_mode = arg.trim_prefix("--willtest=")
+		elif arg.begins_with("--willskip="):
+			_skip_to = maxf(0.0, float(arg.trim_prefix("--willskip=")))
 	if _tally:
 		# faster-than-realtime with dt pinned to exactly 1/60 (Swap Meet trick)
 		var fast := 8.0
@@ -461,9 +464,12 @@ func _make_lantern(with_light: bool) -> Node3D:
 	cage.material_override = cage_mat
 	cage.position.y = 1.3
 	root.add_child(cage)
+	# tiny finial knob — the amber housing must stay visible from the high
+	# couch camera (an earlier full-width cap blacked every lantern out)
 	var cap := MeshInstance3D.new()
-	var capm := BoxMesh.new()
-	capm.size = Vector3(0.36, 0.07, 0.36)
+	var capm := SphereMesh.new()
+	capm.radius = 0.06
+	capm.height = 0.12
 	cap.mesh = capm
 	cap.material_override = post_mat
 	cap.position.y = 1.5
@@ -517,12 +523,38 @@ func _build_platform() -> void:
 			dm.height = 2.6
 			disc.mesh = dm
 			var dmat := StandardMaterial3D.new()
-			dmat.albedo_color = Color(0.42, 0.4, 0.46)
+			dmat.albedo_color = Color(0.5, 0.47, 0.53)
 			dmat.roughness = 0.95
 			disc.material_override = dmat
 			disc.position.y = -1.31
 			$Arena.add_child(disc)
 			_pillar_disc = disc
+			# the last flame: candle stubs + one warm light that NEVER falls,
+			# so the sudden-death brawl isn't fought in the dark
+			var candle_mat := StandardMaterial3D.new()
+			candle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			candle_mat.albedo_color = Color(1.0, 0.82, 0.5)
+			candle_mat.emission_enabled = true
+			candle_mat.emission = Color(1.0, 0.7, 0.3)
+			candle_mat.emission_energy_multiplier = 1.6
+			for ci in 5:
+				var ca := TAU * ci / 5.0 + 0.4
+				var candle := MeshInstance3D.new()
+				var cyl := CylinderMesh.new()
+				cyl.top_radius = 0.055
+				cyl.bottom_radius = 0.07
+				cyl.height = 0.16 + 0.07 * ((ci * 3) % 3)
+				candle.mesh = cyl
+				candle.material_override = candle_mat
+				candle.position = Vector3(cos(ca) * (R_LAST - 0.28), 0.09, sin(ca) * (R_LAST - 0.28))
+				disc.add_child(candle)
+				candle.position.y += 1.31   # counter the disc's own offset
+			var pl := OmniLight3D.new()
+			pl.light_color = Color(1.0, 0.72, 0.38)
+			pl.light_energy = 1.7
+			pl.omni_range = 5.0
+			pl.position.y = 1.31 + 1.6
+			disc.add_child(pl)
 		var rm := (inner + outer) / 2.0
 		for i in n:
 			var a := TAU * i / n + (0.11 * ring_id)
@@ -633,6 +665,8 @@ func _start_round() -> void:
 		_tally_stats.carries += 1
 		print("LW_CARRYOVER %s %s %s->%s" % [c.kind, c.effect, player_name(c.from), player_name(tgt)])
 	_carry.clear()
+	if _skip_to > 0.0 and round_index == 0:
+		round_elapsed = _skip_to
 	round_label.text = "ROUND %d / %d" % [round_index + 1, rounds_total]
 	_rebuild_scoreboard()
 	if not _tally:
@@ -674,6 +708,10 @@ func _process_schedule() -> void:
 	while _sched_i < _schedule.size() and round_elapsed >= float(_schedule[_sched_i].t):
 		var ev: Dictionary = _schedule[_sched_i]
 		_sched_i += 1
+		# --willskip fast-forward: stale moving hazards are skipped, but the
+		# shrink chain always replays so the platform state stays honest
+		if round_elapsed - float(ev.t) > 1.5 and str(ev.k) in ["boulder", "pendulum"]:
+			continue
 		match str(ev.k):
 			"boulder":
 				_spawn_boulder()
@@ -719,6 +757,8 @@ func _do_shrink(ring: int) -> void:
 	Sfx.play("crush", -2.0)
 	_shake = maxf(_shake, 0.5)
 	print("LW_SHRINK ring=%d radius=%.1f t=%.1f" % [ring, platform_radius, round_elapsed])
+	# fall ALL the way past the void sea and free — resting at a shallow
+	# depth left a ghost-ring visible from the top-down camera
 	var segs: Array = _ring_segs[ring]
 	for i in segs.size():
 		var seg: MeshInstance3D = segs[i]
@@ -727,17 +767,19 @@ func _do_shrink(ring: int) -> void:
 		var tw := create_tween()
 		var d := 0.03 * (i % 7)
 		tw.tween_interval(d)
-		tw.tween_property(seg, "position:y", seg.position.y - 14.0, 1.15).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		tw.parallel().tween_property(seg, "rotation:x", rng.randf_range(-1.8, 1.8), 1.15)
-		tw.parallel().tween_property(seg, "rotation:z", rng.randf_range(-1.8, 1.8), 1.15)
+		tw.tween_property(seg, "position:y", seg.position.y - 34.0, 2.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.parallel().tween_property(seg, "rotation:x", rng.randf_range(-2.6, 2.6), 2.1)
+		tw.parallel().tween_property(seg, "rotation:z", rng.randf_range(-2.6, 2.6), 2.1)
+		tw.tween_callback(seg.queue_free)
 	# lanterns and gravestones on that ring fall with their parent segs' root
 	var root: Node3D = _ring_roots[ring_root_index(ring)]
 	for child in root.get_children():
 		if child is MeshInstance3D:
 			continue  # segs handled above
 		var tw2 := create_tween()
-		tw2.tween_property(child, "position:y", child.position.y - 14.0, 1.2).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		tw2.parallel().tween_property(child, "rotation:x", 0.9, 1.2)
+		tw2.tween_property(child, "position:y", child.position.y - 34.0, 2.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw2.parallel().tween_property(child, "rotation:x", 0.9, 2.0)
+		tw2.tween_callback(child.queue_free)
 
 func ring_root_index(ring: int) -> int:
 	# _ring_roots built in order [outer(2), mid(1), core(0)]
@@ -1380,8 +1422,9 @@ func _go_resolution() -> void:
 		else:
 			_apply_bless_effect(b, p, bt)
 			_register_claim(p, bt, round_index)
+		var b_stored := round_over and b != "coin" and round_index + 1 < rounds_total
 		print("LW_WILL %s blesses %s with %s%s" % [players[p].name, players[bt].name, b,
-			" (carry)" if round_over and b != "coin" else ""])
+			" (carry)" if b_stored else (" (fades: match over)" if round_over and b != "coin" else "")])
 
 	if _will.curse_target >= 0:
 		var ct: int = _will.curse_target
@@ -1393,8 +1436,9 @@ func _go_resolution() -> void:
 				_carry.append({"kind": "curse", "effect": c, "from": p, "target": ct})
 		else:
 			_apply_curse_effect(c, p, ct)
+		var c_stored := round_over and round_index + 1 < rounds_total
 		print("LW_WILL %s curses %s with %s%s" % [players[p].name, players[ct].name, c,
-			" (carry)" if round_over else ""])
+			" (carry)" if c_stored else (" (fades: match over)" if round_over else "")])
 
 	_tally_stats.wills += 1
 	_ui.show_resolution(lines)
@@ -1438,14 +1482,16 @@ func _spawn_coin_pop(target: int) -> void:
 	_spawn_burst(pawn.global_position + Vector3(0, 1.4, 0), Color(1.0, 0.85, 0.3), 20)
 	Sfx.play("sink", -2.0)
 
+const SEAT_ANGLES := [0.15, PI - 0.15, 4.25, 5.25]  # east, west, NW, NE —
+	# all inside the camera frame (the south wedge is clipped at 720p)
+
 func _seat_ghost(i: int) -> void:
 	if ghosts.has(i):
 		return
 	var g := LWGhostSeat.new()
 	g.name = "Ghost%d" % i
 	spawn_root.add_child(g)
-	var n := players.size()
-	var seat_angle := TAU * i / n + 0.6
+	var seat_angle: float = SEAT_ANGLES[i % SEAT_ANGLES.size()]
 	g.setup(i, players[i].color, players[i].name, load(players[i].char_path), seat_angle, self)
 	ghosts[i] = g
 	if not _tally:
@@ -1456,6 +1502,7 @@ func _end_round() -> void:
 	phase = Phase.ROUND_END
 	_re_t = 0.0
 	_re_events.clear()
+	_clear_hazards()   # the yard goes quiet for the ceremony
 	for pawn in pawns:
 		if pawn.alive:
 			pawn.move_input = Vector2.ZERO

@@ -198,9 +198,9 @@ func _build_plaque() -> void:
 
 	# portrait world: camera + lights (model swapped per deceased)
 	var cam := Camera3D.new()
-	cam.position = Vector3(0, 1.28, 2.0)
-	cam.rotation_degrees = Vector3(-4, 0, 0)
-	cam.fov = 34.0
+	cam.position = Vector3(0, 1.26, 2.4)
+	cam.rotation_degrees = Vector3(-3, 0, 0)
+	cam.fov = 35.0
 	_portrait_vp.add_child(cam)
 	_portrait_light = OmniLight3D.new()
 	_portrait_light.position = Vector3(1.1, 1.9, 1.4)
@@ -457,15 +457,16 @@ func set_card_sel(idx: int) -> void:
 			p.z_index = 0
 
 func lock_card(idx: int) -> void:
+	# pop the chosen card, then ALL cards leave the stage — the choice gets
+	# restated by the mode panels / resolution banners
 	for i in _card_panels.size():
 		var p: Panel = _card_panels[i]
 		var tw := create_tween()
 		if i == idx:
 			tw.tween_property(p, "scale", Vector2(1.16, 1.16), 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-			tw.tween_property(p, "scale", Vector2(0.9, 0.9), 0.25).set_delay(0.25)
-			tw.parallel().tween_property(p, "modulate:a", 0.35, 0.25).set_delay(0.25)
+			tw.tween_property(p, "modulate:a", 0.0, 0.22).set_delay(0.2)
 		else:
-			tw.tween_property(p, "modulate:a", 0.0, 0.22)
+			tw.tween_property(p, "modulate:a", 0.0, 0.18)
 
 func set_world_peek(v: bool) -> void:
 	if _peek == v:
