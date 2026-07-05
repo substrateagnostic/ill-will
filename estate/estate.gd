@@ -88,6 +88,7 @@ func _ready() -> void:
 	PlayerInput.auto_assign(4)
 	_spawn_walkers()
 	_spawn_toys()
+	_spawn_executor()
 	$Trail.build(EstateState.players, EstateState.gate_statues)
 	_redraw_monuments()
 	_redraw_graffiti()
@@ -169,6 +170,15 @@ func _build_lobby_panel() -> void:
 	ward_btn.pressed.connect(_build_wardrobe_panel)
 	btn_row.add_child(ward_btn)
 	phase_box.add_child(btn_row)
+	var quote := Label.new()
+	quote.text = "“%s”  — The Executor" % _executor_greeting()
+	quote.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	quote.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	quote.custom_minimum_size = Vector2(700, 0)
+	quote.add_theme_font_size_override("font_size", 16)
+	quote.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
+	quote.modulate.a = 0.85
+	phase_box.add_child(quote)
 	var hint := Label.new()
 	hint.text = "ESC = players & controls anytime  ·  the estate remembers everything"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -192,6 +202,7 @@ func _start_night_from_lobby() -> void:
 
 func _enter_selector() -> void:
 	phase = Phase.SELECTOR
+	Music.play_slot("lobby")
 	Sfx.play("card")
 	_clear_panel("PICK A GAME — exhibition match, no stakes", Color(0.9, 0.95, 0.9))
 	var grid := GridContainer.new()
@@ -322,6 +333,51 @@ func _spawn_walkers() -> void:
 		w.setup(CHAR_SCENES[i], EstateState.players[i].color, i)
 		Cosmetics.apply_to_character(w, i)
 		walkers.append(w)
+
+## ----- THE EXECUTOR (host; voice register: Saki — dry, immaculate, lethal) -----
+
+const EXECUTOR_GLB := "res://assets/models/meshy/executor_butler.glb"
+const THEATER_GLB := "res://assets/models/meshy/theater_stage.glb"
+
+func _spawn_executor() -> void:
+	if ResourceLoader.exists(THEATER_GLB):
+		var th := MeshyProp.instance(THEATER_GLB, 3.2, 205.0)
+		add_child(th)
+		th.global_position = Vector3(6.4, 0.0, -5.6)
+		var ttag := Label3D.new()
+		ttag.text = "THE THEATER"
+		ttag.font_size = 44
+		ttag.pixel_size = 0.006
+		ttag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		ttag.modulate = Color(1.0, 0.75, 0.75)
+		ttag.outline_size = 12
+		add_child(ttag)
+		ttag.global_position = th.global_position + Vector3(0, 3.6, 0)
+	if not ResourceLoader.exists(EXECUTOR_GLB):
+		return
+	var ex := MeshyProp.instance(EXECUTOR_GLB, 1.9, 25.0)
+	add_child(ex)
+	ex.global_position = Vector3(2.6, 0.0, -3.4)
+	var tag := Label3D.new()
+	tag.text = "THE EXECUTOR"
+	tag.font_size = 40
+	tag.pixel_size = 0.005
+	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	tag.modulate = Color(0.85, 0.8, 0.95)
+	tag.outline_size = 10
+	add_child(tag)
+	tag.global_position = ex.global_position + Vector3(0, 2.15, 0)
+
+## One Saki-voiced line for the lobby, drawn from the ledger's memory.
+func _executor_greeting() -> String:
+	if EstateState.ledger.is_empty():
+		return "The Executor is pleased to receive you. The estate had been expecting someone; it was not, in candour, you."
+	var last: Dictionary = EstateState.ledger.back()
+	var aw: Array = last.get("awards", [])
+	if aw.is_empty():
+		return "Welcome back. The estate kept the lights on and the grudges filed."
+	var a: Dictionary = aw[EstateState.rng.randi_range(0, aw.size() - 1)]
+	return "Welcome back. We remembered %s as %s, and see no reason to revise." % [str(a.get("who", "someone")), str(a.get("title", "themselves"))]
 
 ## ----- THE WARDROBE (cosmetics store; LEGACY buys vanity) -----
 
@@ -955,7 +1011,7 @@ func _enter_will_reading(champ) -> void:
 	var awards: Array = EstateState.night_superlatives(champ.index)
 	_clear_panel("THE READING OF THE WILL", Color(0.85, 0.75, 1.0))
 	var head := Label.new()
-	head.text = "Night %d is settled. %s takes the manor." % [EstateState.nights_played, champ.name]
+	head.text = "The estate has reviewed the evening's conduct and finds it, on the whole, actionable.\n%s takes the manor." % champ.name
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_color_override("font_color", champ.color)
 	phase_box.add_child(head)
