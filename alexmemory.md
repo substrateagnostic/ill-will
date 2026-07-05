@@ -6,6 +6,47 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🌙 OVERNIGHT RUN — progress ledger (updating as the night goes).**
+  Everything below is merged to master and smoke-tested unless noted:
+  - **ILL WILL is real**: window title, lobby title card, exe metadata.
+    Your saves MIGRATED automatically (the rename moved Godot's user://
+    dir — a Migrate autoload copies estate history/seats/cosmetics over;
+    nothing lost, verified).
+  - **THE WARDROBE is open** (lobby button): LEGACY currency = your
+    night points paid at each dawn (+5 champion; old saves grandfathered
+    15/night). Prices 10-30; buy/wear/doff; walkers and the podium wear
+    your hats. E2E-tested.
+  - **How-to-Play cards**: every selector game now opens a card — goal,
+    PLAY / PRACTICE / BACK, and CONTROLS TONIGHT rendered live from your
+    actual bindings (your keybind idea, made structural).
+  - **Press-A-to-join**: an unclaimed gamepad presses A in the lobby and
+    takes the first BOT seat. Seat setup persists.
+  - **THE EXECUTOR is on the grounds** (Meshy butler by the gates) and
+    SPEAKS — Saki register throughout: ledger-aware lobby greeting
+    ("We remembered BLUE as THE HOARDER, and see no reason to revise."),
+    will-reading header ("...finds it, on the whole, actionable.").
+  - **THE THEATER stands** on the right flank (red curtains, gold trim).
+    THE SÉANCE (research pick #1: co-op spirit-board with a paid
+    saboteur, Executor as medium) is being built by a Fable agent NOW.
+    Research doc: docs/design/06-social-deduction-research.md — worth
+    your read; it argues 4-player bluff-and-vote needed re-engineering
+    and pitched three formats (Séance / Understudy / Masked Ball).
+  - **Kill attribution fleet: ALL FOUR MERGED.** Every game reports
+    kill_events; the Reading of the Will can now open with **NEMESIS OF
+    <name> — hunted them down N times tonight**. (Director's ruling:
+    Swap Meet's position-swaps are theft, not kills — filtered.)
+  - **Style unification: echo/tilt/dead_weight now live at the same
+    party** — echo's neon ghosts over a warm wooden well (stunning:
+    docs/verify/shots/style_echo_r5_neon_on_warm.png), tilt at golden
+    hour over an evening sea, dead_weight in a warm room with amber
+    hazard trim. Par got scoreboard badges + a proper "CHAOS — EVERYONE
+    AT ONCE" banner.
+  - **Music scaffold ready**: drop .ogg files at assets/music/
+    (lobby/grounds/auction/ceremony/game_light/game_tense.ogg) and the
+    estate plays them with crossfades — zero code needed from you.
+  - Cache: you were right — Max plans get the 1h TTL; a 48-min
+    self-tick keeps my cache warm and drives the overnight loop.
+
 - **⚙️ SETTINGS V2 SHIPPED (menus first-class, per your call).** ESC now
   opens a tabbed overlay anywhere: SEATS / CONTROLS / AUDIO / VIDEO /
   ACCESS. CONTROLS = full key remapping per device (WASD half, arrows
