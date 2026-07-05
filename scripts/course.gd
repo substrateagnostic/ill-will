@@ -7,6 +7,10 @@ extends Node3D
 ## the @export fields to describe its shape; the logic below is shared.
 
 signal ball_entered_cup(body: Node3D)
+## Emitted when a moving ball falls into an "adventure gutter" mouth (see the
+## optional "Gutters" node). target = where the side channel should deliver it.
+## Only courses that ship gutter Area3Ds ever fire this; main handles the detour.
+signal ball_entered_gutter(body: Node3D, target: Vector3)
 
 const MAGNET_RADIUS := 0.36
 const MAGNET_MAX_SPEED := 5.0
@@ -37,6 +41,19 @@ var balls: Array = []
 
 func _ready() -> void:
 	cup_area.body_entered.connect(func(body): ball_entered_cup.emit(body))
+	# Optional adventure gutters: each Area3D under a "Gutters" node catches a
+	# ball that leaves the green at that marked spot. Its "target" metadata is the
+	# on-green point the side channel returns the ball to (default: near the cup).
+	var gutters := get_node_or_null("Gutters")
+	if gutters:
+		for area in gutters.get_children():
+			if area is Area3D:
+				var tgt: Vector3 = area.get_meta("target", cup_position())
+				area.body_entered.connect(_on_gutter_body.bind(tgt))
+
+func _on_gutter_body(body: Node3D, target: Vector3) -> void:
+	if body is Ball:
+		ball_entered_gutter.emit(body, target)
 
 func _physics_process(_delta: float) -> void:
 	var cup := cup_area.global_position

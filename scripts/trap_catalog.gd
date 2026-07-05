@@ -48,6 +48,46 @@ const TRAPS := {
 		"name": "THE CRUSHER",
 		"desc": "Slams on a timer. Time your putt or die. KILLS.",
 	},
+	"portal_pair": {
+		"scene": "res://scenes/traps/portal.tscn",
+		"name": "PORTAL PAIR",
+		"desc": "In one ring, out the other — speed intact. Place BOTH (two clicks).",
+	},
+	"ice_patch": {
+		"scene": "res://scenes/traps/ice.tscn",
+		"name": "ICE PATCH",
+		"desc": "Frictionless. Your ball forgets how to stop.",
+	},
+	"boost_pad": {
+		"scene": "res://scenes/traps/boost.tscn",
+		"name": "BOOST PAD",
+		"desc": "A shove in the arrows' direction. Rarely the one you wanted.",
+	},
+	"magnet_post": {
+		"scene": "res://scenes/traps/magnet.tscn",
+		"name": "MAGNET POST",
+		"desc": "Drags every ball off its line. Won't kill you — just ruins you.",
+	},
+	"tunnel": {
+		"scene": "res://scenes/traps/tunnel.tscn",
+		"name": "TUNNEL",
+		"desc": "Roll through the pipe. Roll over it and eat the roof.",
+	},
+	"moving_wall": {
+		"scene": "res://scenes/traps/moving_wall.tscn",
+		"name": "MOVING WALL",
+		"desc": "A wall that won't hold still. Timing is everything.",
+	},
+	"trampoline": {
+		"scene": "res://scenes/traps/trampoline.tscn",
+		"name": "TRAMPOLINE",
+		"desc": "Boings your ball up and away. Whee. Splat, maybe.",
+	},
+	"spinner": {
+		"scene": "res://scenes/traps/spinner.tscn",
+		"name": "SPINNER",
+		"desc": "A lazy-susan of spite. Bats rolling balls off course.",
+	},
 }
 
 const CURSED := {
@@ -73,6 +113,24 @@ const CURSED := {
 		"name": "CATEGORY 5 FAN",
 		"desc": "Reclassified as a weather event.",
 		"params": {"push": 16.0},
+	},
+	"express_wall": {
+		"scene": "res://scenes/traps/moving_wall.tscn",
+		"name": "EXPRESS WALL",
+		"desc": "The wall took stimulants. Wider, faster, meaner.",
+		"params": {"rate": 3.1, "travel": 1.5},
+	},
+	"mega_magnet": {
+		"scene": "res://scenes/traps/magnet.tscn",
+		"name": "MEGA MAGNET",
+		"desc": "An event horizon with a business license.",
+		"params": {"pull": 13.0, "radius": 3.4},
+	},
+	"buzzsaw_spinner": {
+		"scene": "res://scenes/traps/spinner.tscn",
+		"name": "BUZZSAW SPINNER",
+		"desc": "Same lazy susan, now caffeinated into a blender.",
+		"params": {"spin": 6.5},
 	},
 }
 

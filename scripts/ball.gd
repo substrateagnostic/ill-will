@@ -13,6 +13,10 @@ var player_color := Color(1.0, 0.42, 0.35)
 var is_sunk := false
 var is_dead := false
 var is_petrified := false
+## True while the ball is being carried through an adventure gutter (main drives
+## its position by tween). Physics + the fell-off-table reset are paused so the
+## detour can't be interrupted.
+var in_transit := false
 var last_rest_position := Vector3.ZERO
 var _was_moving := false
 var _mat: StandardMaterial3D
@@ -53,7 +57,7 @@ func _ready() -> void:
 	add_child(_trail)
 
 func _physics_process(_delta: float) -> void:
-	if is_sunk or is_petrified or is_dead:
+	if is_sunk or is_petrified or is_dead or in_transit:
 		return
 	var speed := linear_velocity.length()
 	if _trail:
@@ -151,5 +155,22 @@ func reset_to_rest() -> void:
 	global_position = last_rest_position + Vector3(0, 0.3, 0)
 	linear_velocity = Vector3.ZERO
 	angular_velocity = Vector3.ZERO
+	freeze = false
+	_was_moving = true
+
+## Adventure gutter: main freezes the ball, sweeps it along the channel by tween,
+## then drops it back onto the green near the cup.
+func enter_gutter() -> void:
+	in_transit = true
+	freeze = true
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+
+func exit_gutter(pos: Vector3) -> void:
+	global_position = pos + Vector3(0, 0.2, 0)
+	last_rest_position = pos
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	in_transit = false
 	freeze = false
 	_was_moving = true

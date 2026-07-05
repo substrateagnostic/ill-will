@@ -1,0 +1,71 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://scripts/traps/magnet_post_trap.gd" id="1"]
+
+[sub_resource type="CylinderMesh" id="pole_mesh"]
+top_radius = 0.09
+bottom_radius = 0.12
+height = 1.0
+
+[sub_resource type="CylinderMesh" id="cap_mesh"]
+top_radius = 0.16
+bottom_radius = 0.16
+height = 0.14
+
+[sub_resource type="TorusMesh" id="ring_mesh"]
+inner_radius = 0.95
+outer_radius = 1.0
+
+[sub_resource type="CylinderShape3D" id="pole_shape"]
+height = 1.0
+radius = 0.12
+
+[sub_resource type="CylinderShape3D" id="pull_shape"]
+height = 0.6
+radius = 2.0
+
+[sub_resource type="StandardMaterial3D" id="mat_pole"]
+albedo_color = Color(0.7, 0.72, 0.78, 1)
+roughness = 0.3
+metallic = 0.7
+
+[sub_resource type="StandardMaterial3D" id="mat_cap"]
+albedo_color = Color(0.85, 0.2, 0.2, 1)
+roughness = 0.4
+
+[sub_resource type="StandardMaterial3D" id="mat_ring"]
+transparency = 1
+albedo_color = Color(0.9, 0.3, 0.75, 0.5)
+emission_enabled = true
+emission = Color(0.9, 0.2, 0.7, 1)
+emission_energy_multiplier = 0.5
+
+[node name="MagnetPostTrap" type="Node3D"]
+script = ExtResource("1")
+
+[node name="PoleBody" type="StaticBody3D" parent="."]
+
+[node name="PoleShape" type="CollisionShape3D" parent="PoleBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("pole_shape")
+
+[node name="PoleMesh" type="MeshInstance3D" parent="PoleBody"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+mesh = SubResource("pole_mesh")
+surface_material_override/0 = SubResource("mat_pole")
+
+[node name="AccentCap" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.02, 0)
+mesh = SubResource("cap_mesh")
+surface_material_override/0 = SubResource("mat_cap")
+
+[node name="PullRing" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.03, 0)
+mesh = SubResource("ring_mesh")
+surface_material_override/0 = SubResource("mat_ring")
+
+[node name="Pull" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+
+[node name="PullShape" type="CollisionShape3D" parent="Pull"]
+shape = SubResource("pull_shape")
