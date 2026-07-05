@@ -59,6 +59,14 @@ Ball physics stay frozen — the interface changes, not the sim.
 Sequencing: land Par v3 → Alex playtests v3 → full v4 spec → subagent
 wave. Too big to collide with v3 mid-flight.
 
+## Online co-op (Alex, 2026-07-05: on the list, further down)
+
+For TRUE testing purposes ahead of couch parties. Design-ahead notes
+already in digest 04: invite codes, bot-takeover-on-drop rejoin, the
+hub IS the lobby (remote players inhabit the estate as avatars — one
+UI, two transports). Godot high-level multiplayer, likely WebRTC for
+browser. Sequenced after the Theater wave and Par v4.
+
 ## Music (Alex owns, tomorrow)
 
 Alex reviews/selects the soundtrack himself (Berklee viola performance;
