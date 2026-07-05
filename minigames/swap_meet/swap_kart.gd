@@ -324,69 +324,34 @@ func cheer_forever() -> void:
 
 ## --- visuals ------------------------------------------------------------------
 
+const KART_GLB := "res://assets/models/meshy/go_kart.glb"
+const KART_HEIGHT := 0.72        # in _visual-local units (the _visual scales x1.15)
+const KART_YAW := 0.0            # steering wheel / nose faces +Z (forward)
+
 func _build_kart() -> void:
+	# Custom Meshy go-kart (rounded cream roadster body, exposed steering wheel)
+	# replacing the box kart. Purely visual; the kinematic soul is unchanged.
+	# Normalized so the wheels sit at y=0 and the nose faces +Z (KayKit forward).
+	var kart := MeshyProp.instance(KART_GLB, KART_HEIGHT, KART_YAW)
+	kart.name = "KartModel"
+	_visual.add_child(kart)
+	# --- per-player identity (the model is cream, so identity is ADDED) ---
+	# bumper ring wrapping the kart (it IS a bumper kart), tinted + emissive
 	_body_mat = StandardMaterial3D.new()
 	_body_mat.albedo_color = color
 	_body_mat.roughness = 0.45
-	var dark := StandardMaterial3D.new()
-	dark.albedo_color = Color(0.13, 0.13, 0.15)
-	dark.roughness = 0.8
-	# chunky body (+Z = forward, matching KayKit facing)
-	var body := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = Vector3(0.85, 0.30, 1.25)
-	body.mesh = bm
-	body.material_override = _body_mat
-	body.position = Vector3(0, 0.34, 0)
-	_visual.add_child(body)
-	# sloped nose
-	var nose := MeshInstance3D.new()
-	var pm := PrismMesh.new()
-	pm.size = Vector3(0.72, 0.24, 0.42)
-	nose.mesh = pm
-	nose.material_override = _body_mat
-	nose.position = Vector3(0, 0.36, 0.80)
-	nose.rotation_degrees = Vector3(90, 0, 0)
-	_visual.add_child(nose)
-	# bumper ring (it's a BUMPER kart) - darkened identity color
+	_body_mat.emission_enabled = true
+	_body_mat.emission = color
+	_body_mat.emission_energy_multiplier = 0.25
 	var ring := MeshInstance3D.new()
 	var tm := TorusMesh.new()
 	tm.inner_radius = 0.58
 	tm.outer_radius = 0.80
 	ring.mesh = tm
-	var ring_mat := StandardMaterial3D.new()
-	ring_mat.albedo_color = Color(color.r * 0.55, color.g * 0.55, color.b * 0.55)
-	ring_mat.roughness = 0.7
-	ring.material_override = ring_mat
-	ring.position = Vector3(0, 0.30, 0.05)
-	ring.scale = Vector3(1.0, 0.55, 1.15)
+	ring.material_override = _body_mat
+	ring.position = Vector3(0, 0.26, 0.05)
+	ring.scale = Vector3(1.0, 0.5, 1.15)
 	_visual.add_child(ring)
-	# rear spoiler
-	var spoiler := MeshInstance3D.new()
-	var sm := BoxMesh.new()
-	sm.size = Vector3(0.78, 0.05, 0.20)
-	spoiler.mesh = sm
-	spoiler.material_override = _body_mat
-	spoiler.position = Vector3(0, 0.62, -0.62)
-	_visual.add_child(spoiler)
-	# wheels
-	for wz in [0.42, -0.45]:
-		for wx in [-0.46, 0.46]:
-			var w := MeshInstance3D.new()
-			var cm := CylinderMesh.new()
-			cm.top_radius = 0.20
-			cm.bottom_radius = 0.20
-			cm.height = 0.15
-			w.mesh = cm
-			w.material_override = dark
-			var pivot := Node3D.new()
-			pivot.position = Vector3(wx, 0.20, wz)
-			_visual.add_child(pivot)
-			w.rotation_degrees = Vector3(0, 0, 90)
-			pivot.add_child(w)
-			_all_wheels.append(w)
-			if wz > 0.0:
-				_front_wheels.append(pivot)
 	# identity ring on the ground (top-down readability)
 	var gring := MeshInstance3D.new()
 	var gt := TorusMesh.new()
