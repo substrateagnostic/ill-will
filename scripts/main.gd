@@ -16,13 +16,14 @@ const CHAR_SCENES := [
 ]
 const BUILD_TIME_LIMIT := 25.0
 const ROYALTY := 2
-## Each player drafts + places this many traps per build phase (v2: hazard
-## density doubled). Grudge/cursed rules apply to the first pick only.
-const TRAPS_PER_BUILD := 2
+## Each player drafts + places this many traps per build phase. Playtest
+## verdict (Alex): 1 placement, MORE TRAP TYPES — density saturates maps.
+const TRAPS_PER_BUILD := 1
 const CHAOS_TRAP_SPEED := 1.6
 
 var balls: Array = []
 var caddies: Array = []
+var _last_green_pos := {}
 var round_manager: RoundManager
 var course: Course
 var phase := Phase.BETWEEN
@@ -116,6 +117,8 @@ func _spawn_balls() -> void:
 		b.sunk.connect(round_manager.on_ball_sunk.bind(i))
 		b.sunk.connect(_on_any_ball_sunk.bind(i))
 		b.died.connect(_on_ball_died.bind(i))
+		b.came_to_rest.connect(_on_ball_rest.bind(b))
+		_last_green_pos[b] = b.global_position
 		balls.append(b)
 		var c := Caddy.new()
 		add_child(c)
@@ -278,6 +281,20 @@ func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("restart"):
 		GameState.reset_match()
 		get_tree().change_scene_to_file("res://scenes/menu.tscn")
+
+## Ramp launches can strand a ball off the green but still on the table.
+## When a ball rests off-green, send it home to its last on-green lie.
+func _on_ball_rest(b: Ball) -> void:
+	if b.is_sunk or b.is_dead or b.is_petrified:
+		return
+	if course.is_point_on_green(b.global_position):
+		_last_green_pos[b] = b.global_position
+		return
+	var home: Vector3 = _last_green_pos.get(b, _tee_pos(b.player_index))
+	b.last_rest_position = home
+	b.call_deferred("reset_to_rest")
+	Sfx.play("invalid", -6.0)
+	_flash_banner("%s WENT EXPLORING — RETURNED" % GameState.players[b.player_index].name, Color(0.85, 0.85, 0.85), 1.4)
 
 func _on_cup_entry(body: Node3D) -> void:
 	if body is Ball and not body.is_sunk:

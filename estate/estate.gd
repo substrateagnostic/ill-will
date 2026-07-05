@@ -480,6 +480,10 @@ func _enter_reckoning(ticker: Array) -> void:
 	_rebuild_top_bar()
 	_clear_panel("THE RECKONING")
 	Sfx.play("round_over")
+	if ticker.size() > 8:
+		var extra := ticker.size() - 7
+		ticker = ticker.slice(0, 7)
+		ticker.append("...and %d more (carved into the graffiti wall)" % extra)
 	for line in ticker:
 		var l := Label.new()
 		l.text = str(line)
