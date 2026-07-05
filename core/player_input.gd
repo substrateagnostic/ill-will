@@ -9,6 +9,8 @@ extends Node
 ##   -2    = keyboard RIGHT half (arrows move, Enter=a, RShift=b)
 ##   -3    = mouse/shared (turn-based games like Par for the Curse; no
 ##           get_move - pointer input handled by the game itself)
+##   -4    = KB+MOUSE (WASD move, LMB=a, RMB=b; aim via get_aim_dir) —
+##           the PC-native pick for aiming games
 ##   -99   = unassigned
 ##
 ## API (all by player index):
@@ -96,8 +98,24 @@ func is_down(p: int, action: String) -> bool:
 	var d := device_of(p)
 	if d >= 0:
 		return Input.is_joy_button_pressed(d, JOY_BUTTON_A if action == "a" else JOY_BUTTON_B)
+	if d == -4:
+		return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT if action == "a" else MOUSE_BUTTON_RIGHT)
 	var m := _keymap(d)
 	return not m.is_empty() and Input.is_physical_key_pressed(m[action])
+
+## For aiming games: world-space direction from `from_pos` toward the mouse
+## cursor projected on the horizontal plane at from_pos.y. Returns ZERO for
+## non-KBM devices (caller falls back to facing/move direction).
+func get_aim_dir(p: int, from_pos: Vector3, cam: Camera3D) -> Vector3:
+	if device_of(p) != -4 or cam == null:
+		return Vector3.ZERO
+	var mp := cam.get_viewport().get_mouse_position()
+	var hit = Plane(Vector3.UP, from_pos.y).intersects_ray(cam.project_ray_origin(mp), cam.project_ray_normal(mp))
+	if hit == null:
+		return Vector3.ZERO
+	var dir: Vector3 = hit - from_pos
+	dir.y = 0.0
+	return dir.normalized() if dir.length() > 0.05 else Vector3.ZERO
 
 func just_pressed(p: int, action: String) -> bool:
 	var key := "%d_%s" % [p, action]
@@ -110,7 +128,7 @@ func _physics_process(_delta: float) -> void:
 			_down["%d_%s" % [p, action]] = is_down(p, action)
 
 func _keymap(d: int) -> Dictionary:
-	if d == -1:
+	if d == -1 or d == -4:
 		return KEY_LEFT_MAP
 	if d == -2:
 		return KEY_RIGHT_MAP

@@ -4,8 +4,8 @@ extends CanvasLayer
 ## BOT. Choices persist to user://party_setup.json and flow into minigame
 ## rosters via PlayerInput.
 
-const DEVICE_CYCLE := [-3, -1, -2, 0, 1, 2, 3]
-const DEVICE_NAMES := {-3: "MOUSE/SHARED", -1: "KEYBOARD (WASD)", -2: "KEYBOARD (ARROWS)", 0: "GAMEPAD 1", 1: "GAMEPAD 2", 2: "GAMEPAD 3", 3: "GAMEPAD 4"}
+const DEVICE_CYCLE := [-4, -3, -1, -2, 0, 1, 2, 3]
+const DEVICE_NAMES := {-4: "KB (WASD) + MOUSE", -3: "MOUSE/SHARED", -1: "KEYBOARD (WASD)", -2: "KEYBOARD (ARROWS)", 0: "GAMEPAD 1", 1: "GAMEPAD 2", 2: "GAMEPAD 3", 3: "GAMEPAD 4"}
 
 var panel: PanelContainer
 var rows_box: VBoxContainer

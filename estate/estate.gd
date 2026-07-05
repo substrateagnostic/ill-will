@@ -39,6 +39,7 @@ var _module: Node = null
 var _bet_targets := {}
 var _monuments_drawn := 0
 var walkers: Array = []
+var _saved_env: Environment = null
 var _selected_walker := -1
 var _bot_wander_timer := 0.0
 var _tile_buyers: Array = []
@@ -67,6 +68,7 @@ func _ready() -> void:
 	_redraw_monuments()
 	_redraw_graffiti()
 	banner.visible = false
+	_saved_env = $WorldEnvironment.environment
 	if EstateState.nights_played > 0:
 		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.5)
 	_enter_grounds()
@@ -343,7 +345,8 @@ func _enter_auction() -> void:
 	for i in EstateState.players.size():
 		var pl = EstateState.players[i]
 		var b := Button.new()
-		b.text = "%s BID %d♠" % [pl.name, high_bid + 1]
+		b.text = "%s: RAISE TO %d♠" % [pl.name, high_bid + 1]
+		b.disabled = _is_bot(i)
 		b.pressed.connect(_on_bid.bind(i))
 		row.add_child(b)
 	row.name = "BidRow"
@@ -366,7 +369,7 @@ func _on_bid(p: int) -> void:
 	if row:
 		for i in row.get_child_count():
 			var b: Button = row.get_child(i)
-			b.text = "%s BID %d♠" % [EstateState.players[i].name, high_bid + 1]
+			b.text = "%s: RAISE TO %d♠" % [EstateState.players[i].name, high_bid + 1]
 
 func _update_auction_clock() -> void:
 	var clock := phase_box.get_node_or_null("Clock")
@@ -421,6 +424,10 @@ func _launch_game(id: String) -> void:
 	$Grounds.process_mode = Node.PROCESS_MODE_DISABLED
 	plinths.visible = false
 	$GraffitiWall.visible = false
+	$Trail.visible = false
+	$Trail.process_mode = Node.PROCESS_MODE_DISABLED
+	$Sun.visible = false
+	$WorldEnvironment.environment = null
 	$UI/TopBar.visible = false
 	if info.mode == "gamestate":
 		GameState.player_count = EstateState.players.size()
@@ -454,6 +461,10 @@ func _on_module_finished(results: Dictionary) -> void:
 	$Grounds.visible = true
 	$Grounds.process_mode = Node.PROCESS_MODE_INHERIT
 	plinths.visible = true
+	$Trail.visible = true
+	$Trail.process_mode = Node.PROCESS_MODE_INHERIT
+	$Sun.visible = true
+	$WorldEnvironment.environment = _saved_env
 	$GraffitiWall.visible = true
 	$UI/TopBar.visible = true
 	cam.current = true
