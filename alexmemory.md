@@ -109,6 +109,14 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-05 — THE THRONE MERGED (game #9)
+Musical-chairs tyranny works: golden score-stream from the seated king,
+grip pips + TYRANNY fatigue bar, dethrone fling with physics crown
+("MINT DETHRONES BLUE"). Balance: worst bot share 31% vs 55% cap, all
+seeds; two real bugs caught by screenshot review (seat jam, kings flung
+over the walls into the void). Watch in human play: reign length (its
+Meshy throne model is queued for the props integration pass too).
+
 ### 2026-07-05 — MESHY CUSTOM PROPS MERGED (10/10 keepers)
 Your Meshy API paid for itself in one run: wardrobe, table lamp, riding
 mower, go-kart, seagull, gilded coin-pot, tufted throne, stone lantern,
