@@ -6,6 +6,11 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **AGREED DIRECTION (2026-07-05): the Estate becomes the MAIN MENU**, with
+  a minigame selector for direct/practice play. Research agent is gathering
+  2026 best practices (hub-as-menu patterns, player-join flows, minigame
+  selectors, the settings checklist, future online-lobby norms); design doc
+  comes to you after your ten-game night. Menus stay as-is until then.
 - **🏆 THE ROSTER IS COMPLETE: TEN GAMES.** Last Will just merged — the
   will-drafting freeze is the best screen in the anthology ("THE LAST WILL
   OF GOLD / six seconds of posthumous power / now... curse whom?" with a
