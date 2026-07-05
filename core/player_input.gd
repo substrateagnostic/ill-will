@@ -22,12 +22,44 @@ extends Node
 const KEY_LEFT_MAP := {"up": KEY_W, "down": KEY_S, "left": KEY_A, "right": KEY_D, "a": KEY_SPACE, "b": KEY_E}
 const KEY_RIGHT_MAP := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "a": KEY_ENTER, "b": KEY_SHIFT}
 
+const SETUP_PATH := "user://party_setup.json"
+
 var _devices := {}
 var _down := {}
 var _prev_down := {}
+var _bots := {}
 
 func assign(p: int, device: int) -> void:
 	_devices[p] = device
+
+func set_bot(p: int, v: bool) -> void:
+	_bots[p] = v
+
+func is_bot(p: int) -> bool:
+	return _bots.get(p, false)
+
+func save_setup() -> void:
+	var f := FileAccess.open(SETUP_PATH, FileAccess.WRITE)
+	if f:
+		var dev := {}
+		var bot := {}
+		for k in _devices:
+			dev[str(k)] = _devices[k]
+		for k in _bots:
+			bot[str(k)] = _bots[k]
+		f.store_string(JSON.stringify({"devices": dev, "bots": bot}))
+
+func load_setup() -> bool:
+	if not FileAccess.file_exists(SETUP_PATH):
+		return false
+	var data = JSON.parse_string(FileAccess.open(SETUP_PATH, FileAccess.READ).get_as_text())
+	if not data is Dictionary:
+		return false
+	for k in data.get("devices", {}):
+		_devices[int(k)] = int(data.devices[k])
+	for k in data.get("bots", {}):
+		_bots[int(k)] = bool(data.bots[k])
+	return true
 
 func device_of(p: int) -> int:
 	return _devices.get(p, -99)
@@ -36,6 +68,8 @@ func auto_assign(n: int) -> void:
 	var pads := Input.get_connected_joypads()
 	var kb_halves := [-1, -2]
 	for p in n:
+		if _devices.get(p, -99) != -99:
+			continue
 		if p < pads.size():
 			assign(p, pads[p])
 		elif kb_halves.size() > 0:

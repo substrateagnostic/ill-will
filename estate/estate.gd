@@ -2,7 +2,7 @@ extends Node3D
 ## THE ESTATE — night-loop shell: GROUNDS -> AUCTION -> GAME -> RECKONING.
 ## v1 "clipboard" grounds (panel UI); walkable grounds is phase E2.
 
-enum Phase { GROUNDS, TILES, AUCTION, GAME, RECKONING, NIGHT_END }
+enum Phase { GROUNDS, TILES, AUCTION, CHOOSING, GAME, RECKONING, NIGHT_END }
 
 const TILE_COST := 2
 
@@ -74,6 +74,17 @@ func _ready() -> void:
 func get_phase_name() -> String:
 	return Phase.keys()[phase]
 
+func _is_bot(p: int) -> bool:
+	return bots or PlayerInput.is_bot(p)
+
+func _all_bots() -> bool:
+	if bots:
+		return true
+	for i in EstateState.players.size():
+		if not PlayerInput.is_bot(i):
+			return false
+	return true
+
 const CHAR_SCENES := [
 	preload("res://assets/models/kaykit/Barbarian.glb"),
 	preload("res://assets/models/kaykit/Knight.glb"),
@@ -138,24 +149,25 @@ func _select_walker(idx: int) -> void:
 	Sfx.play("card", -8.0)
 
 func _process(delta: float) -> void:
-	if bots and _module == null and not walkers.is_empty():
+	if _module == null and not walkers.is_empty():
 		_bot_wander_timer -= delta
 		if _bot_wander_timer <= 0.0:
 			_bot_wander_timer = 1.6
-			var w: EstateWalker = walkers[EstateState.rng.randi_range(0, walkers.size() - 1)]
-			w.walk_target = Vector3(EstateState.rng.randf_range(-6.0, 6.0), 0, EstateState.rng.randf_range(-7.0, 1.5))
+			var bot_walkers: Array = walkers.filter(func(w): return _is_bot(w.player_idx))
+			if not bot_walkers.is_empty():
+				var w: EstateWalker = bot_walkers[EstateState.rng.randi_range(0, bot_walkers.size() - 1)]
+				w.walk_target = Vector3(EstateState.rng.randf_range(-6.0, 6.0), 0, EstateState.rng.randf_range(-7.0, 1.5))
 	if phase == Phase.GROUNDS:
 		_grounds_timer -= delta
 		_update_grounds_clock()
-		if _grounds_timer <= 0.0 or (bots and _grounds_timer < GROUNDS_TIME - 1.5):
-			if bots:
-				_bots_buy_tiles()
-				_bots_place_bets()
+		if _grounds_timer <= 0.0 or (_all_bots() and _grounds_timer < GROUNDS_TIME - 1.5):
+			_bots_buy_tiles()
+			_bots_place_bets()
 			_enter_tiles()
 	elif phase == Phase.AUCTION:
 		_bid_timer -= delta
 		_update_auction_clock()
-		if bots and _bid_timer < BID_TIME - 1.0 and high_bidder < 0:
+		if _bid_timer < BID_TIME - 1.0 and high_bidder < 0:
 			_bots_bid()
 		if _bid_timer <= 0.0:
 			_resolve_auction()
@@ -230,6 +242,11 @@ func _enter_grounds() -> void:
 			else:
 				Sfx.play("invalid"))
 		row.add_child(tile_btn)
+		if _is_bot(i):
+			target_btn.disabled = true
+			bet_btn.disabled = true
+			tile_btn.disabled = true
+			bet_btn.text = "BOT"
 		phase_box.add_child(row)
 	var clock := Label.new()
 	clock.name = "Clock"
@@ -247,11 +264,12 @@ func _update_grounds_clock() -> void:
 
 func _bots_place_bets() -> void:
 	for i in EstateState.players.size():
-		EstateState.place_bet(i, EstateState.rng.randi_range(0, EstateState.players.size() - 1))
+		if _is_bot(i):
+			EstateState.place_bet(i, EstateState.rng.randi_range(0, EstateState.players.size() - 1))
 
 func _bots_buy_tiles() -> void:
 	for i in EstateState.players.size():
-		if EstateState.rng.randf() < 0.55 and not _tile_buyers.has(i):
+		if _is_bot(i) and EstateState.rng.randf() < 0.55 and not _tile_buyers.has(i):
 			if EstateState.spend_grudge(i, TILE_COST):
 				_tile_buyers.append(i)
 
@@ -270,7 +288,7 @@ func _prompt_next_tile() -> void:
 	var p: int = _tile_buyers[0]
 	var pl = EstateState.players[p]
 	_clear_panel("%s — CLICK THE LAWN TO SEED YOUR TRAP TILE" % pl.name, pl.color)
-	if bots:
+	if _is_bot(p):
 		var spot := Vector3(EstateState.rng.randf_range(-5.0, 5.0), 0, EstateState.rng.randf_range(-6.0, 1.0))
 		_place_tile(p, spot)
 
@@ -357,20 +375,27 @@ func _update_auction_clock() -> void:
 		clock.text = "%s   (%ds)" % [lead, ceili(_bid_timer)]
 
 func _bots_bid() -> void:
-	var p := EstateState.rng.randi_range(0, EstateState.players.size() - 1)
-	_on_bid(p)
+	var candidates: Array = []
+	for i in EstateState.players.size():
+		if _is_bot(i) and EstateState.players[i].grudge > high_bid:
+			candidates.append(i)
+	if candidates.is_empty():
+		return
+	_on_bid(candidates[EstateState.rng.randi_range(0, candidates.size() - 1)])
 
 func _resolve_auction() -> void:
+	if phase != Phase.AUCTION:
+		return
+	phase = Phase.CHOOSING
 	var chooser := high_bidder
 	if chooser >= 0:
-		EstateState.players[chooser].grudge -= high_bid
+		EstateState.players[chooser].grudge = maxi(0, EstateState.players[chooser].grudge - high_bid)
 		EstateState.pot += high_bid
+		_rebuild_top_bar()
 	else:
 		chooser = EstateState.standings().back()
-	var chosen: String = auction_options[0]
-	if bots:
-		chosen = auction_options[EstateState.rng.randi_range(0, auction_options.size() - 1)]
-		_launch_game(chosen)
+	if _is_bot(chooser):
+		_launch_game(auction_options[EstateState.rng.randi_range(0, auction_options.size() - 1)])
 		return
 	_clear_panel("%s CHOOSES" % EstateState.players[chooser].name, EstateState.players[chooser].color)
 	var row := HBoxContainer.new()
@@ -412,6 +437,7 @@ func _launch_game(id: String) -> void:
 				"index": pl.index, "name": pl.name, "color": pl.color,
 				"char_scene": CHAR_PATHS[pl.index],
 				"device": PlayerInput.device_of(pl.index),
+				"bot": _is_bot(pl.index),
 			})
 		_module.begin({
 			"roster": roster,
@@ -465,7 +491,7 @@ func _enter_reckoning(ticker: Array) -> void:
 	btn.text = "BACK TO THE GROUNDS" if EstateState.games_played < EstateState.night_length else "END THE NIGHT"
 	btn.pressed.connect(_after_reckoning)
 	phase_box.add_child(btn)
-	if bots:
+	if _all_bots():
 		get_tree().create_timer(2.0).timeout.connect(_after_reckoning)
 
 ## Advances every pawn by the points just earned, worst first, winner last.
