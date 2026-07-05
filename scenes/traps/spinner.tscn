@@ -1,0 +1,61 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://scripts/traps/spinner_trap.gd" id="1"]
+
+[sub_resource type="CylinderMesh" id="base_mesh"]
+top_radius = 1.05
+bottom_radius = 1.1
+height = 0.03
+
+[sub_resource type="CylinderMesh" id="hub_mesh"]
+top_radius = 0.22
+bottom_radius = 0.26
+height = 0.22
+
+[sub_resource type="BoxMesh" id="arm_mesh"]
+size = Vector3(2.0, 0.16, 0.2)
+
+[sub_resource type="BoxShape3D" id="arm_shape"]
+size = Vector3(2.0, 0.16, 0.2)
+
+[sub_resource type="StandardMaterial3D" id="mat_base"]
+albedo_color = Color(0.22, 0.22, 0.27, 1)
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="mat_arm"]
+albedo_color = Color(0.95, 0.55, 0.15, 1)
+roughness = 0.45
+metallic = 0.2
+
+[node name="SpinnerTrap" type="Node3D"]
+script = ExtResource("1")
+
+[node name="BaseDisc" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.016, 0)
+mesh = SubResource("base_mesh")
+surface_material_override/0 = SubResource("mat_base")
+
+[node name="AccentHub" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.13, 0)
+mesh = SubResource("hub_mesh")
+
+[node name="Arms" type="AnimatableBody3D" parent="."]
+sync_to_physics = true
+
+[node name="ShapeA" type="CollisionShape3D" parent="Arms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
+shape = SubResource("arm_shape")
+
+[node name="MeshA" type="MeshInstance3D" parent="Arms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.12, 0)
+mesh = SubResource("arm_mesh")
+surface_material_override/0 = SubResource("mat_arm")
+
+[node name="ShapeB" type="CollisionShape3D" parent="Arms"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0.12, 0)
+shape = SubResource("arm_shape")
+
+[node name="MeshB" type="MeshInstance3D" parent="Arms"]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 0, 0.12, 0)
+mesh = SubResource("arm_mesh")
+surface_material_override/0 = SubResource("mat_arm")

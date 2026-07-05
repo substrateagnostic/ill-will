@@ -65,7 +65,14 @@ func is_turn_ready() -> bool:
 	if _round_over or _awaiting_rest:
 		return false
 	var p := current_player()
-	return p >= 0 and not resolved.has(p) and balls[p].is_stopped()
+	if p < 0 or resolved.has(p):
+		return false
+	# CHAOS: the whole point is "no waiting" — the current seat may fire even
+	# while its own ball (and everyone else's) is still rolling, so >=2 balls are
+	# commonly live at once. NORMAL: wait for this ball to settle first.
+	if chaos_mode:
+		return true
+	return balls[p].is_stopped()
 
 func _physics_process(delta: float) -> void:
 	if _round_over:

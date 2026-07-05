@@ -37,6 +37,9 @@ var _build_timer := 0.0
 var _currency_log: Array = []
 var _highlights: Array = []
 var _golden_hour_done := false
+## Chaos concurrency telemetry: peak number of balls in motion at once. Printed
+## each time a new peak is reached so a verify run can prove true overlap.
+var _chaos_peak_movers := 0
 
 # --- minimal per-player bot driver (turn-based) --------------------------------
 # A seat plays itself if PlayerInput marks it a bot OR the --parbots flag forces
@@ -81,6 +84,7 @@ func _ready() -> void:
 	round_manager.ball_resolved.connect(_on_ball_resolved)
 	putt_controller.stroke_taken.connect(_on_stroke_taken)
 	course.ball_entered_cup.connect(_on_cup_entry)
+	course.ball_entered_gutter.connect(_on_ball_gutter)
 	placement.trap_container = course.get_node("TrapContainer")
 	placement.course = course
 	placement.trap_placed.connect(_on_trap_placed)
@@ -269,6 +273,8 @@ func _process(delta: float) -> void:
 	var cur := round_manager.current_player()
 	putt_controller.enabled = phase == Phase.PUTT and round_manager.is_turn_ready() and not _is_bot(cur)
 	_bot_tick(delta)
+	if phase == Phase.PUTT and GameState.is_chaos_round():
+		_track_chaos_concurrency()
 	if phase == Phase.BUILD:
 		_build_timer += delta
 		if _build_timer > BUILD_TIME_LIMIT:
@@ -276,6 +282,22 @@ func _process(delta: float) -> void:
 			build_hint.visible = false
 			_flash_banner("TOO SLOW — TRAP FORFEITED", Color(0.8, 0.8, 0.8), 1.5)
 			_advance_after_placement()
+
+## Counts balls currently rolling (chaos round). Prints on each new peak so the
+## overlap is provable from the log; the peak line naming 3+ movers pairs with
+## the concurrency screenshot.
+func _track_chaos_concurrency() -> void:
+	var movers := 0
+	for b in balls:
+		if b == null or b.is_sunk or b.is_dead or b.is_petrified or b.in_transit:
+			continue
+		if b.linear_velocity.length() > 0.6:
+			movers += 1
+	if movers >= 2:
+		print("CHAOS_CONCURRENT movers=%d frame=%d" % [movers, Engine.get_process_frames()])
+	if movers > _chaos_peak_movers:
+		_chaos_peak_movers = movers
+		print("CHAOS_CONCURRENT_PEAK movers=%d frame=%d" % [movers, Engine.get_process_frames()])
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("restart"):
@@ -299,6 +321,38 @@ func _on_ball_rest(b: Ball) -> void:
 func _on_cup_entry(body: Node3D) -> void:
 	if body is Ball and not body.is_sunk:
 		body.mark_sunk()
+
+## Adventure gutter (gauntlet only): a ball that leaves the green at a marked
+## mouth is swept down a side channel and delivered near the cup after a visible
+## detour — a risk/reward alternative to the plain return-home everywhere else.
+func _on_ball_gutter(body: Node3D, target: Vector3) -> void:
+	if not body is Ball or body.is_sunk or body.is_dead or body.is_petrified or body.in_transit:
+		return
+	var b: Ball = body
+	b.enter_gutter()
+	Sfx.play("bounce", -2.0)
+	print("GUTTER: %s took the channel -> near cup" % GameState.players[b.player_index].name)
+	_flash_banner("%s HIT THE ADVENTURE GUTTER!" % GameState.players[b.player_index].name, Color(0.3, 0.9, 1.0), 1.6)
+	var start: Vector3 = b.global_position
+	# Two-hop detour: dip out to a side waypoint (below the lip), then rise to the
+	# green near the cup. Quadratic-ish path via nested lerps for a swept feel.
+	var mid := Vector3((start.x + target.x) * 0.5, -1.1, (start.z + target.z) * 0.5 + 1.2)
+	var tw := create_tween()
+	tw.tween_method(func(t: float): _gutter_step(b, start, mid, target, t), 0.0, 1.0, 1.35).set_trans(Tween.TRANS_SINE)
+	tw.tween_callback(func(): _gutter_land(b, target))
+
+func _gutter_step(b: Ball, a: Vector3, mid: Vector3, c: Vector3, t: float) -> void:
+	if not is_instance_valid(b):
+		return
+	var p := a.lerp(mid, t).lerp(mid.lerp(c, t), t)
+	b.global_position = p
+
+func _gutter_land(b: Ball, target: Vector3) -> void:
+	if not is_instance_valid(b):
+		return
+	b.exit_gutter(target)
+	_last_green_pos[b] = target
+	print("GUTTER_DONE: delivered near cup at %.1f,%.1f" % [target.x, target.z])
 
 func _on_turn_started(p: int) -> void:
 	var player = GameState.players[p]
@@ -556,7 +610,13 @@ func _bot_tick(delta: float) -> void:
 			if _bot_think_t >= 1.0:
 				_bot_build()
 		Phase.PUTT:
-			if _bot_think_t >= 1.5 and balls[actor].is_stopped():
+			# CHAOS: fire the instant the turn opens and DON'T wait for the ball to
+			# settle — that's what keeps several balls live at once. NORMAL: the
+			# old calm turn-based cadence (think a beat, wait for rest).
+			if GameState.is_chaos_round():
+				if _bot_think_t >= 0.2:
+					_bot_putt(actor)
+			elif _bot_think_t >= 1.5 and balls[actor].is_stopped():
 				_bot_putt(actor)
 
 func _bot_build() -> void:

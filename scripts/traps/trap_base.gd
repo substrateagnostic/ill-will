@@ -12,6 +12,37 @@ var is_ghost := false
 ## Chaos round cranks powered traps (windmill/crusher/fan) to 1.6x. Motion is
 ## time-based, so powered traps multiply their per-frame step by this.
 var speed_scale := 1.0
+## Number of clicks the placement flow needs to finish this trap. Default 1
+## (drop it where the mouse is). Portal-style traps override to 2: the first
+## click locks endpoint A, the second locks endpoint B, then it confirms.
+var endpoint_count := 1
+
+## Every disc a later placement must avoid overlapping. Default: one disc at the
+## root. Multi-endpoint traps (portal) override to report BOTH rings so nothing
+## gets built on top of a portal mouth. Each entry: {"pos": Vector3, "radius": float}.
+func footprint_points() -> Array:
+	return [{"pos": global_position, "radius": footprint_radius}]
+
+# --- Placement interface (single-click default; overridden by portal) --------
+## Where the validity check + preview disc should sit right now.
+func active_placement_pos() -> Vector3:
+	return global_position
+
+func active_footprint_radius() -> float:
+	return footprint_radius
+
+## Move the currently-active footprint to a green-plane point.
+func move_placement(pos: Vector3) -> void:
+	global_position = Vector3(pos.x, 0.0, pos.z)
+
+## Commit the current click. Return true when fully placed (confirm now),
+## false when the trap still needs another click.
+func advance_placement() -> bool:
+	return true
+
+## Footprints of endpoints already locked this placement (self-overlap guard).
+func locked_footprint_points() -> Array:
+	return []
 
 func kill_ball(ball: Ball) -> void:
 	if is_ghost or ball.is_sunk or ball.is_dead:
