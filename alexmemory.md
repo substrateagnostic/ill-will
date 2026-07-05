@@ -6,6 +6,14 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🎯 BOT-MIX IS MERGED — GO PLAY.** All eight minigames now honor
+  per-seat HUMAN/BOT from the ESC menu (roster-driven, determinism
+  receipts unchanged). Par included: bots draft/place/putt on their turns
+  and the game waits for yours. Verified on master: full Par match with
+  3 bots ran to MATCH_OVER. Your saved setup (RED=human, rest bots) is
+  exactly the solo-test loop you asked for. Mouse-AIM retrofit (swing/
+  throw/tackle/furniture-fling toward cursor for the KB+MOUSE device) is
+  now in flight for echo/orbital/greed/dead_weight.
 - **IMPORTANT: fully CLOSE and RELAUNCH the game.** The auction fix is
   proven working on master via an end-to-end test that drives the real
   button signals (bid → CHOOSING → click card → launch: PASS). A running
