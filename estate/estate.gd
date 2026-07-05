@@ -17,6 +17,8 @@ const MODULES := {
 	"deadweight": {"name": "DEAD WEIGHT", "scene": "res://minigames/dead_weight/dead_weight.tscn", "mode": "contract"},
 	"throne": {"name": "THE THRONE", "scene": "res://minigames/throne/throne.tscn", "mode": "contract"},
 	"lastwill": {"name": "LAST WILL", "scene": "res://minigames/last_will/last_will.tscn", "mode": "contract"},
+	"seance": {"name": "THE SÉANCE", "scene": "res://minigames/seance/seance.tscn", "mode": "contract", "theater": true},
+	"understudy": {"name": "THE UNDERSTUDY", "scene": "res://minigames/understudy/understudy.tscn", "mode": "contract", "theater": true},
 	"mock": {"name": "EXHIBITION MATCH", "scene": "res://estate/mock_game.tscn", "mode": "contract"},
 }
 const CHAR_PATHS := [
@@ -161,7 +163,11 @@ func _build_lobby_panel() -> void:
 	btn_row.add_child(start_btn)
 	var sel_btn := Button.new()
 	sel_btn.custom_minimum_size = Vector2(220, 56)
-	sel_btn.text = "MINIGAMES (10)"
+	var n_games := 0
+	for mid in MODULES:
+		if mid != "mock" and ResourceLoader.exists(String(MODULES[mid].scene)):
+			n_games += 1
+	sel_btn.text = "MINIGAMES (%d)" % n_games
 	sel_btn.pressed.connect(_enter_selector)
 	btn_row.add_child(sel_btn)
 	var ward_btn := Button.new()
@@ -210,12 +216,13 @@ func _enter_selector() -> void:
 	grid.add_theme_constant_override("h_separation", 10)
 	grid.add_theme_constant_override("v_separation", 10)
 	for id in MODULES:
-		if id == "mock":
-			continue
 		var info: Dictionary = MODULES[id]
+		# Theater specials appear the moment their scene lands on disk.
+		if id == "mock" or not ResourceLoader.exists(String(info.scene)):
+			continue
 		var b := Button.new()
 		b.custom_minimum_size = Vector2(158, 84)
-		b.text = info.name
+		b.text = String(info.name) + ("\n· at the theater ·" if info.get("theater", false) else "")
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.pressed.connect(_show_howto.bind(String(id)))
 		grid.add_child(b)
@@ -240,6 +247,8 @@ const HOWTO := {
 	"deadweight": {"goal": "Sumo where the dead never leave — they possess the furniture and fling it at the living.", "a": "SHOVE", "b": "HOP"},
 	"throne": {"goal": "One throne, four claimants. Reigning scores. Decrees blast, guards defend, gravity votes last.", "a": "SHOVE / DECREE", "b": "DASH / GUARD"},
 	"lastwill": {"goal": "A brawl where dying is power: the dead stop the world for six seconds and write curses into their will.", "a": "SHOVE", "b": "HOP"},
+	"seance": {"goal": "A co-op séance: guide the planchette to the spirit's word — but one of you was paid in grudge to make it fail without getting caught. The Executor is the medium.", "a": "—", "b": "—"},
+	"understudy": {"goal": "Everyone knows tonight's play but the understudy, who must bluff along. Rehearse, interrogate, vote — the scoring never stalemates.", "a": "—", "b": "—"},
 }
 
 func _show_howto(id: String) -> void:
@@ -1073,8 +1082,12 @@ func _flash(text: String, color: Color, dur: float) -> void:
 func _redraw_monuments() -> void:
 	for c in plinths.get_children():
 		c.queue_free()
-	for m_idx in EstateState.monuments.size():
-		var m: Dictionary = EstateState.monuments[m_idx]
+	# Show the 8 newest stones in 3 columns with staggered label heights;
+	# older history stays in the save (and the ledger), not on the lawn.
+	var all: Array = EstateState.monuments
+	var shown: Array = all.slice(maxi(0, all.size() - 8))
+	for m_idx in shown.size():
+		var m: Dictionary = shown[m_idx]
 		var col := Color.from_string(str(m.color), Color.WHITE)
 		var obelisk := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
@@ -1083,14 +1096,26 @@ func _redraw_monuments() -> void:
 		var mat := StandardMaterial3D.new()
 		mat.albedo_color = col
 		obelisk.material_override = mat
-		obelisk.position = Vector3(-7.4 + (m_idx % 2) * 1.1, 0.65, 0.8 - floorf(m_idx / 2.0) * 1.7)
+		obelisk.position = Vector3(-7.7 + (m_idx % 3) * 1.05, 0.65, 0.9 - floorf(m_idx / 3.0) * 1.6)
 		plinths.add_child(obelisk)
 		var tag := Label3D.new()
 		tag.text = str(m.label)
-		tag.pixel_size = 0.005
-		tag.position = obelisk.position + Vector3(0, 0.95, 0.3)
+		tag.font_size = 30
+		tag.pixel_size = 0.0042
+		tag.position = obelisk.position + Vector3(0, 0.82 + (m_idx % 3) * 0.3, 0.3)
 		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		tag.outline_size = 8
 		plinths.add_child(tag)
+	if all.size() > shown.size():
+		var older := Label3D.new()
+		older.text = "+%d older stones (the ledger keeps them)" % (all.size() - shown.size())
+		older.font_size = 26
+		older.pixel_size = 0.0042
+		older.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		older.modulate = Color(0.8, 0.78, 0.75)
+		older.outline_size = 8
+		plinths.add_child(older)
+		older.position = Vector3(-6.6, 2.4, -3.2)
 
 func _redraw_graffiti() -> void:
 	var lines: Array = EstateState.graffiti.slice(-10)
