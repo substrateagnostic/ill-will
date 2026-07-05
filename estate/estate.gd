@@ -248,7 +248,7 @@ const HOWTO := {
 	"throne": {"goal": "One throne, four claimants. Reigning scores. Decrees blast, guards defend, gravity votes last.", "a": "SHOVE / DECREE", "b": "DASH / GUARD"},
 	"lastwill": {"goal": "A brawl where dying is power: the dead stop the world for six seconds and write curses into their will.", "a": "SHOVE", "b": "HOP"},
 	"seance": {"goal": "A co-op séance: guide the planchette to the spirit's word — but one of you was paid in grudge to make it fail without getting caught. The Executor is the medium.", "a": "—", "b": "—"},
-	"understudy": {"goal": "Everyone knows tonight's play but the understudy, who must bluff along. Rehearse, interrogate, vote — the scoring never stalemates.", "a": "—", "b": "—"},
+	"understudy": {"goal": "Everyone knows tonight's play but the understudy, who must bluff along. Rehearse, interrogate, vote — the scoring never stalemates.", "a": "COMMIT (move = choose)", "b": "—"},
 }
 
 func _show_howto(id: String) -> void:
