@@ -13,14 +13,17 @@ func _ready() -> void:
 	add_child(_root)
 
 	var bone := StandardMaterial3D.new()
-	bone.albedo_color = Color(0.93, 0.9, 0.8)
+	bone.albedo_color = Color(0.95, 0.92, 0.82)
 	bone.emission_enabled = true
-	bone.emission = Color(0.9, 0.87, 0.75)
-	bone.emission_energy_multiplier = 0.45
+	bone.emission = Color(0.95, 0.9, 0.75)
+	bone.emission_energy_multiplier = 1.1
 	bone.roughness = 0.6
 
 	var sleeve_mat := StandardMaterial3D.new()
-	sleeve_mat.albedo_color = Color(0.13, 0.1, 0.2)
+	sleeve_mat.albedo_color = Color(0.32, 0.27, 0.45)
+	sleeve_mat.emission_enabled = true
+	sleeve_mat.emission = Color(0.3, 0.25, 0.45)
+	sleeve_mat.emission_energy_multiplier = 0.4
 	sleeve_mat.roughness = 1.0
 
 	# tattered sleeve cuff above the wrist
@@ -114,7 +117,11 @@ func _ready() -> void:
 	thumb.rotation_degrees = Vector3(0, 0, -25)
 	_root.add_child(thumb)
 
-	scale = Vector3(1.35, 1.35, 1.35)
+	scale = Vector3(1.55, 1.55, 1.55)
+	# pitch the whole hand toward the 3/4 camera so the pointing finger —
+	# not the sleeve — is what the couch sees from above
+	_root.rotation_degrees.x = 38.0
+	_root.position.z = 0.35
 
 func _process(delta: float) -> void:
 	_bob_t += delta

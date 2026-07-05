@@ -218,12 +218,13 @@ func _tint_model(node: Node) -> void:
 		_tint_model(c)
 
 func _rim_material() -> StandardMaterial3D:
+	# a WHISPER of identity color — the KayKit texture must stay readable
 	var m := StandardMaterial3D.new()
 	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.albedo_color = Color(color.r, color.g, color.b, 0.28)
+	m.albedo_color = Color(color.r, color.g, color.b, 0.13)
 	m.emission_enabled = true
 	m.emission = color
-	m.emission_energy_multiplier = 0.35
+	m.emission_energy_multiplier = 0.12
 	m.rim_enabled = true
 	m.rim = 0.8
 	return m

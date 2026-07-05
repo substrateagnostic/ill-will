@@ -66,7 +66,8 @@ func setup(angle_deg: float, swings: int, p_owner: Node) -> void:
 	bm.size = Vector3(15.0, 0.35, 0.35)
 	beam.mesh = bm
 	var beam_mat := StandardMaterial3D.new()
-	beam_mat.albedo_color = Color(0.2, 0.16, 0.14)
+	beam_mat.albedo_color = Color(0.38, 0.29, 0.24)
+	beam_mat.roughness = 0.8
 	beam.material_override = beam_mat
 	beam.position.y = PIVOT_Y + 0.3
 	add_child(beam)
@@ -79,17 +80,18 @@ func setup(angle_deg: float, swings: int, p_owner: Node) -> void:
 	cm.size = Vector3(0.16, ARM_LEN, 0.16)
 	chain.mesh = cm
 	var chain_mat := StandardMaterial3D.new()
-	chain_mat.albedo_color = Color(0.42, 0.4, 0.45)
-	chain_mat.metallic = 0.6
+	chain_mat.albedo_color = Color(0.6, 0.58, 0.64)
+	chain_mat.metallic = 0.5
+	chain_mat.roughness = 0.4
 	chain.material_override = chain_mat
 	chain.position.y = -ARM_LEN / 2.0
 	_blade.add_child(chain)
 
 	var plank_mat := StandardMaterial3D.new()
-	plank_mat.albedo_color = Color(0.5, 0.36, 0.22)
+	plank_mat.albedo_color = Color(0.66, 0.48, 0.3)
 	plank_mat.roughness = 0.85
 	var slat_mat := StandardMaterial3D.new()
-	slat_mat.albedo_color = Color(0.72, 0.62, 0.45)
+	slat_mat.albedo_color = Color(0.85, 0.73, 0.52)
 	# windmill sail: main plank + lighter slats, swinging in the local XZ... XY plane
 	var plank := MeshInstance3D.new()
 	var pm := BoxMesh.new()
@@ -112,9 +114,12 @@ func setup(angle_deg: float, swings: int, p_owner: Node) -> void:
 	em.size = Vector3(3.5, 0.16, 0.36)
 	edge.mesh = em
 	var edge_mat := StandardMaterial3D.new()
-	edge_mat.albedo_color = Color(0.3, 0.3, 0.36)
-	edge_mat.metallic = 0.8
-	edge_mat.roughness = 0.3
+	edge_mat.albedo_color = Color(0.55, 0.52, 0.58)
+	edge_mat.metallic = 0.85
+	edge_mat.roughness = 0.25
+	edge_mat.emission_enabled = true
+	edge_mat.emission = Color(1.0, 0.3, 0.2)
+	edge_mat.emission_energy_multiplier = 0.35
 	edge.material_override = edge_mat
 	edge.position.y = -ARM_LEN - 0.83
 	_blade.add_child(edge)

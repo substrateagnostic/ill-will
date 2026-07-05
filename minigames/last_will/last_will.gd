@@ -275,36 +275,64 @@ func _build_world() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.75
+	env.ambient_light_energy = 0.42
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.glow_enabled = true
-	env.glow_intensity = 0.75
-	env.glow_bloom = 0.15
-	env.glow_hdr_threshold = 0.85
+	env.glow_intensity = 0.55
+	env.glow_bloom = 0.1
+	env.glow_hdr_threshold = 1.0
 	env.fog_enabled = true
 	env.fog_light_color = Color(0.2, 0.1, 0.2)
 	env.fog_density = 0.008
 	env.fog_sky_affect = 0.0
 	we.environment = env
 
-	cam.global_position = Vector3(0, 14.6, 12.4)
+	cam.global_position = Vector3(0, 13.9, 11.8)
 	cam.look_at(Vector3(0, 0.2, -0.7), Vector3.UP)
 	cam.fov = _cam_base_fov
 
 	var sun := DirectionalLight3D.new()
 	sun.name = "DuskSun"
 	add_child(sun)
-	sun.rotation_degrees = Vector3(-21.0, 118.0, 0.0)
-	sun.light_energy = 1.0
-	sun.light_color = Color(1.0, 0.62, 0.38)
+	sun.rotation_degrees = Vector3(-19.0, 118.0, 0.0)
+	sun.light_energy = 0.7
+	sun.light_color = Color(1.0, 0.58, 0.33)
 	sun.shadow_enabled = true
 
 	var moon := DirectionalLight3D.new()
 	moon.name = "MoonFill"
 	add_child(moon)
 	moon.rotation_degrees = Vector3(-48.0, -50.0, 0.0)
-	moon.light_energy = 0.42
+	moon.light_energy = 0.28
 	moon.light_color = Color(0.5, 0.58, 0.95)
+
+	# the void has a floor of dusk, not pure black: a deep-purple sea far
+	# below + a faint warm under-glow that silhouettes falling bodies
+	var sea := MeshInstance3D.new()
+	var seam := CylinderMesh.new()
+	seam.top_radius = 90.0
+	seam.bottom_radius = 90.0
+	seam.height = 0.3
+	sea.mesh = seam
+	var sea_mat := StandardMaterial3D.new()
+	sea_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sea_mat.albedo_color = Color(0.085, 0.05, 0.13)
+	sea.material_override = sea_mat
+	sea.position.y = -26.0
+	$Arena.add_child(sea)
+	var under_glow := MeshInstance3D.new()
+	var ugm := CylinderMesh.new()
+	ugm.top_radius = 13.0
+	ugm.bottom_radius = 13.0
+	ugm.height = 0.1
+	under_glow.mesh = ugm
+	var ug_mat := StandardMaterial3D.new()
+	ug_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ug_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ug_mat.albedo_color = Color(0.55, 0.2, 0.28, 0.16)
+	under_glow.material_override = ug_mat
+	under_glow.position.y = -9.5
+	$Arena.add_child(under_glow)
 
 	# floor collider: one fat cylinder slab, radius shrinks with the yard
 	var floor_body := StaticBody3D.new()
@@ -418,32 +446,33 @@ func _make_lantern(with_light: bool) -> Node3D:
 	post.material_override = post_mat
 	post.position.y = 0.57
 	root.add_child(post)
+	# glowing amber housing (translucent, so the lamp reads from every angle)
 	var cage := MeshInstance3D.new()
 	var cm := BoxMesh.new()
-	cm.size = Vector3(0.3, 0.34, 0.3)
+	cm.size = Vector3(0.28, 0.32, 0.28)
 	cage.mesh = cm
-	cage.material_override = post_mat
+	var cage_mat := StandardMaterial3D.new()
+	cage_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	cage_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	cage_mat.albedo_color = Color(1.0, 0.76, 0.38, 0.55)
+	cage_mat.emission_enabled = true
+	cage_mat.emission = Color(1.0, 0.7, 0.3)
+	cage_mat.emission_energy_multiplier = 1.9
+	cage.material_override = cage_mat
 	cage.position.y = 1.3
 	root.add_child(cage)
-	var glow := MeshInstance3D.new()
-	var gm := SphereMesh.new()
-	gm.radius = 0.11
-	gm.height = 0.22
-	glow.mesh = gm
-	var glow_mat := StandardMaterial3D.new()
-	glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	glow_mat.albedo_color = Color(1.0, 0.8, 0.4)
-	glow_mat.emission_enabled = true
-	glow_mat.emission = Color(1.0, 0.72, 0.3)
-	glow_mat.emission_energy_multiplier = 3.2
-	glow.material_override = glow_mat
-	glow.position.y = 1.3
-	root.add_child(glow)
+	var cap := MeshInstance3D.new()
+	var capm := BoxMesh.new()
+	capm.size = Vector3(0.36, 0.07, 0.36)
+	cap.mesh = capm
+	cap.material_override = post_mat
+	cap.position.y = 1.5
+	root.add_child(cap)
 	if with_light:
 		var l := OmniLight3D.new()
-		l.light_color = Color(1.0, 0.72, 0.35)
-		l.light_energy = 1.5
-		l.omni_range = 4.5
+		l.light_color = Color(1.0, 0.7, 0.34)
+		l.light_energy = 2.1
+		l.omni_range = 4.2
 		l.position.y = 1.35
 		root.add_child(l)
 	return root
@@ -503,8 +532,8 @@ func _build_platform() -> void:
 			bm.size = Vector3(outer - inner - 0.04, 1.5, tangential)
 			seg.mesh = bm
 			var mat := StandardMaterial3D.new()
-			var shade := 0.44 + 0.10 * ((i * 7 + ring_id * 3) % 5) / 4.0
-			mat.albedo_color = Color(shade, shade * 0.97, shade * 1.08)
+			var shade := 0.28 + 0.11 * ((i * 7 + ring_id * 3) % 5) / 4.0
+			mat.albedo_color = Color(shade * 0.96, shade * 0.94, shade * 1.14)
 			mat.roughness = 0.95
 			seg.material_override = mat
 			seg.position = Vector3(cos(a) * rm, -0.76 - 0.012 * ((i * 5) % 3), sin(a) * rm)
@@ -512,16 +541,15 @@ func _build_platform() -> void:
 			root.add_child(seg)
 			_ring_segs[ring_id].append(seg)
 			_ring_mats[ring_id].append(mat)
-		# lanterns per ring
-		var lant_defs := {2: [6, false], 1: [4, true], 0: [3, true]}
-		var ln: int = lant_defs[ring_id][0]
-		var lit: bool = lant_defs[ring_id][1]
+		# lanterns per ring — every lantern is LIT; at dusk they carry the scene
+		var lant_counts := {2: 6, 1: 4, 0: 3}
+		var ln: int = lant_counts[ring_id]
 		for i in ln:
 			var a := TAU * i / ln + 0.35 + ring_id * 0.5
 			var lr := outer - 0.45
 			if ring_id == 0:
 				lr = R_CORE - 0.5
-			var lant := _make_lantern(lit)
+			var lant := _make_lantern(true)
 			lant.position = Vector3(cos(a) * lr, 0, sin(a) * lr)
 			root.add_child(lant)
 	# gravestones + cracked slab flavor on core and mid
@@ -556,8 +584,8 @@ func _build_platform() -> void:
 func _build_target_ring() -> void:
 	_target_ring = MeshInstance3D.new()
 	var tm := TorusMesh.new()
-	tm.inner_radius = 0.55
-	tm.outer_radius = 0.72
+	tm.inner_radius = 0.72
+	tm.outer_radius = 0.95
 	_target_ring.mesh = tm
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -754,6 +782,10 @@ func _physics_process(delta: float) -> void:
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+
+	if _target_ring != null and _target_ring.visible:
+		var s := 1.0 + 0.1 * sin(game_time * 7.0)
+		_target_ring.scale = Vector3(s, 1.0, s)
 
 	match phase:
 		Phase.INTRO:
@@ -1095,6 +1127,7 @@ func _tick_will(delta: float) -> void:
 					_will.t = 0.0
 					return
 				_ui.open(players[p].name, players[p].color, players[p].char_path)
+				_set_base_ui(false)
 				Sfx.play("grudge", 0.0, 0.03)
 				if not _tally:
 					var tw := create_tween()
@@ -1236,6 +1269,7 @@ func _tick_will(delta: float) -> void:
 					tw.tween_property(cam, "fov", _cam_base_fov, 0.4).set_trans(Tween.TRANS_SINE)
 		WStep.CLOSING:
 			if _will.t >= (0.1 if _tally else 0.5):
+				_set_base_ui(true)
 				_seat_ghost(p)
 				_will = {}
 				if not _will_queue.is_empty():
@@ -1617,6 +1651,12 @@ func on_shield_break(i: int) -> void:
 func on_wisp_contact(i: int) -> void:
 	if not _tally:
 		_flash_sub("THE WISP CATCHES %s" % players[i].name, Color(0.6, 1.0, 0.6), 1.2)
+
+func _set_base_ui(v: bool) -> void:
+	round_label.visible = v
+	timer_label.visible = v
+	hint_label.visible = v
+	$UI/ScorePanel.visible = v
 
 # ================================================================ input helpers
 func _nav_dir(p: int) -> int:

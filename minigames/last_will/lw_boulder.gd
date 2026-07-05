@@ -108,7 +108,8 @@ func tick(delta: float) -> void:
 				state = BState.ROLLING
 				_rock.visible = true
 				_bang.visible = false
-				_strip_mat.albedo_color.a = 0.08
+				_strip_mat.albedo_color.a = 0.035
+				_strip_mat.emission_energy_multiplier = 0.4
 				Sfx.play("crush", -9.0, 0.2)
 		BState.ROLLING:
 			var step := SPEED * delta

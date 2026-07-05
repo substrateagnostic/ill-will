@@ -19,6 +19,8 @@ const INK := Color(0.16, 0.12, 0.09)
 
 var _dc := Color.WHITE          # deceased color
 var _pulse_t := 0.0
+var _peek := false              # target phase: let the 3D world (and the
+                                # skeletal hand) read through the dim
 
 var _root: Control
 var _dim: ColorRect
@@ -88,6 +90,7 @@ func _ready() -> void:
 		_root.add_child(bar)
 		_edges.append(bar)
 	_layout_frame()
+	_peek = false
 
 	_title = _mk_label("", F_LUCKIEST, 54, Color.WHITE)
 	_title.set_anchors_preset(Control.PRESET_TOP_WIDE)
@@ -123,8 +126,8 @@ func _mk_label(text: String, font: FontFile, size: int, color: Color) -> Label:
 	return l
 
 func _layout_frame() -> void:
-	var t := 10.0
-	var st := 34.0
+	var t := 9.0
+	var st := 24.0
 	# top, bottom, left, right
 	var rects := [Rect2(0, 0, 1280, t), Rect2(0, 720 - t, 1280, t),
 		Rect2(0, 0, t, 720), Rect2(1280 - t, 0, t, 720)]
@@ -314,6 +317,7 @@ func open(pname: String, color: Color, char_scene_path: String) -> void:
 	_portrait_spin.rotation.y = 0.0
 
 	# entrance: dim + vignette + frame breathe in; cards come later
+	_peek = false
 	_cards_box.visible = false
 	_prompt.visible = false
 	_target_label.visible = false
@@ -402,6 +406,7 @@ func _make_card(card: Dictionary) -> Panel:
 	var d1 := _mk_label(str(bl.desc), F_BALOO, 14, Color(0.85, 0.8, 0.68))
 	d1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	d1.autowrap_mode = TextServer.AUTOWRAP_WORD
+	d1.custom_minimum_size = Vector2(0, 48)
 	v.add_child(d1)
 
 	var mid := _mk_label("— upon one — a plague upon another —", F_BALOO, 12, Color(0.52, 0.47, 0.42))
@@ -422,6 +427,7 @@ func _make_card(card: Dictionary) -> Panel:
 	var d2 := _mk_label(str(cu.desc), F_BALOO, 14, Color(0.72, 0.82, 0.68))
 	d2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	d2.autowrap_mode = TextServer.AUTOWRAP_WORD
+	d2.custom_minimum_size = Vector2(0, 48)
 	v.add_child(d2)
 	return p
 
@@ -461,10 +467,20 @@ func lock_card(idx: int) -> void:
 		else:
 			tw.tween_property(p, "modulate:a", 0.0, 0.22)
 
+func set_world_peek(v: bool) -> void:
+	if _peek == v:
+		return
+	_peek = v
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(_dim, "color:a", 0.30 if v else 0.68, 0.3)
+	tw.tween_property(_vig, "modulate:a", 0.45 if v else 1.0, 0.3)
+
 func show_target_prompt(kind: String) -> void:
 	_cards_box.visible = true
+	set_world_peek(true)
 	var tw := create_tween()
-	tw.tween_property(_cards_box, "modulate:a", 0.10, 0.25)
+	tw.tween_property(_cards_box, "modulate:a", 0.0, 0.25)
 	_prompt.visible = true
 	_target_label.visible = true
 	_mode_box.visible = false
@@ -488,8 +504,9 @@ func set_target_display(pname: String, color: Color) -> void:
 	tw.tween_property(_target_label, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func show_mode_choice(bless_title: String, curse_title: String, survivor_name: String, survivor_color: Color) -> void:
+	set_world_peek(true)
 	var tw := create_tween()
-	tw.tween_property(_cards_box, "modulate:a", 0.10, 0.25)
+	tw.tween_property(_cards_box, "modulate:a", 0.0, 0.25)
 	_prompt.visible = true
 	_prompt.text = "ONE HEIR REMAINS: %s" % survivor_name
 	_prompt.add_theme_color_override("font_color", survivor_color)
@@ -550,6 +567,7 @@ func show_resolution(lines: Array) -> void:
 	_target_label.visible = false
 	_mode_box.visible = false
 	_set_timer_visible(false)
+	set_world_peek(true)
 	var tw0 := create_tween()
 	tw0.tween_property(_cards_box, "modulate:a", 0.0, 0.2)
 	for c in _res_lines.get_children():
@@ -585,6 +603,7 @@ func close() -> void:
 	tw.tween_property(_root, "modulate:a", 0.0, 0.32)
 	tw.tween_callback(func():
 		visible = false
+		_peek = false
 		_root.modulate.a = 1.0
 		_dim.color.a = 0.0
 		_vig.modulate.a = 0.0
