@@ -6,6 +6,18 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **IMPORTANT: fully CLOSE and RELAUNCH the game.** The auction fix is
+  proven working on master via an end-to-end test that drives the real
+  button signals (bid → CHOOSING → click card → launch: PASS). A running
+  Godot instance keeps pre-fix scripts — your "still broken" was almost
+  certainly the stale build.
+- **Fixed this pass**: estate leakage (Trail stones/sun/environment were
+  visible behind Tilt etc. — now fully hidden during minigames); bid
+  buttons relabeled "NAME: RAISE TO n♠" and disabled for bots.
+- **NEW DEVICE in ESC menu: "KB (WASD) + MOUSE"** (LMB=A, RMB=B). Mouse
+  AIM (swing/throw/tackle toward cursor) comes per-game right after the
+  bot-mix retrofit merges — the two would collide in the same files.
+
 - **YOUR TWO PLAYTEST ISSUES: FIXED (pull/relaunch).** (1) Auction bug
   root-caused: the resolve step re-fired every frame (no phase change),
   re-draining grudge and rebuilding the chooser buttons before clicks
