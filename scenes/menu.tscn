@@ -150,5 +150,5 @@ theme_override_font_sizes/font_size = 18
 theme_override_colors/font_color = Color(1, 1, 0.95, 0.85)
 theme_override_colors/font_outline_color = Color(0.1, 0.12, 0.08, 1)
 theme_override_constants/outline_size = 4
-text = "One mouse. Nine rounds. The course remembers everything."
+text = "One couch. Ten games. The estate remembers everything."
 horizontal_alignment = 1
