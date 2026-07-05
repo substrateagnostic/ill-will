@@ -117,11 +117,11 @@ deaths: void=6 squish=3 | gusts=3  puppet_bonuses=4 carryovers=1
 WILL_TALLY seed=2 rounds=3 wills=9 wills_per_round=3.00
 deaths: void=6 squish=3 | gusts=16 puppet_bonuses=1 carryovers=2
 WILL_TALLY seed=3 rounds=3 wills=9 wills_per_round=3.00
-deaths: void=7 squish=2 | gusts=11 puppet_bonuses=2 carryovers=2
+deaths: void=6 squish=3 | gusts=19 puppet_bonuses=3 carryovers=2
 WILL_TALLY seed=4 rounds=3 wills=9 wills_per_round=3.00
 deaths: void=8 squish=1 | gusts=6  puppet_bonuses=2 carryovers=2
 WILL_TALLY seed=5 rounds=3 wills=9 wills_per_round=3.00
-deaths: void=6 squish=3 | gusts=8  puppet_bonuses=4 carryovers=2
+deaths: void=6 squish=3 | gusts=7  puppet_bonuses=4 carryovers=2
 AVERAGE = 3.00 wills/round across 5 seeds  (target >=2)  PASS
 ```
 
@@ -145,8 +145,8 @@ LW_DEATH round=2 t=16.9 RED SHOVES BLUE INTO THE DUSK
 LW_WILL BLUE blesses RED with shield (carry)
 LW_ROUND_START 3/3
 LW_CARRYOVER bless shield BLUE->RED
-LW_DEATH round=3 t=57.0 THE BOULDER FLATTENS RED (squish)
-LW_WILL RED curses BLUE with butterfingers (fades: match over)
+LW_DEATH round=3 t=58.2 THE PENDULUM SWATS RED AWAY
+LW_WILL RED curses BLUE with sluggish (fades: match over)
 totals: RED=3 BLUE=6
 ```
 
@@ -158,6 +158,22 @@ carry into the next round's first seconds; a carried bless that delivers
 pays the puppetmaster +2 a round later. 2P scoring is 3/0. Note: the
 >=2-wills metric is structurally a 4P target (a 2P round has at most one
 will).
+
+## Results contract, end to end (seed 5 tally, printed as LW_RESULTS)
+
+```json
+{"placements":[0,2,1,3],"points":{"0":9,"1":8,"2":9,"3":6},
+ "currency_events":[ 9x {"type":"grudge","amount":1,"reason":"eliminated (void|squish)"},
+                     4x {"type":"royalty","amount":2,"reason":"the dead hand moves the world"} ],
+ "highlights":["GOLD shoved RED into the dusk",
+               "RED's curse dragged GOLD to the grave",
+               "RED backed BLUE from beyond the grave — BLUE delivered"],
+ "monuments":[{"kind":"kingmaker","label":"GOLD, Kingmaker from the Grave","player":2}]}
+```
+
+Placements include every roster player (ties by earlier index: RED 9 before
+GOLD 9); all three highlight flavors fire; the KINGMAKER monument triggers
+at 2+ puppetmaster bonuses. `report_finished()` validation: zero warnings.
 
 ## Squish self-test
 

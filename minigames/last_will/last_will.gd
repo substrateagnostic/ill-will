@@ -108,7 +108,6 @@ var _intro_t := 0.0
 var _re_t := 0.0                   # ROUND_END sequencer time
 var _re_events: Array = []         # {t, fn}
 var _re_done_t := 0.0
-var _sudden_death_announced := false
 
 # will theater
 var _will: Dictionary = {}
@@ -639,7 +638,6 @@ func _start_round() -> void:
 	_intro_t = 0.0
 	round_elapsed = 0.0
 	_elim_order.clear()
-	_sudden_death_announced = false
 	_clear_hazards()
 	_clear_ghosts()
 	_clear_wisps()
@@ -737,7 +735,6 @@ func _process_schedule() -> void:
 			"shrink":
 				_do_shrink(int(ev.ring))
 			"sudden":
-				_sudden_death_announced = true
 				if not _tally:
 					_flash_banner("SUDDEN DEATH\nONLY THE PILLAR REMAINS", Color(1.0, 0.35, 0.25), 2.0)
 					Sfx.play("grudge", -2.0)
@@ -1598,21 +1595,12 @@ func _points_table() -> Array:
 func _finish_match() -> void:
 	phase = Phase.MATCH_END
 	_tally_stats.rounds = rounds_total
-	if _tally:
-		_print_tally()
-		get_tree().quit()
-		return
 	var order: Array = range(players.size())
 	order.sort_custom(func(a, b):
 		if players[a].total != players[b].total:
 			return players[a].total > players[b].total
 		return a < b)
 	var champ: int = order[0]
-	print("LW_MATCH_OVER champ=%s pts=%d" % [players[champ].name, players[champ].total])
-	_flash_banner("%s WINS LAST WILL" % players[champ].name, players[champ].color, 6.0)
-	Sfx.play("match_win")
-	_spawn_confetti(pawns[champ].global_position + Vector3(0, 1.2, 0), players[champ].color)
-
 	var points := {}
 	for i in players.size():
 		points[i] = players[i].total
@@ -1628,6 +1616,15 @@ func _finish_match() -> void:
 		"highlights": _dedup(_highlights).slice(0, 3),
 		"monuments": monuments,
 	}
+	print("LW_MATCH_OVER champ=%s pts=%d" % [players[champ].name, players[champ].total])
+	print("LW_RESULTS ", JSON.stringify(results))
+	if _tally:
+		_print_tally()
+		get_tree().quit()
+		return
+	_flash_banner("%s WINS LAST WILL" % players[champ].name, players[champ].color, 6.0)
+	Sfx.play("match_win")
+	_spawn_confetti(pawns[champ].global_position + Vector3(0, 1.2, 0), players[champ].color)
 	report_finished(results)
 
 func _print_tally() -> void:

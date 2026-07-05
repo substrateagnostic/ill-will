@@ -131,11 +131,13 @@ func setup(angle_deg: float, swings: int, p_owner: Node) -> void:
 	Sfx.play("grudge", -8.0, 0.02)
 
 func blade_world_info() -> Dictionary:
-	## center of the blade in world space + swing velocity sign along sweep_dir
+	## center of the blade in world space + swing velocity sign along sweep_dir.
+	## theta(t) = A*cos(wt); along = -sin(theta)*L; d(along)/dt has the sign
+	## of sin(wt) — victims must be carried in the blade's TRAVEL direction.
 	var ang := _blade.rotation.z
 	var along := -sin(ang) * ARM_LEN        # local x of blade center
 	var y := _pivot.position.y - cos(ang) * ARM_LEN
-	var vel_sign := -cos(_phase_t * TAU / PERIOD)  # d/dt of -sin phase
+	var vel_sign := sin(_phase_t * TAU / PERIOD)
 	return {"along": along, "y": y, "vel_sign": signf(vel_sign) if absf(vel_sign) > 0.05 else 0.0}
 
 func tick(delta: float) -> void:
