@@ -93,7 +93,7 @@ func _ready() -> void:
 func _enter_lobby() -> void:
 	phase = Phase.LOBBY
 	$UI/TopBar.visible = false
-	_flash("THE UN-PARTY", Color(1, 0.85, 0.2), 9999.0)
+	_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0)
 	_build_lobby_panel()
 
 func _build_lobby_panel() -> void:
