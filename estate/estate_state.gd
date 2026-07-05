@@ -27,6 +27,9 @@ var trail_pos := {}
 var tollgates := {}
 var last_deltas := {}
 var night_stats := {}
+# Directed kill counts for the night: "killer>victim" -> count. Fed by
+# the module contract's optional kill_events; powers the NEMESIS award.
+var kill_matrix := {}
 
 func _ready() -> void:
 	rng.randomize()
@@ -48,10 +51,11 @@ func start_night(player_count: int) -> void:
 	tollgates.clear()
 	last_deltas.clear()
 	night_stats.clear()
+	kill_matrix.clear()
 	for i in player_count:
 		trail_pos[i] = 0
 		night_stats[i] = {"wins": 0, "lasts": 0, "royalties": 0,
-			"grudge_earned": 0, "bets_won": 0, "tolls": 0}
+			"grudge_earned": 0, "bets_won": 0, "tolls": 0, "kills": 0}
 	for i in player_count:
 		players.append({
 			"index": i,
@@ -83,6 +87,13 @@ func apply_results(results: Dictionary) -> Array:
 	if placements.size() >= 2:
 		night_stats[placements[0]].wins += 1
 		night_stats[placements.back()].lasts += 1
+	for ke in results.get("kill_events", []):
+		var killer: int = int(ke.get("killer", -1))
+		var victim: int = int(ke.get("victim", -1))
+		if killer >= 0 and victim >= 0 and killer != victim:
+			night_stats[killer].kills += 1
+			var pair := "%d>%d" % [killer, victim]
+			kill_matrix[pair] = int(kill_matrix.get(pair, 0)) + 1
 	for ev in results.get("currency_events", []):
 		var p: int = ev.player
 		if ev.type == "grudge":
@@ -126,6 +137,16 @@ func record_toll(owner_idx: int, amount: int) -> void:
 func night_superlatives(champ: int) -> Array:
 	var awards: Array = []
 	var order := standings()
+	var best_pair := ""
+	var best_n := 1
+	for pair in kill_matrix:
+		if int(kill_matrix[pair]) > best_n:
+			best_n = int(kill_matrix[pair])
+			best_pair = pair
+	if best_pair != "":
+		var kp := best_pair.split(">")
+		awards.append({"player": int(kp[0]), "title": "NEMESIS OF %s" % players[int(kp[1])].name,
+			"line": "hunted them down %d times tonight" % best_n})
 	var work := _stat_leader("wins", order)
 	if work >= 0 and work != champ:
 		awards.append({"player": work, "title": "THE WORKHORSE",

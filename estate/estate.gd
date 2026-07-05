@@ -468,7 +468,38 @@ func _select_walker(idx: int) -> void:
 		w.set_selected(w.player_idx == idx)
 	Sfx.play("card", -8.0)
 
+var _join_held := {}
+
+## Press-A-to-join (digest join flow): a gamepad nobody is seated on
+## presses A in the LOBBY and claims the first BOT seat as HUMAN.
+func _poll_pad_join() -> void:
+	var seated: Array = []
+	for i in 4:
+		seated.append(PlayerInput.device_of(i))
+	for pad in Input.get_connected_joypads():
+		var down := Input.is_joy_button_pressed(pad, JOY_BUTTON_A)
+		if not down:
+			_join_held.erase(pad)
+			continue
+		if _join_held.get(pad, false) or pad in seated:
+			continue
+		_join_held[pad] = true
+		for i in 4:
+			if PlayerInput.is_bot(i):
+				PlayerInput.assign(i, pad)
+				PlayerInput.set_bot(i, false)
+				PlayerInput.save_setup()
+				Sfx.play("confirm")
+				_flash("%s JOINS THE PARTY (GAMEPAD %d)" % [GameState.PLAYER_NAMES[i], pad + 1], GameState.PLAYER_COLORS[i], 2.2)
+				get_tree().create_timer(2.3).timeout.connect(func():
+					if phase == Phase.LOBBY:
+						_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0))
+				_build_lobby_panel()
+				break
+
 func _process(delta: float) -> void:
+	if phase == Phase.LOBBY:
+		_poll_pad_join()
 	if _module == null and not walkers.is_empty():
 		_bot_wander_timer -= delta
 		if _bot_wander_timer <= 0.0:
