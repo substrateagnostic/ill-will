@@ -11,6 +11,11 @@ const GRAB_RADIUS := 1.2
 
 var ball: Ball
 var enabled := true
+## PAR v4: the embodied hold-release swing (avatar_shot.gd) is the shipped
+## default; the v3 drag-back putt stays available behind this toggle (spec OQ2,
+## read from PartySetup pref "par_drag_putt" / --v3putt by main). The drag path
+## below is byte-identical to v3 when re-enabled.
+var drag_enabled := false
 
 var _aiming := false
 var _drag_point := Vector3.ZERO
@@ -81,7 +86,7 @@ func _update_dots(dir: Vector3, speed: float) -> void:
 		d.material_override.albedo_color = Color(col.r, col.g, col.b, 0.4 + 0.5 * fade)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not enabled or ball == null or not ball.is_stopped():
+	if not drag_enabled or not enabled or ball == null or not ball.is_stopped():
 		return
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
@@ -135,10 +140,27 @@ func _update_arrow() -> void:
 		arrow.visible = false
 		_hide_dots()
 		return
-	arrow.visible = true
 	var t: float = clampf(len / MAX_DRAG, 0.0, 1.0)
+	_render_arrow(pull.normalized(), t, _power_for_drag(len))
+
+## PAR v4: the embodied aim renders the SAME arrow + first-bounce dots from a
+## (dir, speed) pair — presentation only, identical visuals to the drag path.
+func show_aim_preview(dir: Vector3, speed: float) -> void:
+	if ball == null:
+		return
+	dir.y = 0.0
+	if dir.length() < 0.01:
+		return
+	var t: float = clampf((speed - MIN_SPEED) / (MAX_SPEED - MIN_SPEED), 0.0, 1.0)
+	_render_arrow(dir.normalized(), t, speed)
+
+func hide_preview() -> void:
+	arrow.visible = false
+	_hide_dots()
+
+func _render_arrow(dir: Vector3, t: float, speed: float) -> void:
+	arrow.visible = true
 	var display_len := 0.5 + t * 2.2
-	var dir := pull.normalized()
 	arrow.global_position = ball.global_position + Vector3(0, 0.02, 0)
 	arrow.global_position += dir * (display_len * 0.5)
 	arrow.look_at(arrow.global_position + dir, Vector3.UP)
@@ -151,7 +173,7 @@ func _update_arrow() -> void:
 	var hmat: StandardMaterial3D = arrow_head.get_surface_override_material(0)
 	if hmat:
 		hmat.albedo_color = col
-	_update_dots(dir, _power_for_drag(len))
+	_update_dots(dir, speed)
 
 func _ball_flat() -> Vector3:
 	return ball.global_position

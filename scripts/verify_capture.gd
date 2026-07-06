@@ -19,6 +19,19 @@ var frame := 0
 var active := false
 var quit_after := 0
 var trace_pos := false
+## PAR v4: --swingplay routes --autoplay shots through the embodied swing
+## (walk -> address -> charge -> contact-frame debug_putt) instead of calling
+## debug_putt directly. Same numbers in; the byte-identical receipt diffs the
+## two runs. --traceall logs every ball position EVERY physics tick (PTRACE) so
+## the per-tick roll of a v3 shot and a v4 swing can be compared exactly,
+## independent of when the stroke fired.
+var swingplay := false
+var trace_all := false
+## --physputt=power,angle,tick[,power,angle,tick...] — fire debug_putt at EXACT
+## physics ticks. Pairs a v3-direct run tick-for-tick against a v4 swing run
+## (whose SWING_FIRE logs its tick), so powered-trap phases align and the diff
+## isolates the interface: same tick + same numbers must equal same roll.
+var physputts: Array = []
 var _ap_cooldown := 0
 
 func _ready() -> void:
@@ -54,6 +67,19 @@ func _ready() -> void:
 			active = true
 		elif arg == "--tracepos":
 			trace_pos = true
+			active = true
+		elif arg == "--swingplay":
+			swingplay = true
+			active = true
+		elif arg.begins_with("--physputt="):
+			var pp := arg.trim_prefix("--physputt=").split(",")
+			var k := 0
+			while k + 3 <= pp.size():
+				physputts.append({"power": float(pp[k]), "angle": float(pp[k + 1]), "tick": int(pp[k + 2])})
+				k += 3
+			active = true
+		elif arg == "--traceall":
+			trace_all = true
 			active = true
 		elif arg.begins_with("--outdir="):
 			out_dir = arg.trim_prefix("--outdir=")
@@ -112,6 +138,43 @@ func _pt_report(trap: Node3D, tag: String) -> void:
 
 func _v(v: Vector3) -> String:
 	return "(%.2f,%.2f,%.2f)" % [v.x, v.y, v.z]
+
+func _v4(v: Vector3) -> String:
+	return "(%.4f,%.4f,%.4f)" % [v.x, v.y, v.z]
+
+## --traceall: every physics tick, every ball, 0.1mm resolution. The frozen-putt
+## receipt extracts each ball's moving segment from two runs and byte-diffs.
+func _physics_process(_delta: float) -> void:
+	if not physputts.is_empty():
+		var tick := Engine.get_physics_frames()
+		for pp in physputts:
+			if pp.tick == tick:
+				var scene := get_tree().current_scene
+				var pc := scene.find_child("PuttController", true, false) if scene else null
+				if pc and pc.has_method("debug_putt"):
+					pc.debug_putt(pp.power, pp.angle)
+					print("VERIFY_PHYSPUTT fired p=%.1f a=%.1f tick=%d" % [pp.power, pp.angle, tick])
+	if not trace_all:
+		return
+	var m := get_tree().current_scene
+	if m == null or not "balls" in m or m.balls.is_empty():
+		return
+	var parts := "PTRACE t=%d" % Engine.get_physics_frames()
+	for b in m.balls:
+		# Resolved balls animate by wall-clock tween (sink dip, gutter sweep) —
+		# presentation, not sim. Log a state marker so the receipt only ever
+		# compares LIVE physics positions.
+		if b.is_sunk:
+			parts += " SUNK"
+		elif b.is_dead:
+			parts += " DEAD"
+		elif b.is_petrified:
+			parts += " PETRIFIED"
+		elif b.in_transit:
+			parts += " TRANSIT"
+		else:
+			parts += " %s" % _v4(b.global_position)
+	print(parts)
 
 func _process(_delta: float) -> void:
 	if not active:
@@ -178,7 +241,16 @@ func _process(_delta: float) -> void:
 	if not autoplay.is_empty():
 		_ap_cooldown -= 1
 		var main := scene
-		if _ap_cooldown <= 0 and main.has_method("is_turn_ready") and main.is_turn_ready():
+		if swingplay and _ap_cooldown <= 0 and main.has_method("is_swing_ready") and main.is_swing_ready():
+			# v4 embodied route: the avatar has walked in and holds the address
+			# stance; queue the exact same numbers through the swing.
+			var sshot: Dictionary = autoplay.pop_front()
+			if main.begin_auto_swing(sshot.power, sshot.angle):
+				print("VERIFY_SWINGQUEUE p=%.1f a=%.1f frame=%d" % [sshot.power, sshot.angle, frame])
+				_ap_cooldown = 30
+			else:
+				autoplay.push_front(sshot)
+		elif not swingplay and _ap_cooldown <= 0 and main.has_method("is_turn_ready") and main.is_turn_ready():
 			var pc := main.find_child("PuttController", true, false)
 			if pc:
 				var shot: Dictionary = autoplay.pop_front()
