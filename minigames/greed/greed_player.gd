@@ -51,6 +51,8 @@ var _leak: CPUParticles3D
 var _grab_ring: MeshInstance3D
 var _grab_mat: StandardMaterial3D
 var _stun_stars: CPUParticles3D
+var _dash_ring: CooldownRing          # THE COOLDOWN RING for the dash (feet-anchored)
+var _squash_tw: Tween                 # owns the HIT KIT windup/pop scale (one at a time)
 var _cur_anim := ""
 var _anim_hold := 0.0                  # seconds a one-shot anim owns the body
 var _base_scale := 0.92
@@ -191,6 +193,12 @@ func setup(index: int, col: Color, char_scene: String) -> void:
 	_stun_stars.mesh.surface_set_material(0, stmat)
 	add_child(_stun_stars)
 
+	# dash cooldown ring — flat, player-colored, concentric just outside the
+	# identity ring (identity outer 0.58); geometric fill = colorblind-safe.
+	_dash_ring = CooldownRing.new()
+	add_child(_dash_ring)
+	_dash_ring.setup(color, 0.70, 0.60, 0.05, 0.9)
+
 	_play("Idle")
 
 
@@ -213,6 +221,11 @@ func reset_for_round(pos: Vector3, face_yaw: float) -> void:
 	_grab_ring.visible = false
 	_stun_stars.emitting = false
 	_pivot.rotation = Vector3.ZERO
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	_pivot.scale = Vector3.ONE
+	if _dash_ring:
+		_dash_ring.tick(0.0, 1.0, false, false)   # force-hide the cooldown ring
 	_cur_anim = ""
 	_play("Idle")
 
@@ -250,7 +263,34 @@ func try_dash() -> bool:
 func do_tackle_swing() -> void:
 	tackle_lock = TACKLE_LOCK
 	_one_shot("Unarmed_Melee_Attack_Punch_A", TACKLE_LOCK)
+	windup_coil()                       # HIT KIT windup: coil before the strike lands
 	Sfx.play("putt", -3.0)
+
+
+## HIT KIT §B1 Phase 1 — WINDUP. The body coils (chunky crouch) then springs
+## back over ~0.16s. Visual only; the tackle hitbox is decided by the controller.
+func windup_coil() -> void:
+	if _pivot == null:
+		return
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	_squash_tw = create_tween()
+	_squash_tw.tween_property(_pivot, "scale", Vector3(1.08, 0.90, 1.08), 0.06)
+	_squash_tw.tween_property(_pivot, "scale", Vector3.ONE, 0.10) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## HIT KIT §B1 Phase 2 — victim impact pop (copy of echo_chamber _flash_pop):
+## flatten wide on impact, snap back over 0.16s. Reads as "hit hard".
+func flash_pop() -> void:
+	if _pivot == null:
+		return
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	_pivot.scale = Vector3(1.22, 0.85, 1.22)
+	_squash_tw = create_tween()
+	_squash_tw.tween_property(_pivot, "scale", Vector3.ONE, 0.16) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 ## Mouse aim (KBM humans only): a tackle pounces toward the cursor. We face the
@@ -396,3 +436,8 @@ func tick_visual(delta: float, t: float) -> void:
 		_glow_light.light_energy = 2.0 + 0.6 * sin(t * 6.0)
 	if _grab_ring.visible:
 		_grab_ring.rotation.y += delta * 5.0
+	# dash cooldown ring: empty at fire (dash_cd = DASH_CD) -> full = READY.
+	if _dash_ring:
+		var frac := clampf(1.0 - dash_cd / DASH_CD, 0.0, 1.0)
+		var reduced := not bool(PartySetup.pref("screen_shake", true))
+		_dash_ring.tick(delta, frac, true, reduced)

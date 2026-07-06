@@ -50,6 +50,7 @@ var ring: MeshInstance3D
 var crown_anchor: Node3D
 var _cur_anim := ""
 var _anim_lock := 0.0
+var _squash_tw: Tween             # owns the HIT KIT windup/pop model scale
 
 func setup(p_index: int, p_color: Color, char_scene: PackedScene, p_owner: Node) -> void:
 	index = p_index
@@ -172,8 +173,11 @@ func become_king(p_seat: Vector3) -> void:
 	# face the camera (at +Z) so the crown and cushion read; KayKit faces -Z,
 	# so rotate the model 180 deg to look toward the viewer
 	_face = Vector3(0, 0, 1)
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
 	if model_pivot:
 		model_pivot.rotation.y = PI
+		model_pivot.scale = Vector3.ONE
 	freeze = true
 	_set_anim("Idle")
 
@@ -192,6 +196,10 @@ func launch(dir: Vector3, force: float) -> void:
 	re_sit_cd = 2.0
 	apply_central_impulse(d * force + Vector3.UP * force * 0.55)
 	apply_torque_impulse(Vector3(d.z, 1.0, -d.x) * force * 0.4)
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	if model_pivot:
+		model_pivot.scale = Vector3.ONE
 	if anim and anim.has_animation("Hit_A"):
 		_cur_anim = "Hit_A"
 		anim.play("Hit_A")
@@ -268,10 +276,42 @@ func _update_anim(delta: float) -> void:
 	else:
 		_set_anim("Idle")
 
+## Visual FX gate — off in the reproducible no-FX balance sim (--thronebalancefast).
+func _visuals_on() -> bool:
+	return owner_game != null and owner_game.has_method("fx_on") and owner_game.fx_on()
+
+
+## HIT KIT §B1 Phase 1 — WINDUP coil (chunky crouch) then spring back. Visual
+## only; the shove hitbox still resolves this same frame, so time-to-hit is
+## unchanged (< 0.18s). This is the "standard shove windup" (research fix #3).
+func windup_coil() -> void:
+	if model_pivot == null or not _visuals_on():
+		return
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	_squash_tw = create_tween()
+	_squash_tw.tween_property(model_pivot, "scale", Vector3(1.08, 0.90, 1.08), 0.06)
+	_squash_tw.tween_property(model_pivot, "scale", Vector3.ONE, 0.10) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## HIT KIT §B1 Phase 2 — victim impact pop (flatten wide, snap back over 0.16s).
+func flash_pop() -> void:
+	if model_pivot == null or not _visuals_on():
+		return
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	model_pivot.scale = Vector3(1.22, 0.85, 1.22)
+	_squash_tw = create_tween()
+	_squash_tw.tween_property(model_pivot, "scale", Vector3.ONE, 0.16) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
 func _do_shove() -> void:
 	if _shove_cd > 0.0 or owner_game == null:
 		return
 	_shove_cd = SHOVE_CD
+	windup_coil()                       # HIT KIT windup on the shove action
 	Sfx.play("bumper", -4.0)
 	if anim and anim.has_animation("Interact"):
 		_cur_anim = "Interact"
@@ -307,12 +347,19 @@ func _do_dash() -> void:
 	dir.y = 0.0
 	apply_central_impulse(dir.normalized() * DASH_IMPULSE)
 
-func take_shove(dir: Vector3, impulse: float, _attacker: int) -> void:
+func take_shove(dir: Vector3, impulse: float, attacker: int) -> void:
 	if is_king:
 		return
 	dir.y = 0.0
 	apply_central_impulse(dir.normalized() * impulse + Vector3.UP * impulse * 0.12)
 	_stun = STUN_TIME
+	# HIT KIT: victim squash-pop + spark along the knockback at the strike point.
+	flash_pop()
+	if _visuals_on() and owner_game.has_method("spark_at"):
+		var col: Color = color
+		if attacker >= 0 and attacker < owner_game.players.size():
+			col = owner_game.players[attacker].color
+		owner_game.spark_at(global_position + Vector3(0, 0.9, 0), dir, col, _shove_strength(impulse))
 
 ## The controller's decree blast pushes challengers away from the dais.
 func apply_blast(dir: Vector3, impulse: float) -> void:
@@ -321,3 +368,9 @@ func apply_blast(dir: Vector3, impulse: float) -> void:
 	dir.y = 0.0
 	apply_central_impulse(dir.normalized() * impulse + Vector3.UP * impulse * 0.35)
 	_stun = STUN_TIME
+	# HIT KIT victim pop (the decree already carries its own shockwave for the spark read).
+	flash_pop()
+
+## Normalized impact strength for HIT KIT scaling (spark count / shake).
+func _shove_strength(impulse: float) -> float:
+	return clampf(impulse / (SHOVE_BASE + 5.0 * SHOVE_SPEED_SCALE), 0.5, 1.5)
