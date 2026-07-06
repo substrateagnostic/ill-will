@@ -70,7 +70,9 @@ var _probe := false
 
 # --- NETPROBE deterministic input tape (see docs/verify/online-phase1-VERIFY.md)
 # Steps hold until the next entry; from PULSE_FROM the tape pulses A every 90
-# ticks (6 ticks wide) so it can answer any READY gate whenever it appears.
+# ticks (6 ticks wide) so it can answer the GET READY gate whenever it appears.
+# The pulses start well past the lobby window (20 s) — earlier pulses would
+# keep toggling the lobby READY chip off again while the probe is still there.
 const TAPE := [
 	{"t": 0, "move": Vector2(-1, 0), "a": false},
 	{"t": 60, "move": Vector2(0, -1), "a": false},
@@ -80,7 +82,7 @@ const TAPE := [
 	{"t": 300, "move": Vector2.ZERO, "a": true},    # single A press: lobby READY
 	{"t": 306, "move": Vector2.ZERO, "a": false},
 ]
-const TAPE_PULSE_FROM := 660
+const TAPE_PULSE_FROM := 1200
 const TAPE_PULSE_EVERY := 90
 const TAPE_PULSE_WIDTH := 6
 const TAPE_END := 5400

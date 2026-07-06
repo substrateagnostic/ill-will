@@ -1,0 +1,59 @@
+﻿NET host port=8910 err=0 code=80CMWE addr=192.168.0.101:8910
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 1071192751 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE seat 1 claimed by peer 1071192751
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+NETHASH side=host seq=15 h=1503d1f4
+NETPROBE_TRACE tick=60 p1=(-3.400,0.001,-2.500)
+VERIFY_SNAP res://docs/verify/netshots_host/snap_online_host_claim_0424.png
+NETPROBE_TRACE tick=90 p1=(-3.400,0.001,-4.200)
+NETPROBE_TRACE tick=120 p1=(-3.400,0.001,-5.900)
+NETHASH side=host seq=30 h=fd99ba85
+NETPROBE_TRACE tick=150 p1=(-1.757,0.001,-5.957)
+NETPROBE_TRACE tick=180 p1=(-0.057,0.001,-5.957)
+NETHASH side=host seq=45 h=625dc811
+NETPROBE_TRACE tick=210 p1=(-0.057,0.001,-4.257)
+NETPROBE_TRACE tick=240 p1=(-0.057,0.001,-2.613)
+NETHASH side=host seq=60 h=e26a1d08
+NETPROBE_TRACE tick=270 p1=(-0.057,0.001,-2.613)
+NETPROBE_TRACE tick=300 p1=(-0.057,0.001,-2.613)
+NETPROBE toggle seat=1 ready=true pf=441
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/netshots_host/snap_online_host_ready_0987.png
+NETHASH side=host seq=75 h=fab381ae
+NETHASH side=host seq=90 h=1436cbab
+NETHASH side=host seq=105 h=915f7198
+NETHASH side=host seq=120 h=aae2bb95
+NETHASH side=host seq=135 h=c32c203b
+NETHASH side=host seq=150 h=dcaf6a38
+NETHASH side=host seq=165 h=f4f8cede
+NETHASH side=host seq=180 h=0e7c18db
+NETHASH side=host seq=195 h=26c57d81
+NETHASH side=host seq=210 h=68bf57b5
+NETHASH side=host seq=225 h=8108bc5b
+VERIFY_SNAP res://docs/verify/netshots_host/snap_online_host_gate_2573.png
+NETHASH side=host seq=240 h=9a8c0658
+NETHASH side=host seq=255 h=b2d56afe
+NETHASH side=host seq=270 h=cc58b4fb
+NETHASH side=host seq=285 h=e4a219a1
+NETHASH side=host seq=300 h=269bf3d5
+VERIFY_SNAP res://docs/verify/netshots_host/snap_online_host_game_3279.png
+NETHASH side=host seq=315 h=3ee5587b
+NETHASH side=host seq=330 h=5868a278
+NETHASH side=host seq=345 h=70b2071e
+NETHASH side=host seq=360 h=8a35511b
+NETHASH side=host seq=375 h=a27eb5c1
+NETHASH side=host seq=390 h=bc01ffbe
+VERIFY_SNAP res://docs/verify/netshots_host/snap_online_host_reckoning_4218.png
+NETPROBE_RESULTS RED:pts=1,grudge=4 BLUE:pts=3,grudge=3 GOLD:pts=5,grudge=2 MINT:pts=2,grudge=1
+NETPROBE saves restored
+NETPROBE_DONE
+NETHASH side=host seq=405 h=fcc1f49b

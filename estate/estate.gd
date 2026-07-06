@@ -66,6 +66,7 @@ var _client_walker_targets := {}  # client: p -> {pos, rot, moving} interp targe
 
 # ----- READY ROOM v2 (seat tri-state, join/ready, pre-game GET READY card) -----
 var _lobby_ready := {}            # seat -> bool: lobby READY chip toggled on
+var _lobby_ready_edge := {}       # seat -> physics frame of last READY toggle
 var _kb_join_held := {}           # keyboard device (-1/-2) -> bool: A-key edge
 var _join_ready_lock := {}        # seat -> bool: swallow the join press so it
                                   # does not also flip READY until A releases
@@ -712,7 +713,16 @@ func _poll_lobby_ready() -> void:
 				_join_ready_lock.erase(i)
 			continue
 		if PlayerInput.just_pressed(i, "a"):
+			# just_pressed holds for a whole physics tick; when render fps
+			# outruns physics, two _process frames can see the same edge and
+			# double-toggle. Consume each edge once, keyed by physics frame.
+			var pf := Engine.get_physics_frames()
+			if _lobby_ready_edge.get(i, -1) == int(pf):
+				continue
+			_lobby_ready_edge[i] = int(pf)
 			_lobby_ready[i] = not _lobby_ready.get(i, false)
+			if _netprobe != "":
+				print("NETPROBE toggle seat=%d ready=%s pf=%d" % [i, str(_lobby_ready[i]), pf])
 			Sfx.play("card")
 			var row := phase_box.get_node_or_null("SeatRow%d" % i)
 			if row:
@@ -721,8 +731,9 @@ func _poll_lobby_ready() -> void:
 					chip.visible = _lobby_ready[i]
 
 ## Keep the START button label's waiting list current as seats ready up.
+## find_child, not get_node: StartBtn sits nested inside a button row.
 func _update_lobby_start_btn() -> void:
-	var btn := phase_box.get_node_or_null("StartBtn")
+	var btn := phase_box.find_child("StartBtn", true, false)
 	if btn and btn is Button:
 		btn.text = _start_btn_text()
 
@@ -1237,6 +1248,10 @@ func _rebuild_top_bar() -> void:
 
 func _clear_panel(title: String, color := Color(1, 0.9, 0.5)) -> void:
 	for c in phase_box.get_children():
+		# Detach BEFORE queue_free: a dying child keeps its name until end of
+		# frame, so a same-frame rebuild would get its named rows auto-renamed
+		# (@SeatRow1@...) and every later get_node_or_null update would miss.
+		phase_box.remove_child(c)
 		c.queue_free()
 	var t := Label.new()
 	t.text = title
@@ -2348,6 +2363,18 @@ func _client_build_panel() -> void:
 		if bool(s.get("ready", false)):
 			row.add_child(_make_ready_chip())
 		phase_box.add_child(row)
+	if phase_name == "RECKONING":
+		var r_t := Label.new()
+		r_t.text = "— THE RECKONING SETTLES ON THE HOST'S SCREEN —"
+		r_t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		r_t.add_theme_font_size_override("font_size", 16)
+		r_t.add_theme_color_override("font_color", Color(1, 0.9, 0.5))
+		phase_box.add_child(r_t)
+		for s in state.get("standings", []):
+			var rl := Label.new()
+			rl.text = "%s  %d pts  ♠%d" % [String(s.get("name", "?")), int(s.get("points", 0)), int(s.get("grudge", 0))]
+			rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			phase_box.add_child(rl)
 	var gate: Dictionary = state.get("gate", {})
 	if not gate.is_empty():
 		var g_t := Label.new()
@@ -2450,7 +2477,7 @@ func _physics_process(_delta: float) -> void:
 
 func _np_snap(tag: String) -> void:
 	if DisplayServer.get_name() != "headless":
-		VerifyCapture.snap(tag)
+		await VerifyCapture.snap(tag)
 
 func _on_net_probe_first_input(seat: int) -> void:
 	if _netprobe == "" or seat != 1:
@@ -2515,13 +2542,12 @@ func _netprobe_host_flow(ps: String, pf: String) -> void:
 			return
 		print("NETPROBE seat 1 claimed by peer %d" % NetSession.peer_of_seat(1))
 	await get_tree().create_timer(1.0).timeout
-	_np_snap("online_host_claim")
+	await _np_snap("online_host_claim")
 	# tape: 5 s stroll (traced) + READY press at tick 300
 	var seat1_ready := func() -> bool: return bool(_lobby_ready.get(1, false))
 	var got_ready: bool = await _np_wait(seat1_ready, 30.0)
 	print("NETPROBE seat1 lobby ready=%s" % str(got_ready))
-	await get_tree().create_timer(0.5).timeout
-	_np_snap("online_host_ready")
+	await _np_snap("online_host_ready")
 	_start_night_from_lobby()
 	await get_tree().create_timer(1.5).timeout
 	_continue_to_night()
@@ -2530,18 +2556,18 @@ func _netprobe_host_flow(ps: String, pf: String) -> void:
 		_ready_gate_ready[0] = true
 		_refresh_ready_gate_countdown()
 		await get_tree().create_timer(0.6).timeout
-		_np_snap("online_host_gate")
+		await _np_snap("online_host_gate")
 	var in_game := func() -> bool: return phase == Phase.GAME
 	if not await _np_wait(in_game, 40.0):
 		print("NETPROBE FAIL: night never reached GAME")
 		await _netprobe_finish(ps, pf)
 		return
 	await get_tree().create_timer(1.2).timeout
-	_np_snap("online_host_game")
+	await _np_snap("online_host_game")
 	var reckoned := func() -> bool: return phase == Phase.RECKONING
 	if await _np_wait(reckoned, 40.0):
 		await get_tree().create_timer(1.2).timeout
-		_np_snap("online_host_reckoning")
+		await _np_snap("online_host_reckoning")
 	var parts := "NETPROBE_RESULTS"
 	for pl in EstateState.players:
 		parts += " %s:pts=%d,grudge=%d" % [pl.name, pl.points, pl.grudge]
@@ -2566,7 +2592,7 @@ func _netprobe_join_flow() -> void:
 		return
 	print("NETPROBE granted seat %d" % NetSession.my_seat())
 	await get_tree().create_timer(2.0).timeout
-	_np_snap("online_client_lobby")
+	await _np_snap("online_client_lobby")
 	var my := NetSession.my_seat()
 	var see_ready := func() -> bool:
 		var seats: Array = _client_last_state.get("seats", [])
@@ -2574,19 +2600,19 @@ func _netprobe_join_flow() -> void:
 	var ready_seen: bool = await _np_wait(see_ready, 30.0)
 	print("NETPROBE client sees own ready=%s" % str(ready_seen))
 	await get_tree().create_timer(0.5).timeout
-	_np_snap("online_client_ready")
+	await _np_snap("online_client_ready")
 	var gate_seen := func() -> bool: return _client_last_state.has("gate")
 	if await _np_wait(gate_seen, 40.0):
 		await get_tree().create_timer(0.6).timeout
-		_np_snap("online_client_gate")
+		await _np_snap("online_client_gate")
 	var game_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "GAME"
 	if await _np_wait(game_seen, 40.0):
 		await get_tree().create_timer(1.2).timeout
-		_np_snap("online_client_spectate")
+		await _np_snap("online_client_spectate")
 	var reck_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "RECKONING"
 	if await _np_wait(reck_seen, 40.0):
 		await get_tree().create_timer(1.0).timeout
-		_np_snap("online_client_reckoning")
+		await _np_snap("online_client_reckoning")
 	print("NETPROBE_CLIENT_DONE")
 	# outlive the host by a breath so its quit lands first, then leave
 	await get_tree().create_timer(6.0).timeout
