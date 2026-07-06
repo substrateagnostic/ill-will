@@ -32,6 +32,11 @@ var throw_time := -999.0
 var rest_planet := 0
 var trail: OrbTrail = null
 
+## PRESENTATION ONLY — the threat ladder's per-ball audio cadence accumulator.
+## Written/read exclusively from the world's _process (visual frame); the
+## deterministic sim never touches it, so KILL_EVENTS stay byte-identical.
+var _threat_phase := 0.0
+
 var _mat: StandardMaterial3D
 
 func _ready() -> void:
@@ -68,6 +73,14 @@ func age(now: float) -> float:
 
 func deadly() -> bool:
 	return state == S.FLYING and vel.length() >= DEADLY_SPEED
+
+## THREAT LADDER heat factor: 0 at the deadly threshold, 1 at the top speed
+## tier. Drives emission, trail heat, threat-audio pitch/cadence and the
+## danger vignette. Presentation only — reads vel, mutates nothing.
+func heat_factor() -> float:
+	if state != S.FLYING:
+		return 0.0
+	return clampf((vel.length() - DEADLY_SPEED) / (SPEED_CAP - DEADLY_SPEED - 1.0), 0.0, 1.0)
 
 func launch(from: Vector3, v: Vector3, thrower: int, now: float) -> void:
 	global_position = from
@@ -139,18 +152,28 @@ func _come_to_rest(planet_i: int, n: Vector3) -> void:
 	global_position = pl.center + n * (float(pl.radius) + RADIUS)
 	world.on_ball_rest(self)
 
-## Visual heartbeat: deadly balls glow hard, ghost orbits (>10s) pulse.
+## Visual heartbeat: deadly balls glow hard and run HOT up the speed tiers
+## (emission ramps, hue bleeds toward orange-white), ghost orbits (>10s) pulse.
+## THREAT LADDER: the faster a live ball flies, the more it reads as a threat.
 func _process(_dt: float) -> void:
 	if world == null:
 		return
 	var c := display_color()
+	var hf := heat_factor()
 	var glow := 0.25
 	if state == S.FLYING:
 		if deadly():
-			glow = 1.1
+			glow = lerpf(1.0, 2.7, hf)  # top-tier balls burn ~2.7x brighter
 		var a := age(world.now)
 		if a > GHOST_AGE:
 			glow += 0.4 + 0.35 * sin(world.now * 7.0)
 	elif state == S.HELD:
 		glow = 0.5
-	_mat.emission = c * glow
+	# Heat colour: keep the owner hue readable but bleed toward molten orange,
+	# then a hot white core only at the very top tier — reads as incandescent
+	# metal, not a flashbang, so a screamer still carries a warm identity.
+	var hot := c.lerp(Color(1.0, 0.55, 0.2), 0.6 * hf).lerp(Color(1.0, 0.88, 0.62), 0.3 * hf * hf)
+	_mat.emission = hot * glow
+	_mat.albedo_color = c.lightened(0.06 + 0.18 * hf)
+	if trail != null:
+		trail.heat = hf

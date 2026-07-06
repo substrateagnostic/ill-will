@@ -12,6 +12,10 @@ const WIDTH := 0.2
 const MAX_ALPHA := 0.9
 
 var color := Color(0.9, 0.9, 0.92)
+## THREAT LADDER heat (0..1), set each visual frame by the ball. Bleeds the
+## ribbon toward incandescent and thickens it as the ball climbs the speed
+## tiers, without erasing the owner hue (whose orbit this is stays readable).
+var heat := 0.0
 
 var _pts: Array = []  # [{ p: Vector3, t: float }]
 var _im: ImmediateMesh
@@ -46,6 +50,10 @@ func render(now: float, cam_pos: Vector3) -> void:
 		return
 	_im.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
 	var n := _pts.size()
+	# Owner hue bled toward incandescent by the current heat; width scales up
+	# with heat so a top-tier comet leaves a fatter, hotter streak.
+	var hot := Color(color.r, color.g, color.b).lerp(Color(1.0, 0.6, 0.25), 0.6 * heat).lerp(Color(1.0, 0.9, 0.7), 0.28 * heat * heat)
+	var w := WIDTH * (1.0 + 0.6 * heat)
 	for i in n:
 		var p: Vector3 = _pts[i].p
 		var age: float = now - _pts[i].t
@@ -60,8 +68,8 @@ func render(now: float, cam_pos: Vector3) -> void:
 		var side := dir.cross(cam_pos - p)
 		if side.length_squared() < 0.000001:
 			side = Vector3.UP
-		side = side.normalized() * (WIDTH * 0.5 * (0.35 + 0.65 * k))
-		var c := Color(color.r, color.g, color.b, MAX_ALPHA * k * k)
+		side = side.normalized() * (w * 0.5 * (0.35 + 0.65 * k))
+		var c := Color(hot.r, hot.g, hot.b, MAX_ALPHA * k * k * (1.0 + 0.25 * heat))
 		_im.surface_set_color(c)
 		_im.surface_add_vertex(p - side)
 		_im.surface_set_color(c)

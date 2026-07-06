@@ -125,6 +125,21 @@ var _row_labels: Array = []
 var _event_until := 0.0
 var _banner_gen := 0
 
+## --- THREAT LADDER (presentation only) --------------------------------------
+## Speed-tier danger feedback: escalating ball heat, a proximity danger
+## vignette, threat-tone audio, and a speed-scaled kill impact. NONE of this
+## feeds the deterministic sim (all driven from _process / _do_kill's
+## presentation tail, no rng, no sim-state writes) so same-seed KILL_EVENTS
+## stay byte-identical. Motion-heavy pieces respect PartySetup's screen_shake
+## (reduced-motion) preference, the HIT KIT pattern.
+var _impact_amp := 0.0        # 0..1 kill punch, decays each frame
+var _impact_decay := 10.0     # faster ball -> quicker decay (deeper, shorter)
+var _vig_strength := 0.0      # smoothed danger-vignette strength
+var _vignette: ColorRect
+var _vig_mat: ShaderMaterial
+var _threat_pool: Array = []  # AudioStreamPlayer pool for pitched threat tones
+var _threat_next := 0
+
 func _ready() -> void:
 	_parse_args()
 	_build_static()
@@ -232,6 +247,8 @@ func begin(cfg: Dictionary) -> void:
 			pawns[0].held = b
 	elif _test_mode == "aimprobe":
 		_run_orb_probe()
+	elif _test_mode == "threat":
+		_run_threat_demo()
 	else:
 		_flash_banner("ORBITAL DODGEBALL", Color(1.0, 0.85, 0.25), 2.2)
 		_flash_event("BALLS NEVER DESPAWN. OLD ORBITS STILL KILL.", Color(0.85, 0.88, 1.0))
@@ -290,6 +307,7 @@ func _build_static() -> void:
 	_aim_mesh.material_override = am
 	add_child(_aim_mesh)
 	_build_ui()
+	_build_threat_fx()
 
 func _build_stars() -> void:
 	var srng := RandomNumberGenerator.new()
@@ -573,7 +591,7 @@ func _do_kill(pw: OrbPawn, bb: OrbBall) -> void:
 	_respawn_queue.append({"t": now + RESPAWN_DELAY, "player": victim})
 	Sfx.play("splat")
 	Sfx.play("death")
-	_shake = maxf(_shake, 0.5)
+	_kill_impact(bb.vel.length())  # speed-scaled VISUAL punch; sim slow-mo unchanged
 	_spawn_burst(pw.body_center(), pawn_color(victim), 30)
 	if killer == victim:
 		_flash_banner("%s ORBITED THEMSELF" % pawn_name(victim), pawn_color(victim), 2.2)
@@ -789,13 +807,29 @@ func _process(delta: float) -> void:
 		_hint_label.visible = false
 	if _event_label.visible and now > _event_until:
 		_event_label.visible = false
+	var motion_ok := _motion_ok()
+	# Camera shake now respects the reduced-motion pref (was unconditional).
 	if _shake > 0.002:
-		_cam.h_offset = randf_range(-1.0, 1.0) * _shake * 0.3
-		_cam.v_offset = randf_range(-1.0, 1.0) * _shake * 0.3
+		if motion_ok:
+			_cam.h_offset = randf_range(-1.0, 1.0) * _shake * 0.3
+			_cam.v_offset = randf_range(-1.0, 1.0) * _shake * 0.3
+		else:
+			_cam.h_offset = 0.0
+			_cam.v_offset = 0.0
 		_shake = lerpf(_shake, 0.0, 1.0 - exp(-5.0 * delta))
 	else:
 		_cam.h_offset = 0.0
 		_cam.v_offset = 0.0
+	# Speed-scaled kill freeze (visual): a brief FOV punch-in that decays at a
+	# heat-scaled rate. Motion-gated; the sim's slow-mo beat is untouched.
+	if _impact_amp > 0.001:
+		_impact_amp = lerpf(_impact_amp, 0.0, 1.0 - exp(-_impact_decay * delta))
+		_cam.fov = CAM_FOV - (_impact_amp * 3.5 if motion_ok else 0.0)
+	else:
+		_impact_amp = 0.0
+		_cam.fov = CAM_FOV
+	_update_threat_audio(delta)
+	_update_vignette(delta)
 
 func _draw_aim_previews() -> void:
 	_aim_im.clear_surfaces()
@@ -873,6 +907,129 @@ func _spawn_burst(pos: Vector3, color: Color, amount: int) -> void:
 	part.material_override = mat
 	part.emitting = true
 	get_tree().create_timer(1.6).timeout.connect(part.queue_free)
+
+## --- THREAT LADDER presentation ---------------------------------------------
+
+## Reduced-motion gate (the HIT KIT pattern): games read PartySetup's
+## screen_shake toggle. When off, camera shake / kill punch / vignette pulse
+## are suppressed or heavily softened. Audio + ball heat are not motion, so
+## they stay on. Reads live so an ESC-menu toggle takes effect immediately.
+func _motion_ok() -> bool:
+	var ps := get_node_or_null(^"/root/PartySetup")
+	if ps == null:
+		return true
+	return bool(ps.pref("screen_shake", true))
+
+func _build_threat_fx() -> void:
+	# Danger vignette: a full-screen radial edge tint that ramps up as a
+	# top-tier ball screams past a living player. Own CanvasLayer under the HUD
+	# text so scores/banners stay crisp on top.
+	var vig_layer := CanvasLayer.new()
+	vig_layer.layer = 0
+	add_child(vig_layer)
+	_vignette = ColorRect.new()
+	_vignette.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_vignette.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var vsh := Shader.new()
+	vsh.code = """
+shader_type canvas_item;
+render_mode blend_mix;
+uniform float strength : hint_range(0.0, 1.0) = 0.0;
+uniform vec4 tint : source_color = vec4(0.95, 0.12, 0.12, 1.0);
+void fragment() {
+	vec2 uv = UV - vec2(0.5);
+	float d = length(uv) * 1.42;                 // 0 centre -> ~1 corner
+	float v = smoothstep(0.34, 0.98, d);         // soft edge mask
+	COLOR = vec4(tint.rgb, v * strength);
+}
+"""
+	_vig_mat = ShaderMaterial.new()
+	_vig_mat.shader = vsh
+	_vig_mat.set_shader_parameter("strength", 0.0)
+	_vignette.material = _vig_mat
+	vig_layer.add_child(_vignette)
+	# Threat-tone voices: reuse a soft bank asset (the plate tap the Sfx bank
+	# already ships) and PITCH-SCALE it per speed tier — a spaced low hum that
+	# tightens into a high whistle as the ball climbs the ladder.
+	var tone: AudioStream = load("res://assets/audio/impactPlate_light_000.ogg")
+	for i in 6:
+		var pl := AudioStreamPlayer.new()
+		pl.bus = "SFX"
+		pl.stream = tone
+		add_child(pl)
+		_threat_pool.append(pl)
+
+## Speed-scaled kill freeze (presentation): the sim's own slow-mo beat is left
+## byte-identical; this layers the VISUAL punch on top. Faster ball => DEEPER
+## (bigger amplitude) and SHORTER (quicker decay) — a snappier, more violent
+## hit — while a slow lob gives a softer, longer-lingering thud. Motion-gated.
+func _kill_impact(speed: float) -> void:
+	var t := clampf((speed - OrbBall.DEADLY_SPEED) / (OrbBall.SPEED_CAP - OrbBall.DEADLY_SPEED - 1.0), 0.0, 1.0)
+	_impact_amp = lerpf(0.4, 1.0, t)      # deeper for faster
+	_impact_decay = lerpf(6.0, 15.0, t)   # shorter (faster decay) for faster
+	_shake = maxf(_shake, lerpf(0.34, 0.82, t))
+
+## Per-frame threat audio: for every deadly ball near a living player, advance
+## a cadence accumulator and fire a pitched tone when it rolls over. Cadence
+## and pitch both scale with heat (hum -> whistle); volume with heat AND
+## proximity. Presentation only: runs in _process, no sim rng, no sim writes.
+func _update_threat_audio(delta: float) -> void:
+	if _threat_pool.is_empty():
+		return
+	for b in balls:
+		var bb: OrbBall = b
+		if not bb.deadly():
+			bb._threat_phase = 0.0
+			continue
+		var hf := bb.heat_factor()
+		var nd := 1.0e9
+		for p in pawns:
+			var pw: OrbPawn = p
+			if pw.alive:
+				nd = minf(nd, bb.global_position.distance_to(pw.body_center()))
+		var prox := clampf(inverse_lerp(9.0, 2.0, nd), 0.0, 1.0)
+		var loud := prox * lerpf(0.15, 1.0, hf)
+		if bb.vel.length() < 5.0 or loud < 0.06:
+			bb._threat_phase = 0.0
+			continue
+		var period := lerpf(0.26, 0.07, hf)  # low hum spacing -> whistle flutter
+		bb._threat_phase += delta
+		if bb._threat_phase >= period:
+			bb._threat_phase -= period
+			_emit_threat(hf, loud)
+
+func _emit_threat(hf: float, loud: float) -> void:
+	var pl: AudioStreamPlayer = _threat_pool[_threat_next]
+	_threat_next = (_threat_next + 1) % _threat_pool.size()
+	pl.pitch_scale = lerpf(0.85, 2.15, hf) * (1.0 + randf_range(-0.03, 0.03))
+	pl.volume_db = linear_to_db(clampf(loud, 0.02, 1.0)) - 7.0  # subtle bed
+	pl.play()
+
+## Danger vignette + kill flash: strength = the strongest (proximity x heat)
+## of any top-tier deadly ball hovering near a living player, plus the decaying
+## kill punch. Smoothed, capped subtle, and softened under reduced motion.
+func _update_vignette(delta: float) -> void:
+	if _vig_mat == null:
+		return
+	var vig := 0.0
+	for b in balls:
+		var bb: OrbBall = b
+		if not bb.deadly():
+			continue
+		var hf := bb.heat_factor()
+		if hf < 0.45:  # only the upper tiers raise the alarm
+			continue
+		for p in pawns:
+			var pw: OrbPawn = p
+			if not pw.alive:
+				continue
+			var d := bb.global_position.distance_to(pw.body_center())
+			var prox := clampf(inverse_lerp(4.0, 1.0, d), 0.0, 1.0)
+			vig = maxf(vig, prox * hf)
+	vig = maxf(vig, _impact_amp * 0.6)
+	_vig_strength = lerpf(_vig_strength, vig, 1.0 - exp(-10.0 * delta))
+	var motion := 1.0 if _motion_ok() else 0.45
+	_vig_mat.set_shader_parameter("strength", clampf(_vig_strength * 0.5 * motion, 0.0, 0.5))
 
 ## --- UI -----------------------------------------------------------------------
 
@@ -1029,6 +1186,48 @@ func _orb_probe_grab(tag: String) -> void:
 	var path := "res://verify_out/orbital_aim_%s.png" % tag
 	img.save_png(path)
 	print("ORB_AIMPROBE_CAP ", path)
+
+
+## --- threat-ladder verification (--orbtest=threat) --------------------------
+## Stages a deterministic top-tier moment: pawn 0 stands still on the small
+## planet, a ~12 m/s (top speed tier) ball is launched screaming across the
+## front of it at a ~1-unit near miss. Captures a bracket of PNGs around
+## closest approach so a human can read the heated ball + danger vignette.
+## Isolated test path — never runs during a real match, so KILL_EVENTS unaffected.
+func _run_threat_demo() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
+	_hint_label.visible = false
+	var pw: OrbPawn = pawns[0]
+	pw.place_on(2, Vector3(0.0, 0.0, 1.0))     # near point of the small planet
+	pw.invuln = 0.0
+	var start := Vector3(-4.2, 3.3, 3.9)
+	var vel := Vector3(12.0, 0.0, -0.6)         # top speed tier, slight in-arc
+	var b: OrbBall = balls[0] if balls.size() > 0 else _spawn_ball_at(2, Vector3(0, 0, 1), false)
+	b.launch(start, vel, 1, now)                # owner = P1 (identity hue under the heat)
+	print("THREAT_DEMO launched speed=%.1f hf~=%.2f" % [vel.length(), b.heat_factor()])
+	for grab in [{"t": 0.34, "tag": "a"}, {"t": 0.05, "tag": "b"}, {"t": 0.05, "tag": "c"}, {"t": 0.05, "tag": "d"}]:
+		await get_tree().create_timer(float(grab.t)).timeout
+		var nd := 1.0e9
+		for p in pawns:
+			var pp: OrbPawn = p
+			if pp.alive:
+				nd = minf(nd, b.global_position.distance_to(pp.body_center()))
+		print("THREAT_STATE tag=%s speed=%.2f hf=%.2f nearest_pawn=%.2f vig=%.2f alive0=%s"
+			% [grab.tag, b.vel.length(), b.heat_factor(), nd, _vig_strength, str(pawns[0].alive)])
+		await _threat_grab(String(grab.tag))
+	print("THREAT_DEMO_DONE")
+	if _autoquit:
+		get_tree().quit()
+
+func _threat_grab(tag: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		print("THREAT_SKIP_HEADLESS ", tag)
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := "res://verify_out/orbital_threat_%s.png" % tag
+	img.save_png(path)
+	print("THREAT_CAP ", path)
 
 
 ## --- debug/verify surface ------------------------------------------------------
