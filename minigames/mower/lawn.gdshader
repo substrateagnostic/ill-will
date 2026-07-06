@@ -18,6 +18,12 @@ uniform vec3 uncut_color : source_color = vec3(0.10, 0.24, 0.08);
 uniform vec3 mowed_base : source_color = vec3(0.40, 0.62, 0.26);
 uniform vec3 soil_color : source_color = vec3(0.34, 0.22, 0.13);
 uniform float overtime = 0.0;          // 0..1, pulses mowed brightness in OT
+// TALLY CEREMONY spotlight: at time-up the root walks owner codes worst->best,
+// saturating each player's turf in turn. tally_owner = the code being lit
+// (0 = ceremony off), tally_gain = 0..1 ramp of that player's glow.
+uniform int tally_owner = 0;
+uniform float tally_gain = 0.0;
+uniform float tally_active = 0.0;      // 1 while the ceremony recedes other turf
 
 int owner_at(vec2 uv) {
 	float r = texture(coverage_tex, uv).r;
@@ -57,6 +63,17 @@ void fragment() {
 		col = grass * (tint_floor + tint_gain * pc);
 		col *= 1.0 + overtime * 0.16 * band;   // OT shimmer
 		rough = 0.78;
+		// tally spotlight: the counted player's turf SATURATES to its pure hue
+		// (brightness driven by luma so the bright sun can't wash it to white)
+		// while the rest of the lawn recedes, so each reveal pops in sequence.
+		if (owner == tally_owner) {
+			float l = clamp(dot(col, vec3(0.30, 0.59, 0.11)), 0.18, 1.0);
+			vec3 hue = pc / max(max(pc.r, max(pc.g, pc.b)), 0.001);  // full-value hue
+			col = mix(col, hue * l * 1.6, tally_gain);
+			EMISSION = hue * (0.4 * tally_gain);                      // hue-true glow
+		} else {
+			col = mix(col, col * 0.38, tally_active);
+		}
 	}
 	ALBEDO = col;
 	ROUGHNESS = rough;

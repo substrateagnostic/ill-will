@@ -72,6 +72,15 @@ func set_overtime(v: float) -> void:
 	if _mat:
 		_mat.set_shader_parameter("overtime", v)
 
+## Presentation-only: spotlight one owner's cells for the tally ceremony.
+## owner_code 1..4 = the player being lit (0 = ceremony off), gain 0..1 = glow.
+func set_tally(owner_code: int, gain: float) -> void:
+	if _mat:
+		_mat.set_shader_parameter("tally_owner", owner_code)
+		_mat.set_shader_parameter("tally_gain", gain)
+		# owner_code 0 = ceremony off (no dim); >0 = recede every other player's turf
+		_mat.set_shader_parameter("tally_active", 1.0 if owner_code > 0 else 0.0)
+
 # -- coordinate helpers -------------------------------------------------------
 
 func col_of(wx: float) -> int:
