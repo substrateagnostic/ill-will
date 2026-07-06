@@ -168,7 +168,10 @@ func _spawn_balls() -> void:
 		var cx: float = course.course_center.x + (course.course_extent.x + 0.9) * side
 		var cz: float = course.course_center.z + 0.2 + floorf(i / 2.0) * 1.5
 		c.global_position = Vector3(cx, -0.4, cz)
-		c.rotation_degrees.y = 105.0 * side
+		# Face the course (KayKit models look down +Z): yaw toward the course centre
+		# so caddies watch the green instead of a hardcoded ±105° stare.
+		var to_center: Vector3 = course.course_center - c.global_position
+		c.rotation.y = atan2(to_center.x, to_center.z)
 		c.setup(CHAR_SCENES[i], GameState.players[i].color)
 		caddies.append(c)
 	course.balls = balls

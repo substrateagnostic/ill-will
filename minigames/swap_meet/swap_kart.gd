@@ -79,6 +79,8 @@ var boost_t := 0.0
 var boost_amt := 0.0
 var steer := 0.0                 # smoothed stick.x
 var locked := true               # countdown / end freeze
+var stuck_t := 0.0               # seconds jammed near-zero-speed while steering (ramp unstick)
+var last_input_mag := 0.0        # magnitude of the raw player intent this tick
 
 var _spin_t := 0.0               # windmill knock 360 visual
 var _visual: Node3D
@@ -145,6 +147,7 @@ func step(dt: float, mv: Vector2, b_down: bool) -> void:
 	swap_immune = maxf(0.0, swap_immune - dt)
 	knock_immune = maxf(0.0, knock_immune - dt)
 	boost_t = maxf(0.0, boost_t - dt)
+	last_input_mag = mv.length()   # raw player intent, before lock/finish overrides
 	if locked:
 		mv = Vector2.ZERO
 		b_down = false

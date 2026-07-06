@@ -87,6 +87,11 @@ var _reported := false
 var _intro_t := 0.0
 var _intro_stage := -1
 var _freeze_ticks := 0
+
+var _stuck_test := false          # dev --swapstuck: jam kart 0 to film the unstick
+var _stuck_fired := false
+var _stuck_cap_delay := 8
+var _stuck_captured := false
 var _gold_t := 0.0
 var _gold_pickup: Node3D = null
 var _gold_spot := Vector3.ZERO
@@ -162,6 +167,11 @@ func _parse_args() -> void:
 		elif arg.begins_with("--shotsec="):
 			for s in arg.trim_prefix("--shotsec=").split(","):
 				_shotsec.append(float(s))
+		elif arg == "--swapstuck":
+			# dev: jam kart 0 on the ramp (near-zero speed, input held) to prove
+			# the anti-trap unstick fires. Films swap_unstick.png and quits.
+			_stuck_test = true
+			bots_enabled = true
 	if _fast > 1.01:
 		# Faster-than-realtime with dt pinned to exactly 1/60 (the sim is
 		# tick-identical to live play): scale BOTH time_scale and tick rate.
@@ -444,6 +454,8 @@ func _physics_process(delta: float) -> void:
 		var inp := _input_for(kart.index)
 		if sdt > 0.0:
 			kart.step(sdt, inp.move, inp.b)
+			if _stuck_test and kart.index == 0 and phase == Phase.PLAY and not _stuck_fired:
+				_force_stuck(kart)
 			_constrain(kart, sdt)
 			if phase == Phase.PLAY and inp.a:
 				_throw_orb(kart)
@@ -465,6 +477,11 @@ func _physics_process(delta: float) -> void:
 			if not (o as SwapOrb).dead:
 				alive.append(o)
 		orbs = alive
+	if _stuck_test and _stuck_fired and not _stuck_captured and sdt > 0.0:
+		_stuck_cap_delay -= 1
+		if _stuck_cap_delay <= 0:
+			_stuck_captured = true
+			_grab_stuck_shot()
 	if phase == Phase.PLAY and sdt > 0.0:
 		_progress_all()
 		_golden_tick(sdt)
@@ -544,6 +561,7 @@ func _constrain(kart: SwapKart, dt: float) -> void:
 		else:
 			_apply_walls(kart, q, track.sc_floor(s_sc), dt)
 			s_eff = track.sc_entry_s + (s_sc / track.sc_len) * fposmod(track.sc_exit_s - track.sc_entry_s, track.total_len)
+			_ramp_unstick(kart, q, s_sc, dt)
 	else:
 		var q2: Dictionary = track.nearest_main(kart.global_position, kart.hint)
 		kart.hint = int(q2.idx)
@@ -573,6 +591,65 @@ func _constrain(kart: SwapKart, dt: float) -> void:
 	if phase == Phase.PLAY:
 		_check_gates(kart)
 		_check_laps(kart)
+
+## Ramp/bridge anti-trap. A kart that pins itself against the narrow shortcut
+## corridor (nose into a rail on the plank ramp) can grind to near-zero speed
+## while the player keeps steering into it — the bots never do this (they hold
+## ~5u/s straight through, so this never fires for them and their receipts are
+## unchanged). After 1.5s jammed, give ONE gentle gutter-style nudge: recentre on
+## the corridor a step further along the path and hand back a little forward speed.
+## No teleport past the jam beyond that one nudge.
+func _ramp_unstick(kart: SwapKart, q: Dictionary, s_sc: float, dt: float) -> void:
+	if kart.locked or kart.finished or kart.airborne \
+			or absf(kart.speed) >= 1.0 or kart.last_input_mag < 0.5:
+		kart.stuck_t = 0.0
+		return
+	kart.stuck_t += dt
+	if kart.stuck_t < 1.5:
+		return
+	kart.stuck_t = 0.0
+	# nudge a step further along the shortcut centre-line (toward the exit)
+	var fwd := Vector3(q.tangent)
+	var ahead: float = minf(s_sc + 1.2, track.sc_len)
+	var centre := Vector3(track.sc_sample_at(ahead).pos)
+	kart.global_position = Vector3(centre.x, kart.y, centre.z)
+	kart.heading = fwd
+	kart.vel_dir = fwd
+	kart.speed = maxf(kart.speed, 3.0)
+	kart.knock_vel = Vector3.ZERO
+	Sfx.play("bounce", -6.0)
+	if _stuck_test and kart.index == 0:
+		_stuck_fired = true
+	print("SC_UNSTICK t=%.1f p=%d s=%.1f" % [race_t, kart.index, s_sc])
+
+
+## Dev (--swapstuck): pin kart 0 on the plank ramp at near-zero speed with input
+## "held", exactly the human trap the tester hit — so _ramp_unstick trips and we
+## can film the recovery. Runs only under the flag; never touches normal play.
+func _force_stuck(kart: SwapKart) -> void:
+	if not kart.on_shortcut:
+		kart.global_position = Vector3(track.sc_sample_at(3.2).pos)
+		kart.on_shortcut = true
+		kart.sc_hint = 0
+		kart.airborne = false
+		kart.y = track.sc_floor(3.2)
+	kart.speed = 0.0
+	kart.last_input_mag = 1.0   # simulate the player mashing forward into the jam
+
+
+func _grab_stuck_shot() -> void:
+	if DisplayServer.get_name() == "headless":
+		print("SWAP_STUCK_CAP_SKIP_HEADLESS")
+		get_tree().quit()
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
+	var path := "res://verify_out/swap_unstick.png"
+	img.save_png(path)
+	print("SWAP_STUCK_CAP ", path)
+	await get_tree().create_timer(0.2).timeout
+	get_tree().quit()
 
 func _apply_walls(kart: SwapKart, q: Dictionary, floor_y: float, dt: float) -> void:
 	var hw := float(q.hw) - KART_R
