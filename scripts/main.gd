@@ -28,7 +28,8 @@ const CHAOS_TRAP_SPEED := 1.6
 const KILLCAM_DURATION := 1.6
 
 var balls: Array = []
-var caddies: Array = []
+## PAR v4: the caddies became the players (PlayerAvatar). Same reaction API.
+var avatars: Array = []
 var _last_green_pos := {}
 var round_manager: RoundManager
 var course: Course
@@ -75,6 +76,12 @@ var _par_quit := false
 var _bot_rng := RandomNumberGenerator.new()
 var _bot_ctx := ""          # actionable-turn key; resets the think timer on change
 var _bot_think_t := 0.0
+## PAR v4 WAVE 1 — embodied third-person shots. The AvatarShot state machine
+## walks the acting avatar to its ball and fires the frozen debug_putt at the
+## swing's contact frame. _embodied=false (--v3putt or pref "par_embodied")
+## restores the exact v3 interface (drag putt, no walk gate, diorama-only cam).
+var avatar_shot: AvatarShot = null
+var _embodied := true
 
 @onready var putt_controller: Node3D = $PuttController
 @onready var placement: Node3D = $PlacementController
@@ -102,6 +109,10 @@ func _ready() -> void:
 			_par_quit = true
 		elif arg.begins_with("--killcamtest="):
 			_killcam_test_mode = arg.trim_prefix("--killcamtest=")
+		elif arg == "--v3putt":
+			_embodied = false
+	if _embodied:
+		_embodied = bool(PartySetup.pref("par_embodied", true))
 	# Seed the bot rng FROM GameState.rng without consuming its stream (read the
 	# seed value, don't draw), so drafting/course/trap RNG is untouched.
 	_bot_rng.seed = int(GameState.rng.seed) ^ 0x9E3779B9
@@ -123,6 +134,13 @@ func _ready() -> void:
 	_killcam.name = "Killcam"
 	add_child(_killcam)
 	_killcam.finished.connect(_on_killcam_finished)
+	avatar_shot = AvatarShot.new()
+	avatar_shot.name = "AvatarShot"
+	add_child(avatar_shot)
+	avatar_shot.setup(self, putt_controller, camera_rig, $UI)
+	avatar_shot.contact_fired.connect(_on_swing_contact)
+	# v3 drag putt lives behind the settings pref (spec OQ2); embodied-off = v3 feel.
+	putt_controller.drag_enabled = (not _embodied) or bool(PartySetup.pref("par_drag_putt", false))
 	_spawn_balls()
 	banner.visible = false
 	if _killcam_test_mode == "chaos":
@@ -162,19 +180,30 @@ func _spawn_balls() -> void:
 		b.came_to_rest.connect(_on_ball_rest.bind(b))
 		_last_green_pos[b] = b.global_position
 		balls.append(b)
-		var c := Caddy.new()
-		add_child(c)
-		var side := -1.0 if i % 2 == 0 else 1.0
-		var cx: float = course.course_center.x + (course.course_extent.x + 0.9) * side
-		var cz: float = course.course_center.z + 0.2 + floorf(i / 2.0) * 1.5
-		c.global_position = Vector3(cx, -0.4, cz)
-		# Face the course (KayKit models look down +Z): yaw toward the course centre
-		# so caddies watch the green instead of a hardcoded ±105° stare.
-		var to_center: Vector3 = course.course_center - c.global_position
-		c.rotation.y = atan2(to_center.x, to_center.z)
-		c.setup(CHAR_SCENES[i], GameState.players[i].color)
-		caddies.append(c)
+		# v4: caddies are promoted to PlayerAvatars — they walk to the ball and
+		# swing (facing handled by the shot system; the old caddy-facing fix's
+		# intent lives on in _place_avatar_home, which faces the cup).
+		var a := PlayerAvatar.new()
+		add_child(a)
+		a.setup(CHAR_SCENES[i], GameState.players[i].color)
+		_place_avatar_home(a, i)
+		avatars.append(a)
+	# Wave-1 physics isolation: avatars NEVER exchange contacts with balls (the
+	# sim stays byte-identical to v3). Griefer ball-contact arrives in wave 2.
+	for a in avatars:
+		for b in balls:
+			a.add_collision_exception_with(b)
 	course.balls = balls
+
+## Park an avatar at its tee-address spot: just behind its ball, facing the cup.
+func _place_avatar_home(a: PlayerAvatar, i: int) -> void:
+	var tee := _tee_pos(i)
+	var to_cup: Vector3 = course.cup_position() - tee
+	to_cup.y = 0.0
+	to_cup = to_cup.normalized() if to_cup.length() > 0.01 else Vector3(0, 0, -1)
+	var pos := tee - to_cup * AvatarShot.ADDRESS_BACK
+	a.teleport_to(Vector3(pos.x, 0.05, pos.z))
+	a.face_dir(to_cup)
 
 func _tee_pos(i: int) -> Vector3:
 	var tees: Array = course.tee_positions()
@@ -186,9 +215,11 @@ func _tee_pos(i: int) -> Vector3:
 
 func _start_round() -> void:
 	banner.visible = false
+	camera_rig.set_mode(camera_rig.Mode.DIORAMA)
 	for i in balls.size():
 		balls[i].reset_for_round(_tee_pos(i))
-		caddies[i].revive()
+		avatars[i].revive()
+		_place_avatar_home(avatars[i], i)
 	if GameState.is_chaos_round():
 		round_label.text = "CHAOS ROUND"
 		_enter_chaos_round()
@@ -424,6 +455,14 @@ func _on_turn_started(p: int) -> void:
 	var player = GameState.players[p]
 	putt_controller.ball = balls[p]
 	camera_rig.ball = balls[p]
+	if _embodied:
+		# Walk the acting avatar to its ball; the swing fires the frozen putt.
+		avatar_shot.begin_turn(p, avatars[p], balls[p], _is_bot(p), GameState.is_chaos_round())
+		# Camera: skill-shot framing for the normal-round shot (owner note:
+		# SMITE-style, aim line readable across the lane). CHAOS keeps the v3
+		# diorama — several balls are live at once and the overview must read.
+		if not GameState.is_chaos_round():
+			camera_rig.set_mode(camera_rig.Mode.SHOT, avatars[p])
 	if GameState.is_chaos_round():
 		# Simultaneous play: keep the persistent CHAOS banner (set on round
 		# entry) instead of a misleading per-player turn line. The stroke
@@ -434,9 +473,18 @@ func _on_turn_started(p: int) -> void:
 	turn_label.add_theme_color_override("font_color", player.color)
 	_update_stroke_label(p)
 
+## Contact frame fired (the ball is away): hand the roll back to the diorama so
+## trap-dodging reads from the overview — the readability the v1 spec demanded.
+func _on_swing_contact(_p: int) -> void:
+	if not GameState.is_chaos_round():
+		camera_rig.set_mode(camera_rig.Mode.DIORAMA)
+
 func _on_stroke_taken() -> void:
 	# A fresh stroke opens a new resolution window -> the next death may claim a killcam.
 	_killcam_claimed = false
+	# A stroke fired outside the swing (drag putt, --autoplay direct, --autoputt,
+	# killcam tests) stands the embodied state machine down for this turn.
+	avatar_shot.on_external_stroke()
 	round_manager.notify_stroke()
 	_update_stroke_label(round_manager.current_player())
 
@@ -449,7 +497,7 @@ func _update_stroke_label(p: int) -> void:
 func _on_any_ball_sunk(p: int) -> void:
 	print("BALL_SUNK p=%d round=%d" % [p, GameState.round_num])
 	Sfx.play("sink")
-	caddies[p].react("Cheer")
+	avatars[p].react("Cheer")
 	_spawn_confetti(course.get_node("CupArea").global_position + Vector3(0, 0.6, 0), GameState.players[p].color)
 	_flash_banner("%s SINKS IT!" % GameState.players[p].name, GameState.players[p].color, 1.4)
 
@@ -459,7 +507,7 @@ func _on_ball_died(killer: Trap, victim: int) -> void:
 	var death_pos: Vector3 = balls[victim].global_position
 	Sfx.play("splat")
 	Sfx.play("death")
-	caddies[victim].react_death()
+	avatars[victim].react_death()
 	camera_rig.shake(0.35)
 	camera_rig.focus_on(death_pos, 1.3)
 	_spawn_death_fx(death_pos, v.color)
@@ -486,7 +534,7 @@ func _on_ball_died(killer: Trap, victim: int) -> void:
 		else:
 			a.score += ROYALTY
 			a.royalties += ROYALTY
-			caddies[killer.author_index].react("Cheer")
+			avatars[killer.author_index].react("Cheer")
 			_currency_log.append({"type": "royalty", "player": killer.author_index, "amount": ROYALTY, "reason": "killed %s" % v.name})
 			_rebuild_scoreboard()
 	elif killer != null:
@@ -648,6 +696,7 @@ func _on_ball_resolved(p: int, status: String) -> void:
 
 func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 	phase = Phase.BETWEEN
+	camera_rig.set_mode(camera_rig.Mode.DIORAMA)
 	GameState.award_round_points(finish_order)
 	_rebuild_scoreboard()
 	GameState.round_num += 1
@@ -685,8 +734,8 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 		await tw.finished
 		print("FLYOVER_DONE")
 		Sfx.play("match_win")
-		caddies[champ].react("Cheer")
-		_spawn_confetti(caddies[champ].global_position + Vector3(0, 1.5, 0), GameState.players[champ].color)
+		avatars[champ].react("Cheer")
+		_spawn_confetti(avatars[champ].global_position + Vector3(0, 1.5, 0), GameState.players[champ].color)
 		_flash_banner("%s WINS THE MATCH!\n(press R for a rematch)" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
 		finished.emit(results)
 		return
@@ -760,6 +809,16 @@ func _rebuild_scoreboard() -> void:
 func is_turn_ready() -> bool:
 	return phase == Phase.PUTT and round_manager.is_turn_ready()
 
+## --swingplay harness gate: the turn is open AND the acting avatar holds the
+## address stance, so an auto swing can be queued through the embodied path.
+func is_swing_ready() -> bool:
+	return is_turn_ready() and _embodied and avatar_shot.is_addressed(round_manager.current_player())
+
+## --swingplay: fire this exact (power, angle) through walk->address->charge->
+## swing-contact. Numbers pass through UNTOUCHED (the byte-identical receipt).
+func begin_auto_swing(power: float, angle_deg: float) -> bool:
+	return avatar_shot.auto_swing(power, angle_deg)
+
 func debug_pick_card(i: int) -> void:
 	if phase == Phase.DRAFT:
 		_on_card_picked(mini(i, current_hand.size() - 1))
@@ -816,6 +875,14 @@ func _bot_tick(delta: float) -> void:
 			if _bot_think_t >= 1.0:
 				_bot_build()
 		Phase.PUTT:
+			# v4 walk layer: the bot's avatar must ARRIVE at its ball before the
+			# think clock starts (spec: cadence counts from arrival). While it
+			# walks, keep resetting the timer. If the embodied machine is NOT
+			# running this shot (begin_turn declined — e.g. the ball died between
+			# rounds), fall through to the v3 direct path so the turn resolves.
+			if _embodied and avatar_shot.is_pending(actor) and not avatar_shot.is_addressed(actor):
+				_bot_think_t = 0.0
+				return
 			# CHAOS: fire the instant the turn opens and DON'T wait for the ball to
 			# settle — that's what keeps several balls live at once. NORMAL: the
 			# old calm turn-based cadence (think a beat, wait for rest).
@@ -848,6 +915,10 @@ func _bot_putt(actor: int) -> void:
 	var angle := rad_to_deg(atan2(-dir.x, -dir.z)) + _bot_rng.randf_range(-4.0, 4.0)
 	var power := clampf(dist * 0.5 + _bot_rng.randf_range(0.0, 1.0), 2.0, 13.0)
 	putt_controller.ball = b
+	# v4: the same seeded numbers, fired through the swing's contact frame. The
+	# rng draw count per stroke is unchanged, so --parbots stays reproducible.
+	if _embodied and avatar_shot.bot_swing(power, angle):
+		return
 	putt_controller.debug_putt(power, angle)
 
 func get_phase_name() -> String:

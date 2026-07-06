@@ -1,6 +1,22 @@
 extends Node3D
 ## Diorama camera: frames the whole course from a 3/4 angle, with a gentle
 ## lean toward the ball so motion feels tracked without losing the overview.
+##
+## PAR v4: gains a mode enum. DIORAMA is the v3 pose (build/draft/roll/chaos).
+## SHOT is the embodied aim camera — owner-corrected to a SMITE-style
+## SKILL-SHOT framing, not a TPS shoulder cam: high pitched-down angle
+## (~55 deg), behind/above the golfer, so the aim arrow + dots read across the
+## whole lane (traps and cup in one glance) and the character is a reference
+## point at the bottom of the view. set_mode() blends over the named times.
+## shake / focus_on / start_flyover act on `cam` and stay mode-agnostic.
+
+enum Mode { DIORAMA, SHOT }
+
+const CAM_TO_SHOT := 0.6
+const CAM_TO_DIORAMA := 0.5
+const CAM_SHOT_BACK := 2.0    # m behind the avatar, along -facing
+const CAM_SHOT_UP := 11.5     # m above the green (steep skill-shot pitch ~53deg)
+const CAM_SHOT_AHEAD := 6.0   # look target this far down the aim line
 
 @export var course_center := Vector3(0, 0, -6.5)
 @export var course_extent := Vector3(3.0, 0.0, 8.5)
@@ -9,12 +25,31 @@ extends Node3D
 var home_position := Vector3(0, 12.5, 4.5)
 
 var ball: Ball
+var mode: int = Mode.DIORAMA
+## The acting avatar the skill-shot pose frames (set by main per turn).
+var shot_avatar: Node3D = null
 var _shake := 0.0
 var cinematic := false
 var _focus_override := Vector3.INF
 var _focus_timer := 0.0
+var _blend_from := Transform3D.IDENTITY
+var _blend_t := -1.0
+var _blend_dur := 0.5
 
 @onready var cam: Camera3D = $Camera3D
+
+func set_mode(m: int, avatar: Node3D = null) -> void:
+	if m == mode and (m != Mode.SHOT or avatar == shot_avatar):
+		return
+	mode = m
+	shot_avatar = avatar
+	_blend_from = cam.global_transform
+	_blend_t = 0.0
+	_blend_dur = CAM_TO_SHOT if m == Mode.SHOT else CAM_TO_DIORAMA
+	# The skill-shot cam sits ~11m from the golfer; the diorama's near-blur
+	# plane (5m) would smear the whole aim read. Presentation only.
+	if cam.attributes != null:
+		cam.attributes.dof_blur_near_enabled = m == Mode.DIORAMA
 
 func shake(amount: float) -> void:
 	_shake = maxf(_shake, amount)
@@ -41,17 +76,50 @@ func _flyover_step(t: float, start_pos: Vector3, end_pos: Vector3) -> void:
 	var look_target := course_center + Vector3(0, 0.3, lerpf(course_extent.z * 0.55, -course_extent.z * 0.55, eased))
 	cam.look_at(look_target, Vector3.UP)
 
-func _process(delta: float) -> void:
-	if cinematic:
-		return
+## Target pose for the current mode. DIORAMA reproduces the v3 behavior exactly
+## when the camera already parks at home (position home, lean toward the ball).
+func _target_pose() -> Transform3D:
+	if mode == Mode.SHOT and shot_avatar != null:
+		var facing: Vector3 = shot_avatar.facing
+		if facing.length() < 0.01:
+			facing = Vector3(0, 0, -1)
+		# While the golfer walks, anchor the frame on the golfer (the stride
+		# reads); at address the anchor is the ball — the two coincide at the
+		# 0.55m address distance, so the handoff has no pop.
+		var anchor: Vector3 = shot_avatar.global_position + facing * 0.55
+		if ball != null and not shot_avatar.is_walking():
+			anchor = ball.global_position
+		var pos: Vector3 = shot_avatar.global_position - facing * CAM_SHOT_BACK + Vector3.UP * CAM_SHOT_UP
+		# Look DOWN THE AIM LINE, not at the ball: the golfer reads as a
+		# reference point at the bottom edge while the lane fills the frame.
+		var look: Vector3 = anchor + facing * CAM_SHOT_AHEAD
+		var fwd := look - pos
+		if fwd.length() < 0.05:
+			fwd = facing
+		return Transform3D(Basis.looking_at(fwd, Vector3.UP), pos)
 	var focus := course_center
 	if _focus_timer > 0.0:
-		_focus_timer -= delta
 		focus = _focus_override
 	elif ball != null and not ball.is_sunk:
 		focus = course_center.lerp(ball.global_position, lean_strength)
-	var target := Transform3D(Basis.looking_at(focus - cam.global_position, Vector3.UP), cam.global_position)
-	cam.global_transform = cam.global_transform.interpolate_with(target, 1.0 - exp(-6.0 * delta))
+	var home := global_transform * home_position
+	return Transform3D(Basis.looking_at(focus - home, Vector3.UP), home)
+
+func _process(delta: float) -> void:
+	if cinematic:
+		return
+	if _focus_timer > 0.0:
+		_focus_timer -= delta
+	var target := _target_pose()
+	if _blend_t >= 0.0:
+		_blend_t += delta
+		var t := clampf(_blend_t / _blend_dur, 0.0, 1.0)
+		cam.global_transform = _blend_from.interpolate_with(target, smoothstep(0.0, 1.0, t))
+		if _blend_t >= _blend_dur:
+			_blend_t = -1.0
+	else:
+		var w := 1.0 - exp((-9.0 if mode == Mode.SHOT else -6.0) * delta)
+		cam.global_transform = cam.global_transform.interpolate_with(target, w)
 	if _shake > 0.002:
 		cam.h_offset = randf_range(-1.0, 1.0) * _shake * 0.35
 		cam.v_offset = randf_range(-1.0, 1.0) * _shake * 0.35

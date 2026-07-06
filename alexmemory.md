@@ -717,3 +717,50 @@ wiring suggestions (MODULES + HOWTO lines) at the bottom of the VERIFY doc.
 Note: party_setup.json in user:// changed mid-session from a SIBLING agent's
 backup/restore cycle, not this lane — my runs write nothing to user://
 (verified against a pre-run snapshot; prefs/cosmetics/estate_save untouched).
+
+## 2026-07-06 — PAR v4 WAVE 1: EMBODIED GOLF (agent worktree)
+
+Par's characters stopped caddying and started playing. On your turn your KayKit
+character walks to the ball (Walking_A, 3.0 m/s, 1.4s cap then teleport-dolly),
+takes the 2H_Melee_Idle address stance, you aim + hold-release a POWER meter
+(1.2->13 m/s over 1.1s ping-pong), and the 2H_Melee_Attack_Slice swing fires
+the EXACT same debug_putt(power, angle) at the 0.18s contact frame. Devices:
+-3 cursor+LMB, -4 get_aim_dir+A/LMB, pads/kb-halves stick heading+A. Bots use
+their same seeded numbers, gated on AVATAR_ARRIVED, fired through the swing.
+v3 drag putt survives behind PartySetup pref "par_drag_putt" (and --v3putt
+restores the whole v3 interface). BUILD half untouched. Chaos = wave-1 rule:
+still turn-based v3 chaos (embodied swings, diorama camera), griefing is wave 2.
+
+YOUR CAMERA NOTE LANDED: shot camera is now a SMITE skill-shot frame — 2m back,
+11.5m up (~53 deg), looking 6m down the aim line; from the fairway tee the
+whole lane + traps + cup + aim dots read in one glance, golfer bottom-edge.
+Contact blends 0.5s back to the diorama for the roll.
+
+THE FROZEN-PHYSICS RECEIPT (the make-or-break): --traceall logs every ball
+every physics tick at 0.1mm. v3-direct vs v4-swing runs, same seed + autoplay:
+byte-identical ball paths on empty courses (seeds 11, 23). With TRAPS placed,
+free-running diverges ONLY because powered traps are met at different absolute
+ticks — proven benign by firing the v3 putts at the v4 swing's exact ticks
+(--physputt): byte-identical through the whole trap field. Interface clean.
+
+FOUND + FIXED a real pre-existing bug your playtests could have hit: a black
+hole camping the tees kills RESTING balls during the next round's BUILD phase,
+while the round manager is between rounds -> the death is never booked -> in
+v4 that deadlocked the match (dogleg seed 6, deterministic), in v3 it silently
+wasted up to 6 fake bot strokes per zombie. Now: dead/sunk balls are booked
+resolved at putt-phase start, and the bot gate falls through to the v3 path if
+the avatar can't address — turns always advance. Dogleg seed 6 now completes.
+
+Receipts: full parbots matches to MATCH_OVER on all four courses (fairway s5+s9,
+dogleg/green/gauntlet s6), 0 script errors; walk->swing gate 0 violations over
+62 swings; killcam plays+auto-skips in windowed bot matches; chaos concurrency
+peaks >=2 movers. docs/verify/par-v4-wave1-VERIFY.md has all commands.
+
+NEEDS YOUR HANDS (playtest asks, in order):
+1. Feel of hold-release power vs the old drag (pref "par_drag_putt" flips back).
+2. Skill-shot camera pitch — I tuned to ~53deg for full-lane read; SMITE-y enough?
+3. Aiming with mouse cursor from the high camera (and pad stick if you dig one out).
+KNOWN LIMIT (flagging for wave 2): bot MATCH OUTCOMES are not run-to-run
+reproducible (pre-existing v3 — bot think timers are wall-clock; tick-phased
+traps amplify). The physics receipts sidestep it; wave 2's "reproducible chaos"
+exit should move bot cadence to physics ticks.
