@@ -24,6 +24,7 @@ var _arrow: Node3D
 var _ready_label: Label3D
 var _ring: MeshInstance3D
 var _seat_root: Node3D
+var _cd_ring: CooldownRing   # THE COOLDOWN RING for the 10s gust (the one that matters most)
 
 func setup(p_index: int, p_color: Color, p_name: String, char_scene: PackedScene, seat_angle: float, p_owner: Node) -> void:
 	index = p_index
@@ -92,6 +93,13 @@ func setup(p_index: int, p_color: Color, p_name: String, char_scene: PackedScene
 	_ring.material_override = rmat
 	_ring.position.y = -0.02
 	_seat_root.add_child(_ring)
+
+	# THE COOLDOWN RING — the 10s gust recharge, drawn concentric INSIDE the pew's
+	# identity ring at the ghost's feet. Geometric fill (colorblind-safe) makes the
+	# "when can I gust again" wait legible; ready-flash on completion.
+	_cd_ring = CooldownRing.new()
+	_seat_root.add_child(_cd_ring)
+	_cd_ring.setup(color, 0.80, 0.68, 0.0, 1.0)
 
 	# ghost body: translucent, tinted toward identity color, Sit/Lie pose
 	if char_scene != null:
@@ -220,6 +228,10 @@ func consume_gust() -> void:
 func _process(delta: float) -> void:
 	_bob_t += delta
 	_seat_root.position.y = sin(_bob_t * 1.3) * 0.09
+	# THE COOLDOWN RING: empty at fire (gust_cd = GUST_COOLDOWN) -> full = READY.
+	if _cd_ring:
+		var reduced := not bool(PartySetup.pref("screen_shake", true))
+		_cd_ring.tick(delta, clampf(1.0 - gust_cd / GUST_COOLDOWN, 0.0, 1.0), true, reduced)
 	var ready := gust_ready()
 	_ready_label.visible = ready
 	if ready:

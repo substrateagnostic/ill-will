@@ -154,6 +154,9 @@ var _time_token := 0
 var _banner_token := 0
 var _sub_token := 0
 var _cam_base_fov := 52.0
+var _last_hitstop := -99.0       # HIT KIT global one-at-a-time hitstop throttle (0.14s)
+var _hitkit_cap := false         # --hitkitcap: stage the HIT KIT / cooldown-ring shots
+var _cap_dir := "verify_out/hitkit"
 
 @onready var cam: Camera3D = $CameraRig/Camera3D
 @onready var banner: Label = $UI/Banner
@@ -206,6 +209,13 @@ func _parse_args() -> void:
 		elif arg == "--shovecue":
 			_shove_cue_probe = true
 			_all_bots = true
+		elif arg == "--hitkitcap":
+			_hitkit_cap = true
+			_cli_players = 2
+		elif arg.begins_with("--outdir="):
+			_cap_dir = arg.trim_prefix("--outdir=")
+	if _hitkit_cap:
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://%s" % _cap_dir))
 	if _dead_hint_demo:
 		# seat 0 (KBM human) dies at t=1.0 so the dead-state hint bar is on screen
 		_forced_kills.append({"t": 1.0, "p": 0})
@@ -283,6 +293,8 @@ func begin(config: Dictionary) -> void:
 	hint_label.text = HINT_LIVING
 	round_index = 0
 	_start_round()
+	if _hitkit_cap:
+		_run_hitkit_cap()
 
 # ================================================================ world
 func _build_world() -> void:
@@ -1739,9 +1751,57 @@ func wisp_pos_for(i: int):
 	return null
 
 func on_shove_landed(_pos: Vector3) -> void:
+	# _shake is set in BOTH modes exactly as before (it consumes the game rng in
+	# _physics_process, so the --willtally receipt depends on it — never changed).
 	_shake = maxf(_shake, 0.26)
-	if not _tally:
-		_time_hit(0.001, 0.05)
+	if _tally:
+		return
+	# LIVE: THE ILL WILL HIT KIT — layered thud on connect + (unless reduced-motion)
+	# ONE throttled micro-hitstop (0.15 time_scale, 45ms).
+	Sfx.play("bumper", -3.0)
+	if not _reduced_motion() and game_time - _last_hitstop >= 0.14:
+		_last_hitstop = game_time
+		_time_hit(0.15, 0.045)
+
+## Visual FX gate — OFF in the headless --willtally receipt run, so none of the
+## HIT KIT / cooldown-ring code executes there (determinism receipt).
+func fx_on() -> bool:
+	return not _tally
+
+func _reduced_motion() -> bool:
+	return not bool(PartySetup.pref("screen_shake", true))
+
+## HIT KIT §B1 spark burst — a one-shot cone of sparks along the knockback dir at
+## the contact point (kept even under reduced-motion; a read, not a shake).
+func spark_at(pos: Vector3, dir: Vector3, color: Color, strength := 1.0) -> void:
+	if not fx_on():
+		return
+	var p := CPUParticles3D.new()
+	spawn_root.add_child(p)
+	p.global_position = pos
+	p.one_shot = true
+	p.emitting = true
+	p.amount = clampi(int(round(8.0 * strength)), 3, 14)
+	p.lifetime = 0.25
+	p.explosiveness = 1.0
+	p.spread = 55.0
+	var d := dir
+	d.y = 0.0
+	p.direction = (d.normalized() if d.length() > 0.05 else Vector3.UP)
+	p.initial_velocity_min = 4.0
+	p.initial_velocity_max = 8.0
+	p.gravity = Vector3(0, -6.0, 0)
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.09, 0.09, 0.09)
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color.WHITE
+	mat.emission_enabled = true
+	mat.emission = color.lerp(Color.WHITE, 0.5)
+	mat.emission_energy_multiplier = 2.4
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	p.material_override = mat
+	get_tree().create_timer(0.6).timeout.connect(p.queue_free)
 
 ## Readability cue fired the instant a shove releases (hit OR whiff): a bright
 ## windup ring + a directional arc filling the shove's front-hemisphere reach, in
@@ -2046,6 +2106,82 @@ func _spawn_confetti(pos: Vector3, color: Color) -> void:
 		p.material_override = mat
 		p.emitting = true
 		get_tree().create_timer(2.0).timeout.connect(p.queue_free)
+
+# ================================================================ HIT KIT capture
+# --hitkitcap (windowed): stages each feel moment (shove coil+arc, victim impact
+# with sparks+pop, cooldown-ring fill, ready-flash) with the round held, films it,
+# then quits. Verify-only; no effect on a normal match or the --willtally receipt.
+func _settle(sec: float) -> void:
+	await get_tree().create_timer(sec, true, false, true).timeout
+
+func _cap_shot(tag: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		print("LW_HITKIT_SKIP_HEADLESS ", tag)
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := "res://%s/last_will_%s.png" % [_cap_dir, tag]
+	img.save_png(path)
+	print("LW_HITKIT_CAP ", path)
+
+func _run_hitkit_cap() -> void:
+	while phase != Phase.ROUND:
+		await get_tree().physics_frame
+	_clear_hazards()
+	# BLUE attacker (rings read clearly on the tan stone yard); RED victim. Staged
+	# side-by-side at the same depth so neither body occludes the other's rings.
+	var atk: LWPawn = pawns[1]     # BLUE attacker
+	var vic: LWPawn = pawns[0]     # RED victim
+	atk._cap_freeze = true
+	vic._cap_freeze = true
+	atk.freeze = true
+	vic.freeze = true
+	var atk_pos := Vector3(-1.5, 0.25, 1.7)
+	var vic_pos := Vector3(1.1, 0.25, 1.7)
+	atk.global_position = atk_pos
+	vic.global_position = vic_pos
+	var face := (vic_pos - atk_pos)
+	face.y = 0.0
+	face = face.normalized()
+	atk._face = face
+	if atk.model_pivot:
+		atk.model_pivot.rotation.y = atan2(face.x, face.z)
+	if vic.model_pivot:
+		vic.model_pivot.rotation.y = atan2(-face.x, -face.z)   # victim faces the shover
+	phase = Phase.WAITING     # hold the round sim; the two pawns are frozen
+	banner.visible = false
+	sub_banner.visible = false
+	_set_base_ui(false)
+	await _settle(0.35)
+	# 1) WINDUP COIL + readability arc (BLUE attacker mid crouch-and-lunge at RED)
+	atk.windup_coil(true)
+	on_shove_fired(atk_pos, face, players[1].color)
+	await _settle(0.05)
+	await _cap_shot("hitkit_coil")
+	await _settle(0.3)
+	# 2) IMPACT — RED victim squash-popped + spark cone along the knockback
+	vic.flash_pop()
+	spark_at(vic_pos + Vector3(0, 0.9, 0) - face * 0.3, face, players[1].color, 1.35)
+	await _settle(0.06)
+	await _cap_shot("hitkit_impact")
+	await _settle(0.35)
+	# 3) COOLDOWN RINGS mid-fill — park the victim, center the BLUE attacker so its
+	#    SHOVE (outer) + HOP (thin inner) rings are fully visible and unoccluded.
+	vic.global_position = Vector3(11.0, 0.25, 0.0)
+	atk.global_position = Vector3(0.0, 0.25, 1.8)
+	atk._shove_cd = LWPawn.SHOVE_CD * 0.45
+	atk._hop_cd = LWPawn.HOP_CD * 0.45
+	await _settle(0.14)
+	await _cap_shot("hitkit_ring_fill")
+	# 4) READY-FLASH — drive the SHOVE ring to full so it flashes bright
+	atk._shove_cd = 0.04
+	await _settle(0.06)
+	atk._shove_cd = 0.0
+	await _settle(0.05)
+	await _cap_shot("hitkit_ring_ready")
+	await _settle(0.15)
+	print("LW_HITKIT_CAP_DONE")
+	get_tree().quit()
 
 # ================================================================ verify hooks
 func get_phase_name() -> String:
