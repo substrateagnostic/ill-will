@@ -927,6 +927,10 @@ func _executor_greeting() -> String:
 	var a: Dictionary = aw[EstateState.rng.randi_range(0, aw.size() - 1)]
 	var who := str(a.get("who", "someone"))
 	var title := str(a.get("title", "themselves"))
+	# One rare line honors the estate's first outside guest (2026-07-05),
+	# whose field report on the seagull is archived in docs/playtests/.
+	if EstateState.rng.randf() < 0.07:
+		return "The first guest left a note about the seagull. The estate declines to repeat it, but agrees it was beautiful."
 	var lines := [
 		"Welcome back. We remembered %s as %s, and see no reason to revise.",
 		"The ledger has %s down as %s. The ledger is seldom wrong twice.",
