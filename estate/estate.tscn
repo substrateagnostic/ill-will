@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://estate/estate.gd" id="1"]
 [ext_resource type="Script" path="res://estate/trail.gd" id="5_trail"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" path="res://assets/models/meshy/stone_lantern.glb" id="7_lantern"]
 [ext_resource type="PackedScene" path="res://assets/models/meshy/auction_podium.glb" id="8_podium"]
 [ext_resource type="PackedScene" path="res://assets/models/meshy/gilded_pot.glb" id="9_pot"]
+[ext_resource type="PackedScene" path="res://assets/models/meshy/market_stall.glb" id="10_stall"]
 [ext_resource type="FontFile" path="res://assets/fonts/LuckiestGuy-Regular.ttf" id="2_luckiest"]
 [ext_resource type="Texture2D" path="res://assets/textures/grass_stripes.png" id="3_grass"]
 [ext_resource type="PackedScene" path="res://assets/models/minigolf/castle.glb" id="4_castle"]
@@ -155,15 +156,8 @@ transform = Transform3D(1.29904, 0, -0.75, 0, 1.5, 0, 0.75, 0, 1.29904, 3.5, 0, 
 [node name="StallPot" parent="Grounds" instance=ExtResource("9_pot")]
 transform = Transform3D(0.6, 0, 0, 0, 0.6, 0, 0, 0, 0.6, -3.0, 0, -2.2)
 
-[node name="Stall" type="CSGBox3D" parent="Grounds"]
-transform = Transform3D(0.866025, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866025, -3.8, 0.65, -3)
-size = Vector3(2, 1.3, 1)
-material = SubResource("mat_wall")
-
-[node name="StallRoof" type="CSGBox3D" parent="Grounds"]
-transform = Transform3D(0.866025, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866025, -3.8, 1.5, -3)
-size = Vector3(2.4, 0.12, 1.5)
-material = SubResource("mat_path")
+[node name="Stall" parent="Grounds" instance=ExtResource("10_stall")]
+transform = Transform3D(1.08903, 0, 0.62875, 0, 1.2575, 0, -0.62875, 0, 1.08903, -3.8, 0.75, -3)
 
 [node name="GraffitiWall" type="Node3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.5, 0, -6)

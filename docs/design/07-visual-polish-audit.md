@@ -113,7 +113,7 @@ Shot: `polish_audit_throne.png`.
 
 ## Ranked fix list (visible-seconds-per-night × jarringness)
 
-**Fixing now (≤8 Meshy generations + 2 free reuses):**
+**FIXED (Phase 2 complete — see `docs/verify/visual-polish-VERIFY.md`; 8 Meshy generations + 2 free reuses):**
 
 1. **Dead Weight furniture set** — wardrobe.glb + table_lamp.glb reuse (free) + **crate** + **chair** generations. The whole game is these props.
 2. **Par crusher hammer** — **crusher head** generation. Flagship game, drafted constantly.
