@@ -12,6 +12,9 @@ const DEVICE_NAMES := {-4: "KB (WASD) + MOUSE", -3: "MOUSE/SHARED", -1: "KEYBOAR
 const PREFS_PATH := "user://prefs.json"
 const BIND_DEVICES := [-1, -2, -4]
 const BIND_ACTIONS := ["up", "left", "down", "right", "a", "b"]
+## ACCESS: colorblind palette ids (match GameState.PALETTES) + display labels.
+const PALETTE_IDS := ["classic", "deutan", "protan", "tritan"]
+const PALETTE_LABELS := ["CLASSIC", "DEUTERANOPIA", "PROTANOPIA", "TRITANOPIA"]
 
 var panel: PanelContainer
 var tabs: TabContainer
@@ -31,6 +34,7 @@ func _ready() -> void:
 	_load_prefs()
 	_apply_audio_prefs()
 	_apply_video_prefs()
+	_apply_access_prefs()
 	panel = PanelContainer.new()
 	panel.visible = false
 	panel.set_anchors_preset(Control.PRESET_CENTER)
@@ -357,6 +361,11 @@ func _build_video_tab() -> Control:
 
 ## ----- ACCESS tab -----
 
+## Applied on boot (from _ready, after _load_prefs) and live on change.
+func _apply_access_prefs() -> void:
+	GameState.apply_palette(str(pref("palette", "classic")))
+	get_tree().root.content_scale_factor = float(pref("ui_scale", 1.0))
+
 func _build_access_tab() -> Control:
 	var v := VBoxContainer.new()
 	v.name = "ACCESS"
@@ -370,8 +379,51 @@ func _build_access_tab() -> Control:
 	var sc := CenterContainer.new()
 	sc.add_child(shake)
 	v.add_child(sc)
+	# COLORBLIND PALETTE — persists to pref "palette", applied via GameState.
+	var prow := HBoxContainer.new()
+	prow.alignment = BoxContainer.ALIGNMENT_CENTER
+	prow.add_theme_constant_override("separation", 16)
+	var pl := Label.new()
+	pl.text = "COLOR PALETTE"
+	prow.add_child(pl)
+	var pob := OptionButton.new()
+	pob.custom_minimum_size = Vector2(340, 44)
+	for n in PALETTE_LABELS:
+		pob.add_item(n)
+	pob.selected = maxi(0, PALETTE_IDS.find(str(pref("palette", "classic"))))
+	pob.item_selected.connect(func(idx: int):
+		var id: String = PALETTE_IDS[idx]
+		_prefs["palette"] = id
+		GameState.apply_palette(id)
+		Sfx.play("card"))
+	prow.add_child(pob)
+	v.add_child(prow)
+	# UI SCALE — persists to pref "ui_scale", drives content_scale_factor.
+	var srow := HBoxContainer.new()
+	srow.alignment = BoxContainer.ALIGNMENT_CENTER
+	srow.add_theme_constant_override("separation", 16)
+	var sl := Label.new()
+	sl.text = "UI SCALE"
+	sl.custom_minimum_size = Vector2(120, 0)
+	srow.add_child(sl)
+	var s := HSlider.new()
+	s.min_value = 1.0
+	s.max_value = 1.3
+	s.step = 0.05
+	s.value = float(pref("ui_scale", 1.0))
+	s.custom_minimum_size = Vector2(400, 32)
+	var pct := Label.new()
+	pct.text = "%d%%" % roundi(s.value * 100)
+	pct.custom_minimum_size = Vector2(64, 0)
+	s.value_changed.connect(func(val: float):
+		_prefs["ui_scale"] = val
+		get_tree().root.content_scale_factor = val
+		pct.text = "%d%%" % roundi(val * 100))
+	srow.add_child(s)
+	srow.add_child(pct)
+	v.add_child(srow)
 	var note := Label.new()
-	note.text = "Player shapes (never color alone) are rolling out across all game HUDs.\nColorblind palettes and text scaling land with the lobby pass."
+	note.text = "Palettes keep all four seats distinct under color blindness; identity also\ntravels as name + badge SHAPE. Palette applies to the next game launched\n(estate panels refresh each phase). UI scale applies instantly."
 	note.add_theme_font_size_override("font_size", 15)
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.modulate.a = 0.65

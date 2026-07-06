@@ -1,12 +1,43 @@
 extends Node
 ## Match-level state: roster, scores, round counter. Autoloaded as GameState.
 
-const PLAYER_COLORS := [
-	Color(0.92, 0.34, 0.30),
-	Color(0.25, 0.55, 0.90),
-	Color(0.95, 0.75, 0.20),
-	Color(0.30, 0.85, 0.60),
-]
+## Colorblind-safe seat palettes (research digest 04 MUST item). Each alternate
+## is designed so all FOUR seats stay mutually distinguishable under that
+## dichromacy — validated with Machado-2009 dichromacy simulation + CIEDE2000
+## (min ΔE00 well past the just-distinct threshold; full hex tables + reasoning
+## in docs/verify/access-VERIFY.md). Anchored on Okabe-Ito CVD-safe hues.
+## Seat NAMES (RED/BLUE/GOLD/MINT) and badge SHAPES never change: hue is never
+## the only identity channel, the shapes exist precisely so it isn't.
+##   index: 0 RED (circle)  1 BLUE (triangle)  2 GOLD (square)  3 MINT (diamond)
+const PALETTES := {
+	"classic": [
+		Color(0.92, 0.34, 0.30), Color(0.25, 0.55, 0.90),
+		Color(0.95, 0.75, 0.20), Color(0.30, 0.85, 0.60),
+	],
+	# Deuteranopia (no M-cones): spread on the retained blue-yellow axis +
+	# lightness. Vermillion red / vivid blue / lemon / teal-green.
+	"deutan": [
+		Color(0.769, 0.243, 0.0), Color(0.082, 0.322, 0.847),
+		Color(0.941, 0.894, 0.259), Color(0.267, 0.667, 0.6),
+	],
+	# Protanopia (no L-cones; reds lose luminance): push RED darker so it becomes
+	# a unique DARK anchor (lightness is retained), the rest stay bright.
+	"protan": [
+		Color(0.69, 0.227, 0.0), Color(0.0, 0.447, 0.698),
+		Color(0.941, 0.894, 0.259), Color(0.0, 0.62, 0.451),
+	],
+	# Tritanopia (no S-cones; blue-yellow confusion): spread on the retained
+	# red-green axis + lightness. Clean red / indigo / gold / spring green.
+	"tritan": [
+		Color(0.8, 0.2, 0.067), Color(0.231, 0.298, 0.753),
+		Color(0.925, 0.831, 0.0), Color(0.0, 0.765, 0.537),
+	],
+}
+## Active seat colors, mutated in place by apply_palette(). NOT a const: games
+## read this at launch and estate panels rebuild per phase, so a live palette
+## swap needs a mutable array (const Arrays are read-only in Godot 4). Defaults
+## to the classic palette, byte-identical to the shipped colors.
+var PLAYER_COLORS: Array = PALETTES["classic"].duplicate()
 const PLAYER_NAMES := ["RED", "BLUE", "GOLD", "MINT"]
 const POINTS_TABLE := {2: [3, 1], 3: [4, 2, 1], 4: [5, 3, 2, 1]}
 ## Chaos round pays double, winner-take-more.
@@ -54,6 +85,16 @@ func reset_match() -> void:
 			"grudge": 0,
 			"royalties": 0,
 		})
+
+## Swap the active seat palette in place (see PALETTES). Unknown ids fall back
+## to classic. Mutates PLAYER_COLORS rather than reassigning it, so any live
+## reader (estate panels, rebuilt per phase) picks the change up; a game already
+## in progress keeps the palette it launched with — the ACCESS hint notes this
+## applies-to-next-game caveat.
+func apply_palette(id: String) -> void:
+	var pal: Array = PALETTES.get(id, PALETTES["classic"])
+	for i in mini(PLAYER_COLORS.size(), pal.size()):
+		PLAYER_COLORS[i] = pal[i]
 
 func standings() -> Array:
 	var idx := range(players.size())
