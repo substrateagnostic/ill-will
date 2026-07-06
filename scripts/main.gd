@@ -455,10 +455,11 @@ func _on_turn_started(p: int) -> void:
 	if _embodied:
 		# Walk the acting avatar to its ball; the swing fires the frozen putt.
 		avatar_shot.begin_turn(p, avatars[p], balls[p], _is_bot(p), GameState.is_chaos_round())
-		# Camera: over-shoulder for the normal-round shot. CHAOS keeps the v3
+		# Camera: skill-shot framing for the normal-round shot (owner note:
+		# SMITE-style, aim line readable across the lane). CHAOS keeps the v3
 		# diorama — several balls are live at once and the overview must read.
 		if not GameState.is_chaos_round():
-			camera_rig.set_mode(camera_rig.Mode.OVER_SHOULDER, avatars[p])
+			camera_rig.set_mode(camera_rig.Mode.SHOT, avatars[p])
 	if GameState.is_chaos_round():
 		# Simultaneous play: keep the persistent CHAOS banner (set on round
 		# entry) instead of a misleading per-player turn line. The stroke

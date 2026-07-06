@@ -149,6 +149,8 @@ func _physics_process(delta: float) -> void:
 func _tick_walk(delta: float) -> void:
 	_walk_t += delta
 	_avatar.walk_to(_ball.global_position, _chaos)
+	if _walk_t >= 0.5:
+		_snap_once("walk")
 	var dist := _flat_dist(_avatar.global_position, _ball.global_position)
 	if dist <= ARRIVE_DIST:
 		_arrive(dist)
@@ -165,7 +167,11 @@ func _arrive(dist: float) -> void:
 	state = State.ADDRESS
 	if _walkprobe:
 		print("AVATAR_ARRIVED p=%d dist=%.2f" % [actor, dist])
-	_snap_once("address")
+	# Snap AFTER the skill-shot camera blend (0.6s) lands, so the receipt shows
+	# the address stance from the actual aim framing.
+	if _swingsnap and not _snapped.has("address"):
+		_snapped["address"] = true
+		get_tree().create_timer(0.75).timeout.connect(func(): VerifyCapture.snap("address"))
 
 func _tick_address(delta: float) -> void:
 	if _chaos and _flat_dist(_avatar.global_position, _ball.global_position) > CHASE_DIST:
@@ -193,8 +199,10 @@ func _tick_charge(delta: float) -> void:
 		_charge_power = minf(POWER_MIN + (POWER_MAX - POWER_MIN) * (_charge_t / POWER_CHARGE_T), _pending_power)
 		_update_meter()
 		_putt.show_aim_preview(_aim_dir, _charge_power)
-		if _charge_power >= _pending_power - 0.001:
+		# snap mid-ramp (meter visibly filling, still on screen at frame draw)
+		if _charge_power >= (POWER_MIN + _pending_power) * 0.5:
 			_snap_once("charge")
+		if _charge_power >= _pending_power - 0.001:
 			_start_swing()
 		return
 	_aim_dir = _read_aim()

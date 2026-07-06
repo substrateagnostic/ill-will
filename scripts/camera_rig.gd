@@ -3,17 +3,20 @@ extends Node3D
 ## lean toward the ball so motion feels tracked without losing the overview.
 ##
 ## PAR v4: gains a mode enum. DIORAMA is the v3 pose (build/draft/roll/chaos).
-## OVER_SHOULDER frames the acting avatar from behind for the embodied shot:
-## position = avatar - facing*CAM_SHOULDER_BACK + UP*CAM_SHOULDER_UP, looking at
-## the ball. set_mode() blends between the two over the spec's named times.
+## SHOT is the embodied aim camera — owner-corrected to a SMITE-style
+## SKILL-SHOT framing, not a TPS shoulder cam: high pitched-down angle
+## (~55 deg), behind/above the golfer, so the aim arrow + dots read across the
+## whole lane (traps and cup in one glance) and the character is a reference
+## point at the bottom of the view. set_mode() blends over the named times.
 ## shake / focus_on / start_flyover act on `cam` and stay mode-agnostic.
 
-enum Mode { DIORAMA, OVER_SHOULDER }
+enum Mode { DIORAMA, SHOT }
 
-const CAM_TO_SHOULDER := 0.6
+const CAM_TO_SHOT := 0.6
 const CAM_TO_DIORAMA := 0.5
-const CAM_SHOULDER_BACK := 3.2
-const CAM_SHOULDER_UP := 1.8
+const CAM_SHOT_BACK := 2.0    # m behind the avatar, along -facing
+const CAM_SHOT_UP := 11.5     # m above the green (steep skill-shot pitch ~53deg)
+const CAM_SHOT_AHEAD := 6.0   # look target this far down the aim line
 
 @export var course_center := Vector3(0, 0, -6.5)
 @export var course_extent := Vector3(3.0, 0.0, 8.5)
@@ -23,8 +26,8 @@ var home_position := Vector3(0, 12.5, 4.5)
 
 var ball: Ball
 var mode: int = Mode.DIORAMA
-## The acting avatar the over-shoulder pose frames (set by main per turn).
-var shoulder_avatar: Node3D = null
+## The acting avatar the skill-shot pose frames (set by main per turn).
+var shot_avatar: Node3D = null
 var _shake := 0.0
 var cinematic := false
 var _focus_override := Vector3.INF
@@ -36,13 +39,17 @@ var _blend_dur := 0.5
 @onready var cam: Camera3D = $Camera3D
 
 func set_mode(m: int, avatar: Node3D = null) -> void:
-	if m == mode and (m != Mode.OVER_SHOULDER or avatar == shoulder_avatar):
+	if m == mode and (m != Mode.SHOT or avatar == shot_avatar):
 		return
 	mode = m
-	shoulder_avatar = avatar
+	shot_avatar = avatar
 	_blend_from = cam.global_transform
 	_blend_t = 0.0
-	_blend_dur = CAM_TO_SHOULDER if m == Mode.OVER_SHOULDER else CAM_TO_DIORAMA
+	_blend_dur = CAM_TO_SHOT if m == Mode.SHOT else CAM_TO_DIORAMA
+	# The skill-shot cam sits ~11m from the golfer; the diorama's near-blur
+	# plane (5m) would smear the whole aim read. Presentation only.
+	if cam.attributes != null:
+		cam.attributes.dof_blur_near_enabled = m == Mode.DIORAMA
 
 func shake(amount: float) -> void:
 	_shake = maxf(_shake, amount)
@@ -72,12 +79,20 @@ func _flyover_step(t: float, start_pos: Vector3, end_pos: Vector3) -> void:
 ## Target pose for the current mode. DIORAMA reproduces the v3 behavior exactly
 ## when the camera already parks at home (position home, lean toward the ball).
 func _target_pose() -> Transform3D:
-	if mode == Mode.OVER_SHOULDER and shoulder_avatar != null:
-		var facing: Vector3 = shoulder_avatar.facing
+	if mode == Mode.SHOT and shot_avatar != null:
+		var facing: Vector3 = shot_avatar.facing
 		if facing.length() < 0.01:
 			facing = Vector3(0, 0, -1)
-		var pos: Vector3 = shoulder_avatar.global_position - facing * CAM_SHOULDER_BACK + Vector3.UP * CAM_SHOULDER_UP
-		var look: Vector3 = ball.global_position if ball != null else shoulder_avatar.global_position + facing
+		# While the golfer walks, anchor the frame on the golfer (the stride
+		# reads); at address the anchor is the ball — the two coincide at the
+		# 0.55m address distance, so the handoff has no pop.
+		var anchor: Vector3 = shot_avatar.global_position + facing * 0.55
+		if ball != null and not shot_avatar.is_walking():
+			anchor = ball.global_position
+		var pos: Vector3 = shot_avatar.global_position - facing * CAM_SHOT_BACK + Vector3.UP * CAM_SHOT_UP
+		# Look DOWN THE AIM LINE, not at the ball: the golfer reads as a
+		# reference point at the bottom edge while the lane fills the frame.
+		var look: Vector3 = anchor + facing * CAM_SHOT_AHEAD
 		var fwd := look - pos
 		if fwd.length() < 0.05:
 			fwd = facing
@@ -103,7 +118,7 @@ func _process(delta: float) -> void:
 		if _blend_t >= _blend_dur:
 			_blend_t = -1.0
 	else:
-		var w := 1.0 - exp((-9.0 if mode == Mode.OVER_SHOULDER else -6.0) * delta)
+		var w := 1.0 - exp((-9.0 if mode == Mode.SHOT else -6.0) * delta)
 		cam.global_transform = cam.global_transform.interpolate_with(target, w)
 	if _shake > 0.002:
 		cam.h_offset = randf_range(-1.0, 1.0) * _shake * 0.35
