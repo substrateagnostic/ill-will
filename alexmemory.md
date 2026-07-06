@@ -337,6 +337,29 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-06 — ONLINE PHASE 1 IS REAL: two copies of ILL WILL played one night together
+The spine from doc 10 is built and proven on this machine: **HOST NIGHT /
+JOIN NIGHT on the title**, a 6-char invite code (`80CMWE` = your LAN
+IP+port; loopback/LAN/port-forward this phase, Steam codes phase 3), remote
+guests claim seats (`BLUE JOINS FROM AFAR`), their walkers stroll YOUR
+grounds on relayed 30 Hz input through a new `_remote` seam in PlayerInput
+(additive — couch untouched, all old CLI hooks green), READY + GET READY
+gate work over the wire, disconnect flips the seat to BOT on the Executor
+register ("THE WIRE TO BLUE WENT DEAD…"). Client sees a live lobby mirror +
+walkers, and during games the honest spectate card + ladder (full game
+mirrors = phase 2). **Proof, not vibes:** same seed + same input tape via
+couch-injection vs the real network produced IDENTICAL night results — the
+transport provably doesn't touch the sim; 27/27 mirror hashes matched;
+evidence + screenshots in `docs/verify/online-phase1-VERIFY.md` /
+`online_host_*.png` / `online_client_*.png`. **Bonus: the rig caught three
+latent couch bugs** (READY chip double-toggle at high fps; panel rebuilds
+silently breaking every chip/label update via node auto-rename; the START
+waiting-list never updating live) — all fixed at the root. NEEDS YOU:
+(1) to host real friends before Steam lands, forward UDP 8910 (or just use
+Remote Play Together meanwhile); (2) the phase-3 Steam decision (GodotSteam
+SteamMultiplayerPeer drops in behind NetSession — one file). Branch:
+worktree-agent-aba80dc71b36f7a58, 2 commits.
+
 ### 2026-07-06 — ONLINE-FIRST ARCHITECTURE DECIDED (docs only, build day is tomorrow)
 Your call ("online is 90% of 2026 play") is now a blueprint:
 `docs/design/10-online-first-architecture.md`. The decision: **host runs the
