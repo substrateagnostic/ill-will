@@ -30,6 +30,10 @@ var night_stats := {}
 # Directed kill counts for the night: "killer>victim" -> count. Fed by
 # the module contract's optional kill_events; powers the NEMESIS award.
 var kill_matrix := {}
+# Standing VENDETTA from last night's ledger: {hunter, prey} — armed at
+# start_night, settled when the PREY kills the HUNTER in any game.
+var vendetta := {}
+var vendetta_settled_by := -1
 
 func _ready() -> void:
 	rng.randomize()
@@ -52,6 +56,14 @@ func start_night(player_count: int) -> void:
 	last_deltas.clear()
 	night_stats.clear()
 	kill_matrix.clear()
+	vendetta_settled_by = -1
+	vendetta = {}
+	if not ledger.is_empty():
+		var last: Dictionary = ledger.back()
+		var nem: Dictionary = last.get("nemesis", {})
+		if not nem.is_empty():
+			vendetta = {"hunter": int(nem.hunter), "prey": int(nem.prey)}
+			print("VENDETTA armed hunter=%d prey=%d" % [vendetta.hunter, vendetta.prey])
 	for i in player_count:
 		trail_pos[i] = 0
 		night_stats[i] = {"wins": 0, "lasts": 0, "royalties": 0,
@@ -97,6 +109,12 @@ func apply_results(results: Dictionary) -> Array:
 		if killer >= 0 and victim >= 0 and killer != victim:
 			night_stats[killer].kills += 1
 			pairs_this_game["%d>%d" % [killer, victim]] = true
+			if not vendetta.is_empty() and vendetta_settled_by < 0 \
+					and killer == int(vendetta.prey) and victim == int(vendetta.hunter):
+				vendetta_settled_by = killer
+				players[killer].grudge += 3
+				ticker.append("VENDETTA SETTLED — %s repays %s (+3♠)" % [players[killer].name, players[victim].name])
+				add_graffiti("%s settled the vendetta against %s" % [players[killer].name, players[victim].name])
 	for pair in pairs_this_game:
 		kill_matrix[pair] = int(kill_matrix.get(pair, 0)) + 1
 	for ev in results.get("currency_events", []):
@@ -139,19 +157,28 @@ func record_toll(owner_idx: int, amount: int) -> void:
 
 ## End-of-night superlatives from night_stats. Skips zero-data awards.
 ## champ is excluded from WORKHORSE (their glory is the podium).
-func night_superlatives(champ: int) -> Array:
-	var awards: Array = []
-	var order := standings()
+func _best_kill_pair() -> Dictionary:
 	var best_pair := ""
 	var best_n := 1
 	for pair in kill_matrix:
 		if int(kill_matrix[pair]) > best_n:
 			best_n = int(kill_matrix[pair])
 			best_pair = pair
-	if best_pair != "":
-		var kp := best_pair.split(">")
-		awards.append({"player": int(kp[0]), "title": "NEMESIS OF %s" % players[int(kp[1])].name,
-			"line": "came for them in %d different games tonight" % best_n})
+	if best_pair == "":
+		return {}
+	var kp := best_pair.split(">")
+	return {"hunter": int(kp[0]), "prey": int(kp[1]), "n": best_n}
+
+func night_superlatives(champ: int) -> Array:
+	var awards: Array = []
+	var order := standings()
+	if vendetta_settled_by >= 0:
+		awards.append({"player": vendetta_settled_by, "title": "THE RECKONER",
+			"line": "settled last night's vendetta in blood"})
+	var nem := _best_kill_pair()
+	if not nem.is_empty():
+		awards.append({"player": int(nem.hunter), "title": "NEMESIS OF %s" % players[int(nem.prey)].name,
+			"line": "came for them in %d different games tonight" % int(nem.n)})
 	var work := _stat_leader("wins", order)
 	if work >= 0 and work != champ:
 		awards.append({"player": work, "title": "THE WORKHORSE",
@@ -237,7 +264,8 @@ func end_night(champ_override := -1) -> Dictionary:
 		award_log.append({"who": players[aw.player].name,
 			"title": aw.title, "line": aw.line})
 	gate_statues.append({"owner": pl.name, "color": pl.color.to_html(), "night": nights_played})
-	ledger.append({"night": nights_played, "winner": pl.name, "awards": award_log})
+	ledger.append({"night": nights_played, "winner": pl.name, "awards": award_log,
+		"nemesis": _best_kill_pair()})
 	if not awards.is_empty():
 		var top: Dictionary = awards[0]
 		add_graffiti("N%d: %s was %s" % [nights_played + 1, players[top.player].name, top.title])

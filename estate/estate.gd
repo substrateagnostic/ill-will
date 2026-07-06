@@ -495,7 +495,15 @@ func _executor_greeting() -> String:
 	if aw.is_empty():
 		return "Welcome back. The estate kept the lights on and the grudges filed."
 	var a: Dictionary = aw[EstateState.rng.randi_range(0, aw.size() - 1)]
-	return "Welcome back. We remembered %s as %s, and see no reason to revise." % [str(a.get("who", "someone")), str(a.get("title", "themselves"))]
+	var who := str(a.get("who", "someone"))
+	var title := str(a.get("title", "themselves"))
+	var lines := [
+		"Welcome back. We remembered %s as %s, and see no reason to revise.",
+		"The ledger has %s down as %s. The ledger is seldom wrong twice.",
+		"%s returns. Last night they were %s. The estate expects consistency.",
+		"Do come in. %s will find their reputation as %s exactly where they left it.",
+	]
+	return String(lines[EstateState.rng.randi_range(0, lines.size() - 1)]) % [who, title]
 
 ## ----- THE WARDROBE (cosmetics store; LEGACY buys vanity) -----
 
@@ -732,6 +740,18 @@ func _enter_grounds() -> void:
 	_tile_buyers.clear()
 	_rebuild_top_bar()
 	_clear_panel("THE GROUNDS — place your bets on the next game")
+	if EstateState.games_played == 0 and not EstateState.vendetta.is_empty():
+		var v: Dictionary = EstateState.vendetta
+		var hunter = EstateState.players[int(v.hunter)]
+		var prey = EstateState.players[int(v.prey)]
+		var vl := Label.new()
+		vl.text = "“An unsettled matter: %s hunted %s last night. The estate has opened a book on the reprisal (+3♠).”  — The Executor" % [hunter.name, prey.name]
+		vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vl.custom_minimum_size = Vector2(700, 0)
+		vl.add_theme_font_size_override("font_size", 16)
+		vl.add_theme_color_override("font_color", Color(0.9, 0.75, 0.75))
+		phase_box.add_child(vl)
 	for i in EstateState.players.size():
 		var pl = EstateState.players[i]
 		var row := HBoxContainer.new()
@@ -859,6 +879,18 @@ func _enter_auction() -> void:
 		auction_options.append(pool[EstateState.rng.randi_range(0, pool.size() - 1)])
 	_rebuild_top_bar()
 	_clear_panel("THE AUCTION — bid grudge to choose the game")
+	var exec_lines := [
+		"The Executor opens the bidding. Spite is legal tender.",
+		"The Executor reminds the room that generosity is not on the block.",
+		"The Executor accepts grudge, resentment, and exact change.",
+	]
+	var eq := Label.new()
+	eq.text = "“%s”" % String(exec_lines[EstateState.rng.randi_range(0, exec_lines.size() - 1)])
+	eq.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	eq.add_theme_font_size_override("font_size", 15)
+	eq.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
+	eq.modulate.a = 0.8
+	phase_box.add_child(eq)
 	var opts := Label.new()
 	var names: Array = []
 	for id in auction_options:
@@ -1143,6 +1175,16 @@ func _enter_will_reading(champ) -> void:
 		l.add_theme_color_override("font_color", pl.color)
 		l.modulate.a = 0.0
 		phase_box.add_child(l)
+	if not EstateState.vendetta.is_empty() and EstateState.vendetta_settled_by < 0:
+		var v: Dictionary = EstateState.vendetta
+		var open_l := Label.new()
+		open_l.text = "The matter of %s and %s remains open. The estate is patient." % [
+			EstateState.players[int(v.hunter)].name, EstateState.players[int(v.prey)].name]
+		open_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		open_l.add_theme_font_size_override("font_size", 15)
+		open_l.modulate.a = 0.0
+		open_l.self_modulate.a = 0.7
+		phase_box.add_child(open_l)
 	var i := 0
 	for c in phase_box.get_children():
 		if c is Label and c.modulate.a == 0.0:
@@ -1150,7 +1192,7 @@ func _enter_will_reading(champ) -> void:
 			tw.tween_interval(0.45 * i)
 			tw.tween_property(c, "modulate:a", 1.0, 0.3)
 			i += 1
-	print("WILL_READ night=%d awards=%d" % [EstateState.nights_played, awards.size()])
+	print("WILL_READ night=%d awards=%d vendetta_settled=%d" % [EstateState.nights_played, awards.size(), EstateState.vendetta_settled_by])
 	await get_tree().create_timer(0.45 * i + 0.6).timeout
 	VerifyCapture.snap("will_reading")
 	if phase != Phase.NIGHT_END:
