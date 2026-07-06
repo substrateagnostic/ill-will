@@ -337,6 +337,24 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-06 — ONLINE-FIRST ARCHITECTURE DECIDED (docs only, build day is tomorrow)
+Your call ("online is 90% of 2026 play") is now a blueprint:
+`docs/design/10-online-first-architecture.md`. The decision: **host runs the
+ENTIRE sim exactly as couch; remote clients stream inputs into a new
+`_remote` seam inside PlayerInput** (the same injection pattern your
+--aimprobe hooks already prove) — zero minigame code changes for input; aim
+relays as vectors, never raw mice. Clients mirror the match (same scene +
+seed = free static worlds; host replicates actors/facts back). Lockstep is
+buried with citations (Jolt isn't cross-machine deterministic); rollback
+rejected (3-6 months for 2 games' feel). Audit found ONE real violator: PAR's
+mouse controllers — so phase 1 = estate lobby + SÉANCE online (100%
+PlayerInput, private role flashes get BETTER online), phase 2 = fleet fans
+out per-game mirrors, phase 3 = par refactor + rejoin + Steam sockets. Steam
+Remote Play Together is the zero-code fallback that works TONIGHT (4 pads,
+and par's shared mouse is already RPT-shaped). Biggest risk named: the
+per-game render mirror, not input. Verification runs two instances on one
+machine + your existing TALLY harnesses as the transport regression suite.
+
 ### 2026-07-05 — MESHY PROPS LIVE IN-GAME (wave closed)
 The tufted golden throne sits on the dais, the gilded cauldron anchors the
 vault, mowers/karts carry their riders with tinted identity rings, and the
