@@ -128,6 +128,8 @@ var _dwell_cd := 0.0
 var _last_beat := -1
 var _recent_travel := Vector3.ZERO
 var _contrib: Array = []             # per player Vector3, exp-decayed pull
+var _pull: Array = []                # per player Vector3, CURRENT pull (visual only)
+var _arrows: Array = []              # index -> SeanceArrow (spectral pull-pointer)
 var _surge_cd_p: Array = []
 var _last_surge_t: Array = []
 var _last_tap_beat: Array = []
@@ -280,6 +282,7 @@ func begin(config: Dictionary) -> void:
 	for i in players.size():
 		suspicion[i] = 0.0
 		_contrib.append(Vector3.ZERO)
+		_pull.append(Vector3.ZERO)
 		_surge_cd_p.append(0.0)
 		_last_surge_t.append(-99.0)
 		_last_tap_beat.append(-1)
@@ -623,6 +626,26 @@ func _spawn_figures() -> void:
 		var dir := -pos.normalized()
 		fig.rotation.y = atan2(dir.x, dir.z)
 		figures.append(fig)
+		# spectral pull-pointer, anchored at this sitter's rim of the board
+		# (skipped headless — it is rendered decor, never gates a thing)
+		if not _tally:
+			var arrow := SeanceArrow.new()
+			arrow.name = "Arrow%d" % i
+			spawn_root.add_child(arrow)
+			arrow.setup(i, players[i].color, _seat_rim_anchor(az))
+			_arrows.append(arrow)
+
+## The point on the board's rim toward a seat's azimuth — the sitter's home
+## edge, where their pull-pointer lives. Uses the planchette's clamp ellipse.
+func _seat_rim_anchor(az: float) -> Vector3:
+	var c: Vector3 = planchette.board_center
+	var hx: float = planchette.half_x
+	var hz: float = planchette.half_z
+	var dx := sin(az)
+	var dz := -cos(az)
+	# scale the direction out to the ellipse boundary, then tuck just inside
+	var t := 1.0 / sqrt((dx / hx) * (dx / hx) + (dz / hz) * (dz / hz))
+	return c + Vector3(dx * t * 0.92, 0.02, dz * t * 0.92)
 
 # ================================================================ tick
 func _physics_process(delta: float) -> void:
@@ -743,6 +766,7 @@ func _tick_seance(delta: float) -> void:
 		if force.length() > 0.05:
 			planchette.apply_force(force, ACCEL_PER, delta)
 		_contrib[i] = _contrib[i] * exp(-delta / 0.8) + force * delta
+		_pull[i] = force        # visual only: feeds this sitter's spectral arrow
 		if tap:
 			_do_tap(i)
 		if surge and can_surge(i) and force.length() > 0.05:
@@ -751,6 +775,7 @@ func _tick_seance(delta: float) -> void:
 	planchette.tick(delta)
 	_recent_travel = _recent_travel * exp(-delta / 0.6) + planchette.vel * delta
 	_tick_dwell(delta)
+	_update_arrows(delta)
 
 	# focus
 	focus = clampf(focus - PASSIVE_DECAY * delta, 0.0, 100.0)
@@ -766,6 +791,15 @@ func _tick_seance(delta: float) -> void:
 		_end_seance(false, "focus")
 	elif seance_elapsed >= SEANCE_TIME:
 		_end_seance(false, "time")
+
+## Presentation only: point each sitter's spectral arrow the way they are
+## currently dragging the planchette. Reads _pull (the same per-seat force the
+## physics already summed above) — never writes back into the sim.
+func _update_arrows(delta: float) -> void:
+	if _arrows.is_empty():
+		return
+	for i in _arrows.size():
+		_arrows[i].drive(_pull[i], delta)
 
 func _do_tap(p: int) -> void:
 	figures[p].flare()
@@ -919,6 +953,8 @@ func _end_seance(success: bool, cause: String) -> void:
 		str(success), cause, focus, seance_elapsed, _commits_right, _commits_wrong])
 	planchette.set_channel(0.0)
 	_dwell_ring.visible = false
+	for a in _arrows:            # the hands come off the board — snuff the pointers
+		a.snuff()
 	clue_label.visible = false   # the sitting is over; portraits take the stage
 	if success:
 		_flash_banner("THE WORD IS SPOKEN", Color(1.0, 0.85, 0.35), 2.4)
