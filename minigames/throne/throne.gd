@@ -108,6 +108,14 @@ var _crisis_announced := false
 var _shake := 0.0
 var _time_token := 0
 var _gold_stream: CPUParticles3D = null
+# THE COOLDOWN RING — the king's court powers, feet-anchored (research fix #3).
+var _decree_ring: CooldownRing = null   # primary (outer) — DECREE BLAST recharge
+var _guard_ring: CooldownRing = null    # secondary (thin inner) — SUMMON GUARD recharge
+var _decree_cd_max := DECREE_CD_BASE
+var _last_hitstop := -99.0              # HIT KIT global 0.14s hitstop throttle
+var _hitkit_cap := false               # verify: stage the HIT KIT / ring shots
+var _freeze := false                   # verify: hold gameplay to film a moment
+var _cap_dir := "verify_out"
 
 @onready var arena: Node3D = $Arena
 @onready var cam: Camera3D = $CameraRig/Camera3D
@@ -155,6 +163,13 @@ func _parse_args() -> void:
 			_match_time = maxf(20.0, float(arg.trim_prefix("--matchtime=")))
 		elif arg.begins_with("--thronescale="):
 			_balance_scale = clampf(float(arg.trim_prefix("--thronescale=")), 1.0, 8.0)
+		elif arg == "--hitkitcap":
+			_hitkit_cap = true
+			_all_bots = true
+		elif arg.begins_with("--outdir="):
+			_cap_dir = arg.trim_prefix("--outdir=")
+	if _hitkit_cap:
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
 
 func _seed_from_args() -> int:
 	for arg in OS.get_cmdline_user_args():
@@ -237,6 +252,8 @@ func _begin(config: Dictionary) -> void:
 	print("THRONE_BEGIN players=%d seed=%d bots=%s balance=%s" % [
 		players.size(), int(config.get("rng_seed", 1)), str(bot_enabled), str(_balance)])
 	_start_match()
+	if _hitkit_cap:
+		_run_hitkit_cap()
 
 func _spawn_pos(i: int, n: int) -> Vector3:
 	# ring the challengers around the dais, evenly spread
@@ -264,6 +281,8 @@ func _physics_process(delta: float) -> void:
 		cam.v_offset = 0.0
 
 	if phase != Phase.PLAY:
+		return
+	if _freeze:                       # verify capture: gameplay held, visuals keep ticking
 		return
 	game_time += delta
 	_update_timer_label()
@@ -391,6 +410,7 @@ func _try_decree() -> void:
 	if king < 0 or decree_cd > 0.0 or ceremony_t > 0.0:
 		return
 	decree_cd = DECREE_CD_BASE + float(decree_uses) * DECREE_FATIGUE
+	_decree_cd_max = decree_cd
 	decree_uses += 1
 	var hits := 0
 	for r in _royals:
@@ -508,9 +528,24 @@ func on_king_shoved(attacker: int, dir: Vector3) -> void:
 		return
 	grip -= 1
 	_update_throne_hud()
+	# HIT KIT: the grip-drain must read as a real hit, not a soft bump. King
+	# squash-pop + spark always; micro-hitstop + shake unless reduced-motion.
 	if _fx:
 		Sfx.play("bounce", -1.0)
-		_shake = maxf(_shake, 0.3)
+		var kr: Royal = _royals[king]
+		kr.flash_pop()
+		var strength := _king_shove_strength(attacker)
+		var atk_col: Color = Color.WHITE
+		if attacker >= 0 and attacker < players.size():
+			atk_col = players[attacker].color
+		spark_at(kr.global_position + Vector3(0, 1.0, 0), dir, atk_col, strength)
+		if not _reduced_motion():
+			_shake = maxf(_shake, clampf(0.22 + 0.14 * strength, 0.0, 0.5))
+			# one hitstop at a time (0.14s throttle); the FINAL drain gets the big
+			# dethrone slow-mo beat instead, so only micro-freeze a non-final hit.
+			if grip > 0 and game_time - _last_hitstop >= 0.14:
+				_last_hitstop = game_time
+				_time_hit(0.15, 0.045)
 	if grip <= 0:
 		_dethrone(attacker, dir)
 
@@ -999,6 +1034,7 @@ func _process(delta: float) -> void:
 			if t is OmniLight3D:
 				var base: float = float(t.get_meta("base_energy", 3.0))
 				(t as OmniLight3D).light_energy = base + sin(game_time * 11.0 + t.position.x) * 0.4 + randf_range(-0.15, 0.15)
+		_update_cd_rings(delta)
 
 # =====================================================================
 # UI
@@ -1035,6 +1071,16 @@ func _build_hud() -> void:
 	lbl.position = Vector2(0, 30)
 	throne_hud.add_child(lbl)
 	throne_hud.visible = false
+	# court-power cooldown rings at the king's feet (only when FX are on).
+	# Colored per-king each frame; two concentric bands = ability by position
+	# (outer = DECREE, thin inner = GUARD), never by hue (colorblind-safe).
+	if _fx:
+		_decree_ring = CooldownRing.new()
+		spawn_root.add_child(_decree_ring)
+		_decree_ring.setup(Color.WHITE, 0.68, 0.58, 0.0, 0.9)
+		_guard_ring = CooldownRing.new()
+		spawn_root.add_child(_guard_ring)
+		_guard_ring.setup(Color.WHITE, 0.54, 0.46, 0.0, 0.9)
 
 func _update_throne_hud() -> void:
 	if throne_hud == null:
@@ -1126,6 +1172,152 @@ func _time_hit(scale: float, real_duration: float) -> void:
 	await get_tree().create_timer(real_duration, true, false, true).timeout
 	if my == _time_token:
 		Engine.time_scale = 1.0
+
+## Public FX gate so the avatar (royal.gd) can skip visuals in the no-FX sim.
+func fx_on() -> bool:
+	return _fx
+
+func _reduced_motion() -> bool:
+	return not bool(PartySetup.pref("screen_shake", true))
+
+## Normalized attacker strength for HIT KIT scaling (spark count / shake).
+func _king_shove_strength(attacker: int) -> float:
+	if attacker < 0 or attacker >= _royals.size():
+		return 1.0
+	var a: Royal = _royals[attacker]
+	var power := Royal.SHOVE_BASE + a.speed() * Royal.SHOVE_SPEED_SCALE
+	return clampf(power / (Royal.SHOVE_BASE + 5.0 * Royal.SHOVE_SPEED_SCALE), 0.5, 1.5)
+
+## HIT KIT §B1 spark burst — a one-shot cone of sparks along the knockback dir at
+## the contact point (kept even in reduced-motion; it is a read, not a shake).
+func spark_at(pos: Vector3, dir: Vector3, color: Color, strength := 1.0) -> void:
+	if not _fx:
+		return
+	var p := CPUParticles3D.new()
+	spawn_root.add_child(p)
+	p.global_position = pos
+	p.one_shot = true
+	p.emitting = true
+	p.amount = clampi(int(round(8.0 * strength)), 3, 14)
+	p.lifetime = 0.25
+	p.explosiveness = 1.0
+	p.spread = 55.0
+	var d := dir
+	d.y = 0.0
+	p.direction = (d.normalized() if d.length() > 0.05 else Vector3.UP)
+	p.initial_velocity_min = 4.0
+	p.initial_velocity_max = 8.0
+	p.gravity = Vector3(0, -6.0, 0)
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.09, 0.09, 0.09)
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color.WHITE
+	mat.emission_enabled = true
+	mat.emission = color.lerp(Color.WHITE, 0.5)
+	mat.emission_energy_multiplier = 2.4
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	p.material_override = mat
+	get_tree().create_timer(0.6).timeout.connect(p.queue_free)
+
+## THE COOLDOWN RING for the king's court powers: ride the king's feet and fill
+## as DECREE / GUARD recharge. Only visible while charging or freshly ready.
+func _update_cd_rings(delta: float) -> void:
+	if _decree_ring == null:
+		return
+	var active := king >= 0 and seating_index < 0 and phase == Phase.PLAY
+	var reduced := _reduced_motion()
+	if active:
+		var kr: Royal = _royals[king]
+		var feet := kr.global_position + Vector3(0, 0.06, 0)
+		_decree_ring.global_position = feet
+		_guard_ring.global_position = feet
+		var kc: Color = players[king].color
+		_decree_ring.set_color(kc)
+		_guard_ring.set_color(kc)
+	var d_frac := clampf(1.0 - decree_cd / maxf(_decree_cd_max, 0.001), 0.0, 1.0)
+	_decree_ring.tick(delta, d_frac, active, reduced)
+	# GUARD is not truly ready until the standing wall also expires (one at a time).
+	var g_ready := guard_cd <= 0.0 and active_guard == null
+	var g_frac := 1.0 if g_ready else clampf(1.0 - guard_cd / GUARD_CD, 0.0, 0.98)
+	_guard_ring.tick(delta, g_frac, active, reduced)
+
+# ---------------------------------------------------------------------------
+# HIT KIT / COOLDOWN RING capture (--hitkitcap, windowed): stages each feel
+# moment (shove coil, king-shove impact, decree/guard rings) and films it with
+# gameplay frozen, then quits. Verify-only; no effect on a normal match.
+# ---------------------------------------------------------------------------
+func _settle(sec: float) -> void:
+	await get_tree().create_timer(sec, true, false, true).timeout
+
+func _cap_shot(tag: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		print("THRONE_HITKIT_SKIP_HEADLESS ", tag)
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := "res://%s/throne_%s.png" % [_cap_dir, tag]
+	img.save_png(path)
+	print("THRONE_HITKIT_CAP ", path)
+
+func _run_hitkit_cap() -> void:
+	while phase != Phase.PLAY:
+		await get_tree().physics_frame
+	# crown BLUE (index 1) — a high-contrast ring color against the red carpet —
+	# and use RED (index 0) as the shoving challenger.
+	var king_i := 1
+	var chal_i := 0
+	var king_r: Royal = _royals[king_i]
+	var chal: Royal = _royals[chal_i]
+	_begin_coronation(king_i)
+	seating_index = -1
+	ceremony_t = 0.0
+	king_r.global_position = SEAT_POS
+	# challenger stands front-LEFT of the dais, clear of the king's feet rings
+	chal.global_position = Vector3(-1.9, 0.1, 2.4)
+	chal.linear_velocity = Vector3.ZERO
+	if chal.model_pivot:
+		chal.model_pivot.rotation.y = atan2(-chal.global_position.x, -chal.global_position.z)
+	var parked := Vector3(5.5, 0.1, 5.5)
+	for i in _royals.size():
+		if i != king_i and i != chal_i:
+			(_royals[i] as Royal).global_position = parked
+	_freeze = true
+	banner.visible = false
+	await _settle(0.3)
+	# 1) WINDUP COIL — the challenger's standard shove windup, caught mid-crouch
+	banner.visible = false
+	chal.windup_coil()
+	await _settle(0.05)
+	await _cap_shot("hitkit_coil")
+	await _settle(0.3)
+	# park the challenger out of frame — the next shots are all about the KING
+	chal.global_position = parked
+	# 2) KING-SHOVE IMPACT — grip-drain reads as a real hit: king pop + spark.
+	#    Hide the reign gold-stream and aim the spark cone front-left over the
+	#    dark dais so the white->attacker sparks read clearly (not masked by gold).
+	banner.visible = false
+	_set_gold_stream(false)
+	on_king_shoved(chal_i, Vector3(-0.7, 0, 1.0))
+	await _settle(0.07)
+	await _cap_shot("hitkit_impact")
+	await _settle(0.35)
+	# 3) COOLDOWN RINGS mid-fill — DECREE (outer) + GUARD (thin inner) at the feet
+	banner.visible = false
+	_decree_cd_max = DECREE_CD_BASE
+	decree_cd = DECREE_CD_BASE * 0.32     # ~68% charged: ring sits clear of the body
+	guard_cd = GUARD_CD * 0.32
+	await _settle(0.16)
+	await _cap_shot("hitkit_rings_fill")
+	# 4) READY-FLASH — drive the decree ring to full so it flashes bright
+	decree_cd = DECREE_CD_BASE * 0.5
+	await _settle(0.06)
+	decree_cd = 0.0
+	await _settle(0.04)
+	await _cap_shot("hitkit_ring_ready")
+	await _settle(0.15)
+	print("THRONE_HITKIT_CAP_DONE")
+	get_tree().quit()
 
 func _spawn_shockwave(pos: Vector3, color: Color) -> void:
 	var ring := MeshInstance3D.new()

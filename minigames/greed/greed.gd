@@ -108,6 +108,8 @@ var _cap_dir := "verify_out"
 var _cap_done := {}
 var _aim_probe_on := false
 var _aim_probe_deg := 0.0
+var _hitkit_cap := false        # verify: stage the HIT KIT / cooldown-ring shots
+var _freeze := false            # verify: pause gameplay so a moment can be filmed
 
 # juice
 var _shake := 0.0
@@ -190,6 +192,8 @@ func begin(config: Dictionary) -> void:
 	_start_round()
 	if _aim_probe_on:
 		_run_greed_probe()
+	if _hitkit_cap:
+		_run_hitkit_cap()
 
 
 # ===========================================================================
@@ -302,6 +306,8 @@ func _finish_match() -> void:
 # ===========================================================================
 func _physics_process(delta: float) -> void:
 	if phase == Phase.WAITING:
+		return
+	if _freeze:                     # verify capture: gameplay held, visuals keep ticking
 		return
 	game_t += delta
 	phase_t += delta
@@ -530,9 +536,15 @@ func _drop_carrier(victim: int, tackler: int) -> void:
 	# structured kill attribution (module contract): the tackle stuns the carrier
 	# (get_stunned, STUN_TIME) — a genuine down, at the exact royalty-crediting path.
 	_kill_events.append({"killer": tackler, "victim": victim, "cause": "mugged"})
-	# juice: hit-pause, shake, coin burst
+	# HIT KIT: softened hitstop + victim squash-pop + spark along the knockback,
+	# then coin burst. Shake + hitstop drop under reduced-motion; pop/spark stay.
 	_hit_pause()
-	_shake = maxf(_shake, 0.45)
+	var tk: GreedPlayer = players[tackler]
+	var kdir := drop_pos - tk.global_position
+	cp.flash_pop()
+	_spark_burst(drop_pos + Vector3(0, 1.0, 0), kdir, roster[tackler].color, 1.0)
+	if not _reduced_motion():
+		_shake = maxf(_shake, 0.45)
 	_coin_burst(drop_pos + Vector3(0, 1.0, 0), 22)
 	Sfx.play("splat", -1.0)
 	Sfx.play("death", -6.0)
@@ -810,14 +822,54 @@ func _flash_pot(text: String, color: Color) -> void:
 # ===========================================================================
 # FX
 # ===========================================================================
+## HIT KIT §B1 Phase 2 hitstop. Softened from 0.05 -> 0.15 time_scale: a 0.05
+## freeze on every tackle read as a lurch, not impact (research fix #2). Micro-
+## hitstop 0.15 for 45ms; one at a time (the _slowmo guard); reserved slow-mo
+## (deep 0.05) stays for round-deciding KOs elsewhere. Skipped in reduced-motion.
 func _hit_pause() -> void:
-	if _slowmo:
+	if _slowmo or _reduced_motion():
 		return
 	_slowmo = true
-	Engine.time_scale = 0.05
-	await get_tree().create_timer(0.05, true, false, true).timeout
+	Engine.time_scale = 0.15
+	await get_tree().create_timer(0.045, true, false, true).timeout
 	Engine.time_scale = 1.0
 	_slowmo = false
+
+
+func _reduced_motion() -> bool:
+	return not bool(PartySetup.pref("screen_shake", true))
+
+
+## HIT KIT §B1 spark burst — a one-shot cone of sparks along the knockback dir at
+## the contact point. Kept even in reduced-motion (it's a read, not a shake).
+## amount = round(8*strength) capped at 14, white->attacker color, auto-freed.
+func _spark_burst(pos: Vector3, dir: Vector3, color: Color, strength := 1.0) -> void:
+	var p := CPUParticles3D.new()
+	add_child(p)
+	p.global_position = pos
+	p.one_shot = true
+	p.emitting = true
+	p.amount = clampi(int(round(8.0 * strength)), 3, 14)
+	p.lifetime = 0.25
+	p.explosiveness = 1.0
+	p.spread = 55.0
+	var d := dir
+	d.y = 0.0
+	p.direction = (d.normalized() if d.length() > 0.05 else Vector3.UP)
+	p.initial_velocity_min = 4.0
+	p.initial_velocity_max = 8.0
+	p.gravity = Vector3(0, -6.0, 0)
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.09, 0.09, 0.09)
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color.WHITE
+	mat.emission_enabled = true
+	mat.emission = color.lerp(Color.WHITE, 0.5)
+	mat.emission_energy_multiplier = 2.4
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	p.material_override = mat
+	get_tree().create_timer(0.6).timeout.connect(p.queue_free)
 
 
 func _coin_burst(pos: Vector3, amount: int) -> void:
@@ -1188,7 +1240,9 @@ func _parse_args() -> void:
 		elif arg.begins_with("--aimprobe="):
 			_aim_probe_on = true
 			_aim_probe_deg = float(arg.trim_prefix("--aimprobe="))
-	if _cap_on or _aim_probe_on:
+		elif arg == "--hitkitcap":
+			_hitkit_cap = true
+	if _cap_on or _aim_probe_on or _hitkit_cap:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
 
 
@@ -1409,6 +1463,60 @@ func _run_greed_probe() -> void:
 	print("GREED_AIMPROBE body_after=%.0fdeg lunge_dir=%.0fdeg matches_aim=%s (moved %.2fm)" % [
 		rad_to_deg(me.yaw), rad_to_deg(move_yaw), str(absf(rad_to_deg(move_yaw) - _aim_probe_deg) < 20.0), moved.length()])
 	await get_tree().create_timer(0.2).timeout
+	get_tree().quit()
+
+
+# ===========================================================================
+# HIT KIT / COOLDOWN RING capture (--hitkitcap, windowed): stages each feel
+# moment deterministically and films it, then quits. Gameplay is frozen so the
+# tween/particle frame we want is guaranteed on screen (frame-indexed --shots
+# cannot land a 0.05s coil reliably). Verify-only; no effect on a normal match.
+# ===========================================================================
+func _settle(sec: float) -> void:
+	await get_tree().create_timer(sec, true, false, true).timeout
+
+
+func _run_hitkit_cap() -> void:
+	while phase != Phase.PLAY:
+		await get_tree().physics_frame
+	_freeze = true
+	banner.visible = false               # declutter the staged shots
+	var a: GreedPlayer = players[0]      # attacker (on the far side)
+	var b: GreedPlayer = players[1]      # victim (nearer the camera)
+	# clean patch right-of-centre, clear of the pedestal + crates; knockback runs
+	# toward the camera (+z) so the spark cone is face-on and legible.
+	a.global_position = Vector3(2.2, 0.1, 0.4)
+	a.yaw = 0.0                          # face +z (toward the victim / camera)
+	b.global_position = Vector3(2.2, 0.1, 2.1)
+	b.yaw = PI
+	a.set_move_intent(Vector2.ZERO)
+	b.set_move_intent(Vector2.ZERO)
+	for i in range(2, players.size()):
+		(players[i] as GreedPlayer).global_position = Vector3(6.2, 0.1, 6.2)
+	await _settle(0.25)
+	# 1) WINDUP COIL — fire the swing, catch the crouch mid-tween (~0.05s in)
+	a.do_tackle_swing()
+	await _settle(0.05)
+	await _grab_shot("hitkit_coil", false)
+	await _settle(0.3)
+	# 2) IMPACT — victim squash-pop + spark cone along the knockback (+z, face-on)
+	b.flash_pop()
+	_spark_burst(b.global_position + Vector3(0, 1.0, 0), Vector3(0, 0, 1), roster[0].color, 1.3)
+	await _settle(0.09)
+	await _grab_shot("hitkit_impact", false)
+	await _settle(0.35)
+	# 3) DASH COOLDOWN RING — held at half fill
+	a.dash_cd = GreedPlayer.DASH_CD * 0.5
+	await _settle(0.14)
+	await _grab_shot("hitkit_ring_fill", false)
+	# 4) READY-FLASH — drive the ring to full so it flashes, film inside the window
+	a.dash_cd = GreedPlayer.DASH_CD * 0.5
+	await _settle(0.06)
+	a.dash_cd = 0.0
+	await _settle(0.04)
+	await _grab_shot("hitkit_ring_ready", false)
+	await _settle(0.15)
+	print("GREED_HITKIT_CAP_DONE")
 	get_tree().quit()
 
 
