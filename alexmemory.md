@@ -6,6 +6,28 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **📋 ANDREW'S PLAYTEST — full triage** (his email, disposed item by item):
+  FIXED TONIGHT: mower 120s→45s; throne 150s→100s; auction duplicate
+  options (sample w/o replacement); QUIT TO TITLE in the ESC overlay.
+  AGENTS ON IT: echo off-map camping exploit (ring enforcement + KO) +
+  echo ignoring the rounds setting; swap ramp stuck-trap; greed
+  grab-starvation fairness; par caddies facing wrong + sunk-ball
+  "go again" investigation; eyes-closed flow in Séance/Understudy
+  (his "how da hell do people know who should look" is RIGHT — fix is
+  an audio roll-call: each seat learns its pitch eyes-open, then gets
+  a triple-tick summons; gaps stretched).
+  ALREADY COOKING WHEN HE WROTE: "actions feel loose/sloppy" = the HIT
+  KIT waves (greed/throne/orbital merged; DW/LW in flight).
+  TOMORROW (mechanical sweep): hint bars showing REAL keys ("Space =
+  SHOVE" not "A = SHOVE") via describe_binding — his best UX note;
+  plus a first-night HOUSE RULES card (currencies/bids/trail tutorial).
+  THE BIG ONE (your call, endorsed): LAST WILL rebuilt as a Fall Guys
+  obstacle gauntlet — keep death-drafting (die → 6s will → CURSE the
+  course → respawn, 3 lives; out of lives → harassment ghost; first to
+  the crypt wins). Launches the moment the DW/LW feel agent clears the
+  lane. "YO IN TILT I CAN SHIT ON PEOPLE. Beautiful." — carving that
+  into the graffiti wall someday.
+
 - **🏰 THE FLOW IS THE GAME NOW (your big playtest note, built).**
   PLAY on the title = the full game instantly: nights of (auction →
   minigame + quick podium → reckoning) — no settings screen between —
