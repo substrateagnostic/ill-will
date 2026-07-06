@@ -514,3 +514,37 @@ fence; accretes all night in Par), Last Will lanterns -> stone_lantern.glb
 (free swap, check perf with ~16 instances), magnet post, spikes, throne wall
 dressing, crown. Saves: estate_save.json etc. backed up before runs and
 restored after (hash-verified).
+
+## 2026-07-06 — ORBITAL THREAT LADDER (AAA-gap #7, presentation only)
+
+Layered a speed-tier danger ladder over Orbital Dodgeball, minigames/orbital/
+only. Four pieces, all keyed to a per-ball heat factor hf = clamp((speed-4)/8):
+(1) threat AUDIO — every deadly ball near a living player fires a pitched tone
+from the existing bank asset (impactPlate_light_000), pitch 0.85->2.15 and
+cadence 0.26s->0.07s by hf: a low hum tightening into a high whistle; (2) a
+subtle red DANGER VIGNETTE that ramps with proximity x heat when a top-tier ball
+passes a living player (capped 0.5 edge alpha); (3) ball/trail HEAT — emission
+1x->2.7x, hue bled toward molten orange then hot-white, trail thickens, owner
+hue kept readable at low/mid tiers; (4) speed-scaled KILL FREEZE as a VISUAL
+punch (camera FOV punch-in + shake, faster ball = deeper+shorter).
+
+Determinism was the whole game. The existing slow-mo scales the SIM timestep
+(sdt = delta*0.3), so it's baked into KILL_EVENTS — touching its depth/duration
+would move ball ages, spawns and time_left. So I left the sim slow-mo exactly
+as-is and realised "speed-scaled freeze" purely as a _process visual layer. All
+threat code runs in _process / the ball's _process / _do_kill's presentation
+tail — no sim RNG, no sim writes (OrbBall._threat_phase is visual-only). Proof:
+KILL_EVENTS byte-for-byte identical vs pre-change baseline across seeds 1/2/7/11
+(diff = empty); seed-7 max_flight_age 46.4s unchanged; no script errors on a
+full match with all FX active.
+
+Reduced motion = the HIT KIT pattern: reads PartySetup.pref("screen_shake").
+Off -> shake + FOV punch + vignette suppressed/softened (vignette 45%); audio +
+heat stay on (not motion). Orbital previously shook the camera unconditionally;
+now it honours the pref. Verified by staging the same threat moment with
+screen_shake=false — vignette visibly dimmer, heat identical. prefs.json
+(user://, was {}) backed up + restored.
+
+New: --orbtest=threat staging mode (isolated test path) + windowed self-capture.
+Evidence: docs/verify/orbital-threat-VERIFY.md, verify_out/orbital_threat_b.png
+(top-tier ball + strong vignette) and orbital_threat_reducedmotion_b.png.
