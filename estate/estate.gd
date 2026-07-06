@@ -75,6 +75,18 @@ func _ready() -> void:
 			get_tree().create_timer(1.2).timeout.connect(func():
 				exhibition = true
 				_launch_game(gid))
+		elif arg == "--strolltest":
+			get_tree().create_timer(1.5).timeout.connect(func():
+				_enter_lobby()
+				_enter_stroll()
+				if not walkers.is_empty():
+					walkers[0].global_position = Vector3(6.4, 0.1, -4.2)
+				get_tree().create_timer(1.0).timeout.connect(func():
+					VerifyCapture.snap("stroll_prompt")
+					get_tree().create_timer(0.6).timeout.connect(func():
+						_exit_stroll("selector")
+						get_tree().create_timer(0.5).timeout.connect(func():
+							VerifyCapture.snap("stroll_selector")))))
 		elif arg == "--howtotest":
 			get_tree().create_timer(1.2).timeout.connect(func():
 				_hide_title()
@@ -275,6 +287,11 @@ func _build_lobby_panel() -> void:
 	ward_btn.text = "WARDROBE"
 	ward_btn.pressed.connect(_build_wardrobe_panel)
 	btn_row.add_child(ward_btn)
+	var stroll_btn := Button.new()
+	stroll_btn.custom_minimum_size = Vector2(200, 56)
+	stroll_btn.text = "WALK THE GROUNDS"
+	stroll_btn.pressed.connect(_enter_stroll)
+	btn_row.add_child(stroll_btn)
 	var title_btn := Button.new()
 	title_btn.custom_minimum_size = Vector2(120, 56)
 	title_btn.text = "◄ TITLE"
@@ -650,6 +667,61 @@ func _select_walker(idx: int) -> void:
 		w.set_selected(w.player_idx == idx)
 	Sfx.play("card", -8.0)
 
+## ----- STROLL MODE (DRG dual pattern: every panel has a walk-up twin) -----
+
+const STROLL_SPOTS := [
+	{"name": "THE THEATER", "pos": Vector3(6.4, 0, -5.6), "r": 2.6, "act": "selector"},
+	{"name": "THE WARDROBE", "pos": Vector3(-3.0, 0, -2.2), "r": 2.2, "act": "wardrobe"},
+]
+var _strolling := false
+
+func _enter_stroll() -> void:
+	_strolling = true
+	Sfx.play("card")
+	phase_panel.visible = false
+	banner.add_theme_font_size_override("font_size", 26)
+	_flash("walk to a landmark  ·  A enter  ·  B desk", Color(0.9, 0.95, 0.9), 9999.0)
+
+func _exit_stroll(open_act := "") -> void:
+	_strolling = false
+	banner.remove_theme_font_size_override("font_size")
+	banner.visible = false
+	match open_act:
+		"selector":
+			_enter_selector()
+		"wardrobe":
+			_build_wardrobe_panel()
+		_:
+			_build_lobby_panel()
+
+func _poll_stroll() -> void:
+	var near_spot: Dictionary = {}
+	var near_player := -1
+	for i in EstateState.players.size():
+		if PlayerInput.is_bot(i) or i >= walkers.size() or not is_instance_valid(walkers[i]):
+			continue
+		for spot in STROLL_SPOTS:
+			var d: float = walkers[i].global_position.distance_to(spot.pos)
+			if d <= float(spot.r):
+				near_spot = spot
+				near_player = i
+				break
+		if near_player >= 0:
+			break
+	if near_player >= 0:
+		banner.text = "%s — A: enter %s  ·  B: desk" % [GameState.PLAYER_NAMES[near_player], near_spot.name]
+		if PlayerInput.just_pressed(near_player, "a"):
+			Sfx.play("confirm")
+			_exit_stroll(String(near_spot.act))
+			return
+	else:
+		banner.text = "WALK THE GROUNDS — approach a landmark, A to enter, B back to the desk"
+	for i in EstateState.players.size():
+		if not PlayerInput.is_bot(i) and PlayerInput.just_pressed(i, "b"):
+			Sfx.play("card")
+			_exit_stroll()
+			return
+
 var _join_held := {}
 
 ## Press-A-to-join (digest join flow): a gamepad nobody is seated on
@@ -681,7 +753,10 @@ func _poll_pad_join() -> void:
 
 func _process(delta: float) -> void:
 	if phase == Phase.LOBBY:
-		_poll_pad_join()
+		if _strolling:
+			_poll_stroll()
+		else:
+			_poll_pad_join()
 	if _module == null and not walkers.is_empty():
 		_bot_wander_timer -= delta
 		if _bot_wander_timer <= 0.0:
@@ -1030,11 +1105,13 @@ func _on_module_finished(results: Dictionary) -> void:
 	$GraffitiWall.visible = true
 	$UI/TopBar.visible = true
 	cam.current = true
+	var placements: Array = results.get("placements", [])
+	if placements.size() >= 2:
+		await _present_match_podium(placements)
 	if exhibition:
 		exhibition = false
 		$UI/TopBar.visible = false
 		var champ_line := "EXHIBITION OVER"
-		var placements: Array = results.get("placements", [])
 		if not placements.is_empty():
 			var w = EstateState.players[placements[0]]
 			champ_line = "EXHIBITION: %s TAKES IT" % w.name
@@ -1045,6 +1122,26 @@ func _on_module_finished(results: Dictionary) -> void:
 	_redraw_monuments()
 	_redraw_graffiti()
 	_enter_reckoning(ticker)
+
+## Every minigame ends on the podium (Alex's call): quick shared ceremony
+## with characters, hats, and confetti before the estate takes over again.
+func _present_match_podium(placements: Array) -> void:
+	phase_panel.visible = false
+	banner.visible = false
+	var podium := Podium.new()
+	add_child(podium)
+	var entries: Array = []
+	for rank in placements.size():
+		var p: int = placements[rank]
+		var pl = EstateState.players[p]
+		entries.append({
+			"name": pl.name, "color": pl.color, "rank": rank,
+			"char_scene": CHAR_SCENES[p], "player": p,
+		})
+	podium.present(entries, 2.0 if _all_bots() else 4.2)
+	await podium.done
+	podium.queue_free()
+	cam.current = true
 
 func _enter_reckoning(ticker: Array) -> void:
 	phase = Phase.RECKONING

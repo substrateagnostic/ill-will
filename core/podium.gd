@@ -47,7 +47,7 @@ func _ready() -> void:
 	cam.fov = 42.0
 	add_child(cam)
 
-func present(entries: Array) -> void:
+func present(entries: Array, ceremony_time := CEREMONY_TIME) -> void:
 	cam.current = true
 	for entry in entries:
 		var rank: int = entry.rank
@@ -99,7 +99,7 @@ func present(entries: Array) -> void:
 		add_child(tag)
 	_confetti()
 	Sfx.play("match_win")
-	await get_tree().create_timer(CEREMONY_TIME).timeout
+	await get_tree().create_timer(ceremony_time).timeout
 	done.emit()
 
 func _confetti() -> void:
