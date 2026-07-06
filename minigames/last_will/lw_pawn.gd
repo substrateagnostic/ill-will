@@ -1,10 +1,13 @@
 class_name LWPawn
 extends RigidBody3D
-## LAST WILL living pawn. KayKit body, snappy sumo control on a shrinking
-## circular chapel-yard. A = shove, B = hop (gap-hop the boulder). No HP:
-## void fall or boulder squish = eliminated for the round. Blessings and
-## curses from the dead modulate this body: shield (eats one hit), swiftness
-## (+20%), sluggish (-20%), butterfingers (no shove), haunted (wisp hunts).
+## LAST WILL racer. KayKit body, snappy sumo control, now pointed down a
+## funeral procession course. A = shove, B = hop (gap-hop the ossuary ridge,
+## hop the boulder). No HP: void fall or boulder squish costs a LIFE — and
+## buys the beloved six-second WILL DRAFT.
+##
+## Terrain/curse modifiers are pushed by the controller each physics tick
+## (terrain_speed / terrain_accel reset to 1.0 before curses apply), so the
+## pawn itself stays dumb about what a greased flagstone is.
 ##
 ## World-freeze: during the will-draft theater the controller freezes every
 ## living pawn (freeze=true + anim speed 0) so the deceased's six seconds
@@ -28,18 +31,15 @@ var color := Color.WHITE
 var alive := true
 var owner_game: Node = null
 var last_attacker := {}        # {type, index, name, color, time}
+var last_curse := {}           # {author, slug, name, color, time} — curse touch
 
 var move_input := Vector2.ZERO
 var want_shove := false
 var want_hop := false
 
-# --- will effects -------------------------------------------------------
-var bless_kind := ""           # "" | "shield" | "swift"
-var bless_t := 0.0             # remaining seconds (shield: until hit/round end)
-var bless_from := -1
-var curse_kind := ""           # "" | "sluggish" | "butterfingers" | "haunted"
-var curse_t := 0.0
-var curse_from := -1
+# --- terrain / curse modifiers (controller-owned, reset each tick) --------
+var terrain_speed := 1.0
+var terrain_accel := 1.0
 
 var world_frozen := false
 var _stored_vel := Vector3.ZERO
@@ -56,10 +56,6 @@ var grace_until := 0.0
 var model_pivot: Node3D
 var anim: AnimationPlayer
 var ring: MeshInstance3D
-var _shield_orb: MeshInstance3D
-var _swift_trail: CPUParticles3D
-var _curse_drips: CPUParticles3D
-var _status_label: Label3D
 var _name_label: Label3D
 var _cur_anim := ""
 var _anim_lock := 0.0
@@ -151,84 +147,6 @@ func setup(p_index: int, p_color: Color, p_name: String, char_scene: PackedScene
 	_name_label.position = Vector3(0, 1.85, 0)
 	add_child(_name_label)
 
-	_status_label = Label3D.new()
-	_status_label.font_size = 36
-	_status_label.pixel_size = 0.006
-	_status_label.outline_size = 9
-	_status_label.outline_modulate = Color(0.06, 0.05, 0.09)
-	_status_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	_status_label.position = Vector3(0, 2.16, 0)
-	_status_label.visible = false
-	add_child(_status_label)
-
-	_build_effect_fx()
-
-func _build_effect_fx() -> void:
-	_shield_orb = MeshInstance3D.new()
-	var sm := SphereMesh.new()
-	sm.radius = 0.72
-	sm.height = 1.44
-	_shield_orb.mesh = sm
-	var smat := StandardMaterial3D.new()
-	smat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	smat.albedo_color = Color(1.0, 0.87, 0.35, 0.22)
-	smat.emission_enabled = true
-	smat.emission = Color(1.0, 0.82, 0.3)
-	smat.emission_energy_multiplier = 0.7
-	smat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_shield_orb.material_override = smat
-	_shield_orb.position.y = 0.72
-	_shield_orb.visible = false
-	add_child(_shield_orb)
-
-	_swift_trail = CPUParticles3D.new()
-	_swift_trail.amount = 26
-	_swift_trail.lifetime = 0.5
-	_swift_trail.local_coords = false
-	_swift_trail.direction = Vector3.UP
-	_swift_trail.spread = 22.0
-	_swift_trail.gravity = Vector3.ZERO
-	_swift_trail.initial_velocity_min = 0.4
-	_swift_trail.initial_velocity_max = 1.0
-	_swift_trail.scale_amount_min = 0.35
-	_swift_trail.scale_amount_max = 0.8
-	var stm := SphereMesh.new()
-	stm.radius = 0.05
-	stm.height = 0.1
-	_swift_trail.mesh = stm
-	var stmat := StandardMaterial3D.new()
-	stmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	stmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	stmat.albedo_color = Color(1.0, 0.9, 0.45, 0.7)
-	_swift_trail.material_override = stmat
-	_swift_trail.emitting = false
-	_swift_trail.position.y = 0.5
-	add_child(_swift_trail)
-
-	_curse_drips = CPUParticles3D.new()
-	_curse_drips.amount = 20
-	_curse_drips.lifetime = 0.8
-	_curse_drips.local_coords = false
-	_curse_drips.direction = Vector3.DOWN
-	_curse_drips.spread = 35.0
-	_curse_drips.gravity = Vector3(0, -3.0, 0)
-	_curse_drips.initial_velocity_min = 0.1
-	_curse_drips.initial_velocity_max = 0.5
-	_curse_drips.scale_amount_min = 0.4
-	_curse_drips.scale_amount_max = 0.9
-	var cdm := SphereMesh.new()
-	cdm.radius = 0.05
-	cdm.height = 0.1
-	_curse_drips.mesh = cdm
-	var cdmat := StandardMaterial3D.new()
-	cdmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	cdmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	cdmat.albedo_color = Color(0.45, 0.95, 0.5, 0.65)
-	_curse_drips.material_override = cdmat
-	_curse_drips.emitting = false
-	_curse_drips.position.y = 1.5
-	add_child(_curse_drips)
-
 func _tint_model(node: Node) -> void:
 	if node is MeshInstance3D:
 		(node as MeshInstance3D).material_overlay = _rim_material()
@@ -272,106 +190,14 @@ func _update_anim(delta: float) -> void:
 	else:
 		_set_anim("Idle")
 
-# ---------------------------------------------------------------- effects
-func speed_mult() -> float:
-	var m := 1.0
-	if bless_kind == "swift":
-		m *= 1.2
-	if curse_kind == "sluggish":
-		m *= 0.8
-	return m
-
-func apply_bless(kind: String, from_idx: int, duration: float) -> void:
-	bless_kind = kind
-	bless_from = from_idx
-	bless_t = duration
-	_shield_orb.visible = (kind == "shield")
-	_swift_trail.emitting = (kind == "swift")
-	_refresh_status()
-
-func apply_curse(kind: String, from_idx: int, duration: float) -> void:
-	curse_kind = kind
-	curse_from = from_idx
-	curse_t = duration
-	_curse_drips.emitting = true
-	_refresh_status()
-
-func clear_bless() -> void:
-	bless_kind = ""
-	bless_from = -1
-	bless_t = 0.0
-	_shield_orb.visible = false
-	_swift_trail.emitting = false
-	_refresh_status()
-
-func clear_curse() -> void:
-	curse_kind = ""
-	curse_from = -1
-	curse_t = 0.0
-	_curse_drips.emitting = false
-	_refresh_status()
-
-## Called by the controller each PHYSICS tick, only while the round runs.
-func tick_effects(delta: float) -> void:
-	if bless_kind == "swift":
-		bless_t -= delta
-		if bless_t <= 0.0:
-			clear_bless()
-	if curse_kind != "" and curse_kind != "haunted":
-		# haunted expiry is owned by the wisp
-		curse_t -= delta
-		if curse_t <= 0.0:
-			clear_curse()
-
-func _refresh_status() -> void:
-	var lines: Array = []
-	if bless_kind == "shield":
-		lines.append("SHIELD")
-	elif bless_kind == "swift":
-		lines.append("SWIFT")
-	if curse_kind == "sluggish":
-		lines.append("SLUGGISH")
-	elif curse_kind == "butterfingers":
-		lines.append("NO SHOVE")
-	elif curse_kind == "haunted":
-		lines.append("HAUNTED")
-	_status_label.visible = not lines.is_empty()
-	_status_label.text = "\n".join(lines)
-	if curse_kind != "" and bless_kind == "":
-		_status_label.modulate = Color(0.55, 1.0, 0.55)
-	elif bless_kind != "" and curse_kind == "":
-		_status_label.modulate = Color(1.0, 0.85, 0.35)
-	else:
-		_status_label.modulate = Color(0.95, 0.95, 0.9)
-
-## Consume the shield if present. Returns true when the hit was eaten.
-func try_shield_block() -> bool:
-	if bless_kind != "shield":
-		return false
-	clear_bless()
-	Sfx.play("bounce", -2.0)
-	var burst := CPUParticles3D.new()
-	get_parent().add_child(burst)
-	burst.global_position = global_position + Vector3(0, 0.8, 0)
-	burst.one_shot = true
-	burst.amount = 24
-	burst.lifetime = 0.5
-	burst.explosiveness = 1.0
-	burst.spread = 180.0
-	burst.initial_velocity_min = 2.0
-	burst.initial_velocity_max = 4.0
-	burst.gravity = Vector3(0, -3, 0)
-	var bm := SphereMesh.new()
-	bm.radius = 0.06
-	bm.height = 0.12
-	burst.mesh = bm
-	var bmat := StandardMaterial3D.new()
-	bmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	bmat.albedo_color = Color(1.0, 0.85, 0.4)
-	burst.material_override = bmat
-	burst.emitting = true
-	get_tree().create_timer(1.0).timeout.connect(burst.queue_free)
-	return true
+## Stamped by course curses on contact/exposure so a death within 3s pays the
+## author royalties (cause = the curse slug in kill_events).
+func note_curse_touch(author: int, slug: String, author_name: String, author_color: Color) -> void:
+	var t := 0.0
+	if owner_game != null:
+		t = owner_game.game_time
+	last_curse = {"author": author, "slug": slug, "name": author_name,
+		"color": author_color, "time": t}
 
 # ---------------------------------------------------------------- freeze
 func set_world_frozen(v: bool) -> void:
@@ -406,10 +232,11 @@ func _physics_process(delta: float) -> void:
 	if _stun > 0.0:
 		_stun -= delta
 	else:
-		var desired := Vector3(move_input.x, 0.0, move_input.y) * MOVE_SPEED * speed_mult()
+		var desired := Vector3(move_input.x, 0.0, move_input.y) * MOVE_SPEED * terrain_speed
 		var v := linear_velocity
-		v.x = move_toward(v.x, desired.x, ACCEL * delta)
-		v.z = move_toward(v.z, desired.z, ACCEL * delta)
+		var acc := ACCEL * terrain_accel * delta
+		v.x = move_toward(v.x, desired.x, acc)
+		v.z = move_toward(v.z, desired.z, acc)
 		linear_velocity = Vector3(v.x, linear_velocity.y, v.z)
 		if desired.length() > 0.2:
 			_face = desired.normalized()
@@ -424,10 +251,10 @@ func _physics_process(delta: float) -> void:
 		want_hop = false
 		_do_hop()
 
-	# anti-tunnel: over the current platform footprint you can never be below
-	# its surface (Jolt slab lesson from Dead Weight, adapted to the circle)
-	var flat_r := Vector2(global_position.x, global_position.z).length()
-	if global_position.y < -0.6 and owner_game != null and flat_r < owner_game.platform_radius - 0.05:
+	# anti-tunnel: over solid road you can never be below its surface
+	# (Jolt slab lesson from Dead Weight, adapted to the procession spine)
+	if global_position.y < -0.6 and owner_game != null \
+			and owner_game.over_ground(global_position):
 		global_position.y = 0.05
 		linear_velocity.y = maxf(linear_velocity.y, 0.0)
 
@@ -446,9 +273,6 @@ func speed() -> float:
 func _do_shove() -> void:
 	if _shove_cd > 0.0 or owner_game == null:
 		return
-	if curse_kind == "butterfingers":
-		Sfx.play("invalid", -6.0)
-		return
 	_shove_cd = SHOVE_CD
 	# HIT KIT §B1 Phase 1 — windup whoosh (the thud is layered on connect in the
 	# controller's on_shove_landed).
@@ -459,8 +283,6 @@ func _do_shove() -> void:
 	_anim_lock = 0.35
 	# READABILITY (presentation only — no change to range/power/timing): flash a
 	# directional arc so you can see WHEN the shove fires and WHERE it reaches.
-	# This is the KIT's swing-arc element (already in-tree); the coil below adds
-	# the anticipation, and the victim pop/spark land in hit().
 	if owner_game != null and owner_game.has_method("on_shove_fired"):
 		owner_game.on_shove_fired(global_position, _face, color)
 	var power := SHOVE_BASE + speed() * SHOVE_SPEED_SCALE
@@ -498,10 +320,6 @@ func is_grounded() -> bool:
 
 func hit(dir: Vector3, impulse: float, atk_type: String, atk_index: int, src_name: String, atk_color: Color) -> void:
 	if not alive or world_frozen:
-		return
-	if try_shield_block():
-		if owner_game != null and owner_game.has_method("on_shield_break"):
-			owner_game.on_shield_break(index)
 		return
 	dir.y = 0.0
 	var d := dir.normalized()
@@ -559,7 +377,7 @@ func _drive_rings(delta: float) -> void:
 	_shove_ring.tick(delta, clampf(1.0 - _shove_cd / SHOVE_CD, 0.0, 1.0), active, reduced)
 	_hop_ring.tick(delta, clampf(1.0 - _hop_cd / HOP_CD, 0.0, 1.0), active, reduced)
 
-## A soft push (ghost gust). Never blocked by shield; small, aimable spite.
+## A soft push (ghost gust / gust corridor). Small, aimable spite.
 func gust_push(dir: Vector3, impulse: float, ghost_index: int, ghost_name: String, ghost_color: Color) -> void:
 	if not alive or world_frozen:
 		return
@@ -577,27 +395,8 @@ func gust_push(dir: Vector3, impulse: float, ghost_index: int, ghost_name: Strin
 	if _visuals_on() and owner_game.has_method("spark_at"):
 		owner_game.spark_at(global_position + Vector3(0, 0.8, 0) - gd * 0.3, gd, ghost_color, 0.5)
 
-## Haunted wisp contact: a stumble, not a launch.
-func stumble() -> void:
-	if not alive or world_frozen:
-		return
-	_stun = 0.55
-	linear_velocity = Vector3(linear_velocity.x * 0.2, linear_velocity.y, linear_velocity.z * 0.2)
-	_cur_anim = "Hit_A"
-	if anim and anim.has_animation("Hit_A"):
-		anim.play("Hit_A")
-	_anim_lock = 0.45
-	Sfx.play("splat", -8.0)
-
 func squish() -> void:
 	if not alive or _squish_immune > 0.0:
-		return
-	if try_shield_block():
-		# the shield converts a squish into a shove away from the boulder
-		_squish_immune = 0.9
-		apply_central_impulse(Vector3(-_face.x, 0.6, -_face.z).normalized() * 7.0)
-		if owner_game != null and owner_game.has_method("on_shield_break"):
-			owner_game.on_shield_break(index)
 		return
 	# flatten the body for the beat before it disappears
 	if model_pivot:
@@ -610,9 +409,6 @@ func _process(delta: float) -> void:
 		_drive_rings(delta)
 	if alive and not world_frozen:
 		_update_anim(delta)
-		if _shield_orb.visible:
-			var s := 1.0 + sin(Time.get_ticks_msec() * 0.006) * 0.06
-			_shield_orb.scale = Vector3(s, s, s)
 
 func _die(cause: String) -> void:
 	if not alive:
@@ -626,6 +422,17 @@ func _disable_body() -> void:
 	collision_layer = 0
 	collision_mask = 0
 	visible = false
+
+func celebrate() -> void:
+	## The finisher holds the crypt doorstep: frozen in place, cheering.
+	freeze = true
+	linear_velocity = Vector3.ZERO
+	move_input = Vector2.ZERO
+	_anim_lock = 999.0
+	_cur_anim = "Cheer"
+	if anim and anim.has_animation("Cheer"):
+		anim.get_animation("Cheer").loop_mode = Animation.LOOP_LINEAR
+		anim.play("Cheer")
 
 func revive(pos: Vector3) -> void:
 	alive = true
@@ -642,7 +449,11 @@ func revive(pos: Vector3) -> void:
 	_stun = 0.0
 	_shove_cd = 0.0
 	_hop_cd = 0.0
+	_squish_immune = 0.9
 	last_attacker = {}
+	last_curse = {}
+	terrain_speed = 1.0
+	terrain_accel = 1.0
 	collision_layer = 2
 	collision_mask = 1 | 2
 	_anim_lock = 0.0
@@ -657,7 +468,5 @@ func revive(pos: Vector3) -> void:
 		_hop_ring.tick(0.0, 1.0, false, false)
 	if anim:
 		anim.speed_scale = 1.0
-	clear_bless()
-	clear_curse()
 	_set_anim("Idle")
 	call_deferred("set", "freeze", false)

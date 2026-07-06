@@ -2,9 +2,9 @@ class_name LWWillUI
 extends CanvasLayer
 ## THE SHOW. The will-drafting pause overlay: the world dims, the deceased's
 ## color frames the screen, a memorial portrait (live SubViewport bust) hangs
-## on the left, three parchment cards fill the center, and a six-second
-## timer drains along the bottom. The controller drives the state machine;
-## this layer only performs.
+## on the left, three parchment CURSE cards fill the center (each names a
+## stretch of the procession route), and a six-second timer drains along the
+## bottom. The controller drives the state machine; this layer only performs.
 
 const F_LUCKIEST := preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 const F_BALOO := preload("res://assets/fonts/Baloo2.ttf")
@@ -19,8 +19,8 @@ const INK := Color(0.16, 0.12, 0.09)
 
 var _dc := Color.WHITE          # deceased color
 var _pulse_t := 0.0
-var _peek := false              # target phase: let the 3D world (and the
-                                # skeletal hand) read through the dim
+var _peek := false              # resolution phase: let the 3D world (and the
+                                # skeletal hand over the cursed stretch) read
 
 var _root: Control
 var _dim: ColorRect
@@ -29,6 +29,7 @@ var _edges: Array = []          # 4 frame bars
 var _edges_soft: Array = []
 var _title: Label
 var _subtitle: Label
+var _exec_line: Label
 var _plaque: Panel
 var _plaque_name: Label
 var _portrait_vp: SubViewport
@@ -37,10 +38,6 @@ var _portrait_spin: Node3D
 var _portrait_light: OmniLight3D
 var _cards_box: HBoxContainer
 var _card_panels: Array = []
-var _prompt: Label
-var _target_label: Label
-var _mode_box: HBoxContainer
-var _mode_panels: Array = []
 var _timer_bg: Panel
 var _timer_fill: ColorRect
 var _timer_label: Label
@@ -106,9 +103,16 @@ func _ready() -> void:
 	_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_root.add_child(_subtitle)
 
+	_exec_line = _mk_label("“The deceased has opinions about the route.” — THE EXECUTOR",
+		F_BALOO, 16, Color(0.72, 0.66, 0.55))
+	_exec_line.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	_exec_line.offset_top = -52
+	_exec_line.offset_bottom = -26
+	_exec_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_root.add_child(_exec_line)
+
 	_build_plaque()
 	_build_cards_box()
-	_build_prompt()
 	_build_timer()
 	_build_resolution()
 
@@ -223,31 +227,6 @@ func _build_cards_box() -> void:
 	_cards_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_root.add_child(_cards_box)
 
-func _build_prompt() -> void:
-	_prompt = _mk_label("", F_LUCKIEST, 52, GOLD)
-	_prompt.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_prompt.offset_top = 168
-	_prompt.offset_bottom = 240
-	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_prompt.visible = false
-	_root.add_child(_prompt)
-
-	_target_label = _mk_label("", F_LUCKIEST, 72, Color.WHITE)
-	_target_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	_target_label.offset_top = 260
-	_target_label.offset_bottom = 360
-	_target_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_target_label.visible = false
-	_root.add_child(_target_label)
-
-	_mode_box = HBoxContainer.new()
-	_mode_box.add_theme_constant_override("separation", 40)
-	_mode_box.position = Vector2(400, 250)
-	_mode_box.size = Vector2(560, 200)
-	_mode_box.visible = false
-	_mode_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_root.add_child(_mode_box)
-
 func _build_timer() -> void:
 	_timer_bg = Panel.new()
 	var sb := StyleBoxFlat.new()
@@ -319,27 +298,29 @@ func open(pname: String, color: Color, char_scene_path: String) -> void:
 	# entrance: dim + vignette + frame breathe in; cards come later
 	_peek = false
 	_cards_box.visible = false
-	_prompt.visible = false
-	_target_label.visible = false
-	_mode_box.visible = false
 	_res_lines.visible = false
 	_set_timer_visible(false)
 	_plaque.visible = true
 	_title.visible = true
 	_subtitle.visible = true
+	_exec_line.visible = true
 	_plaque.modulate.a = 0.0
 	_title.modulate.a = 0.0
 	_subtitle.modulate.a = 0.0
+	_exec_line.modulate.a = 0.0
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(_dim, "color:a", 0.68, 0.45)
 	tw.tween_property(_vig, "modulate:a", 1.0, 0.45)
 	tw.tween_property(_title, "modulate:a", 1.0, 0.5).set_delay(0.15)
 	tw.tween_property(_subtitle, "modulate:a", 1.0, 0.5).set_delay(0.3)
+	tw.tween_property(_exec_line, "modulate:a", 1.0, 0.5).set_delay(0.55)
 	tw.tween_property(_plaque, "modulate:a", 1.0, 0.5).set_delay(0.25)
 	# dim carries a whisper of the deceased's color
 	_dim.color = Color(_dc.r * 0.06, _dc.g * 0.06, _dc.b * 0.08, _dim.color.a)
 
+## cards: [{kind, title, desc, zone, replaces}] — one CURSE per card, the
+## condemned stretch printed in gold on the card itself.
 func show_cards(cards: Array) -> void:
 	for c in _card_panels:
 		c.queue_free()
@@ -383,52 +364,44 @@ func _make_card(card: Dictionary) -> Panel:
 	v.set_anchors_preset(Control.PRESET_FULL_RECT)
 	v.offset_left = 12
 	v.offset_right = -12
-	v.offset_top = 10
-	v.offset_bottom = -10
-	v.add_theme_constant_override("separation", 1)
+	v.offset_top = 12
+	v.offset_bottom = -12
+	v.add_theme_constant_override("separation", 3)
 	v.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	p.add_child(v)
 
-	var bl: Dictionary = card.bless
-	var cu: Dictionary = card.curse
-
-	var h1 := _mk_label("✦ BEQUEATH", F_BALOO, 14, GOLD_DIM)
+	var h1 := _mk_label("☠ CONDEMN", F_BALOO, 15, GREEN_DIM)
 	h1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(h1)
-	var icon1 := LWCardIcon.new()
-	icon1.custom_minimum_size = Vector2(0, 74)
-	icon1.set_icon(str(bl.kind), GOLD)
-	icon1.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(icon1)
-	var t1 := _mk_label(str(bl.title), F_LUCKIEST, 27, GOLD)
+	var icon := LWCardIcon.new()
+	icon.custom_minimum_size = Vector2(0, 108)
+	icon.set_icon(str(card.kind), GREEN)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	v.add_child(icon)
+	var t1 := _mk_label(str(card.title), F_LUCKIEST, 27, GREEN)
 	t1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t1.autowrap_mode = TextServer.AUTOWRAP_WORD
 	v.add_child(t1)
-	var d1 := _mk_label(str(bl.desc), F_BALOO, 14, Color(0.85, 0.8, 0.68))
+	var d1 := _mk_label(str(card.desc), F_BALOO, 14, Color(0.72, 0.82, 0.68))
 	d1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	d1.autowrap_mode = TextServer.AUTOWRAP_WORD
-	d1.custom_minimum_size = Vector2(0, 48)
+	d1.custom_minimum_size = Vector2(0, 66)
 	v.add_child(d1)
 
-	var mid := _mk_label("— upon one — a plague upon another —", F_BALOO, 12, Color(0.52, 0.47, 0.42))
+	var mid := _mk_label("— to be visited upon —", F_BALOO, 12, Color(0.52, 0.47, 0.42))
 	mid.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(mid)
 
-	var h2 := _mk_label("☠ CONDEMN", F_BALOO, 14, GREEN_DIM)
-	h2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(h2)
-	var icon2 := LWCardIcon.new()
-	icon2.custom_minimum_size = Vector2(0, 74)
-	icon2.set_icon(str(cu.kind), GREEN)
-	icon2.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	v.add_child(icon2)
-	var t2 := _mk_label(str(cu.title), F_LUCKIEST, 27, GREEN)
-	t2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(t2)
-	var d2 := _mk_label(str(cu.desc), F_BALOO, 14, Color(0.72, 0.82, 0.68))
-	d2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	d2.autowrap_mode = TextServer.AUTOWRAP_WORD
-	d2.custom_minimum_size = Vector2(0, 48)
-	v.add_child(d2)
+	var z1 := _mk_label(str(card.zone), F_LUCKIEST, 21, GOLD)
+	z1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	z1.autowrap_mode = TextServer.AUTOWRAP_WORD
+	v.add_child(z1)
+	var rep := str(card.get("replaces", ""))
+	if rep != "":
+		var r1 := _mk_label("displaces %s" % rep, F_BALOO, 12, Color(0.7, 0.55, 0.4))
+		r1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		r1.autowrap_mode = TextServer.AUTOWRAP_WORD
+		v.add_child(r1)
 	return p
 
 func set_card_sel(idx: int) -> void:
@@ -458,7 +431,7 @@ func set_card_sel(idx: int) -> void:
 
 func lock_card(idx: int) -> void:
 	# pop the chosen card, then ALL cards leave the stage — the choice gets
-	# restated by the mode panels / resolution banners
+	# restated by the resolution banners over the cursed stretch itself
 	for i in _card_panels.size():
 		var p: Panel = _card_panels[i]
 		var tw := create_tween()
@@ -474,99 +447,11 @@ func set_world_peek(v: bool) -> void:
 	_peek = v
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(_dim, "color:a", 0.30 if v else 0.68, 0.3)
-	tw.tween_property(_vig, "modulate:a", 0.45 if v else 1.0, 0.3)
-
-func show_target_prompt(kind: String) -> void:
-	_cards_box.visible = true
-	set_world_peek(true)
-	var tw := create_tween()
-	tw.tween_property(_cards_box, "modulate:a", 0.0, 0.25)
-	_prompt.visible = true
-	_target_label.visible = true
-	_mode_box.visible = false
-	if kind == "bless":
-		_prompt.text = "✦ BLESS WHOM?"
-		_prompt.add_theme_color_override("font_color", GOLD)
-	else:
-		_prompt.text = "☠ NOW... CURSE WHOM?"
-		_prompt.add_theme_color_override("font_color", GREEN)
-	_prompt.pivot_offset = Vector2(640, 36)
-	_prompt.scale = Vector2(0.7, 0.7)
-	var tw2 := create_tween()
-	tw2.tween_property(_prompt, "scale", Vector2.ONE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-func set_target_display(pname: String, color: Color) -> void:
-	_target_label.text = "◄  %s  ►" % pname
-	_target_label.add_theme_color_override("font_color", color)
-	_target_label.pivot_offset = Vector2(640, 50)
-	_target_label.scale = Vector2(0.85, 0.85)
-	var tw := create_tween()
-	tw.tween_property(_target_label, "scale", Vector2.ONE, 0.14).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-func show_mode_choice(bless_title: String, curse_title: String, survivor_name: String, survivor_color: Color) -> void:
-	set_world_peek(true)
-	var tw := create_tween()
-	tw.tween_property(_cards_box, "modulate:a", 0.0, 0.25)
-	_prompt.visible = true
-	_prompt.text = "ONE HEIR REMAINS: %s" % survivor_name
-	_prompt.add_theme_color_override("font_color", survivor_color)
-	_target_label.visible = false
-	_mode_box.visible = true
-	for c in _mode_panels:
-		c.queue_free()
-	_mode_panels.clear()
-	var opts := [{"txt": "BLESS THEM", "sub": bless_title, "col": GOLD},
-		{"txt": "CURSE THEM", "sub": curse_title, "col": GREEN}]
-	for o in opts:
-		var p := Panel.new()
-		p.custom_minimum_size = Vector2(260, 150)
-		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.11, 0.09, 0.08, 0.97)
-		sb.border_width_left = 4
-		sb.border_width_right = 4
-		sb.border_width_top = 4
-		sb.border_width_bottom = 4
-		sb.border_color = Color(0.4, 0.35, 0.25)
-		sb.corner_radius_top_left = 12
-		sb.corner_radius_top_right = 12
-		sb.corner_radius_bottom_left = 12
-		sb.corner_radius_bottom_right = 12
-		p.add_theme_stylebox_override("panel", sb)
-		p.pivot_offset = Vector2(130, 75)
-		var v := VBoxContainer.new()
-		v.set_anchors_preset(Control.PRESET_FULL_RECT)
-		v.alignment = BoxContainer.ALIGNMENT_CENTER
-		var l1 := _mk_label(str(o.txt), F_LUCKIEST, 30, o.col)
-		l1.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		v.add_child(l1)
-		var l2 := _mk_label(str(o.sub), F_BALOO, 16, Color(0.75, 0.7, 0.6))
-		l2.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		v.add_child(l2)
-		p.add_child(v)
-		_mode_box.add_child(p)
-		_mode_panels.append(p)
-
-func set_mode_sel(idx: int) -> void:
-	for i in _mode_panels.size():
-		var p: Panel = _mode_panels[i]
-		var sb: StyleBoxFlat = p.get_theme_stylebox("panel")
-		if i == idx:
-			p.modulate = Color.WHITE
-			sb.border_color = _dc
-			var tw := create_tween()
-			tw.tween_property(p, "scale", Vector2(1.1, 1.1), 0.12).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		else:
-			p.modulate = Color(0.6, 0.6, 0.6, 0.8)
-			sb.border_color = Color(0.4, 0.35, 0.25)
-			var tw2 := create_tween()
-			tw2.tween_property(p, "scale", Vector2.ONE, 0.12)
+	tw.tween_property(_dim, "color:a", 0.22 if v else 0.68, 0.3)
+	tw.tween_property(_vig, "modulate:a", 0.35 if v else 1.0, 0.3)
 
 func show_resolution(lines: Array) -> void:
 	## lines: [{text, color, delay}]
-	_prompt.visible = false
-	_target_label.visible = false
-	_mode_box.visible = false
 	_set_timer_visible(false)
 	set_world_peek(true)
 	var tw0 := create_tween()
@@ -584,10 +469,6 @@ func show_resolution(lines: Array) -> void:
 		var tw := create_tween()
 		tw.tween_property(l, "modulate:a", 1.0, 0.16).set_delay(float(ln.delay))
 		tw.parallel().tween_property(l, "scale", Vector2.ONE, 0.2).set_delay(float(ln.delay)).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-
-func flash_no_heirs(pname: String, color: Color) -> void:
-	open(pname, color, "")
-	_subtitle.text = "NO HEIRS REMAIN — THE ESTATE PASSES TO THE VOID"
 
 func set_timer(frac: float, secs: float) -> void:
 	_timer_fill.size.x = 432.0 * clampf(frac, 0.0, 1.0)
