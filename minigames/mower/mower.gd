@@ -305,6 +305,47 @@ func _stone() -> StandardMaterial3D:
 	m.roughness = 0.85
 	return m
 
+# -- live-binding hint bar (real keys, not "A"/"B"; see docs/verify/realkeys-VERIFY.md) --
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
+## main bar personalizes only these; an all-bot demo gets an empty list and keeps
+## the generic scene-authored "A = ..." text.
+func _human_seats() -> Array:
+	var out := []
+	for i in roster.size():
+		if i < bot_enabled.size() and not bot_enabled[i] and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = RAM HORN"), else the per-seat "LABEL: KEY/NAME · KEY/NAME"
+## form (mixed keyboard + pad). Bindings are fixed per match, so this is built
+## once when the round starts - no live polling.
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The main bar with real keys, or "" for an all-bot demo (keep the scene text).
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return ""
+	return "MOVE = STEER   ·   %s   ·   %s   |   COVERAGE IS SCORE" % [
+		_btn_hint("a", "RAM HORN"), _btn_hint("b", "BOOST")]
+
 # -- round flow ---------------------------------------------------------------
 
 func _start_round() -> void:
@@ -317,6 +358,9 @@ func _start_round() -> void:
 	_over12 = 0
 	_flash_banner("MOW!", Color(1, 0.9, 0.3), 1.0)
 	hint_label.visible = true
+	var bar := _controls_bar()
+	if bar != "":
+		hint_label.text = bar
 	Sfx.play("confirm")
 
 func _physics_process(delta: float) -> void:

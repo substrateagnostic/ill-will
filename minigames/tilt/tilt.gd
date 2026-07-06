@@ -610,6 +610,47 @@ func _gull_hint_line(p: int) -> String:
 	var bomb: String = PlayerInput.describe_binding(p, "a")
 	return "%s IS A SEAGULL — %s fly · %s = drop a BOMB" % [nm, mv, bomb]
 
+## ---- live-binding hint bar (real keys, not "A"/"B"; see docs/verify/realkeys-VERIFY.md) ----
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
+## main bar personalizes only these; an all-bot demo gets an empty list and keeps
+## the generic TILT_HINT_BASE text.
+func _human_seats() -> Array:
+	var out := []
+	for i in roster.size():
+		if i < bot_enabled.size() and not bot_enabled[i] and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = SHOVE"), else the per-seat "LABEL: KEY/NAME · KEY/NAME"
+## form (mixed keyboard + pad). Bindings are fixed per match, so this is built
+## once when the round starts - no live polling.
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The main living bar with real keys, or TILT_HINT_BASE for an all-bot demo.
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return TILT_HINT_BASE
+	return "MOVE   ·   %s   ·   %s   |   FALL AND YOU RETURN AS A SEAGULL" % [
+		_btn_hint("a", "SHOVE"), _btn_hint("b", "BRACE")]
+
 func _spawn_guano(from: Vector3, owner_p: int) -> void:
 	var node := MeshInstance3D.new()
 	var m := SphereMesh.new()
@@ -710,7 +751,7 @@ func _start_round() -> void:
 	round_label.text = "ROUND %d / %d" % [round_num, rounds_total]
 	_flash_banner("ROUND %d" % round_num, Color(1, 0.85, 0.2), 1.2)
 	if round_num == 1:
-		hint_label.text = TILT_HINT_BASE
+		hint_label.text = _controls_bar()
 		hint_label.visible = true
 		var tw := create_tween()
 		tw.tween_interval(7.0)

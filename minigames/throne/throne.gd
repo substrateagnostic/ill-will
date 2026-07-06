@@ -248,12 +248,53 @@ func _begin(config: Dictionary) -> void:
 		longest_reign[i] = 0.0
 		_last_coin[i] = 0
 
-	hint_label.text = "MOVE   ·   A = SHOVE / DECREE   ·   B = DASH / GUARD   |   SIT THE THRONE TO REIGN"
+	hint_label.text = _controls_bar()
 	print("THRONE_BEGIN players=%d seed=%d bots=%s balance=%s" % [
 		players.size(), int(config.get("rng_seed", 1)), str(bot_enabled), str(_balance)])
 	_start_match()
 	if _hitkit_cap:
 		_run_hitkit_cap()
+
+## ---- live-binding hint bar (real keys, not "A"/"B"; see docs/verify/realkeys-VERIFY.md) ----
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
+## main bar personalizes only these; an all-bot demo gets an empty list and keeps
+## the generic "A = ..." text.
+func _human_seats() -> Array:
+	var out := []
+	for i in players.size():
+		if i < bot_enabled.size() and not bot_enabled[i] and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = SHOVE / DECREE"), else the per-seat "LABEL: KEY/NAME ·
+## KEY/NAME" form (mixed keyboard + pad). Bindings are fixed per match, so this is
+## built once when the match starts - no live polling.
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The main bar with real keys, or the generic text for an all-bot demo.
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return "MOVE   ·   A = SHOVE / DECREE   ·   B = DASH / GUARD   |   SIT THE THRONE TO REIGN"
+	return "MOVE   ·   %s   ·   %s   |   SIT THE THRONE TO REIGN" % [
+		_btn_hint("a", "SHOVE / DECREE"), _btn_hint("b", "DASH / GUARD")]
 
 func _spawn_pos(i: int, n: int) -> Vector3:
 	# ring the challengers around the dais, evenly spread
