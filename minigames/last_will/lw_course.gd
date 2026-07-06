@@ -145,12 +145,29 @@ func _build_slabs() -> void:
 		bm.size = Vector3(l - 0.05, 1.5, hw * 2.0)
 		seg.mesh = bm
 		var mat := StandardMaterial3D.new()
-		var shade := 0.28 + 0.11 * float((i * 7) % 5) / 4.0
+		var shade := 0.34 + 0.11 * float((i * 7) % 5) / 4.0
 		mat.albedo_color = Color(shade * 0.96, shade * 0.94, shade * 1.14)
 		mat.roughness = 0.95
 		seg.material_override = mat
 		seg.position = Vector3(cx, -0.76 - 0.012 * float((i * 5) % 3), zc)
 		add_child(seg)
+		# candle-warm curb hairlines: the race is about not falling off, so
+		# the edges must read against the void from the couch
+		for zs in [-1.0, 1.0]:
+			var curb := MeshInstance3D.new()
+			var cbm := BoxMesh.new()
+			cbm.size = Vector3(l - 0.05, 0.07, 0.14)
+			curb.mesh = cbm
+			var cmat := StandardMaterial3D.new()
+			cmat.albedo_color = Color(0.52, 0.46, 0.4)
+			cmat.roughness = 0.85
+			cmat.emission_enabled = true
+			cmat.emission = Color(1.0, 0.72, 0.4)
+			cmat.emission_energy_multiplier = 0.14
+			curb.material_override = cmat
+			curb.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			curb.position = Vector3(cx, 0.02, zc + zs * (hw - 0.08))
+			add_child(curb)
 		var cs := CollisionShape3D.new()
 		var box := BoxShape3D.new()
 		box.size = Vector3(l + 0.02, 1.5, hw * 2.0 + 0.1)

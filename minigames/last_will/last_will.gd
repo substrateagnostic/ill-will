@@ -332,7 +332,7 @@ func _build_world() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.42
+	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.glow_enabled = true
 	env.glow_intensity = 0.55
@@ -353,9 +353,9 @@ func _build_world() -> void:
 	var sun := DirectionalLight3D.new()
 	sun.name = "DuskSun"
 	add_child(sun)
-	sun.rotation_degrees = Vector3(-19.0, 118.0, 0.0)
-	sun.light_energy = 0.7
-	sun.light_color = Color(1.0, 0.58, 0.33)
+	sun.rotation_degrees = Vector3(-32.0, 118.0, 0.0)
+	sun.light_energy = 0.95
+	sun.light_color = Color(1.0, 0.62, 0.38)
 	sun.shadow_enabled = true
 
 	var moon := DirectionalLight3D.new()
@@ -434,10 +434,13 @@ func _build_world() -> void:
 	spawn_root.add_child(_ghost_rail)
 
 	if _view_mode == "overview":
+		# a hero survey: from over the chapel, down the length of the route,
+		# the crypt glowing at the vanishing point
 		cam_rig.position = Vector3.ZERO
-		cam.position = Vector3(95.0, 102.0, 82.0)
-		cam.look_at_from_position(cam.position, Vector3(95.0, 0.0, -4.0), Vector3.UP)
-		cam.fov = 60.0
+		cam.position = Vector3(-14.0, 26.0, 30.0)
+		cam.look_at_from_position(cam.position, Vector3(78.0, -2.0, -6.0), Vector3.UP)
+		cam.fov = 58.0
+		env.fog_enabled = false   # the survey shot reads the whole route
 
 ## Solid-road query used by pawns (anti-tunnel + void grace) and boulders.
 func over_ground(pos: Vector3) -> bool:
@@ -1157,14 +1160,14 @@ func _resolve_will() -> void:
 	Sfx.play("grudge", -1.0)
 	if not _tally:
 		cu.play_install()
-		_flash_exec(EXEC_DRAFT, 3.0)
 		_rig_home = cam_rig.position
 		var sc := LWCourse.slot_center(slot)
 		var tw := create_tween()
 		tw.tween_property(cam_rig, "position", Vector3(sc.x + 1.0, 0.0, sc.z * 0.6), 0.6) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		_hand.visible = true
-		_hand.global_position = sc + Vector3(0, 2.6, 0.6)
+		_hand.scale = Vector3(2.6, 2.6, 2.6)   # zone-pointing reads from the pan distance
+		_hand.global_position = sc + Vector3(0, 3.1, 1.2)
 		_snap_after_pan()
 	_will.step = WStep.RESOLUTION
 	_will.t = 0.0
@@ -1312,6 +1315,8 @@ func _finish_match() -> void:
 	print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
 	print("LW_MATCH_OVER champ=%s pts=%d" % [players[champ].name, players[champ].total])
 	print("LW_RESULTS ", JSON.stringify(results))
+	var problems := Minigame.validate_results(results, players.size())
+	print("LW_VALIDATE problems=%d %s" % [problems.size(), str(problems)])
 	if _tally:
 		_print_tally()
 		get_tree().quit()

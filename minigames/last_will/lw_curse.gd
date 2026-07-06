@@ -212,13 +212,13 @@ func _build_plaque() -> void:
 	stone.scale = Vector3(1.2, 1.2, 1.2)
 	var tag := Label3D.new()
 	tag.text = "%s %s\n%s" % [PlayerBadge.glyph(author), author_name, title()]
-	tag.font_size = 30
-	tag.pixel_size = 0.0062
+	tag.font_size = 34
+	tag.pixel_size = 0.0078
 	tag.modulate = author_color
-	tag.outline_size = 9
+	tag.outline_size = 10
 	tag.outline_modulate = Color(0.06, 0.05, 0.09)
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	tag.position = Vector3(0.0, 1.75, pz - global_position.z)
+	tag.position = Vector3(0.0, 2.05, pz - global_position.z)
 	add_child(tag)
 
 ## Live-mode install flourish: plaque stone + visuals rise from the sod.
