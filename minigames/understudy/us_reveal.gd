@@ -169,12 +169,50 @@ func open() -> void:
 
 func show_call(pname: String, col: Color, glyph: String) -> void:
 	_accent = col
+	_card.visible = true
+	# seat name HUGE for the one player peeking; standing instruction for the rest
 	_call_label.text = "%s %s — YOUR PART" % [glyph, pname]
 	_call_label.add_theme_color_override("font_color", col)
+	_eyes_label.text = "EVERYONE ELSE — EYES DOWN · LISTEN FOR YOUR VOICE"
+	_eyes_label.add_theme_color_override("font_color", Color(0.82, 0.62, 0.6))
+	_eyes_label.visible = true
 	_card_sb.border_color = col
 	_show_back()
 	_prompt.text = "%s: PRESS  A  TO READ" % pname
 	_prompt.visible = true
+
+## Roll-call intro — eyes OPEN, before the lights fall. No card yet.
+func show_rollcall_intro() -> void:
+	_card.visible = false
+	_call_label.text = "YOUR COLOUR HAS A VOICE"
+	_call_label.add_theme_color_override("font_color", Color(0.85, 0.85, 1.0))
+	_eyes_label.text = "EYES OPEN — LEARN YOUR SOUND BEFORE THE LIGHTS FALL"
+	_eyes_label.add_theme_color_override("font_color", Color(0.7, 0.78, 0.9))
+	_eyes_label.visible = true
+	_prompt.text = "each colour speaks in turn — listen"
+	_prompt.visible = true
+
+## Roll-call slot — one colour learns its summons, eyes OPEN, name HUGE.
+func show_teach(pname: String, col: Color, glyph: String) -> void:
+	_accent = col
+	_card.visible = false
+	_call_label.text = "%s %s" % [glyph, pname]
+	_call_label.add_theme_color_override("font_color", col)
+	_eyes_label.text = "THIS IS YOUR VOICE — REMEMBER IT"
+	_eyes_label.add_theme_color_override("font_color", Color(0.82, 0.7, 0.6))
+	_eyes_label.visible = true
+	_prompt.text = "%s — three ticks in your tone" % pname
+	_prompt.visible = true
+
+## Interstitial between two seats — eyes down, hold the silence.
+func show_gap() -> void:
+	_card.visible = false
+	_call_label.text = "EYES DOWN"
+	_call_label.add_theme_color_override("font_color", Color(0.72, 0.68, 0.72))
+	_eyes_label.text = "LISTEN FOR YOUR VOICE — THE NEXT COLOUR IS COMING"
+	_eyes_label.add_theme_color_override("font_color", Color(0.7, 0.66, 0.66))
+	_eyes_label.visible = true
+	_prompt.visible = false
 
 func flip_to_cast(play_title: String) -> void:
 	_face_kicker.text = "TONIGHT'S PLAY"

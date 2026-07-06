@@ -104,6 +104,13 @@ const CAUGHT_GRUDGE := 2
 # reusing the existing Sfx bank streams — no new audio files, and never in tally.
 const SEAT_TAP_PITCH := [0.9, 1.0, 1.12, 1.26]   # per-seat chant tick pitch — the tell
 const TAP_TICK_DB := -12.0
+# eyes-closed summons (playtest fix): a blind table cannot read a visual "LOOK
+# NOW". So when it becomes a seat's turn the room speaks their colour — the SAME
+# seat pitch as the chant tick, three clear ticks before the private card, plus a
+# fourth as the reveal turns up. Louder than the chant tick so it carries with
+# eyes shut. Presentation only, inert in tally.
+const SUMMONS_TICK_DB := -4.0
+const SUMMONS_GAP := 0.35          # seconds between the three summons ticks
 const ROLL_START := 1.6         # unmask drumroll window, in REVEAL seconds
 const ROLL_END := 3.2           # ...building into the unmask hit at t=3.2
 const ROLL_STEP := 0.12         # one planchette rattle every 0.12s
@@ -707,31 +714,69 @@ func _begin_cast() -> void:
 	_seq.clear()
 	_seq_t = 0.0
 	var dim := Color(0.62, 0.58, 0.68)
-	_seq_add(0.0, func():
-		_ui.cast_show("EYES CLOSED", dim, "all of them", "", Color.WHITE)
-		_say("Close your eyes. All of them. I will know."))
-	var t := 2.2
+	var foot := "everyone else — eyes down · listen for your voice"
+	var t := 0.0
+	# --- VOICE ROLL-CALL (playtest fix) -------------------------------------
+	# The first tester: "how da hell if everyone eyes are closed are people
+	# supposed to know who should look first." A visual "LOOK NOW" is useless to
+	# a blind table. So BEFORE any eyes close, every colour hears its own summons
+	# — eyes OPEN — and learns the sound that will later call it. Same seat pitch
+	# as the chant tick, so it is one house language. ~9s, presentation only.
+	_seq_add(t, func():
+		_ui.cast_show("YOUR COLOUR HAS A VOICE", Color(0.85, 0.8, 1.0),
+			"eyes OPEN — learn your sound now",
+			"three ticks in your tone = your turn to look", Color(0.82, 0.86, 1.0), "")
+		_say("Your colour has a voice. Learn it now, while your eyes are open."))
+	t += 2.2
+	for i in players.size():
+		var ridx := i
+		var rnm: String = str(players[i].name)
+		var rcol: Color = players[i].color
+		var rglyph := PlayerBadge.glyph(i)
+		_seq_add(t, func():
+			_ui.cast_show(rglyph + " " + rnm, rcol, "this is your voice — listen", "", rcol, "")
+			_say("%s — this one is yours." % rnm))
+		_seq_add(t + 0.15, func(): _play_summons_tick(ridx))
+		_seq_add(t + 0.15 + SUMMONS_GAP, func(): _play_summons_tick(ridx))
+		_seq_add(t + 0.15 + 2.0 * SUMMONS_GAP, func(): _play_summons_tick(ridx))
+		t += 1.75
+	# --- now the eyes close --------------------------------------------------
+	_seq_add(t, func():
+		_ui.cast_show("EYES CLOSED", dim, "all of them", "", Color.WHITE, "")
+		_say("Now — close your eyes. All of them. I will know."))
+	t += 2.6
+	# --- per-seat private delivery, each summoned by voice -------------------
 	for i in players.size():
 		var idx := i
 		var nm: String = str(players[i].name)
 		var col: Color = players[i].color
 		var glyph := PlayerBadge.glyph(i)
-		_seq_add(t, func():
-			_ui.cast_show(glyph + " " + nm, col, "eyes open — this is for you alone", "", Color.WHITE)
+		# AUDIO SUMMONS: three ticks in this seat's tone, eyes still closed, BEFORE
+		# any private content appears — the only cue a blind player gets.
+		_seq_add(t, func(): _play_summons_tick(idx))
+		_seq_add(t + SUMMONS_GAP, func(): _play_summons_tick(idx))
+		_seq_add(t + 2.0 * SUMMONS_GAP, func(): _play_summons_tick(idx))
+		# the summoned seat opens their eyes; the card names them HUGE
+		_seq_add(t + 1.2, func():
+			_ui.cast_show(glyph + " " + nm, col, "eyes open — this is for you alone", "", Color.WHITE, foot)
 			if not _tally:
 				Sfx.play("card", -8.0))
-		_seq_add(t + 1.1, func():
+		# fourth confirmation tick as the private reveal turns up
+		_seq_add(t + 2.2, func():
+			_play_summons_tick(idx)
 			if idx == charlatan:
 				_ui.cast_show(glyph + " " + nm, col, "the spirits took the liberty of paying you",
 					"YOU WERE PAID — %d GRUDGE, UP FRONT\nTHE WORD IS \"%s\"\nBury it. Do not get caught." % [FEE_GRUDGE, word],
-					Color(1.0, 0.78, 0.35))
+					Color(1.0, 0.78, 0.35), foot)
 				VerifyCapture.snap("cast")
 			else:
 				_ui.cast_show(glyph + " " + nm, col, "you are",
-					"FAITHFUL\nGuide the spirit true.", Color(0.75, 0.95, 0.8)))
-		_seq_add(t + 3.7, func():
-			_ui.cast_show("EYES CLOSED", dim, "", "", Color.WHITE))
-		t += 4.4
+					"FAITHFUL\nGuide the spirit true.", Color(0.75, 0.95, 0.8), foot))
+		# reveal hold +50% (2.6s -> 3.9s), then eyes back down
+		_seq_add(t + 6.1, func():
+			_ui.cast_show("EYES CLOSED", dim, "", "", Color.WHITE, ""))
+		# >= 2.0s of silence before the next seat's summons (t+6.1 down -> t+8.1 up)
+		t += 8.1
 	_seq_add(t, func():
 		_ui.cast_hide()
 		_say("The spirits are willing. One of you, less so.")
@@ -884,6 +929,17 @@ func _play_pitched(key: String, pitch: float, volume_db: float) -> void:
 	p.pitch_scale = pitch
 	p.volume_db = volume_db
 	p.play()
+
+## The turn summons (playtest fix). Plays a seat's OWN pitch — same mapping as
+## the chant tick, so the roll-call teaches the sound the sitting will use — but
+## louder, so a player with their eyes closed hears their colour called. Reads
+## only the seat index; no forces, no focus, no RNG. Inert in tally.
+func _play_summons_tick(seat: int) -> void:
+	if _tally:
+		return
+	var pitch: float = SEAT_TAP_PITCH[seat % SEAT_TAP_PITCH.size()]
+	_play_pitched("place", pitch, SUMMONS_TICK_DB)
+	print("SEANCE_SUMMONS p=%d %s pitch=%.2f" % [seat, players[seat].name, pitch])
 
 ## Seat-distinct chant tick. Pitch encodes WHO (seat), timing encodes on/off-beat,
 ## so a saboteur's arrhythmic taps land audibly out of pocket at their own tone.

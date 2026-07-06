@@ -567,3 +567,39 @@ screen_shake=false — vignette visibly dimmer, heat identical. prefs.json
 New: --orbtest=threat staging mode (isolated test path) + windowed self-capture.
 Evidence: docs/verify/orbital-threat-VERIFY.md, verify_out/orbital_threat_b.png
 (top-tier ball + strong vignette) and orbital_threat_reducedmotion_b.png.
+
+---
+
+## Eyes-closed secret delivery — the VOICE SUMMONS (both theater games)
+
+First outside tester (Andrew, round 1) on THE SÉANCE + THE UNDERSTUDY casting:
+"Eyes closed section needs longer in betweens. Also how da hell if everyone eyes
+are closed are people supposed to know who should look first." He's right — a
+visual "LOOK NOW" is useless to a blind table. Fixed BOTH games, presentation/
+timing only (word selection, roles, scoring, votes, bots all unchanged).
+
+The fix reuses the seat-distinct chant pitch as one HOUSE LANGUAGE across both
+games: RED 0.90 / BLUE 1.00 / GOLD 1.12 / MINT 1.26.
+1. AUDIO SUMMONS — when it's a seat's turn, its pitch ticks THREE times (0.35s
+   apart, -4 dB, louder than the -12 dB chant) BEFORE any private card, then a
+   4th confirmation tick as the reveal turns up. No eyes needed to know it's you.
+2. VOICE ROLL-CALL — during the casting intro, eyes OPEN, ~9s: "Your colour has
+   a voice… RED, this one is yours" -> RED tick·tick·tick -> BLUE -> GOLD -> MINT,
+   so everyone learns their tone before they ever close their eyes.
+3. LONGER IN-BETWEENS — >=2.0s silence between one seat's eyes-down and the next
+   summons; reveal holds +50% (seance 2.6->3.9s). Nothing rushes.
+4. Reveal cards restated — seat name HUGE + standing "everyone else — eyes down ·
+   listen for your voice".
+
+Determinism was the constraint. Seance CAST draws no RNG (word+charlatan drawn in
+begin() before CAST), so a longer/louder CAST can't move the sim. Understudy got
+the same tiny pitched pool, but its roll-call (Cast.ROLLCALL) and inter-seat gap
+(Cast.GAP) run ONLY when not _tally — headless takes the original straight-to-
+_present_call path. All audio is _tally-guarded. Proof: tally sim lines
+BYTE-IDENTICAL vs pre-change baseline — seance seed 5 (20 lines), understudy
+seeds 1/2/3 (67 lines each), diff empty. Windowed logs show SEANCE_SUMMONS /
+US_SUMMONS holding each seat's pitch, 3 per colour in the roll-call.
+
+Evidence: docs/verify/eyesclosed-VERIFY.md; docs/verify/shots/seance_eyes_rollcall.png,
+seance_eyes_summons.png, us_eyes_rollcall.png, us_eyes_summons.png. No user://
+writes (bot/tally runs only).
