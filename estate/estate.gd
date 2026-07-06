@@ -91,6 +91,11 @@ func _ready() -> void:
 			get_tree().create_timer(1.2).timeout.connect(func():
 				exhibition = true
 				_launch_game(gid))
+		elif arg == "--lobbyshot":
+			get_tree().create_timer(1.2).timeout.connect(func():
+				_enter_lobby()
+				get_tree().create_timer(0.4).timeout.connect(func():
+					VerifyCapture.snap("lobbyrows")))
 		elif arg == "--strolltest":
 			get_tree().create_timer(1.5).timeout.connect(func():
 				_enter_lobby()
@@ -356,6 +361,7 @@ func _build_lobby_panel() -> void:
 		chip.visible = status == "HUMAN" and _lobby_ready.get(i, false)
 		row.add_child(chip)
 		phase_box.add_child(row)
+	# Two button rows — six buttons in one row overflowed the panel.
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 16)
@@ -374,31 +380,35 @@ func _build_lobby_panel() -> void:
 	start_btn.text = _start_btn_text()
 	start_btn.pressed.connect(_start_night_from_lobby)
 	btn_row.add_child(start_btn)
+	phase_box.add_child(btn_row)
+	var btn_row2 := HBoxContainer.new()
+	btn_row2.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row2.add_theme_constant_override("separation", 14)
 	var sel_btn := Button.new()
-	sel_btn.custom_minimum_size = Vector2(220, 56)
+	sel_btn.custom_minimum_size = Vector2(190, 48)
 	var n_games := 0
 	for mid in MODULES:
 		if mid != "mock" and ResourceLoader.exists(String(MODULES[mid].scene)):
 			n_games += 1
 	sel_btn.text = "MINIGAMES (%d)" % n_games
 	sel_btn.pressed.connect(_enter_selector)
-	btn_row.add_child(sel_btn)
+	btn_row2.add_child(sel_btn)
 	var ward_btn := Button.new()
-	ward_btn.custom_minimum_size = Vector2(180, 56)
+	ward_btn.custom_minimum_size = Vector2(160, 48)
 	ward_btn.text = "WARDROBE"
 	ward_btn.pressed.connect(_build_wardrobe_panel)
-	btn_row.add_child(ward_btn)
+	btn_row2.add_child(ward_btn)
 	var stroll_btn := Button.new()
-	stroll_btn.custom_minimum_size = Vector2(200, 56)
+	stroll_btn.custom_minimum_size = Vector2(200, 48)
 	stroll_btn.text = "WALK THE GROUNDS"
 	stroll_btn.pressed.connect(_enter_stroll)
-	btn_row.add_child(stroll_btn)
+	btn_row2.add_child(stroll_btn)
 	var title_btn := Button.new()
-	title_btn.custom_minimum_size = Vector2(120, 56)
+	title_btn.custom_minimum_size = Vector2(110, 48)
 	title_btn.text = "◄ TITLE"
 	title_btn.pressed.connect(_enter_title)
-	btn_row.add_child(title_btn)
-	phase_box.add_child(btn_row)
+	btn_row2.add_child(title_btn)
+	phase_box.add_child(btn_row2)
 	var quote := Label.new()
 	quote.text = "“%s”  — The Executor" % _executor_greeting()
 	quote.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
