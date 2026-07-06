@@ -29,6 +29,9 @@ const CHAR_PATHS := [
 ]
 const GROUNDS_TIME := 20.0
 const BID_TIME := 8.0
+## Pre-game GET READY card: launch when all humans ready or this many seconds
+## elapse, whichever first. A soak (all bots) never sees it.
+const READY_GATE_TIME := 15.0
 
 var phase := Phase.GROUNDS
 var bots := false
@@ -50,6 +53,18 @@ var _tile_buyers: Array = []
 var exhibition := false
 var _practice := false
 
+# ----- READY ROOM v2 (seat tri-state, join/ready, pre-game GET READY card) -----
+var _lobby_ready := {}            # seat -> bool: lobby READY chip toggled on
+var _kb_join_held := {}           # keyboard device (-1/-2) -> bool: A-key edge
+var _join_ready_lock := {}        # seat -> bool: swallow the join press so it
+                                  # does not also flip READY until A releases
+var _ready_gate_active := false   # the pre-game GET READY card is up
+var _ready_gate_id := ""
+var _ready_gate_practice := false
+var _ready_gate_countdown := 0.0
+var _ready_gate_ready := {}       # seat -> bool: readied on the pre-game card
+var _ready_gate_needed: Array = []  # human seats that must press A to launch
+
 @onready var cam: Camera3D = $Camera3D
 @onready var top_bar: HBoxContainer = $UI/TopBar/Row
 @onready var phase_panel: PanelContainer = $UI/PhasePanel
@@ -59,6 +74,7 @@ var _practice := false
 @onready var wall_text: Label3D = $GraffitiWall/Lines
 
 func _ready() -> void:
+	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	var start_night_now := false
 	var args := OS.get_cmdline_user_args()
 	for arg in args:
@@ -114,6 +130,62 @@ func _ready() -> void:
 							DirAccess.copy_absolute(pair[0], pair[1])
 							DirAccess.remove_absolute(pair[0])
 					print("WARDROBETEST saves restored")))
+		elif arg == "--readytest":
+			# Windowed GET READY card proof. Self-contained: backs up/restores
+			# party_setup.json (the ready/join flows persist seat choices).
+			get_tree().create_timer(1.2).timeout.connect(func():
+				var ps := ProjectSettings.globalize_path("user://party_setup.json")
+				if FileAccess.file_exists(ps):
+					DirAccess.copy_absolute(ps, ps + ".rrbak")
+				_hide_title()
+				PlayerInput.assign(0, -1)
+				PlayerInput.set_bot(0, false)
+				PlayerInput.assign(1, -2)
+				PlayerInput.set_bot(1, false)
+				PlayerInput.set_bot(2, true)
+				PlayerInput.set_bot(3, true)
+				_show_get_ready("orbital")
+				_ready_gate_ready[1] = true
+				var gr := phase_box.get_node_or_null("GateRow1")
+				if gr:
+					var chip := gr.get_node_or_null("GateChip")
+					if chip:
+						chip.text = "READY"
+						chip.add_theme_color_override("font_color", Color(0.35, 0.9, 0.5))
+						chip.modulate.a = 1.0
+				_refresh_ready_gate_countdown()
+				_ready_gate_active = false
+				VerifyCapture.snap("readyroom_getready")
+				get_tree().create_timer(1.0).timeout.connect(func():
+					if FileAccess.file_exists(ps + ".rrbak"):
+						DirAccess.copy_absolute(ps + ".rrbak", ps)
+						DirAccess.remove_absolute(ps + ".rrbak")
+					print("READYTEST saves restored")
+					get_tree().quit()))
+		elif arg == "--readylobbytest":
+			# Windowed lobby proof: an EMPTY chair (dim) + a READY chip + a
+			# waiting START button. Self-contained backup/restore of the seats.
+			get_tree().create_timer(1.2).timeout.connect(func():
+				var ps := ProjectSettings.globalize_path("user://party_setup.json")
+				if FileAccess.file_exists(ps):
+					DirAccess.copy_absolute(ps, ps + ".rrbak")
+				_enter_lobby()
+				PlayerInput.assign(0, -1)
+				PlayerInput.set_bot(0, false)
+				PlayerInput.set_bot(1, false)
+				PlayerInput.assign(1, -99)
+				PlayerInput.assign(2, -2)
+				PlayerInput.set_bot(2, false)
+				PlayerInput.set_bot(3, true)
+				_lobby_ready[0] = true
+				_build_lobby_panel()
+				VerifyCapture.snap("readyroom_lobby")
+				get_tree().create_timer(1.0).timeout.connect(func():
+					if FileAccess.file_exists(ps + ".rrbak"):
+						DirAccess.copy_absolute(ps + ".rrbak", ps)
+						DirAccess.remove_absolute(ps + ".rrbak")
+					print("READYLOBBYTEST saves restored")
+					get_tree().quit()))
 	if "--skipmenu" in args:
 		Transition.change_scene("res://scenes/main.tscn")
 		return
@@ -130,6 +202,7 @@ func _ready() -> void:
 	banner.visible = false
 	_saved_env = $WorldEnvironment.environment
 	if start_night_now:
+		_fill_empty_seats_with_bots()
 		if EstateState.nights_played > 0:
 			_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.5)
 		_enter_grounds()
@@ -235,15 +308,21 @@ func _enter_lobby() -> void:
 	_hide_title()
 	Music.play_slot("lobby")
 	$UI/TopBar.visible = false
+	_lobby_ready.clear()
+	_join_ready_lock.clear()
 	_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0)
 	_build_lobby_panel()
 
 func _build_lobby_panel() -> void:
 	_clear_panel("who's on the couch?", Color(0.9, 0.95, 0.9))
 	for i in 4:
+		var status := _seat_status(i)
 		var row := HBoxContainer.new()
+		row.name = "SeatRow%d" % i
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 12)
+		if status == "EMPTY":
+			row.modulate.a = 0.5
 		row.add_child(PlayerBadge.make(i, 20))
 		var name_l := Label.new()
 		name_l.text = GameState.PLAYER_NAMES[i]
@@ -251,14 +330,16 @@ func _build_lobby_panel() -> void:
 		name_l.add_theme_font_size_override("font_size", 24)
 		name_l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
 		row.add_child(name_l)
-		var bot_btn := Button.new()
-		bot_btn.custom_minimum_size = Vector2(120, 44)
-		bot_btn.text = "BOT" if PlayerInput.is_bot(i) else "HUMAN"
-		bot_btn.pressed.connect(func():
-			PlayerInput.set_bot(i, not PlayerInput.is_bot(i))
-			bot_btn.text = "BOT" if PlayerInput.is_bot(i) else "HUMAN"
-			Sfx.play("card"))
-		row.add_child(bot_btn)
+		# Tri-state: HUMAN -> BOT -> EMPTY -> HUMAN. EMPTY becomes a bot at
+		# night start; a device joining (press A) claims a BOT/EMPTY seat.
+		var status_btn := Button.new()
+		status_btn.custom_minimum_size = Vector2(120, 44)
+		status_btn.text = status
+		status_btn.pressed.connect(func():
+			_cycle_seat_status(i)
+			Sfx.play("card")
+			_build_lobby_panel())
+		row.add_child(status_btn)
 		var dev_btn := Button.new()
 		dev_btn.custom_minimum_size = Vector2(210, 44)
 		dev_btn.text = PartySetup.DEVICE_NAMES.get(PlayerInput.device_of(i), "UNASSIGNED")
@@ -266,9 +347,14 @@ func _build_lobby_panel() -> void:
 			var cur := PartySetup.DEVICE_CYCLE.find(PlayerInput.device_of(i))
 			var nxt: int = PartySetup.DEVICE_CYCLE[(cur + 1) % PartySetup.DEVICE_CYCLE.size()]
 			PlayerInput.assign(i, nxt)
-			dev_btn.text = PartySetup.DEVICE_NAMES.get(nxt, "UNASSIGNED")
-			Sfx.play("card"))
+			PlayerInput.set_bot(i, false)
+			Sfx.play("card")
+			_build_lobby_panel())
 		row.add_child(dev_btn)
+		var chip := _make_ready_chip()
+		chip.name = "ReadyChip"
+		chip.visible = status == "HUMAN" and _lobby_ready.get(i, false)
+		row.add_child(chip)
 		phase_box.add_child(row)
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -283,8 +369,9 @@ func _build_lobby_panel() -> void:
 		Sfx.play("card"))
 	btn_row.add_child(len_btn)
 	var start_btn := Button.new()
-	start_btn.custom_minimum_size = Vector2(240, 56)
-	start_btn.text = "START THE NIGHT"
+	start_btn.name = "StartBtn"
+	start_btn.custom_minimum_size = Vector2(300, 56)
+	start_btn.text = _start_btn_text()
 	start_btn.pressed.connect(_start_night_from_lobby)
 	btn_row.add_child(start_btn)
 	var sel_btn := Button.new()
@@ -322,13 +409,16 @@ func _build_lobby_panel() -> void:
 	quote.modulate.a = 0.85
 	phase_box.add_child(quote)
 	var hint := Label.new()
-	hint.text = "ESC = players & controls anytime  ·  the estate remembers everything"
+	hint.text = "PAD A or KEYBOARD Space/Enter takes an open seat  ·  A again = READY  ·  KB+MOUSE joins by button (its A is the mouse)  ·  ESC = players & controls"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(760, 0)
 	hint.add_theme_font_size_override("font_size", 15)
 	hint.modulate.a = 0.7
 	phase_box.add_child(hint)
 
 func _start_night_from_lobby() -> void:
+	_fill_empty_seats_with_bots()
 	PlayerInput.save_setup()
 	GameState.reset_match()
 	EstateState.start_night(4)
@@ -339,6 +429,148 @@ func _start_night_from_lobby() -> void:
 	if EstateState.nights_played > 0:
 		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.5)
 	_enter_grounds()
+
+## ----- READY ROOM SEATS: tri-state, join, ready chips -----
+
+## HUMAN (device + not bot) / BOT / EMPTY (unassigned + not bot).
+func _seat_status(i: int) -> String:
+	if PlayerInput.is_bot(i):
+		return "BOT"
+	if PlayerInput.device_of(i) == -99:
+		return "EMPTY"
+	return "HUMAN"
+
+## The seat button cycle: HUMAN -> BOT -> EMPTY -> HUMAN. Leaving HUMAN drops
+## the READY chip; EMPTY frees the device so a joiner can take it.
+func _cycle_seat_status(i: int) -> void:
+	match _seat_status(i):
+		"HUMAN":
+			PlayerInput.set_bot(i, true)
+			_lobby_ready.erase(i)
+			_join_ready_lock.erase(i)
+		"BOT":
+			PlayerInput.set_bot(i, false)
+			PlayerInput.assign(i, -99)
+		_:  # EMPTY -> HUMAN
+			PlayerInput.set_bot(i, false)
+			if PlayerInput.device_of(i) == -99:
+				PlayerInput.assign(i, _first_free_device())
+
+## First device in the PartySetup cycle not already held by another seat,
+## falling back to MOUSE/SHARED (-3) if the couch is somehow full.
+func _first_free_device() -> int:
+	var taken: Array = []
+	for i in 4:
+		taken.append(PlayerInput.device_of(i))
+	for d in PartySetup.DEVICE_CYCLE:
+		if not taken.has(d):
+			return int(d)
+	return -3
+
+## EMPTY seats (unassigned, not bot) become bots when the night begins — a
+## soak never stalls on an unmanned chair.
+func _fill_empty_seats_with_bots() -> void:
+	for i in 4:
+		if _seat_status(i) == "EMPTY":
+			PlayerInput.set_bot(i, true)
+
+## READY status chip: green token that sits at the end of a seat row. Plain
+## Label to match the estate's other rows (no stylebox surgery).
+func _make_ready_chip() -> Label:
+	var chip := Label.new()
+	chip.text = "READY"
+	chip.add_theme_font_size_override("font_size", 20)
+	chip.add_theme_color_override("font_color", Color(0.35, 0.9, 0.5))
+	chip.add_theme_color_override("font_outline_color", Color(0.05, 0.15, 0.08))
+	chip.add_theme_constant_override("outline_size", 6)
+	return chip
+
+## Seats still expected to press A before the night can begin (unready humans).
+func _waiting_seats() -> Array:
+	var out: Array = []
+	for i in 4:
+		if _seat_status(i) == "HUMAN" and not _lobby_ready.get(i, false):
+			out.append(i)
+	return out
+
+func _start_btn_text() -> String:
+	var waiting := _waiting_seats()
+	if waiting.is_empty():
+		return "START THE NIGHT"
+	var names: Array = []
+	for i in waiting:
+		names.append(GameState.PLAYER_NAMES[i])
+	return "START THE NIGHT  (waiting: %s)" % ", ".join(names)
+
+## Unseated keyboard half (Space = -1, Enter = -2) joins the first open seat,
+## mirroring press-A pad join. Default keys only (a fresh device has no remap
+## yet); KB+MOUSE stays button-driven since its A is the left mouse button.
+func _poll_kb_join() -> void:
+	var seated: Array = []
+	for i in 4:
+		seated.append(PlayerInput.device_of(i))
+	for pair in [[-1, KEY_SPACE], [-2, KEY_ENTER]]:
+		var dev: int = pair[0]
+		var keycode: int = pair[1]
+		var down := Input.is_physical_key_pressed(keycode)
+		if not down:
+			_kb_join_held.erase(dev)
+			continue
+		if _kb_join_held.get(dev, false) or seated.has(dev):
+			continue
+		_kb_join_held[dev] = true
+		_claim_seat_for_device(dev)
+
+## Claim the first BOT/EMPTY seat as a HUMAN on `dev`. Shared by pad + keyboard
+## join. Returns the seat index, or -1 if the couch is full of humans.
+func _claim_seat_for_device(dev: int) -> int:
+	for i in 4:
+		if _seat_status(i) == "BOT" or _seat_status(i) == "EMPTY":
+			PlayerInput.assign(i, dev)
+			PlayerInput.set_bot(i, false)
+			_lobby_ready.erase(i)
+			_join_ready_lock[i] = true
+			PlayerInput.save_setup()
+			Sfx.play("confirm")
+			var glyph: String = PartySetup.DEVICE_NAMES.get(dev, "A DEVICE")
+			_flash("%s JOINS THE PARTY (%s)" % [GameState.PLAYER_NAMES[i], glyph], GameState.PLAYER_COLORS[i], 2.2)
+			get_tree().create_timer(2.3).timeout.connect(func():
+				if phase == Phase.LOBBY:
+					_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0))
+			if phase == Phase.LOBBY:
+				_build_lobby_panel()
+			return i
+	return -1
+
+## Seated humans toggle their READY chip with A. Pads and keyboard halves only
+## (KB+MOUSE / SHARED A collides with clicking the lobby's own buttons).
+func _poll_lobby_ready() -> void:
+	for i in 4:
+		if _seat_status(i) != "HUMAN":
+			continue
+		var d := PlayerInput.device_of(i)
+		if d != -1 and d != -2 and d < 0:
+			continue  # skip -3 (shared) and -4 (KB+mouse)
+		# A freshly joined seat swallows its still-held join press; only once A
+		# is released does the same button start toggling READY.
+		if _join_ready_lock.get(i, false):
+			if not PlayerInput.is_down(i, "a"):
+				_join_ready_lock.erase(i)
+			continue
+		if PlayerInput.just_pressed(i, "a"):
+			_lobby_ready[i] = not _lobby_ready.get(i, false)
+			Sfx.play("card")
+			var row := phase_box.get_node_or_null("SeatRow%d" % i)
+			if row:
+				var chip := row.get_node_or_null("ReadyChip")
+				if chip:
+					chip.visible = _lobby_ready[i]
+
+## Keep the START button label's waiting list current as seats ready up.
+func _update_lobby_start_btn() -> void:
+	var btn := phase_box.get_node_or_null("StartBtn")
+	if btn and btn is Button:
+		btn.text = _start_btn_text()
 
 ## ----- MINIGAME SELECTOR (flat grid per UFO 50 pattern) -----
 
@@ -658,7 +890,7 @@ func _spawn_toys() -> void:
 		b.global_position = Vector3(-2.0 + i * 2.0, 0.4, -1.5)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if phase == Phase.GAME or _module != null:
+	if phase == Phase.GAME or _module != null or _ready_gate_active:
 		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var origin := cam.project_ray_origin(event.position)
@@ -739,7 +971,7 @@ func _poll_stroll() -> void:
 var _join_held := {}
 
 ## Press-A-to-join (digest join flow): a gamepad nobody is seated on
-## presses A in the LOBBY and claims the first BOT seat as HUMAN.
+## presses A in the LOBBY and claims the first BOT/EMPTY seat as HUMAN.
 func _poll_pad_join() -> void:
 	var seated: Array = []
 	for i in 4:
@@ -752,25 +984,46 @@ func _poll_pad_join() -> void:
 		if _join_held.get(pad, false) or pad in seated:
 			continue
 		_join_held[pad] = true
-		for i in 4:
-			if PlayerInput.is_bot(i):
-				PlayerInput.assign(i, pad)
-				PlayerInput.set_bot(i, false)
-				PlayerInput.save_setup()
-				Sfx.play("confirm")
-				_flash("%s JOINS THE PARTY (GAMEPAD %d)" % [GameState.PLAYER_NAMES[i], pad + 1], GameState.PLAYER_COLORS[i], 2.2)
-				get_tree().create_timer(2.3).timeout.connect(func():
+		_claim_seat_for_device(pad)
+
+## A seated pad vanishing during LOBBY/GROUNDS hands its seat to a bot (Executor
+## register) and frees the pad, so reconnect + press-A can retake a seat. Mid-
+## minigame disconnects belong to the module's own loop — see readyroom-VERIFY.
+func _on_joy_connection_changed(device: int, connected: bool) -> void:
+	if connected:
+		if phase == Phase.LOBBY:
+			_flash("GAMEPAD %d RESTORED — PRESS A TO TAKE A SEAT" % (device + 1), Color(0.85, 0.9, 1.0), 2.4)
+			get_tree().create_timer(2.5).timeout.connect(func():
+				if phase == Phase.LOBBY:
+					_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0))
+		return
+	if phase != Phase.LOBBY and phase != Phase.GROUNDS:
+		return
+	for i in 4:
+		if PlayerInput.device_of(i) == device and not PlayerInput.is_bot(i):
+			PlayerInput.set_bot(i, true)
+			PlayerInput.assign(i, -99)
+			_lobby_ready.erase(i)
+			_join_ready_lock.erase(i)
+			Sfx.play("grudge", -4.0)
+			_flash("GAMEPAD %d LOST — %s PLAYS ITSELF UNTIL FURTHER NOTICE" % [device + 1, GameState.PLAYER_NAMES[i]], GameState.PLAYER_COLORS[i], 2.6)
+			if phase == Phase.LOBBY:
+				get_tree().create_timer(2.7).timeout.connect(func():
 					if phase == Phase.LOBBY:
 						_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0))
 				_build_lobby_panel()
-				break
 
 func _process(delta: float) -> void:
+	if _ready_gate_active:
+		_poll_ready_gate(delta)
 	if phase == Phase.LOBBY:
 		if _strolling:
 			_poll_stroll()
 		else:
 			_poll_pad_join()
+			_poll_kb_join()
+			_poll_lobby_ready()
+			_update_lobby_start_btn()
 	if _module == null and not walkers.is_empty():
 		_bot_wander_timer -= delta
 		if _bot_wander_timer <= 0.0:
@@ -1058,7 +1311,128 @@ func _resolve_auction() -> void:
 		row.add_child(b)
 	phase_box.add_child(row)
 
+## ----- PRE-GAME GET READY CARD (night flow) -----
+
+## The How-to card in a GET READY skin: goal + live per-seat controls, and each
+## human presses their A to ready (chip flips green). Launches when every human
+## is ready or after READY_GATE_TIME, whichever first. Feels like _show_howto.
+func _show_get_ready(id: String, practice := false) -> void:
+	_ready_gate_active = true
+	_ready_gate_id = id
+	_ready_gate_practice = practice
+	_ready_gate_countdown = READY_GATE_TIME
+	_ready_gate_ready.clear()
+	_ready_gate_needed.clear()
+	Sfx.play("card")
+	var info: Dictionary = MODULES[id]
+	var how: Dictionary = HOWTO.get(id, {"goal": "?", "a": "A", "b": "B"})
+	_clear_panel("GET READY — %s" % String(info.name), Color(1, 0.9, 0.5))
+	var goal := Label.new()
+	goal.text = String(how.goal)
+	goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	goal.custom_minimum_size = Vector2(680, 0)
+	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	phase_box.add_child(goal)
+	var ctl_title := Label.new()
+	ctl_title.text = "— CONTROLS TONIGHT (press your A to ready) —"
+	ctl_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ctl_title.modulate.a = 0.7
+	ctl_title.add_theme_font_size_override("font_size", 15)
+	phase_box.add_child(ctl_title)
+	for i in EstateState.players.size():
+		var row := HBoxContainer.new()
+		row.name = "GateRow%d" % i
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 8)
+		row.add_child(PlayerBadge.make(i, 16))
+		var l := Label.new()
+		if PlayerInput.is_bot(i):
+			l.text = "%s — bot, needs no manual" % GameState.PLAYER_NAMES[i]
+			l.modulate.a = 0.5
+		elif id == "par":
+			l.text = "%s — MOUSE: aim, hold, release to putt (hotseat — pass it on)" % GameState.PLAYER_NAMES[i]
+		else:
+			l.text = "%s — MOVE %s  ·  %s: %s  ·  %s: %s" % [
+				GameState.PLAYER_NAMES[i], PlayerInput.describe_binding(i, "move"),
+				PlayerInput.describe_binding(i, "a"), String(how.a),
+				PlayerInput.describe_binding(i, "b"), String(how.b)]
+		l.add_theme_font_size_override("font_size", 17)
+		l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
+		row.add_child(l)
+		# A human with a discrete A must press it; a shared/mouse seat (-3) has
+		# none, so it counts as ready on arrival and the countdown covers it.
+		if not PlayerInput.is_bot(i):
+			var d := PlayerInput.device_of(i)
+			if d == -3:
+				_ready_gate_ready[i] = true
+			else:
+				_ready_gate_ready[i] = false
+				_ready_gate_needed.append(i)
+				var chip := _make_ready_chip()
+				chip.name = "GateChip"
+				chip.text = "PRESS A"
+				chip.add_theme_color_override("font_color", Color(0.9, 0.8, 0.4))
+				chip.modulate.a = 0.85
+				row.add_child(chip)
+		phase_box.add_child(row)
+	var count := Label.new()
+	count.name = "GateCountdown"
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	count.add_theme_font_size_override("font_size", 18)
+	count.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
+	phase_box.add_child(count)
+	_refresh_ready_gate_countdown()
+
+func _all_ready_gate() -> bool:
+	for i in _ready_gate_needed:
+		if not _ready_gate_ready.get(i, false):
+			return false
+	return true
+
+func _refresh_ready_gate_countdown() -> void:
+	var count := phase_box.get_node_or_null("GateCountdown")
+	if count == null or not count is Label:
+		return
+	var waiting: Array = []
+	for i in _ready_gate_needed:
+		if not _ready_gate_ready.get(i, false):
+			waiting.append(GameState.PLAYER_NAMES[i])
+	if waiting.is_empty():
+		count.text = "all ready — the estate begins"
+	else:
+		count.text = "waiting on %s  ·  begins in %ds" % [", ".join(waiting), ceili(maxf(_ready_gate_countdown, 0.0))]
+
+func _poll_ready_gate(delta: float) -> void:
+	_ready_gate_countdown -= delta
+	for i in _ready_gate_needed:
+		if not _ready_gate_ready.get(i, false) and PlayerInput.just_pressed(i, "a"):
+			_ready_gate_ready[i] = true
+			Sfx.play("confirm")
+			var row := phase_box.get_node_or_null("GateRow%d" % i)
+			if row:
+				var chip := row.get_node_or_null("GateChip")
+				if chip and chip is Label:
+					chip.text = "READY"
+					chip.add_theme_color_override("font_color", Color(0.35, 0.9, 0.5))
+					chip.modulate.a = 1.0
+	_refresh_ready_gate_countdown()
+	if _all_ready_gate() or _ready_gate_countdown <= 0.0:
+		_ready_gate_active = false
+		_do_launch_game(_ready_gate_id, _ready_gate_practice)
+
+## Night-flow entry: the chosen game shows a GET READY card (goal + live
+## controls + per-seat A-to-ready) before it launches. Exhibition/practice from
+## the selector already showed the How-to card, so they skip straight to launch;
+## an all-bot soak skips the card entirely so it never stalls.
 func _launch_game(id: String, practice := false) -> void:
+	if phase == Phase.GAME or _ready_gate_active:
+		return
+	if not exhibition and not _all_bots():
+		_show_get_ready(id, practice)
+		return
+	_do_launch_game(id, practice)
+
+func _do_launch_game(id: String, practice := false) -> void:
 	if phase == Phase.GAME:
 		return
 	phase = Phase.GAME
