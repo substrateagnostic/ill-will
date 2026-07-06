@@ -144,8 +144,19 @@ Fix (both directions):
   v3 direct path — the turn always advances.
 
 Receipts: dogleg seed 6 to `MATCH_OVER champ=BLUE` 0 errors; R1 trace receipt
-re-run post-fix still byte-identical; green seed 6 re-run post-fix to
-MATCH_OVER.
+re-run post-fix still byte-identical AND matching the pre-fix baseline
+sequences exactly; green seed 6 re-run post-fix → `MATCH_OVER champ=RED` with
+**identical placements/points to the pre-fix run** (the fix perturbs nothing
+on unaffected paths).
+
+Additional harness regressions (windowed): `--killcamtest=signed` →
+`KILLCAM play ... botonly=false` / `KILLCAM done held_ms=1605` (full-cap
+replay, tree unpauses); `--aimshow=2.6,0,900 --shots=905` runs clean — under
+embodied default the fixed frame lands mid camera-dolly, so the classic
+diorama aim screenshot is taken with `--v3putt` (arrow + dots + traps read;
+`verify_out/parv4/aimshow2/shot_0905.png`). The arrow render path itself is
+also covered by the swingplay address/charge snaps. Estate boot smoke
+(`--estate --quitafter=400`): exit 0, zero script errors.
 
 ## 6. Frozen-invariants checklist
 
