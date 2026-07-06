@@ -31,7 +31,7 @@ extends Minigame
 ##   --shots=N,...       VerifyCapture PNG harness (global autoload)
 
 enum Phase { WAITING, INTRO, CASTING, REHEARSAL, VOTE, RESOLVE, ROUND_END, MATCH_END }
-enum Cast { CALL, PEEK }
+enum Cast { ROLLCALL, CALL, PEEK, GAP }
 
 const CHAR_FALLBACKS := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -58,6 +58,23 @@ const FRAME_PTS := 2    # understudy whose framed target drew the real pile-on
 const BLEND_PTS := 1    # understudy, per on-script cue slipped past the house
 
 const MARK_X := [-3.7, -1.25, 1.25, 3.7]
+
+# --- eyes-closed VOICE SUMMONS (playtest fix) -------------------------------
+# First tester on the eyes-closed casting: "how da hell if everyone eyes are
+# closed are people supposed to know who should look first." A visual "LOOK NOW"
+# is useless to a blind table. So when a seat is called, the room speaks its
+# COLOUR — three ticks at a seat-distinct pitch before the card, a fourth as it
+# flips. Same pitch mapping as THE SÉANCE's chant tick (RED .90 / BLUE 1.00 /
+# GOLD 1.12 / MINT 1.26) so the two theater games share one house language. A
+# roll-call teaches every colour its sound, eyes OPEN, before the lights fall.
+# Presentation only: a local pitched-tick pool over the existing Sfx bank, inert
+# in tally (no new audio files, no RNG, no bot logic touched).
+const SEAT_TAP_PITCH := [0.9, 1.0, 1.12, 1.26]
+const SUMMONS_TICK_DB := -4.0
+const SUMMONS_GAP := 0.35          # seconds between the three summons ticks
+const CAST_GAP := 2.2              # silence between one seat's eyes-down and the next summons
+const ROLLCALL_INTRO := 2.0        # eyes-open teaching intro hold
+const ROLLCALL_SEAT := 1.75        # per-colour teaching slot
 
 # --- state ------------------------------------------------------------------
 var phase := Phase.WAITING
@@ -99,6 +116,14 @@ var _t := 0.0                      # generic phase timer
 var _cast_seat := 0
 var _cast_step := Cast.CALL
 var _cast_bot_t := 0.0
+var _call_tick_i := 0              # how many of the seat's 3 summons ticks have fired
+var _rc_seat := -1                 # roll-call: colour being taught (-1 = intro)
+var _rc_seat_t := 0.0
+var _rc_tick_i := 0
+# pitched-tick pool (presentation only; mirrors the seance audio pass)
+var _pitched_players: Array = []
+var _pitched_next := 0
+var _pitched_streams: Dictionary = {}
 var _beat := 0                     # rehearsal beat index
 var _beat_order: Array = []        # seat order across passes
 var _reh_step := 0                 # 0 pick, 1 result
@@ -149,6 +174,8 @@ func _ready() -> void:
 	add_child(reveal_ui)
 	board = USBoard.new()
 	add_child(board)
+	if not _tally:
+		_build_pitched_pool()
 	await get_tree().create_timer(0.5).timeout
 	if not _started:
 		begin(_default_config())
@@ -510,25 +537,62 @@ func _physics_process(delta: float) -> void:
 func _enter_casting() -> void:
 	phase = Phase.CASTING
 	_cast_seat = 0
-	_cast_step = Cast.CALL
 	_cast_bot_t = 0.0
 	reveal_ui.open()
 	_set_base_ui(false)
-	_say("The casting. When your colour is called, and only then, look up.")
-	_present_call()
+	if _tally:
+		# no teaching roll-call in the headless evidence run — sim path unchanged
+		_cast_step = Cast.CALL
+		_say("The casting. When your colour is called, and only then, look up.")
+		_present_call()
+	else:
+		# VOICE ROLL-CALL: teach every colour its summons, eyes OPEN, before the
+		# lights fall — so a blind player can recognise the call later.
+		_cast_step = Cast.ROLLCALL
+		_rc_seat = -1
+		_rc_seat_t = 0.0
+		_rc_tick_i = 0
+		_say("Your colour has a voice. Learn it now — eyes open — before the lights fall.")
+		reveal_ui.show_rollcall_intro()
 
 func _present_call() -> void:
 	var pl: Dictionary = players[_cast_seat]
+	_call_tick_i = 0        # arm this seat's three summons ticks
 	# dim everyone; the caller's mark glows
 	for i in actors.size():
 		actors[i].set_lit(0.6 if i != _cast_seat else USActor.SPOT_FOCUS)
 	reveal_ui.show_call(pl.name, pl.color, PlayerBadge.glyph(pl.index))
 
+## Roll-call teaching slot: light the taught colour, name it huge.
+func _present_teach(seat: int) -> void:
+	var pl: Dictionary = players[seat]
+	for i in actors.size():
+		actors[i].set_lit(0.6 if i != seat else USActor.SPOT_FOCUS)
+	reveal_ui.show_teach(pl.name, pl.color, PlayerBadge.glyph(pl.index))
+
 func _tick_casting(delta: float) -> void:
+	if _cast_step == Cast.ROLLCALL:
+		_tick_rollcall(delta)
+		return
+	if _cast_step == Cast.GAP:
+		# ≥2s of silence between one seat's eyes-down and the next summons
+		_cast_bot_t += delta
+		if _cast_bot_t >= CAST_GAP:
+			_cast_step = Cast.CALL
+			_cast_bot_t = 0.0
+			_present_call()
+		return
 	var pl: Dictionary = players[_cast_seat]
 	var seat_bot: bool = pl.is_bot
 	if _cast_step == Cast.CALL:
 		_cast_bot_t += delta
+		# AUDIO SUMMONS: three ticks in this seat's tone as the call lands, BEFORE
+		# the card can be read — the only cue a player with eyes closed gets.
+		if not _tally:
+			var marks := [0.15, 0.15 + SUMMONS_GAP, 0.15 + 2.0 * SUMMONS_GAP]
+			while _call_tick_i < marks.size() and _cast_bot_t >= marks[_call_tick_i]:
+				_play_summons_tick(_cast_seat)
+				_call_tick_i += 1
 		var peek := false
 		if seat_bot:
 			if _cast_bot_t >= bots.read_beat(_cast_seat):
@@ -538,6 +602,7 @@ func _tick_casting(delta: float) -> void:
 		if _cast_bot_t > 8.0:
 			peek = true
 		if peek:
+			_play_summons_tick(_cast_seat)   # fourth confirmation tick as the card turns
 			if pl.index == round_understudy:
 				var cands: Array = []
 				for k in PLAYS:
@@ -549,11 +614,11 @@ func _tick_casting(delta: float) -> void:
 			_cast_bot_t = 0.0
 	else:
 		_cast_bot_t += delta
-		if _cast_bot_t >= 0.5:
+		if _cast_bot_t >= (0.5 if _tally else 0.75):
 			_maybe_snap("reveal")   # card fully flipped face-up
 		var commit := false
 		if seat_bot:
-			if _cast_bot_t >= (0.3 if _tally else 1.1):
+			if _cast_bot_t >= (0.3 if _tally else 1.65):   # +50% reveal hold for humans
 				commit = true
 		else:
 			commit = PlayerInput.just_pressed(pl.index, "a")
@@ -561,13 +626,88 @@ func _tick_casting(delta: float) -> void:
 			commit = true
 		if commit:
 			_cast_seat += 1
-			_cast_step = Cast.CALL
 			_cast_bot_t = 0.0
 			if _cast_seat >= players.size():
+				_cast_step = Cast.CALL
 				reveal_ui.close()
 				_enter_rehearsal()
-			else:
+			elif _tally:
+				# original path: straight to the next call, no interstitial gap
+				_cast_step = Cast.CALL
 				_present_call()
+			else:
+				# eyes down, hold the silence, then summon the next colour
+				_cast_step = Cast.GAP
+				reveal_ui.show_gap()
+
+func _tick_rollcall(delta: float) -> void:
+	if _rc_seat < 0:
+		_cast_bot_t += delta
+		if _cast_bot_t >= ROLLCALL_INTRO:
+			_rc_seat = 0
+			_rc_seat_t = 0.0
+			_rc_tick_i = 0
+			_present_teach(_rc_seat)
+		return
+	_rc_seat_t += delta
+	var marks := [0.15, 0.15 + SUMMONS_GAP, 0.15 + 2.0 * SUMMONS_GAP]
+	while _rc_tick_i < marks.size() and _rc_seat_t >= marks[_rc_tick_i]:
+		_play_summons_tick(_rc_seat)
+		_rc_tick_i += 1
+	if _rc_seat_t >= ROLLCALL_SEAT:
+		_rc_seat += 1
+		if _rc_seat >= players.size():
+			# every colour taught — now fall the lights and call the first seat
+			_cast_step = Cast.CALL
+			_cast_bot_t = 0.0
+			_say("The casting. When your colour is called — and only then — look up.")
+			_present_call()
+		else:
+			_rc_seat_t = 0.0
+			_rc_tick_i = 0
+			_present_teach(_rc_seat)
+
+# ---------------------------------------------- pitched audio (presentation)
+## Local AudioStreamPlayer pool so a bank sound can play at a fixed pitch_scale
+## (Sfx.play only offers a symmetric wobble around 1.0). Built once, never in
+## tally, routed through the same "SFX" bus the settings sliders drive. Reuses
+## the existing Sfx bank streams — no new audio files. Mirrors the seance pass.
+func _build_pitched_pool() -> void:
+	for i in 8:
+		var p := AudioStreamPlayer.new()
+		p.bus = "SFX"
+		add_child(p)
+		_pitched_players.append(p)
+
+func _bank_stream(key: String) -> AudioStream:
+	var bank: Dictionary = Sfx.BANK
+	if not bank.has(key) or (bank[key] as Array).is_empty():
+		return null
+	return load("res://assets/audio/%s.ogg" % str(bank[key][0]))
+
+func _play_pitched(key: String, pitch: float, volume_db: float) -> void:
+	if _tally or _pitched_players.is_empty():
+		return
+	if not _pitched_streams.has(key):
+		_pitched_streams[key] = _bank_stream(key)
+	var strm: AudioStream = _pitched_streams[key]
+	if strm == null:
+		return
+	var p: AudioStreamPlayer = _pitched_players[_pitched_next]
+	_pitched_next = (_pitched_next + 1) % _pitched_players.size()
+	p.stream = strm
+	p.pitch_scale = pitch
+	p.volume_db = volume_db
+	p.play()
+
+## The turn summons — a seat's OWN pitch (same mapping as the seance chant tick),
+## loud enough to carry with eyes shut. Reads only the seat index. Inert in tally.
+func _play_summons_tick(seat: int) -> void:
+	if _tally:
+		return
+	var pitch: float = SEAT_TAP_PITCH[seat % SEAT_TAP_PITCH.size()]
+	_play_pitched("card", pitch, SUMMONS_TICK_DB)
+	print("US_SUMMONS seat=%d %s pitch=%.2f" % [seat, players[seat].name, pitch])
 
 # ============================================================== rehearsal
 func _enter_rehearsal() -> void:

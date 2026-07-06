@@ -18,6 +18,7 @@ var _cast: ColorRect
 var _cast_title: Label
 var _cast_sub: Label
 var _cast_card: Label
+var _cast_foot: Label
 
 var _vote_root: Control
 var _portrait_boxes: Dictionary = {}   # target index -> VBoxContainer chip zone
@@ -68,14 +69,27 @@ func _build_cast_overlay() -> void:
 	_cast_card.add_theme_color_override("font_outline_color", Color(0.05, 0.03, 0.06))
 	_cast_card.add_theme_constant_override("outline_size", 8)
 	vb.add_child(_cast_card)
+	# standing footer: the one instruction that never changes during casting —
+	# everyone not summoned keeps eyes down and waits for their own voice.
+	_cast_foot = Label.new()
+	_cast_foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cast_foot.add_theme_font_override("font", _font_baloo)
+	_cast_foot.add_theme_font_size_override("font_size", 22)
+	_cast_foot.add_theme_color_override("font_color", Color(0.78, 0.62, 0.6))
+	_cast_foot.add_theme_color_override("font_outline_color", Color(0.05, 0.03, 0.06))
+	_cast_foot.add_theme_constant_override("outline_size", 6)
+	vb.add_child(_cast_foot)
 
-func cast_show(title: String, title_color: Color, sub: String, card: String, card_color: Color) -> void:
+## foot: the standing "everyone else — eyes down · listen" instruction (persists
+## through a seat's reveal; "" during the eyes-closed lulls and the roll-call).
+func cast_show(title: String, title_color: Color, sub: String, card: String, card_color: Color, foot := "") -> void:
 	_cast.visible = true
 	_cast_title.text = title
 	_cast_title.add_theme_color_override("font_color", title_color)
 	_cast_sub.text = sub
 	_cast_card.text = card
 	_cast_card.add_theme_color_override("font_color", card_color)
+	_cast_foot.text = foot
 
 func cast_hide() -> void:
 	_cast.visible = false
