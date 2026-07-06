@@ -84,7 +84,7 @@ func slot_summary(n: int) -> String:
 	var tag := "at rest"
 	if bool(run.get("active", false)):
 		tag = "night %d underway" % (int(run.get("run_night", 0)) + 1)
-	return "estate of %d nights — %s" % [nights, tag]
+	return "estate of %s — %s" % [_plural(nights, "night"), tag]
 
 func load_slot(n: int) -> void:
 	current_slot = clampi(n, 1, 3)

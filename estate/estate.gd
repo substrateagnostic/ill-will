@@ -96,6 +96,11 @@ func _ready() -> void:
 				_enter_lobby()
 				get_tree().create_timer(0.4).timeout.connect(func():
 					VerifyCapture.snap("lobbyrows")))
+		elif arg == "--slotshot":
+			get_tree().create_timer(1.2).timeout.connect(func():
+				_build_slot_panel()
+				get_tree().create_timer(0.4).timeout.connect(func():
+					VerifyCapture.snap("slots")))
 		elif arg == "--strolltest":
 			get_tree().create_timer(1.5).timeout.connect(func():
 				_enter_lobby()
