@@ -84,6 +84,15 @@ var _meter_bar: HBoxContainer
 var _meter_segs: Array = []       # {rect: ColorRect, label: Label} per player
 var _uncut_seg: ColorRect
 
+# tally ceremony (Splatoon-style turf reveal at time-up)
+var _tally_done := false
+var _tally_root: Control
+var _tally_badge: PlayerBadge
+var _tally_name: Label
+var _tally_pct: Label
+var _tally_last_int := -1
+var _tally_last_tick_ms := 0
+
 @onready var cam: Camera3D = $Camera3D
 @onready var sun: DirectionalLight3D = $Sun
 @onready var timer_label: Label = $UI/TimerLabel
@@ -151,6 +160,7 @@ func begin(config: Dictionary) -> void:
 		mu.reset(sp, (-sp).normalized())
 		mowers.append(mu)
 	_build_meter()
+	_build_tally_ui()
 	_rebuild_scoreboard()
 	_log("begin players=%d seed=%d roundtime=%.0f bots=%s covtest=%s" % [
 		roster.size(), int(config.rng_seed), round_time, str(bot_enabled), _covtest])
@@ -328,7 +338,9 @@ func _physics_process(delta: float) -> void:
 				_over12 += 1
 				print("MOWER_PERF frame step=%.2fms (>12) t=%.1f" % [ms, round_t])
 		Phase.RESULTS:
-			if phase_t >= 3.0 and not _reported:
+			# hold until the tally ceremony finishes (~4.5s); the phase_t fallback
+			# guarantees the round still reports if a reveal tween ever stalls.
+			if (_tally_done or phase_t >= 6.0) and not _reported:
 				_reported = true
 				report_finished(_results)
 				# automated all-bot soak/demo self-terminates (no shell attached)
@@ -480,18 +492,16 @@ func _end_round() -> void:
 		_paint_worst_ms, _commit_worst_ms, _worst_step_ms, _over12, _worst_frame_ms, _frames_over_12, _frame_count, _ram_count])
 	print("KILL_EVENTS n=", _kill_events.size(), " ", JSON.stringify(_kill_events))
 	_build_results()
-	# celebrate the winner
-	var winner: int = _results.placements[0]
-	mowers[winner].cheer()
-	_confetti(Vector3(mowers[winner].pos.x, 1.4, mowers[winner].pos.y), roster[winner].color)
-	var wpl: Dictionary = roster[winner]
-	_flash_banner("%s TAKES THE LAWN!\n%.0f%%" % [wpl.name, lawn.coverage_pct(winner)], wpl.color, 9999.0)
-	Sfx.play("match_win")
 	timer_label.text = ""
 	hint_label.visible = false
+	# covtest is a headless math assert — skip the ceremony, quit immediately.
 	if _covtest:
 		_log("covtest done")
 		get_tree().quit(0 if ok else 1)
+		return
+	# THE TALLY: withhold the winner and stage the Splatoon-style turf reveal.
+	# Presentation only — _results is already built and never changes here.
+	_run_tally()
 
 func _build_results() -> void:
 	var order: Array = range(roster.size())
@@ -597,17 +607,17 @@ func _process(delta: float) -> void:
 	# overtime meter pulse
 	if overtime:
 		_ot_pulse += delta * 6.0
-	# HUD
+	# HUD — frozen once the round ends so the tally ceremony withholds standings.
 	if phase == Phase.PLAY or phase == Phase.INTRO:
 		var remain := int(ceil(maxf(0.0, round_time - round_t)))
 		timer_label.text = str(remain)
 		var hot := overtime or remain <= 10
 		timer_label.add_theme_color_override("font_color", Color(1, 0.35, 0.25) if hot else Color(0.15, 0.35, 0.1))
-	_update_meter()
-	_score_t -= delta
-	if _score_t <= 0.0:
-		_score_t = 0.2
-		_rebuild_scoreboard()
+		_update_meter()
+		_score_t -= delta
+		if _score_t <= 0.0:
+			_score_t = 0.2
+			_rebuild_scoreboard()
 
 func _slow_mo() -> void:
 	if _slowmo or _covtest:
@@ -677,6 +687,152 @@ func _flash_banner(text: String, color: Color, duration: float) -> void:
 		var tw := create_tween()
 		tw.tween_interval(duration)
 		tw.tween_callback(func() -> void: banner.visible = false)
+
+# -- tally ceremony (Splatoon turf reveal) ------------------------------------
+# At time-up we WITHHOLD the winner: the live meter/scoreboard freeze and hide,
+# the camera pulls to the whole lawn, and each player's turf saturates in turn
+# (worst -> best) while a big 72pt count-up ticks their coverage 0 -> final.
+# The winner is stamped last with a flourish. Presentation only: _results is
+# already committed in _end_round and nothing here touches coverage/scoring.
+
+func _build_tally_ui() -> void:
+	_tally_root = Control.new()
+	_tally_root.name = "TallyRoot"
+	_tally_root.anchor_right = 1.0
+	_tally_root.anchor_bottom = 1.0
+	_tally_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tally_root.visible = false
+	$UI.add_child(_tally_root)
+	# park the count-up in the lower third so it never collides with the
+	# upper-center banner ("TALLYING…" / "X TAKES THE LAWN!").
+	var cc := CenterContainer.new()
+	cc.anchor_left = 0.0
+	cc.anchor_top = 0.42
+	cc.anchor_right = 1.0
+	cc.anchor_bottom = 1.0
+	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tally_root.add_child(cc)
+	var vb := VBoxContainer.new()
+	vb.alignment = BoxContainer.ALIGNMENT_CENTER
+	vb.add_theme_constant_override("separation", 4)
+	cc.add_child(vb)
+	# badge + name row
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	vb.add_child(row)
+	_tally_badge = PlayerBadge.make(0, 40)
+	row.add_child(_tally_badge)
+	_tally_name = Label.new()
+	_tally_name.add_theme_font_override("font", load("res://assets/fonts/LuckiestGuy-Regular.ttf"))
+	_tally_name.add_theme_font_size_override("font_size", 40)
+	_tally_name.add_theme_color_override("font_outline_color", Color(0.07, 0.07, 0.1))
+	_tally_name.add_theme_constant_override("outline_size", 8)
+	_tally_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	row.add_child(_tally_name)
+	# big count-up digits (fixed footprint so the pop scales from center)
+	_tally_pct = Label.new()
+	_tally_pct.add_theme_font_override("font", load("res://assets/fonts/LuckiestGuy-Regular.ttf"))
+	_tally_pct.add_theme_font_size_override("font_size", 72)
+	_tally_pct.add_theme_color_override("font_outline_color", Color(0.05, 0.05, 0.08))
+	_tally_pct.add_theme_constant_override("outline_size", 12)
+	_tally_pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tally_pct.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_tally_pct.custom_minimum_size = Vector2(360, 100)
+	_tally_pct.pivot_offset = Vector2(180, 50)
+	vb.add_child(_tally_pct)
+
+func _run_tally() -> void:
+	# withhold the live standings — Splatoon hides the result and "calculates"
+	if _meter_bar:
+		_meter_bar.visible = false
+	var panel := get_node_or_null("UI/ScorePanel")
+	if panel:
+		panel.visible = false
+	lawn.set_tally(0, 0.0)
+	_flash_banner("TALLYING…", Color(1, 0.95, 0.55), 9999.0)
+	_tally_camera_pull()
+	await get_tree().create_timer(0.8).timeout
+	# ascending drama: worst coverage first, the winner (best) revealed last
+	var asc: Array = _results.placements.duplicate()
+	asc.reverse()
+	_tally_root.visible = true
+	banner.visible = false   # the "TALLYING…" beat is over; center digits lead now
+	for i in asc.size():
+		var p: int = asc[i]
+		var final_pct: float = lawn.coverage_pct(p)
+		_tally_set_player(p)
+		lawn.set_tally(p + 1, 0.0)
+		_tally_pct.scale = Vector2(0.7, 0.7)
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.tween_method(_on_tally_value.bind(p), 0.0, final_pct, 0.5) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+		tw.tween_method(func(g: float) -> void: lawn.set_tally(p + 1, g), 0.0, 1.0, 0.45)
+		tw.tween_property(_tally_pct, "scale", Vector2.ONE, 0.24) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		await tw.finished
+		_on_tally_value(final_pct, p)   # land exactly on the final number
+		# mid-count screenshot: after the 2nd player lands (one turf lit, digits up)
+		if i == 1 and _vc != null:
+			await _vc.snap("tally_mid")
+		await get_tree().create_timer(0.08).timeout
+	# winner stamp — the flourish
+	var winner: int = _results.placements[0]
+	var wpl: Dictionary = roster[winner]
+	lawn.set_tally(winner + 1, 1.0)
+	_tally_set_player(winner)
+	_tally_pct.text = "%d%%" % int(round(lawn.coverage_pct(winner)))
+	_tally_pct.scale = Vector2.ONE
+	banner.text = "%s TAKES THE LAWN!" % wpl.name
+	banner.add_theme_color_override("font_color", wpl.color)
+	banner.visible = true
+	_stamp_pop()
+	Sfx.play("match_win")
+	_shake = maxf(_shake, 0.4)
+	mowers[winner].cheer()
+	_confetti(Vector3(mowers[winner].pos.x, 1.4, mowers[winner].pos.y), wpl.color)
+	if _vc != null:
+		await _vc.snap("winner_stamp")
+	await get_tree().create_timer(1.0).timeout
+	_tally_done = true
+
+func _tally_set_player(p: int) -> void:
+	_tally_badge.player_index = p
+	_tally_badge.color = roster[p].color
+	_tally_name.text = str(roster[p].name)
+	_tally_name.add_theme_color_override("font_color", roster[p].color)
+	_tally_pct.add_theme_color_override("font_color", roster[p].color)
+	_tally_pct.text = "0%"
+	_tally_last_int = -1
+
+func _on_tally_value(v: float, _p: int) -> void:
+	var iv := int(round(v))
+	_tally_pct.text = "%d%%" % iv
+	if iv != _tally_last_int:
+		_tally_last_int = iv
+		var now := Time.get_ticks_msec()
+		if now - _tally_last_tick_ms >= 32:   # ~30Hz roll, never a machine-gun
+			_tally_last_tick_ms = now
+			Sfx.play("card", -7.0)
+
+func _set_cam_pos(pos: Vector3) -> void:
+	cam.position = pos
+	cam.look_at(Vector3.ZERO)
+
+func _tally_camera_pull() -> void:
+	# lift to a fuller, more overhead framing so the whole lawn reads as a map
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_method(_set_cam_pos, cam.position, Vector3(0.0, 20.0, 6.5), 0.7) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.tween_property(cam, "fov", 54.0, 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+func _stamp_pop() -> void:
+	banner.pivot_offset = banner.size / 2.0
+	banner.scale = Vector2(1.7, 1.7)
+	var tw := create_tween()
+	tw.tween_property(banner, "scale", Vector2.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 # -- meter (Splatoon-style top bar) -------------------------------------------
 
