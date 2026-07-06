@@ -713,7 +713,7 @@ const HOWTO := {
 	"swap": {"goal": "Kart race where your weapon TRADES PLACES with whoever it hits. The lead is a rumor.", "a": "THROW SWAP ORB", "b": "hold: DRIFT, release: BOOST"},
 	"deadweight": {"goal": "Sumo where the dead never leave — they possess the furniture and fling it at the living.", "a": "SHOVE", "b": "HOP"},
 	"throne": {"goal": "One throne, four claimants. Reigning scores. Decrees blast, guards defend, gravity votes last.", "a": "SHOVE / DECREE", "b": "DASH / GUARD"},
-	"lastwill": {"goal": "A brawl where dying is power: the dead stop the world for six seconds and write curses into their will.", "a": "SHOVE", "b": "HOP"},
+	"lastwill": {"goal": "A funeral procession race: first to the crypt inherits. Every death freezes the world while the deceased writes a curse into the road.", "a": "SHOVE", "b": "HOP"},
 	"seance": {"goal": "A co-op séance: guide the planchette to the spirit's word — but one of you was paid in grudge to make it fail without getting caught. The Executor is the medium.", "a": "CHANT ON THE PULSE", "b": "SURGE (anonymous)"},
 	"understudy": {"goal": "Everyone knows tonight's play but the understudy, who must bluff along. Rehearse, interrogate, vote — the scoring never stalemates.", "a": "COMMIT (move = choose)", "b": "—"},
 }
