@@ -95,6 +95,21 @@ const HOLD_ROYALTY := 1
 const ESCAPE_ROYALTY := 2
 const CAUGHT_GRUDGE := 2
 
+# --- audio drama pass (presentation only; §11 of docs/design/09-aaa-gap-analysis.md)
+# Chant taps used to be silent (candle flare only). Each seat now ticks at its
+# OWN pitch, so the couch can HEAR who is tapping — and, from the rhythm, who is
+# off-beat. That turns the core séance tell (the saboteur's broken rhythm) from
+# a purely visual read into an audible one. Sfx.play only offers a symmetric
+# wobble around 1.0, so a tiny local pool plays these at seat-DISTINCT pitches,
+# reusing the existing Sfx bank streams — no new audio files, and never in tally.
+const SEAT_TAP_PITCH := [0.9, 1.0, 1.12, 1.26]   # per-seat chant tick pitch — the tell
+const TAP_TICK_DB := -12.0
+const ROLL_START := 1.6         # unmask drumroll window, in REVEAL seconds
+const ROLL_END := 3.2           # ...building into the unmask hit at t=3.2
+const ROLL_STEP := 0.12         # one planchette rattle every 0.12s
+const LEDGER_STAGGER := 0.5     # settlement rows read out one beat apart
+const REVEAL_FINISH_T := 11.1   # was 9.6; +1.5s room for the staggered ledger
+
 var phase: int = Phase.WAITING
 var game_time := 0.0
 var rng := RandomNumberGenerator.new()
@@ -140,6 +155,13 @@ var _commits_wrong := 0
 var _seance_success := false
 var _seance_over_cause := ""
 var _low_focus_warned := false
+
+# audio drama (presentation only) — local pitched-tick pool + settle readout
+var _pitched_players: Array = []       # AudioStreamPlayer pool for pitched ticks
+var _pitched_next := 0
+var _pitched_streams: Dictionary = {}  # bank key -> AudioStream (lazy loaded)
+var _ledger_rows: Array = []           # {text,color} queued for staggered readout
+var _settle_row_i := 0
 
 # deduction state
 var suspicion: Dictionary = {}       # index -> float (bots' evidence read)
@@ -206,6 +228,8 @@ func _ready() -> void:
 	_set_focus_ui(1.0)
 	_ui = SeanceUI.new()
 	add_child(_ui)
+	if not _tally:
+		_build_pitched_pool()
 	await get_tree().create_timer(0.5).timeout
 	if not _started:
 		begin(_default_config())
@@ -808,7 +832,11 @@ func _do_tap(p: int) -> void:
 	var nearest := beat_index() if bt <= BEAT_PERIOD * 0.5 else beat_index() + 1
 	var spam: bool = (int(_last_tap_beat[p]) == nearest)
 	_last_tap_beat[p] = nearest
-	if not spam and dist <= TAP_WINDOW:
+	var on_beat := not spam and dist <= TAP_WINDOW
+	# the audible tell: this seat's chant tick at its own pitch (presentation
+	# only — reads existing state, writes nothing the sim reads back)
+	_play_seat_tick(p, on_beat)
+	if on_beat:
 		focus = clampf(focus + ON_TAP, 0.0, 100.0)
 		_taps_on[p] = int(_taps_on[p]) + 1
 	else:
@@ -822,6 +850,50 @@ func _do_surge(p: int, dir: Vector3) -> void:
 	planchette.show_surge_ripple()
 	if not _tally:
 		Sfx.play("bounce", -12.0, 0.15)
+
+# --------------------------------------------------- pitched audio (presentation)
+## A small AudioStreamPlayer pool so a sound can play at a chosen pitch_scale
+## (the shared Sfx.play only offers a symmetric wobble around 1.0). Built once,
+## never in tally, and routed through the same "SFX" bus the settings sliders
+## drive. Reuses the existing Sfx bank streams — no new audio files.
+func _build_pitched_pool() -> void:
+	for i in 8:
+		var p := AudioStreamPlayer.new()
+		p.bus = "SFX"
+		add_child(p)
+		_pitched_players.append(p)
+
+func _bank_stream(key: String) -> AudioStream:
+	var bank: Dictionary = Sfx.BANK
+	if not bank.has(key) or (bank[key] as Array).is_empty():
+		return null
+	return load("res://assets/audio/%s.ogg" % str(bank[key][0]))
+
+## Play a bank sound at an exact pitch. Inert in tally (audio is muted evidence).
+func _play_pitched(key: String, pitch: float, volume_db: float) -> void:
+	if _tally or _pitched_players.is_empty():
+		return
+	if not _pitched_streams.has(key):
+		_pitched_streams[key] = _bank_stream(key)
+	var strm: AudioStream = _pitched_streams[key]
+	if strm == null:
+		return
+	var p: AudioStreamPlayer = _pitched_players[_pitched_next]
+	_pitched_next = (_pitched_next + 1) % _pitched_players.size()
+	p.stream = strm
+	p.pitch_scale = pitch
+	p.volume_db = volume_db
+	p.play()
+
+## Seat-distinct chant tick. Pitch encodes WHO (seat), timing encodes on/off-beat,
+## so a saboteur's arrhythmic taps land audibly out of pocket at their own tone.
+func _play_seat_tick(seat: int, on_beat: bool) -> void:
+	if _tally:
+		return
+	var pitch: float = SEAT_TAP_PITCH[seat % SEAT_TAP_PITCH.size()]
+	_play_pitched("place", pitch, TAP_TICK_DB)
+	print("SEANCE_TICK p=%d %s pitch=%.2f on_beat=%s beat=%d" % [
+		seat, players[seat].name, pitch, str(on_beat), beat_index()])
 
 func _tick_dwell(delta: float) -> void:
 	var found := ""
@@ -1089,10 +1161,19 @@ func _begin_reveal() -> void:
 		_say("The votes are cast. Let us see whom you have chosen to ruin."))
 	_seq_add(1.6, func():
 		_flash_banner("THE CHARLATAN WAS...", Color(0.9, 0.85, 1.0), 999.0))
+	# unmask drumroll — a planchette-rattle crescendo (pitch 0.9->1.4, swelling)
+	# fills the dead 1.6s between the banner and the unmask hit at t=3.2 (§11 #3)
+	var roll_n := int((ROLL_END - ROLL_START) / ROLL_STEP)
+	for k in roll_n:
+		var rt := ROLL_START + ROLL_STEP * float(k)
+		var frac := float(k) / float(maxi(1, roll_n - 1))
+		var rpitch := lerpf(0.9, 1.4, frac)
+		var rdb := lerpf(-15.0, -5.0, frac)
+		_seq_add(rt, func(): _drumroll_hit(rpitch, rdb))
 	_seq_add(3.2, func(): _unmask_moment())
 	_seq_add(4.9, func(): _verdict_moment())
 	_seq_add(6.1, func(): _settle_moment())
-	_seq_add(9.6, func(): _finish_match())
+	_seq_add(REVEAL_FINISH_T, func(): _finish_match())
 
 func _unmask_moment() -> void:
 	var nm: String = str(players[charlatan].name)
@@ -1161,25 +1242,67 @@ func _settle_moment() -> void:
 					break
 			if first_correct >= 0:
 				_kill_events.append({"killer": first_correct, "victim": charlatan, "cause": "seance"})
-	# ---- settle rows on screen
-	_ui.clear_settle_rows()
+	# ---- settle rows: collect (SAME content + order as before), then read
+	# them out one beat apart so the ledger lands as a sequence, not a wall of
+	# text (§11 #4). The economy above is untouched — this only changes WHEN
+	# each row appears; tally adds them all at once so evidence is unchanged.
+	_ledger_rows.clear()
 	if _practice:
-		_ui.add_settle_row("practice sitting — nothing at stake", Color(0.7, 0.68, 0.75))
+		_ledger_add("practice sitting — nothing at stake", Color(0.7, 0.68, 0.75))
 	if _seance_success:
-		_ui.add_settle_row("the seance HELD — the faithful collect royalties", Color(1.0, 0.85, 0.4))
+		_ledger_add("the seance HELD — the faithful collect royalties", Color(1.0, 0.85, 0.4))
 	else:
-		_ui.add_settle_row("the seance DIED — the word was %s" % word, Color(1.0, 0.5, 0.42))
+		_ledger_add("the seance DIED — the word was %s" % word, Color(1.0, 0.5, 0.42))
 	if _caught:
-		_ui.add_settle_row("%s eats %d grudge, dragged into the light" % [players[charlatan].name, CAUGHT_GRUDGE],
+		_ledger_add("%s eats %d grudge, dragged into the light" % [players[charlatan].name, CAUGHT_GRUDGE],
 			players[charlatan].color)
 	elif not _seance_success:
-		_ui.add_settle_row("%s converts the fee — +%d royalty, clean hands" % [players[charlatan].name, ESCAPE_ROYALTY],
+		_ledger_add("%s converts the fee — +%d royalty, clean hands" % [players[charlatan].name, ESCAPE_ROYALTY],
 			players[charlatan].color)
 	for i in players.size():
 		if i != charlatan and int(vote_target[i]) == charlatan:
-			_ui.add_settle_row("%s fingered the charlatan — +%d royalty" % [players[i].name, CATCH_ROYALTY],
+			_ledger_add("%s fingered the charlatan — +%d royalty" % [players[i].name, CATCH_ROYALTY],
 				players[i].color)
-	VerifyCapture.snap("settle")
+	_ui.clear_settle_rows()
+	if _tally:
+		for r in _ledger_rows:
+			_ui.add_settle_row(r.text, r.color)
+		VerifyCapture.snap("settle")
+	else:
+		_settle_row_i = 0
+		_reveal_next_ledger_row()
+
+## One rattle of the unmask drumroll (presentation only; silent in tally).
+func _drumroll_hit(pitch: float, db: float) -> void:
+	if _tally:
+		return
+	_play_pitched("bounce", pitch, db)
+	print("SEANCE_DRUMROLL pitch=%.2f db=%.1f" % [pitch, db])
+
+func _ledger_add(text: String, color: Color) -> void:
+	_ledger_rows.append({"text": text, "color": color})
+
+## Staggered settlement readout (non-tally): reveal one ledger row every
+## LEDGER_STAGGER seconds with a card tick, then snap the settled ledger and
+## punctuate the total with a warm pulse. Presentation only.
+func _reveal_next_ledger_row() -> void:
+	if _settle_row_i >= _ledger_rows.size():
+		VerifyCapture.snap("settle")   # capture the fully-settled ledger
+		# ...then the final-total pulse, a beat later so the snap stays clean
+		var pt := create_tween()
+		pt.tween_interval(0.25)
+		pt.tween_callback(func():
+			_ui.pulse_settle()
+			Sfx.play("confirm", -6.0))
+		return
+	var r: Dictionary = _ledger_rows[_settle_row_i]
+	_ui.add_settle_row(r.text, r.color, true)
+	Sfx.play("card", -8.0)
+	print("SEANCE_LEDGER row=%d \"%s\"" % [_settle_row_i, str(r.text)])
+	_settle_row_i += 1
+	var tw := create_tween()
+	tw.tween_interval(LEDGER_STAGGER)
+	tw.tween_callback(_reveal_next_ledger_row)
 
 func _finish_match() -> void:
 	if _reported:
