@@ -1326,8 +1326,14 @@ func _enter_auction() -> void:
 	if not pool_override.is_empty():
 		pool = pool_override
 	auction_options.clear()
+	# Sample WITHOUT replacement — Andrew's auction offered LAST WILL twice.
+	var bag := pool.duplicate()
 	for k in 3:
-		auction_options.append(pool[EstateState.rng.randi_range(0, pool.size() - 1)])
+		if bag.is_empty():
+			bag = pool.duplicate()
+		var pick := EstateState.rng.randi_range(0, bag.size() - 1)
+		auction_options.append(bag[pick])
+		bag.remove_at(pick)
 	_bots_place_bets()
 	_rebuild_top_bar()
 	_clear_panel("THE AUCTION — bid grudge to choose the game")

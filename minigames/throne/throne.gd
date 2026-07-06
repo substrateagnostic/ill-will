@@ -34,7 +34,7 @@ const ARENA_HALF := 6.0
 const DAIS_TOP_Y := 0.51
 var SEAT_POS := Vector3(0, DAIS_TOP_Y, 0.12)
 
-const MATCH_TIME := 150.0
+const MATCH_TIME := 100.0  # playtest (Andrew): dethrone mode was loooooong
 const CRISIS_TIME := 30.0          # last 30s: throne scores double
 const CRISIS_RATE := 2.0
 const NORMAL_RATE := 1.0

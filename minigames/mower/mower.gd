@@ -27,7 +27,7 @@ const CHAR_FALLBACKS := [
 	"res://assets/models/kaykit/Rogue.glb",
 ]
 const GRAVE_SCENE := "res://scenes/gravestone.tscn"
-const ROUND_TIME := 120.0
+const ROUND_TIME := 45.0   # playtest (Andrew): 120s way too long — Mario Party pace
 const OVERTIME_LEN := 20.0
 const RAM_HALF_ANGLE := 0.15     # dot threshold facing vs victim
 const STEAL_BURST := 6

@@ -65,6 +65,19 @@ func _ready() -> void:
 	tabs.add_child(_build_audio_tab())
 	tabs.add_child(_build_video_tab())
 	tabs.add_child(_build_access_tab())
+	# Playtest (Andrew): no way to leave a game — escape hatch from anywhere.
+	var quit_btn := Button.new()
+	quit_btn.text = "QUIT TO TITLE  (forfeits the current game)"
+	quit_btn.custom_minimum_size = Vector2(0, 44)
+	quit_btn.pressed.connect(func():
+		open = false
+		panel.visible = false
+		get_tree().paused = false
+		PlayerInput.save_setup()
+		_save_prefs()
+		Sfx.play("card")
+		get_tree().change_scene_to_file("res://estate/estate.tscn"))
+	box.add_child(quit_btn)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--opensettings="):
 			var t := int(arg.trim_prefix("--opensettings="))
