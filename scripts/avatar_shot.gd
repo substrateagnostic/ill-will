@@ -96,6 +96,13 @@ func begin_turn(p: int, avatar: PlayerAvatar, ball: Ball, is_bot: bool, chaos: b
 func is_addressed(p: int) -> bool:
 	return state == State.ADDRESS and actor == p
 
+## True while the machine is actively running p's shot (walking in, aiming,
+## charging or swinging). False when begin_turn declined (dead/sunk ball) or
+## the shot already resolved — callers must then fall back to the v3 direct
+## path so the turn ALWAYS advances (liveness guarantee).
+func is_pending(p: int) -> bool:
+	return actor == p and state in [State.WALK, State.ADDRESS, State.CHARGE, State.SWING]
+
 ## An outside path fired a stroke (v3 drag, --autoplay direct, --autoputt,
 ## killcam tests). Stand down cleanly; the sim already has the ball.
 func on_external_stroke() -> void:

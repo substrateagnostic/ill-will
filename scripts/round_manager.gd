@@ -47,6 +47,18 @@ func start_round(order: Array, round_balls: Array, chaos := false) -> void:
 	_turn_pointer = -1
 	for p in turn_order:
 		strokes[p] = 0
+	# Balls can die BETWEEN putt phases (e.g. a black hole camping the tees eats
+	# a resting ball during the BUILD phase, while _round_over from the previous
+	# round makes on_ball_died a no-op). Book them as resolved up front so the
+	# rotation never hands a turn to a ball that cannot be played. The death
+	# drama (banner, gravestone, grudge, royalty) already played when it died.
+	for p in turn_order:
+		var b = balls[p]
+		if b.is_dead and not resolved.has(p):
+			resolved[p] = "dead"
+		elif b.is_sunk and not resolved.has(p):
+			resolved[p] = "sunk"
+			finish_order.append(p)
 	_advance_turn()
 
 func current_player() -> int:

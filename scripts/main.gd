@@ -874,8 +874,10 @@ func _bot_tick(delta: float) -> void:
 		Phase.PUTT:
 			# v4 walk layer: the bot's avatar must ARRIVE at its ball before the
 			# think clock starts (spec: cadence counts from arrival). While it
-			# walks, keep resetting the timer.
-			if _embodied and not avatar_shot.is_addressed(actor):
+			# walks, keep resetting the timer. If the embodied machine is NOT
+			# running this shot (begin_turn declined — e.g. the ball died between
+			# rounds), fall through to the v3 direct path so the turn resolves.
+			if _embodied and avatar_shot.is_pending(actor) and not avatar_shot.is_addressed(actor):
 				_bot_think_t = 0.0
 				return
 			# CHAOS: fire the instant the turn opens and DON'T wait for the ball to
