@@ -104,6 +104,8 @@ var _cli_seed := 1
 var _cli_players := 4
 var _cli_rounds := -1
 var _cli_roundtime := -1.0
+var _dead_hint_demo := false     # --deadhint: seat 0 human, becomes a seagull
+var _deadhint_fired := false
 
 var _shake := 0.0
 var _last_status := 0.0
@@ -197,6 +199,10 @@ func _physics_process(delta: float) -> void:
 		Phase.PLAY:
 			round_t += delta
 			_tick_play(delta)
+			if _dead_hint_demo and not _deadhint_fired and round_num == 1 and round_t > 0.8:
+				_deadhint_fired = true
+				if (pawns[0] as TiltPawn).state == TiltPawn.PState.STANDING:
+					_on_water_death(0)   # seat 0 splashes -> returns as a seagull
 		Phase.ROUND_END:
 			_tick_pawns_idle(delta)
 			platter.update_tilt(delta, _mass_points())
@@ -575,6 +581,34 @@ func _spawn_gull(p: int, at: Vector3) -> void:
 	gull.position = Vector3(at.x, 1.0, at.z)
 	gulls[p] = gull
 	_rebuild_scoreboard()
+	_refresh_hint()
+
+const TILT_HINT_BASE := "MOVE  -  A = SHOVE (ANSWER A SHOVE TO CLASH!)  -  B = BRACE   |   FALL AND YOU RETURN AS A SEAGULL (A = BOMB)"
+
+## The hint bar's seagull legend: shown whenever a HUMAN is a seagull so the dead
+## get their controls (fly + bomb). Bots never trigger it. Owns hint visibility
+## once the round-1 intro window closes.
+func _refresh_hint() -> void:
+	if hint_label == null:
+		return
+	var human_gull := -1
+	var n := 0
+	for p in roster.size():
+		if p < bot_enabled.size() and not bot_enabled[p] and gulls.has(p):
+			n += 1
+			if human_gull < 0:
+				human_gull = p
+	if n > 0:
+		hint_label.text = _gull_hint_line(human_gull) if n == 1 else "SPLASH! YOU'RE A SEAGULL — MOVE to fly · A = drop a BOMB"
+		hint_label.visible = true
+	else:
+		hint_label.visible = false
+
+func _gull_hint_line(p: int) -> String:
+	var nm: String = (roster[p] as Dictionary).name
+	var mv: String = PlayerInput.describe_binding(p, "move")
+	var bomb: String = PlayerInput.describe_binding(p, "a")
+	return "%s IS A SEAGULL — %s fly · %s = drop a BOMB" % [nm, mv, bomb]
 
 func _spawn_guano(from: Vector3, owner_p: int) -> void:
 	var node := MeshInstance3D.new()
@@ -675,11 +709,16 @@ func _start_round() -> void:
 		pawn.reset_for_round(_spawn_pos(i))
 	round_label.text = "ROUND %d / %d" % [round_num, rounds_total]
 	_flash_banner("ROUND %d" % round_num, Color(1, 0.85, 0.2), 1.2)
-	hint_label.visible = round_num == 1
 	if round_num == 1:
+		hint_label.text = TILT_HINT_BASE
+		hint_label.visible = true
 		var tw := create_tween()
 		tw.tween_interval(7.0)
-		tw.tween_callback(func() -> void: hint_label.visible = false)
+		# hand visibility to _refresh_hint: it keeps the bar up iff a human is a gull
+		tw.tween_callback(func() -> void: _refresh_hint())
+	else:
+		# gulls were cleared for the new round -> hide unless a human is a gull
+		_refresh_hint()
 	_rebuild_scoreboard()
 	_log("round_start %d" % round_num)
 
@@ -803,18 +842,25 @@ func _parse_args() -> void:
 			_cli_roundtime = float(arg.trim_prefix("--roundtime="))
 		elif arg.begins_with("--tilttest="):
 			_test_mode = arg.trim_prefix("--tilttest=")
+		elif arg == "--deadhint":
+			_dead_hint_demo = true
 
 func _default_config() -> Dictionary:
 	PlayerInput.auto_assign(_cli_players)
+	if _dead_hint_demo:
+		PlayerInput.assign(0, -4)   # seat 0 = KBM human so its seagull hint reads MOUSE/LMB
 	var r: Array = []
 	for i in _cli_players:
+		var seat_bot: bool = PlayerInput.standalone_bot_default(i)
+		if _dead_hint_demo:
+			seat_bot = (i != 0)   # seat 0 human (forced into a gull), the rest bots
 		r.append({
 			"index": i,
 			"name": GameState.PLAYER_NAMES[i],
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": CHAR_FALLBACKS[i],
 			"device": PlayerInput.device_of(i),
-			"bot": PlayerInput.standalone_bot_default(i),
+			"bot": seat_bot,
 		})
 	return {"roster": r, "rounds": 5, "rng_seed": _cli_seed, "practice": false}
 

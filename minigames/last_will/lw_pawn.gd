@@ -435,6 +435,10 @@ func _do_shove() -> void:
 	if anim and anim.has_animation("Interact"):
 		anim.play("Interact")
 	_anim_lock = 0.35
+	# READABILITY (presentation only — no change to range/power/timing): flash a
+	# directional arc so you can see WHEN the shove fires and WHERE it reaches.
+	if owner_game != null and owner_game.has_method("on_shove_fired"):
+		owner_game.on_shove_fired(global_position, _face, color)
 	var power := SHOVE_BASE + speed() * SHOVE_SPEED_SCALE
 	var hit_any := false
 	for other in owner_game.living_pawns():
