@@ -93,13 +93,27 @@ func _ready() -> void:
 				_show_howto("orbital")
 				VerifyCapture.snap("howto"))
 		elif arg == "--wardrobetest":
+			# Self-contained: backs up and restores the REAL saves it mutates
+			# (buying writes estate_save.json; equipping writes cosmetics.json).
 			get_tree().create_timer(1.2).timeout.connect(func():
+				var est := ProjectSettings.globalize_path("user://estate_save.json")
+				var cos := ProjectSettings.globalize_path("user://cosmetics.json")
+				if FileAccess.file_exists(est):
+					DirAccess.copy_absolute(est, est + ".wt_bak")
+				if FileAccess.file_exists(cos):
+					DirAccess.copy_absolute(cos, cos + ".wt_bak")
 				_enter_lobby()
 				EstateState.legacy[0] = 50
 				_build_wardrobe_panel()
 				_wardrobe_tap("viking_helm")
 				print("WARDROBETEST legacy=%d owned=%s worn=%s" % [EstateState.legacy_of(0), str(EstateState.owned_cosmetics(0)), str(Cosmetics.get_player_cosmetics(0))])
-				VerifyCapture.snap("wardrobe"))
+				VerifyCapture.snap("wardrobe")
+				get_tree().create_timer(1.0).timeout.connect(func():
+					for pair in [[est + ".wt_bak", est], [cos + ".wt_bak", cos]]:
+						if FileAccess.file_exists(pair[0]):
+							DirAccess.copy_absolute(pair[0], pair[1])
+							DirAccess.remove_absolute(pair[0])
+					print("WARDROBETEST saves restored")))
 	if "--skipmenu" in args:
 		Transition.change_scene("res://scenes/main.tscn")
 		return

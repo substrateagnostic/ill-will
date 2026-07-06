@@ -58,11 +58,17 @@ func _init() -> void:
 	custom_minimum_size = Vector2(size_px, size_px)
 
 func _resolve_color() -> Color:
-	# HUD integration passes the exact roster color via `color`. When unset
-	# (probe scenes, quick tests) fall back to the palette, which mirrors
-	# GameState.PLAYER_COLORS exactly — no autoload dependency needed.
+	# HUD integration passes the exact roster color via `color`. When unset,
+	# prefer the LIVE GameState palette (so colorblind palettes recolor badge
+	# fills too); fall back to the static copy in probe/--script contexts
+	# where autoloads don't exist.
 	if color != _UNSET:
 		return color
+	var ml := Engine.get_main_loop()
+	if ml is SceneTree and (ml as SceneTree).root.has_node("GameState"):
+		var cols: Array = (ml as SceneTree).root.get_node("GameState").PLAYER_COLORS
+		if player_index >= 0 and player_index < cols.size():
+			return cols[player_index]
 	if player_index >= 0 and player_index < DEFAULT_COLORS.size():
 		return DEFAULT_COLORS[player_index]
 	return Color.WHITE
