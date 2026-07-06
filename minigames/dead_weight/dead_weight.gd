@@ -374,7 +374,7 @@ func _begin(config: Dictionary) -> void:
 	_layout_spawns(players.size())
 	_build_props()
 	_rebuild_scoreboard()
-	hint_label.text = HINT_LIVING
+	hint_label.text = _controls_bar()
 	round_index = 0
 	_start_round()
 	if _aim_probe_on:
@@ -709,6 +709,47 @@ func _clear_ghosts() -> void:
 
 const HINT_LIVING := "A = SHOVE   B = HOP   ·   THE DEAD POSSESS THE FURNITURE"
 
+## ---- live-binding hint bar (real keys, not "A"/"B"; see docs/verify/realkeys-VERIFY.md) ----
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
+## main bar personalizes only these; an all-bot demo gets an empty list and keeps
+## the generic HINT_LIVING text.
+func _human_seats() -> Array:
+	var out := []
+	for i in players.size():
+		if not players[i].is_bot and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = SHOVE"), else the per-seat "LABEL: KEY/NAME · KEY/NAME"
+## form (mixed keyboard + pad). Consistent with the poltergeist _ghost_hint_line
+## below. Bindings are fixed per match, so this is built once - no live polling.
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The living bar with real keys, or HINT_LIVING for an all-bot demo.
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return HINT_LIVING
+	return "MOVE   ·   %s   ·   %s   ·   THE DEAD POSSESS THE FURNITURE" % [
+		_btn_hint("a", "SHOVE"), _btn_hint("b", "HOP")]
+
 ## Swap the shared hint bar to a dead-state legend the moment a HUMAN becomes a
 ## poltergeist — the dead need the twin-stick controls spelled out (LEFT drifts,
 ## RIGHT aims, A flings). Bots never trigger this, so bot demos keep HINT_LIVING.
@@ -720,7 +761,7 @@ func _refresh_hint() -> void:
 		if i < players.size() and not players[i].is_bot and _ghosts.has(i):
 			dead_humans.append(i)
 	if dead_humans.is_empty():
-		hint_label.text = HINT_LIVING
+		hint_label.text = _controls_bar()
 	elif dead_humans.size() == 1:
 		hint_label.text = _ghost_hint_line(int(dead_humans[0]))
 	else:

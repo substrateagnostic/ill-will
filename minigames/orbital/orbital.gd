@@ -236,6 +236,9 @@ func begin(cfg: Dictionary) -> void:
 			var bot := OrbBot.new()
 			bot.setup(self, i, int(cfg.rng_seed) * 977 + i * 131)
 			bots[i] = bot
+	var _cbar := _controls_bar()
+	if _cbar != "":
+		_hint_label.text = _cbar
 	phase = Phase.PLAY
 	_update_score_rows()
 	if _test_mode == "circ":
@@ -252,6 +255,47 @@ func begin(cfg: Dictionary) -> void:
 	else:
 		_flash_banner("ORBITAL DODGEBALL", Color(1.0, 0.85, 0.25), 2.2)
 		_flash_event("BALLS NEVER DESPAWN. OLD ORBITS STILL KILL.", Color(0.85, 0.88, 1.0))
+
+## ---- live-binding hint bar (real keys, not "A"/"B"; see docs/verify/realkeys-VERIFY.md) ----
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
+## main bar personalizes only these; an all-bot demo gets an empty list and keeps
+## the generic scene-built "A ..." text.
+func _human_seats() -> Array:
+	var out := []
+	for i in bot_enabled.size():
+		if not bot_enabled[i] and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = ..."), else the per-seat "LABEL: KEY/NAME · KEY/NAME" form
+## (mixed keyboard + pad). Bindings are fixed per match, so this is built once when
+## the match starts - no live polling.
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The main bar with real keys, or "" for an all-bot demo (keep the generic text).
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return ""
+	return "MOVE walk   ·   %s   ·   %s" % [
+		_btn_hint("a", "THROW (hold) / CATCH (tap)"), _btn_hint("b", "JUMP the gap")]
 
 ## --- static world (camera, light, stars, planets, ui) ----------------------
 
