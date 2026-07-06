@@ -481,3 +481,36 @@ space), bots auto-skip at 0.4s so soaks stay fast; one killcam per stroke.
   gameplay-receipt lines byte-identical — headless AND windowed (with 2 real
   pauses executed). New flags: --nokillcam; verify-only --parquit, --killcamtest.
 - Evidence: docs/verify/killcam-VERIFY.md + shots/killcam_{signed,self,chaos}.png.
+
+### 2026-07-05 — Visual polish pass: full audit + 8 Meshy props (commits 3c547ec, 71cf56e)
+ART DIRECTOR SWEEP. Phase 1: screenshotted the entire game (estate title/
+grounds/auction/will-reading, all 11 standalone bot demos, Par + forced-trap
+runs) and cataloged every primitive-mesh visual: 31 findings — 8 JARRING,
+12 NOTICEABLE, 11 FINE-AS-IS (charming primitives like trail stones, throne
+"candle" pillars, Understudy's box theater were deliberately left alone).
+Ranked doc: docs/design/07-visual-polish-audit.md.
+
+Phase 2 (8 Meshy generations, the cap; 0 failures): the whole DEAD WEIGHT
+furniture set is now real furniture (wardrobe + table_lamp GLBs finally used,
+new crate + red-cushion armchair; possession glow/dent rewired to GLB
+materials), Greed vaults share the crate, Echo Chamber got broken marble
+columns, Last Will's pendulum is a dark scythe on a shaft (was boxes+slats),
+Par's crusher is an iron press head stretched to the EXACT hammer collider,
+spinner is a wooden sweeper cross, fan is a caged pedestal fan, and the estate
+market stall is a striped-canopy vendor stall (estate.tscn only — estate.gd
+untouched per fence).
+
+Every swap visual-only, proven vs git-stash baselines: greed intercept 0.80
+PASS byte-identical, spinner forced-run log byte-identical, dwbalance 65.0%
+(matches documented table; single dw runs proven non-deterministic even on
+unchanged code), will tally identical mod ±0.1s stamps, estate bot night still
+reaches THE READING OF THE WILL. Evidence: docs/verify/visual-polish-VERIFY.md
++ 31 polish_*.png shots.
+
+BACKLOGGED (top items, ranked in the audit doc): monument obelisks + picnic
+toys (both estate.gd-fenced — the red hex slabs on the lawn are now the
+loudest placeholder left), shared gravestone prop (scenes/ root, outside my
+fence; accretes all night in Par), Last Will lanterns -> stone_lantern.glb
+(free swap, check perf with ~16 instances), magnet post, spikes, throne wall
+dressing, crown. Saves: estate_save.json etc. backed up before runs and
+restored after (hash-verified).
