@@ -6,6 +6,47 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **☀️☀️ MORNING MENU #2 — play this before the 5pm reset. Everything
+  landed. THIRTEEN games, and the estate reaches across the wire.**
+  1. **`build\illwill.exe`** — rebuilt from final master (all of tonight
+     in it). Your session's headline acts:
+     - **PAR v4: your characters PLAY GOLF now.** Walk to the ball,
+       address, hold-release power, swing — through the frozen physics
+       (byte-identical receipts). Your Smite skill-shot camera note
+       applied and verified: whole lane readable while aiming. v3 drag
+       putt survives as SETTINGS pref `par_drag_putt` if the swing
+       isn't it. Bonus: the agent found + root-fixed a REAL v3 bug
+       (black hole killing resting balls between rounds → zombie
+       turns) that may explain your "sunk but went again."
+     - **LAST WILL is the funeral procession race** — chapel → graveyard
+       → THE CRYPT, 3 lives, die → draft a CURSE into a named stretch
+       of road (author plaque, persists across races), out of lives →
+       ghost. First to the crypt inherits.
+     - **MASKED BALL** (theater act 3): find yourself among 20 identical
+       dancers by feel, dance like furniture, one unmask mark. The
+       feather-glint self-ID is the cleverest trick in the anthology.
+     - **ONLINE PHASE 1 IS REAL**: title → HOST NIGHT gives a 6-char
+       code; a friend on your LAN joins, claims a seat, walks YOUR
+       grounds, readies across the wire. Internet friends need UDP 8910
+       forwarded this phase (or Steam Remote Play meanwhile). Test solo
+       with two instances: `--net=host` / `--net=join=127.0.0.1:8910`.
+     - Andrew's list: ALL FIXED — mower 45s, throne 100s, auction
+       dupes, QUIT TO TITLE (ESC), echo apron camping (THE RING
+       DEMANDS), echo honors rounds, swap ramp unstick, greed tie-break
+       (tied human now beats bot), caddies face the green, real keys in
+       hint bars ("Space = SHOVE"), eyes-closed VOICE ROLL-CALL in both
+       theater games, and every shove in the anthology has HIT-KIT
+       weight + cooldown rings.
+  2. **Your sign-off list** (balance, 2 min): throne overtime while
+     contested · tilt overtime · gull assist royalty · DW house-awakens
+     · understudy casting compression. Say yes/no per item.
+  3. **Music** — six slots wait in assets/music/. Your ear, your call.
+  4. **Tomorrow's plan is written**: docs/design/11-final-day-plan.md
+     (online phase 2 fleet, AAA remainders, rituals, handoff). Fire the
+     fighter prompt from projects/second-prompt-draft.md in a FRESH
+     session.
+  5. One wink: the Executor has a rare new greeting about a seagull.
+
 - **📋 ANDREW'S PLAYTEST — full triage** (his email, disposed item by item):
   FIXED TONIGHT: mower 120s→45s; throne 150s→100s; auction duplicate
   options (sample w/o replacement); QUIT TO TITLE in the ESC overlay.
