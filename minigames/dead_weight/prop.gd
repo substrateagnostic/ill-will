@@ -17,6 +17,15 @@ const HIT_COOLDOWN := 0.28
 
 const TIER_DISPLAY := {"lamp": "THE LAMP", "crate": "THE CRATE", "chair": "THE CHAIR", "wardrobe": "THE WARDROBE"}
 
+## Meshy GLB per tier (visual only — colliders/masses untouched). Falls back to
+## the original primitive mesh if an asset is missing.
+const TIER_GLB := {
+	"lamp": "res://assets/models/meshy/table_lamp.glb",
+	"crate": "res://assets/models/meshy/crate.glb",
+	"chair": "res://assets/models/meshy/armchair.glb",
+	"wardrobe": "res://assets/models/meshy/wardrobe.glb",
+}
+
 var owner_game: Node = null           # back-ref to the controller (for game_time)
 var tier := "crate"
 var base_color := Color(0.55, 0.4, 0.28)
@@ -26,8 +35,9 @@ var possess_color := Color.WHITE
 var dent := 0.0                        # accumulated darkening across rounds
 var alive_in_void := true
 
-var _mat: StandardMaterial3D
-var _visual: MeshInstance3D
+var _mats: Array[StandardMaterial3D] = []   # every unique surface mat on the visual
+var _albedo_base: Array[Color] = []         # matching initial albedo per mat (dent tinting)
+var _visual: Node3D
 var _wisps: CPUParticles3D
 var _wobble_t := 0.0
 var _hit_cd := 0.0
@@ -57,15 +67,7 @@ func setup(p_tier: String, p_base: Color, p_owner: Node) -> void:
 	shape.shape = _tier_shape()
 	add_child(shape)
 
-	_visual = MeshInstance3D.new()
-	_visual.name = "Visual"
-	_visual.mesh = _tier_mesh()
-	_mat = StandardMaterial3D.new()
-	_mat.albedo_color = base_color
-	_mat.roughness = 0.7
-	_mat.emission_enabled = true
-	_mat.emission = Color.BLACK
-	_visual.material_override = _mat
+	_visual = _build_visual()
 	add_child(_visual)
 
 	_wisps = CPUParticles3D.new()
@@ -120,6 +122,60 @@ func _tier_shape() -> Shape3D:
 	b3.size = Vector3(0.62, 0.62, 0.62)
 	return b3
 
+## GLB visual (normalized: height = collider height, base re-seated so the model
+## is centered on the body origin like the old primitive was). Purely visual.
+func _build_visual() -> Node3D:
+	_mats.clear()
+	_albedo_base.clear()
+	var glb: String = TIER_GLB.get(tier, "")
+	if glb != "" and ResourceLoader.exists(glb):
+		var h := rest_height() * 2.0
+		var wrap := MeshyProp.instance(glb, h)
+		wrap.name = "Visual"
+		# clamp the visual footprint to (a hair over) the collider so what you
+		# see is what slams you — per-axis, boxy props tolerate the squeeze
+		var fp: Vector2 = {"lamp": Vector2(0.5, 0.5), "crate": Vector2(0.66, 0.66),
+				"chair": Vector2(0.58, 0.58), "wardrobe": Vector2(0.95, 0.68)}[tier]
+		var aabb := MeshyProp.merged_aabb_of_scaled(wrap.get_node("Model"))
+		if aabb.size.x > fp.x:
+			wrap.scale.x = fp.x / aabb.size.x
+		if aabb.size.z > fp.y:
+			wrap.scale.z = fp.y / aabb.size.z
+		wrap.position.y = -rest_height()   # collider is centered on origin
+		_collect_mats(wrap)
+		if not _mats.is_empty():
+			return wrap
+	# primitive fallback (original look)
+	var mi := MeshInstance3D.new()
+	mi.name = "Visual"
+	mi.mesh = _tier_mesh()
+	var m := StandardMaterial3D.new()
+	m.albedo_color = base_color
+	m.roughness = 0.7
+	m.emission_enabled = true
+	m.emission = Color.BLACK
+	mi.material_override = m
+	_mats.append(m)
+	_albedo_base.append(base_color)
+	return mi
+
+## Duplicate every surface material so this prop can glow/darken independently.
+func _collect_mats(node: Node) -> void:
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		if mi.mesh != null:
+			for s in mi.mesh.get_surface_count():
+				var src := mi.get_active_material(s)
+				if src is StandardMaterial3D:
+					var dup: StandardMaterial3D = src.duplicate()
+					dup.emission_enabled = true
+					dup.emission = Color.BLACK
+					mi.set_surface_override_material(s, dup)
+					_mats.append(dup)
+					_albedo_base.append(dup.albedo_color)
+	for c in node.get_children():
+		_collect_mats(c)
+
 func _tier_mesh() -> Mesh:
 	match tier:
 		"lamp":
@@ -165,7 +221,8 @@ func possess(ghost_index: int, color: Color) -> void:
 	possess_color = color
 	gravity_scale = 0.0
 	sleeping = false
-	_mat.emission = color
+	for m in _mats:
+		m.emission = color
 	_wobble_t = 0.0
 	var wmat: StandardMaterial3D = _wisps.material_override
 	wmat.albedo_color = Color(color.r, color.g, color.b, 0.6)
@@ -174,9 +231,10 @@ func possess(ghost_index: int, color: Color) -> void:
 func release() -> void:
 	possessed_by = -1
 	gravity_scale = 1.0
-	_mat.emission = Color.BLACK
 	_emission_energy = 0.0
-	_mat.emission_energy_multiplier = 1.0
+	for m in _mats:
+		m.emission = Color.BLACK
+		m.emission_energy_multiplier = 1.0
 	_wisps.emitting = false
 	_visual.rotation = Vector3.ZERO
 
@@ -201,7 +259,8 @@ func _physics_process(delta: float) -> void:
 	_visual.rotation.z = sin(_wobble_t) * 0.16
 	_visual.rotation.x = cos(_wobble_t * 0.8) * 0.12
 	_emission_energy = 1.4 + sin(_wobble_t * 1.5) * 0.5
-	_mat.emission_energy_multiplier = _emission_energy
+	for m in _mats:
+		m.emission_energy_multiplier = _emission_energy
 
 func _on_body_entered(body: Node) -> void:
 	if possessed_by < 0 or _hit_cd > 0.0:
@@ -233,4 +292,5 @@ func reset_for_round(darken: float) -> void:
 	global_position = home_spawn
 	rotation = Vector3.ZERO
 	_visual.rotation = Vector3.ZERO
-	_mat.albedo_color = base_color.lerp(Color(0.12, 0.12, 0.14), clampf(dent, 0.0, 0.6))
+	for i in _mats.size():
+		_mats[i].albedo_color = _albedo_base[i].lerp(Color(0.12, 0.12, 0.14), clampf(dent, 0.0, 0.6))

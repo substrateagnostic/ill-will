@@ -16,9 +16,12 @@ including within this game ("Par for the Curse" / the UN Party Game anthology).
 ## Provenance
 
 Each asset's exact generation prompt and Meshy task IDs are recorded in
-`docs/verify/meshy-assets-VERIFY.md` (props batch) and
-`docs/verify/cosmetics-VERIFY.md` (`cosmetics/` hat batch). Assets were
-generated preview → refine, exported as GLB, and imported into Godot 4.6.
+`docs/verify/meshy-assets-VERIFY.md` (props batch),
+`docs/verify/cosmetics-VERIFY.md` (`cosmetics/` hat batch) and
+`docs/verify/visual-polish-VERIFY.md` (polish batch: crate, armchair,
+crusher_head, spinner_arms, pendulum_blade, market_stall, broken_column,
+pedestal_fan). Assets were generated preview → refine, exported as GLB, and
+imported into Godot 4.6.
 
 ## Note
 

@@ -328,18 +328,33 @@ func _spawn_pillars() -> void:
 		cs.shape = shape
 		cs.position.y = 1.5
 		body.add_child(cs)
-		var mi := MeshInstance3D.new()
-		var mesh := CylinderMesh.new()
-		mesh.top_radius = 0.42
-		mesh.bottom_radius = 0.5
-		mesh.height = 3.0
-		mi.mesh = mesh
-		mi.position.y = 1.5
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.52, 0.42, 0.30)   # warm carved-wood pillars
-		mat.roughness = 0.9
-		mi.material_override = mat
-		body.add_child(mi)
+		# Visual: Meshy broken column (base at y=0, same footprint the 0.45
+		# cylinder collider implies), varied fixed yaws. Primitive fallback.
+		var column_glb := "res://assets/models/meshy/broken_column.glb"
+		if ResourceLoader.exists(column_glb):
+			var yaws := [0.0, 140.0, 260.0]
+			var vis := MeshyProp.instance(column_glb, 3.0, yaws[spots.find(sp)])
+			# the stub model is wide; squeeze x/z so the visual matches the
+			# 0.45-radius collider instead of swallowing players
+			var model: Node3D = vis.get_node("Model")
+			var caabb := MeshyProp.merged_aabb_of_scaled(model)
+			var w := maxf(caabb.size.x, caabb.size.z)
+			if w > 1.05:
+				vis.scale = Vector3(1.0 / w, 1.0, 1.0 / w)
+			body.add_child(vis)
+		else:
+			var mi := MeshInstance3D.new()
+			var mesh := CylinderMesh.new()
+			mesh.top_radius = 0.42
+			mesh.bottom_radius = 0.5
+			mesh.height = 3.0
+			mi.mesh = mesh
+			mi.position.y = 1.5
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.52, 0.42, 0.30)   # warm carved-wood pillars
+			mat.roughness = 0.9
+			mi.material_override = mat
+			body.add_child(mi)
 		add_child(body)
 
 

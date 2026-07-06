@@ -1129,16 +1129,31 @@ func _build_crates() -> void:
 		cs.shape = box
 		cs.position.y = 0.48
 		body.add_child(cs)
-		var mi := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(0.95, 0.95, 0.95)
-		mi.mesh = bm
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.5, 0.36, 0.2)
-		mat.roughness = 0.85
-		mi.material_override = mat
-		mi.position.y = 0.48
-		body.add_child(mi)
+		# Visual: Meshy crate filling the same 0.95 footprint the collider
+		# implies, fixed varied yaws so the four vaults don't read as clones.
+		# Primitive-box fallback if the asset is missing. Visual only.
+		var crate_glb := "res://assets/models/meshy/crate.glb"
+		if ResourceLoader.exists(crate_glb):
+			var yaws := [0.0, 90.0, 180.0, 270.0]
+			var vis := MeshyProp.instance(crate_glb, 0.95, yaws[spots.find(sp)])
+			# clamp the visual to the 0.95 box collider (model is elongated)
+			var caabb := MeshyProp.merged_aabb_of_scaled(vis.get_node("Model"))
+			if caabb.size.x > 0.98:
+				vis.scale.x = 0.98 / caabb.size.x
+			if caabb.size.z > 0.98:
+				vis.scale.z = 0.98 / caabb.size.z
+			body.add_child(vis)
+		else:
+			var mi := MeshInstance3D.new()
+			var bm := BoxMesh.new()
+			bm.size = Vector3(0.95, 0.95, 0.95)
+			mi.mesh = bm
+			var mat := StandardMaterial3D.new()
+			mat.albedo_color = Color(0.5, 0.36, 0.2)
+			mat.roughness = 0.85
+			mi.material_override = mat
+			mi.position.y = 0.48
+			body.add_child(mi)
 		body.position = Vector3(sp.x, 0, sp.y)
 		add_child(body)
 

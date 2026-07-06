@@ -75,6 +75,25 @@ func setup(angle_deg: float, swings: int, p_owner: Node) -> void:
 	# arm (chain) + windmill blade
 	_blade = Node3D.new()
 	_pivot.add_child(_blade)
+	var blade_glb := "res://assets/models/meshy/pendulum_blade.glb"
+	if ResourceLoader.exists(blade_glb):
+		# VISUAL-ONLY: Meshy shaft+crescent pendulum hung from the pivot. The
+		# blade is stretched on local X so it fills the same lethal span the
+		# hit constants imply (HIT_ALONG 1.7 => 3.4 wide). Swing math, hit
+		# detection and telegraph strip are untouched.
+		var total := ARM_LEN + 0.9
+		var wrap := MeshyProp.instance(blade_glb, total)
+		var model: Node3D = wrap.get_node("Model")
+		var aabb := MeshyProp.merged_aabb_of_scaled(model)
+		if aabb.size.x > 0.05:
+			wrap.scale.x = 3.4 / aabb.size.x
+		if aabb.size.z > 1.2:
+			wrap.scale.z = 1.0 / aabb.size.z
+		wrap.position.y = -total   # top of the shaft at the pivot
+		_blade.add_child(wrap)
+		_finish_setup()
+		return
+
 	var chain := MeshInstance3D.new()
 	var cm := BoxMesh.new()
 	cm.size = Vector3(0.16, ARM_LEN, 0.16)
@@ -124,7 +143,11 @@ func setup(angle_deg: float, swings: int, p_owner: Node) -> void:
 	edge.position.y = -ARM_LEN - 0.83
 	_blade.add_child(edge)
 
-	# start pulled back and high, hidden until telegraph ends
+	_finish_setup()
+
+## Shared tail of setup(): start pulled back and high, hidden until the
+## telegraph ends (same for the Meshy and the primitive blade).
+func _finish_setup() -> void:
 	_blade.rotation.z = SWING_AMP
 	_pivot.position.y = PIVOT_Y + 6.0
 	_rise = 6.0
