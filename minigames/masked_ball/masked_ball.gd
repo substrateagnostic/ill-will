@@ -261,6 +261,7 @@ func begin(config: Dictionary) -> void:
 	bots = MBBots.new()
 	bots.setup(int(config.get("rng_seed", 1)) ^ 0x3A5CED, players.size(),
 		CROWD_TOTAL, _waltz_len)
+	bots.photo_mode = _snaps
 	print("MB_BEGIN players=%d seed=%d practice=%s bots=%s waltz=%.0f" % [
 		players.size(), rng.seed, str(_practice),
 		str(players.map(func(p): return p.is_bot)), _waltz_len])
@@ -728,7 +729,7 @@ func _forced_override(i: int, d: MBDancer) -> Dictionary:
 		if b >= 0:
 			var to: Vector3 = dancers[b].position - d.position
 			to.y = 0.0
-			if to.length() <= MARK_REACH * 0.8:
+			if to.length() <= MARK_REACH * 0.8 and nearest_markable(d.body, d.position) == b:
 				return {"mv": Vector2.ZERO, "mark": true}
 			return {"mv": Vector2(to.x, to.z).normalized(), "mark": false}
 	if i == 0 and not _forced_kill_done and _waltz_e >= 48.0 and players[0].mark_left \
@@ -736,7 +737,7 @@ func _forced_override(i: int, d: MBDancer) -> Dictionary:
 		var tb: int = _body_of[2]
 		var to2: Vector3 = dancers[tb].position - d.position
 		to2.y = 0.0
-		if to2.length() <= MARK_REACH * 0.8:
+		if to2.length() <= MARK_REACH * 0.8 and nearest_markable(d.body, d.position) == tb:
 			return {"mv": Vector2.ZERO, "mark": true}
 		return {"mv": Vector2(to2.x, to2.z).normalized() * 1.12, "mark": false}
 	return {}
@@ -1096,7 +1097,7 @@ func _reveal_survivor(seat: int) -> void:
 	var d: MBDancer = dancers[_body_of[seat]]
 	var p: Dictionary = players[seat]
 	d.reveal(p.color, PlayerBadge.glyph(seat) + " " + str(p.name), false)
-	_reveal_spot.light_energy = 4.0
+	_reveal_spot.light_energy = 6.5
 	_reveal_spot.look_at_from_position(Vector3(d.position.x * 0.5, 9.5, d.position.z * 0.5 + 4.0),
 		d.position + Vector3(0, 1.2, 0), Vector3.UP)
 	_play_seat_tick(seat)
@@ -1111,7 +1112,7 @@ func _ledger_rows() -> Array:
 		var i := int(idx)
 		var p: Dictionary = players[i]
 		var bits: Array = []
-		bits.append("%d curtsies" % int(p.pips))
+		bits.append("1 curtsy" if int(p.pips) == 1 else "%d curtsies" % int(p.pips))
 		var killed := ""
 		for ke in _kill_events:
 			if int(ke.killer) == i:

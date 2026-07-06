@@ -643,3 +643,33 @@ US_SUMMONS holding each seat's pitch, 3 per colour in the roll-call.
 Evidence: docs/verify/eyesclosed-VERIFY.md; docs/verify/shots/seance_eyes_rollcall.png,
 seance_eyes_summons.png, us_eyes_rollcall.png, us_eyes_summons.png. No user://
 writes (bot/tally runs only).
+
+## 2026-07-06 — MASKED BALL ships (Theater act #3, research pitch #3)
+
+The one with no secret to deliver: 20 identical masked dancers (one Rogue
+model, ivory half-mask on the head bone), 4 of them are the players, nobody
+told which. Stick=drift at crowd speed (pace can never be the tell), FEATHER
+the stick = your mask glints privately (NPC masks glint on seeded timers, so
+the signal is the correlation with your own hidden hands — zero on-screen
+secrets), A=curtsy (+2 in the throne circle, 3 max, announced UNNAMED — the
+room only hears "somebody bowed for money"), B=UNMASK, one mark all waltz.
+Human: +6, +2 royalty, victim ghosts out (kill_event cause "unmasked").
+Furniture: −3, grudge, and your dancer FLASHES with your badge — the position
+leak as a self-inflicted reveal moment. PlayerBadge exception is deliberate
+and documented: no identity on any body mid-round; badges + seat pitches
+(0.90/1.00/1.12/1.26) exist only at reveal moments.
+
+Bots read only public evidence (unnamed pip coincidences split across
+everyone mid-bow, waste-flashes, witnessed lunges as LEADS with a 2-5s shock
+pause, stillness >4s) and fire only when the grab lands on their target —
+never through a bystander. 18% seeded misfires supply organic wastes
+(seed 12: BLUE flashes at t=125, then eats the revenge mark). Seeds 1-12:
+0-3 kills per ball, all in the waltz's back half; peaceful balls exist.
+Tally byte-identical across repeat runs, seeds 1/2/3.
+
+Evidence: docs/verify/maskedball-VERIFY.md + docs/verify/shots/maskedball_*.png
+(crowd / furniture flash / GOLD WAS HUMAN / last dance / ledger). Director
+wiring suggestions (MODULES + HOWTO lines) at the bottom of the VERIFY doc.
+Note: party_setup.json in user:// changed mid-session from a SIBLING agent's
+backup/restore cycle, not this lane — my runs write nothing to user://
+(verified against a pre-run snapshot; prefs/cosmetics/estate_save untouched).

@@ -27,6 +27,9 @@ var rng := RandomNumberGenerator.new()
 var n_seats := 0
 var n_bodies := 0
 var waltz_len := 150.0
+## --mbsnaps photographer's rig: bots blend and curtsy but never self-hunt,
+## so the two SCRIPTED reveal beats own the frame. Never set in tally.
+var photo_mode := false
 
 # per-seat personality
 var _threshold: Array = []      # suspicion needed to spend the mark
@@ -209,7 +212,7 @@ func _evaluate(i: int, g) -> void:
 		if b != own and g.alive_body(b) and g.still_of(b) > 4.0:
 			s += 1.2 + rng.randf_range(0.0, 0.5)
 		_sus[i][b] = s
-	if not g.has_mark(i) or int(_mode[i]) == 1:
+	if photo_mode or not g.has_mark(i) or int(_mode[i]) == 1:
 		return
 	# spend the mark?
 	var best := -1

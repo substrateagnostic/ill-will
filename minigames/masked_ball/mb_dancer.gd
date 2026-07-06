@@ -76,16 +76,30 @@ func setup(p_body: int, char_scene: PackedScene, visual: bool) -> void:
 			_anim.play("Idle")
 			# desync the crowd's idle bob so 20 bodies do not metronome
 			_anim.seek(fmod(_sway, 1.0), true)
-	_build_mask()
+		_build_mask(model)
 
-func _build_mask() -> void:
-	# ivory half-mask + thin gold crest, identical on every dancer
+## Ivory half-mask + thin gold crest, identical on every dancer, riding the
+## HEAD BONE so it follows every bow and twirl (the chibi KayKit head is a
+## ~1u sphere centered near y=1.7; the face is +Z).
+func _build_mask(model: Node) -> void:
+	var parent: Node3D = _pivot
+	var at := Vector3(0, 1.66, 0.42)
+	var skel: Skeleton3D = model.find_child("Skeleton3D", true, false)
+	if skel != null:
+		var bone := skel.find_bone("head")
+		if bone >= 0:
+			var att := BoneAttachment3D.new()
+			att.name = "MaskMount"
+			skel.add_child(att)
+			att.bone_name = "head"
+			parent = att
+			at = Vector3(0, 0.42, 0.44)   # relative to the head bone (y=1.24)
 	_mask = MeshInstance3D.new()
 	var mm := SphereMesh.new()
-	mm.radius = 0.115
-	mm.height = 0.21
+	mm.radius = 0.36
+	mm.height = 0.6
 	_mask.mesh = mm
-	_mask.scale = Vector3(1.0, 0.78, 0.5)
+	_mask.scale = Vector3(1.0, 0.72, 0.42)
 	_mask_mat = StandardMaterial3D.new()
 	_mask_mat.albedo_color = Color(0.93, 0.89, 0.8)
 	_mask_mat.roughness = 0.35
@@ -93,19 +107,19 @@ func _build_mask() -> void:
 	_mask_mat.emission = Color(1.0, 0.95, 0.8)
 	_mask_mat.emission_energy_multiplier = 0.12
 	_mask.material_override = _mask_mat
-	_mask.position = Vector3(0, 1.47, 0.14)
-	_pivot.add_child(_mask)
+	_mask.position = at
+	parent.add_child(_mask)
 	var crest := MeshInstance3D.new()
 	var cm := BoxMesh.new()
-	cm.size = Vector3(0.16, 0.05, 0.015)
+	cm.size = Vector3(0.5, 0.1, 0.03)
 	crest.mesh = cm
 	var crest_mat := StandardMaterial3D.new()
 	crest_mat.albedo_color = Color(0.72, 0.58, 0.25)
 	crest_mat.metallic = 0.7
 	crest_mat.roughness = 0.35
 	crest.material_override = crest_mat
-	crest.position = Vector3(0, 1.6, 0.12)
-	_pivot.add_child(crest)
+	crest.position = at + Vector3(0, 0.28, -0.04)
+	parent.add_child(crest)
 
 # ================================================================ logic API
 func busy() -> bool:
@@ -148,10 +162,11 @@ func do_flash(dur: float, col: Color, tag_text: String) -> void:
 		return
 	if _flash_light == null:
 		_flash_light = OmniLight3D.new()
-		_flash_light.omni_range = 3.4
+		_flash_light.omni_range = 4.2
+		_flash_light.position.y = 1.4
 		add_child(_flash_light)
 	_flash_light.light_color = col
-	_flash_light.light_energy = 5.0
+	_flash_light.light_energy = 7.0
 	_show_tag(tag_text, col)
 	if _tag != null:
 		get_tree().create_timer(dur).timeout.connect(func():
@@ -213,12 +228,12 @@ func _show_tag(text: String, col: Color) -> void:
 	if _tag == null:
 		_tag = Label3D.new()
 		_tag.font_size = 44
-		_tag.pixel_size = 0.0055
+		_tag.pixel_size = 0.0075
 		_tag.outline_size = 11
 		_tag.outline_modulate = Color(0.05, 0.04, 0.07)
 		_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 		_tag.no_depth_test = true
-		_tag.position = Vector3(0, 2.2, 0)
+		_tag.position = Vector3(0, 2.55, 0)
 		add_child(_tag)
 	_tag.text = text
 	_tag.modulate = col
