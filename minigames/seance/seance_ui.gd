@@ -224,7 +224,9 @@ func _build_settle_rows() -> void:
 	_settle_rows.offset_bottom = 150.0
 	add_child(_settle_rows)
 
-func add_settle_row(text: String, color: Color) -> void:
+## animate=true fades the row in over ~0.18s, for the staggered readout; the
+## default (all-at-once) path stays byte-identical for headless/tally.
+func add_settle_row(text: String, color: Color, animate := false) -> void:
 	var l := Label.new()
 	l.text = text
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -234,6 +236,19 @@ func add_settle_row(text: String, color: Color) -> void:
 	l.add_theme_color_override("font_outline_color", Color(0.05, 0.04, 0.07))
 	l.add_theme_constant_override("outline_size", 7)
 	_settle_rows.add_child(l)
+	if animate:
+		l.modulate.a = 0.0
+		var tw := l.create_tween()
+		tw.tween_property(l, "modulate:a", 1.0, 0.18)
+
+## Punctuate the completed ledger with a brief warm overbright flash (the total
+## has landed). The room's glow blooms the >1 modulate, then it settles back.
+func pulse_settle() -> void:
+	if _settle_rows == null:
+		return
+	_settle_rows.modulate = Color(1.6, 1.5, 1.2)
+	var tw := _settle_rows.create_tween()
+	tw.tween_property(_settle_rows, "modulate", Color(1, 1, 1, 1), 0.45).set_trans(Tween.TRANS_SINE)
 
 func clear_settle_rows() -> void:
 	for c in _settle_rows.get_children():
