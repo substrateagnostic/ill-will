@@ -1,9 +1,11 @@
 class_name LWGhostSeat
 extends Node3D
-## Spectral onlooker: after willing, the dead take a floating stone pew at
-## the platform edge (Lie/Sit idle poses) and every GUST_COOLDOWN seconds may
-## send a gust — the seat is fixed, so aim comes from the RIGHT channel (mouse
-## cursor / right stick, set via set_aim), A fires. Never out of the game.
+## Spectral onlooker: out of lives, the dead take a floating stone pew that
+## DRIFTS ALONGSIDE THE PROCESSION (the seats are children of the ghost rail,
+## which tracks the race camera) and every GUST_COOLDOWN seconds may send a
+## gust — the seat never steers, so aim comes from the RIGHT channel (mouse
+## cursor / right stick, set via set_aim), A fires. Never out of the game:
+## harass the living for royalties.
 ##
 ## The seat bobs; the ghost body is a KayKit char re-skinned in a translucent
 ## ghost material tinted toward the owner's color. While the living are
@@ -26,18 +28,19 @@ var _ring: MeshInstance3D
 var _seat_root: Node3D
 var _cd_ring: CooldownRing   # THE COOLDOWN RING for the 10s gust (the one that matters most)
 
-func setup(p_index: int, p_color: Color, p_name: String, char_scene: PackedScene, seat_angle: float, p_owner: Node) -> void:
+## local_pos: offset on the ghost rail (the rail follows the race camera).
+func setup(p_index: int, p_color: Color, p_name: String, char_scene: PackedScene, local_pos: Vector3, p_owner: Node) -> void:
 	index = p_index
 	color = p_color
 	pname = p_name
 	owner_game = p_owner
-	_bob_t = seat_angle  # desync the bobbing per seat
+	_bob_t = float(p_index) * 1.7  # desync the bobbing per seat
 
-	var r := 8.3
-	global_position = Vector3(cos(seat_angle) * r, 0.9, sin(seat_angle) * r)
-	# face the platform center
-	rotation.y = atan2(-global_position.x, -global_position.z)
-	aim_dir = Vector2(-cos(seat_angle), -sin(seat_angle))  # default: inward
+	position = local_pos
+	# face the walkway (the rail centers on the course spine)
+	rotation.y = atan2(-local_pos.x, -local_pos.z)
+	var inward := Vector2(-local_pos.x, -local_pos.z)
+	aim_dir = inward.normalized() if inward.length() > 0.05 else Vector2(1, 0)
 
 	_seat_root = Node3D.new()
 	add_child(_seat_root)

@@ -1,11 +1,13 @@
 extends Minigame
-## LAST WILL — survival gauntlet over the dusk void where DYING IS A POWER.
-## A shrinking chapel-yard platform, a windmill-blade pendulum, rolling
-## boulders. When you're eliminated the whole world FREEZES for six seconds
-## while you draft your will: bless one survivor, curse another. Then you
-## linger at the platform edge as a spectral onlooker, gusting the living
-## every 10s. Best-of-3; puppetmaster +2 if your blessed champion wins the
-## round. The dead decide who wins; the living audition for their favor.
+## LAST WILL — a funeral procession RACE where DYING IS A POWER.
+## A linear 3-segment gauntlet over the dusk void: start chapel, winding
+## graveyard path, THE CRYPT. First to the crypt inherits. Three lives each;
+## every death FREEZES THE WHOLE WORLD for six seconds while the deceased
+## drafts a will — one CURSE, written permanently into a named stretch of the
+## course, installed in their color with a name plaque (authorship forever,
+## like Par's traps). Out of lives, the dead drift alongside the procession
+## on ghost pews and gust the living for royalties. Curse kills pay the
+## author royalties and land in kill_events with cause = the curse slug.
 ##
 ## Anthology module: root of minigames/last_will/last_will.tscn, extends
 ## Minigame. Self-starts standalone 0.5s after _ready if begin() wasn't
@@ -19,27 +21,28 @@ extends Minigame
 ##   --willbots            all players are seeded self-play bots
 ##   --seed=N              rng seed for standalone start (default 1)
 ##   --players=N           standalone roster size 2..4
-##   --willrounds=N        override 3 rounds (1..5) for quick verification
+##   --willrounds=N        override race count (1..5) for quick verification
 ##   --willtally           headless evidence mode: full bot match, fast-
 ##                         forwarded with dt pinned to 1/60, prints
-##                         WILL_TALLY (wills per round) and quits
-##   --willkill=T:P,...    force-eliminate player P at round-time T (round 1
+##                         WILL_TALLY (wills/curse kills/finish times), quits
+##   --willkill=T:P,...    force-eliminate player P at race-time T (race 1
 ##                         only; deterministic will-theater screenshots)
+##   --willview=overview   park the camera high over the whole course
+##   --willtest=squish     self-test: a stationary pawn vs an aimed boulder
+##   --deadhint            seat 0 human with ONE life, dies at t=1 (ghost
+##                         hint bar demo)
 ##   --shots=N,...         VerifyCapture PNG harness (global autoload)
 ##
-## RULES DECISIONS (documented per spec "Risks & tests"):
-## - The will ALWAYS fires, including the round-ending death. If the round
-##   is already decided, timed effects CARRY OVER into the next round's
-##   opening seconds (the spec's 2P carry-over rule, generalized). Coin is
-##   always instant. Carry-over blesses claim the NEXT round's puppetmaster.
-## - Caps: 1 active blessing + 1 active curse per player; newest replaces.
-##   Puppetmaster claims survive replacement (the cap governs effects, not
-##   gratitude) — one claim per will, resolved at that round's end.
-## - Gusts are nudges: they bypass shields (a shield eats one HIT — shove,
-##   pendulum, or boulder squish).
+## RULES DECISIONS:
+## - Curses PERSIST across races (the course accretes malice, like Par's
+##   hole). Nine named stretches; a full slate means new curses displace the
+##   oldest resident of the offered stretch.
+## - The will always fires while the race runs. If the crypt is reached
+##   while a will is still queued, probate closes: no draft (Executor line).
+## - Ghost gusts are nudges, ghost kills pay +1; curse kills pay +2.
 
-enum Phase { WAITING, INTRO, ROUND, WILL, ROUND_END, MATCH_END }
-enum WStep { DEATH_BEAT, REVEAL, CARDS, BLESS_T, CURSE_T, MODE, RESOLUTION, CLOSING }
+enum Phase { WAITING, INTRO, RACE, WILL, RACE_END, MATCH_END }
+enum WStep { DEATH_BEAT, REVEAL, CARDS, RESOLUTION, CLOSING }
 
 const CHAR_FALLBACKS := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -48,64 +51,64 @@ const CHAR_FALLBACKS := [
 	"res://assets/models/kaykit/Rogue.glb",
 ]
 
-const R_FULL := 7.0
-const R_MID := 5.1
-const R_CORE := 3.2
-const R_LAST := 1.8      # sudden death: the yard becomes a lonely pillar
-const ROUND_TIME := 60.0
-const HARD_CAP := 78.0
+const LIVES := 3
+const HARD_CAP := 135.0
+const MAX_SCYTHES := 2       # active scythe curses (a wall of blades ends races)
+const MAX_STONES := 3        # active stones ranks
 const DRAFT_BUDGET := 6.0
-const ROYALTY := 2
+const ROYALTY := 2               # curse kill -> author
+const GUST_ROYALTY := 1          # ghost gust kill
 const GUST_SPEED := 9.0
 const GUST_IMPULSE := 4.4
 const GUST_HIT_R := 1.8
 const GUST_RANGE := 17.0
 
-const BLESS_DEFS := {
-	"shield": {"title": "AEGIS", "banner": "SHIELD", "desc": "A shield that eats one hit — shove, blade, or boulder.", "dur": 0.0},
-	"swift": {"title": "DEAD MAN'S HASTE", "banner": "SWIFTNESS", "desc": "+20% speed for 10 seconds.", "dur": 10.0},
-	"coin": {"title": "INHERITANCE", "banner": "A COIN", "desc": "+1 point, paid instantly.", "dur": 0.0},
-}
 const CURSE_DEFS := {
-	"sluggish": {"title": "LEADEN LEGS", "banner": "SLUGGISH", "desc": "-20% speed for 8 seconds.", "dur": 8.0},
-	"butterfingers": {"title": "BUTTERFINGERS", "banner": "BUTTERFINGERS", "desc": "Cannot shove for 6 seconds.", "dur": 6.0},
-	"haunted": {"title": "HAUNTED", "banner": "HAUNTED", "desc": "A hungry wisp hunts them for 8 seconds.", "dur": 8.0},
+	"scythe": {"title": "SUMMON THE SCYTHE", "desc": "A pendulum blade swings over this stretch until the estate settles.",
+		"kill_line": "%s'S SCYTHE REAPS %s"},
+	"grease": {"title": "GREASE THE FLAGSTONES", "desc": "This stretch loses all grip. Momentum keeps its own counsel.",
+		"kill_line": "%s'S GREASE DELIVERS %s TO THE VOID"},
+	"gale": {"title": "A GUST CORRIDOR", "desc": "A crosswind sweeps this stretch toward the void, on a schedule.",
+		"kill_line": "%s'S GALE CARRIES %s OFF THE ROAD"},
+	"stones": {"title": "RAISE THE DEAD", "desc": "A rank of gravestones blocks this stretch, save one gap.",
+		"kill_line": "%s'S STONES DETAIN %s FOREVER"},
 }
+
+const EXEC_DRAFT := "The deceased has opinions about the route."
+const EXEC_CRYPT := "The first to the crypt inherits. The estate finds this poetic."
+const EXEC_GHOST := "Out of lives. Not out of influence."
+const EXEC_PROBATE := "Probate closes at the crypt door. The grievance is noted."
+const EXEC_DEPART := "The estate extends its condolences in advance."
 
 var game_time := 0.0
 var phase := Phase.WAITING
 var rng := RandomNumberGenerator.new()
+var _fx_rng := RandomNumberGenerator.new()   # camera shake only — NEVER gameplay
 var bots: LWBots
 
 var roster: Array = []
-var players: Array = []            # {index,name,color,char_path,device,is_bot,total,alive,deaths,puppet}
+var players: Array = []            # {index,name,color,char_path,device,is_bot,total,
+                                   #  alive,lives,best_x,checkpoint,finished,finish_time,
+                                   #  deaths,deaths_this_race,curse_kills,races_won,deathless_win}
 var pawns: Array = []              # index -> LWPawn
 var ghosts: Dictionary = {}        # index -> LWGhostSeat
-var pendulums: Array = []
+var course: LWCourse
 var boulders: Array = []
-var wisps: Dictionary = {}         # target index -> LWWisp
+var pendulums: Array = []          # base scythe gates (endless)
+var walls: Array = []
+var curses: Array = []             # installed LWCurse nodes
+var spinner: LWSpinner
 var _gusts: Array = []             # {node, pos, dir, traveled, hit, from}
+var _boulder_lanes: Array = []     # {x, period, next_t, side}
+var _curse_order := 0
 
-var platform_radius := R_FULL
-var _next_radius := R_FULL
-var _shrink_pending := false
-var _floor_shape: CylinderShape3D
-var _ring_segs: Array = []         # per ring: Array[MeshInstance3D]
-var _ring_mats: Array = []
-var _ring_roots: Array = []
-var _shrink_stage := 0             # 0 full, 1 outer gone, 2 mid gone, 3 pillar
-var _tele_ring := -1
-var _pillar_disc: MeshInstance3D
-
-var round_index := 0
-var rounds_total := 3
-var round_elapsed := 0.0
-var _elim_order: Array = []
-var _schedule: Array = []
-var _sched_i := 0
-var _boulder_side := 1
+var race_index := 0
+var races_total := 3
+var race_elapsed := 0.0
+var _race_over := false
+var _finisher := -1
 var _intro_t := 0.0
-var _re_t := 0.0                   # ROUND_END sequencer time
+var _re_t := 0.0                   # RACE_END sequencer time
 var _re_events: Array = []         # {t, fn}
 var _re_done_t := 0.0
 
@@ -114,70 +117,77 @@ var _will: Dictionary = {}
 var _will_queue: Array = []
 var _nav_prev: Dictionary = {}
 var _hand: LWHand
-var _target_ring: MeshInstance3D
 var _ui: LWWillUI
+var _rig_home := Vector3.ZERO      # camera rig pos before the resolution pan
+
+# camera
+var _cam_zoom := 1.0
+var _ghost_rail: Node3D
 
 # meta
-var _claims: Array = []            # {from, target, round}
-var _carry: Array = []             # {kind, effect, from, target}
 var _currency: Array = []
 ## Anthology kill ledger (module contract results.kill_events): each entry
-## {killer: int, victim: int, cause: String}. killer -1 = environment/self (void
-## fall with no shover, boulder squish, pendulum); a shove/gust into the dusk
-## credits the attacker. Reporting only — mirrors the banner attribution.
+## {killer: int, victim: int, cause: String}. killer -1 = environment/self;
+## a shove/gust into the dusk credits the attacker; a death within 3s of a
+## CURSE TOUCH credits the curse's author with cause = the curse slug.
 var _kill_events: Array = []
 var _highlights: Array = []
-var _monument_counts: Dictionary = {}
-var _last_kill_line := ""
-var _last_kill_color := Color.WHITE
 
 # modes
 var _started := false
 var _all_bots := false
 var _tally := false
-var _tally_stats := {"wills": 0, "rounds": 0, "void": 0, "squish": 0, "gusts": 0, "puppets": 0, "carries": 0}
+var _tally_stats := {"wills": 0, "races": 0, "curse_kills": 0, "gust_kills": 0,
+	"deaths": 0, "gusts": 0, "finishes": []}
 var _forced_kills: Array = []      # {t, p}
 var _cli_players := 4
 var _cli_seed := 1
-var _rounds_override := 0
-var _test_mode := ""               # --willtest=squish|gust
-var _dead_hint_demo := false       # --deadhint: seat 0 human, dies at t=1
+var _races_override := 0
+var _view_mode := ""               # "" | "overview"
+var _test_mode := ""               # --willtest=squish
+var _dead_hint_demo := false       # --deadhint: seat 0 human, 1 life, dies at t=1
 var _shove_cue_probe := false      # --shovecue: snap the first shove's readability arc
 var _shove_cue_done := false
 var _test_fired := false
 var _delta_cache := 0.016
-var _skip_to := 0.0                # --willskip=T: screenshot aid, round 1 only
 
 # fx
 var _shake := 0.0
 var _time_token := 0
 var _banner_token := 0
 var _sub_token := 0
+var _exec_token := 0
 var _cam_base_fov := 52.0
 var _last_hitstop := -99.0       # HIT KIT global one-at-a-time hitstop throttle (0.14s)
 var _hitkit_cap := false         # --hitkitcap: stage the HIT KIT / cooldown-ring shots
 var _cap_dir := "verify_out/hitkit"
 
+var hud: LWRaceHud
+
 @onready var cam: Camera3D = $CameraRig/Camera3D
+@onready var cam_rig: Node3D = $CameraRig
 @onready var banner: Label = $UI/Banner
 @onready var sub_banner: Label = $UI/SubBanner
-@onready var round_label: Label = $UI/RoundLabel
+@onready var exec_label: Label = $UI/ExecutorLabel
+@onready var race_label: Label = $UI/RaceLabel
 @onready var timer_label: Label = $UI/TimerLabel
 @onready var hint_label: Label = $UI/HintLabel
-@onready var score_rows: VBoxContainer = $UI/ScorePanel/ScoreRows
 @onready var spawn_root: Node3D = $SpawnRoot
 
 func _ready() -> void:
 	_parse_args()
+	_fx_rng.randomize()
 	_build_world()
 	banner.visible = false
 	sub_banner.visible = false
+	exec_label.visible = false
 	_ui = LWWillUI.new()
 	add_child(_ui)
 	_hand = LWHand.new()
 	spawn_root.add_child(_hand)
 	_hand.visible = false
-	_build_target_ring()
+	hud = LWRaceHud.new()
+	$UI.add_child(hud)
 	await get_tree().create_timer(0.5).timeout
 	if not _started:
 		begin(_default_config())
@@ -190,7 +200,7 @@ func _parse_args() -> void:
 			_tally = true
 			_all_bots = true
 		elif arg.begins_with("--willrounds="):
-			_rounds_override = clampi(int(arg.trim_prefix("--willrounds=")), 1, 5)
+			_races_override = clampi(int(arg.trim_prefix("--willrounds=")), 1, 5)
 		elif arg.begins_with("--players="):
 			_cli_players = clampi(int(arg.trim_prefix("--players=")), 2, 4)
 		elif arg.begins_with("--seed="):
@@ -200,10 +210,10 @@ func _parse_args() -> void:
 				var kv := pair.split(":")
 				if kv.size() == 2:
 					_forced_kills.append({"t": float(kv[0]), "p": int(kv[1])})
+		elif arg.begins_with("--willview="):
+			_view_mode = arg.trim_prefix("--willview=")
 		elif arg.begins_with("--willtest="):
 			_test_mode = arg.trim_prefix("--willtest=")
-		elif arg.begins_with("--willskip="):
-			_skip_to = maxf(0.0, float(arg.trim_prefix("--willskip=")))
 		elif arg == "--deadhint":
 			_dead_hint_demo = true
 		elif arg == "--shovecue":
@@ -217,7 +227,8 @@ func _parse_args() -> void:
 	if _hitkit_cap:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://%s" % _cap_dir))
 	if _dead_hint_demo:
-		# seat 0 (KBM human) dies at t=1.0 so the dead-state hint bar is on screen
+		# seat 0 (KBM human) dies at t=1.0 with ONE life -> straight to the
+		# ghost pew, so the dead-state hint bar is on screen
 		_forced_kills.append({"t": 1.0, "p": 0})
 	if _tally:
 		# faster-than-realtime with dt pinned to exactly 1/60 (Swap Meet trick)
@@ -252,13 +263,13 @@ func begin(config: Dictionary) -> void:
 		return
 	_started = true
 	rng.seed = int(config.get("rng_seed", 1))
-	rounds_total = 3
+	races_total = 3
 	if config.get("practice", false):
-		rounds_total = 1
+		races_total = 1
 	if int(config.get("rounds", 3)) < 3:
-		rounds_total = maxi(1, int(config.get("rounds", 3)))
-	if _rounds_override > 0:
-		rounds_total = _rounds_override
+		races_total = maxi(1, int(config.get("rounds", 3)))
+	if _races_override > 0:
+		races_total = _races_override
 	roster = config.get("roster", [])
 	bots = LWBots.new()
 	bots.setup(int(config.get("rng_seed", 1)) ^ 0x717A57, roster.size())
@@ -279,8 +290,16 @@ func begin(config: Dictionary) -> void:
 			"is_bot": is_bot,
 			"total": 0,
 			"alive": true,
+			"lives": LIVES,
+			"best_x": 0.0,
+			"checkpoint": 0,
+			"finished": false,
+			"finish_time": -1.0,
 			"deaths": 0,
-			"puppet": 0,
+			"deaths_this_race": 0,
+			"curse_kills": 0,
+			"races_won": 0,
+			"deathless_win": false,
 		})
 		var pawn := LWPawn.new()
 		pawn.name = "Pawn%d" % i
@@ -288,11 +307,12 @@ func begin(config: Dictionary) -> void:
 		pawn.setup(i, players[i].color, players[i].name, load(char_path), self)
 		pawn.died.connect(_on_pawn_died)
 		pawns.append(pawn)
-	print("LW_BEGIN players=%d seed=%d rounds=%d bots=%s" % [players.size(),
-		rng.seed, rounds_total, str(players.map(func(p): return p.is_bot))])
+	print("LW_BEGIN players=%d seed=%d races=%d bots=%s" % [players.size(),
+		rng.seed, races_total, str(players.map(func(p): return p.is_bot))])
 	hint_label.text = HINT_LIVING
-	round_index = 0
-	_start_round()
+	hud.build(players)
+	race_index = 0
+	_start_race()
 	if _hitkit_cap:
 		_run_hitkit_cap()
 
@@ -312,7 +332,7 @@ func _build_world() -> void:
 	env.background_mode = Environment.BG_SKY
 	env.sky = sky
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.42
+	env.ambient_light_energy = 0.55
 	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
 	env.glow_enabled = true
 	env.glow_intensity = 0.55
@@ -324,16 +344,18 @@ func _build_world() -> void:
 	env.fog_sky_affect = 0.0
 	we.environment = env
 
-	cam.global_position = Vector3(0, 13.9, 11.8)
-	cam.look_at(Vector3(0, 0.2, -0.7), Vector3.UP)
+	cam.position = Vector3(0, 13.9, 11.8)
 	cam.fov = _cam_base_fov
+	cam_rig.position = Vector3(2.0, 0.0, 0.0)
+	cam.look_at_from_position(cam_rig.position + cam.position,
+		cam_rig.position + Vector3(0, 0.2, -0.7), Vector3.UP)
 
 	var sun := DirectionalLight3D.new()
 	sun.name = "DuskSun"
 	add_child(sun)
-	sun.rotation_degrees = Vector3(-19.0, 118.0, 0.0)
-	sun.light_energy = 0.7
-	sun.light_color = Color(1.0, 0.58, 0.33)
+	sun.rotation_degrees = Vector3(-32.0, 118.0, 0.0)
+	sun.light_energy = 0.95
+	sun.light_color = Color(1.0, 0.62, 0.38)
 	sun.shadow_enabled = true
 
 	var moon := DirectionalLight3D.new()
@@ -344,114 +366,49 @@ func _build_world() -> void:
 	moon.light_color = Color(0.5, 0.58, 0.95)
 
 	# the void has a floor of dusk, not pure black: a deep-purple sea far
-	# below + a faint warm under-glow that silhouettes falling bodies
+	# below that silhouettes falling bodies, running the length of the course
 	var sea := MeshInstance3D.new()
-	var seam := CylinderMesh.new()
-	seam.top_radius = 90.0
-	seam.bottom_radius = 90.0
-	seam.height = 0.3
+	var seam := BoxMesh.new()
+	seam.size = Vector3(520.0, 0.3, 260.0)
 	sea.mesh = seam
 	var sea_mat := StandardMaterial3D.new()
 	sea_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	sea_mat.albedo_color = Color(0.085, 0.05, 0.13)
 	sea.material_override = sea_mat
-	sea.position.y = -26.0
+	sea.position = Vector3(99.0, -26.0, 0.0)
 	$Arena.add_child(sea)
-	var under_glow := MeshInstance3D.new()
-	var ugm := CylinderMesh.new()
-	ugm.top_radius = 13.0
-	ugm.bottom_radius = 13.0
-	ugm.height = 0.1
-	under_glow.mesh = ugm
-	var ug_mat := StandardMaterial3D.new()
-	ug_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ug_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	ug_mat.albedo_color = Color(0.55, 0.2, 0.28, 0.16)
-	under_glow.material_override = ug_mat
-	under_glow.position.y = -9.5
-	$Arena.add_child(under_glow)
 
-	# floor collider: one fat cylinder slab, radius shrinks with the yard
-	var floor_body := StaticBody3D.new()
-	floor_body.name = "Floor"
-	floor_body.collision_layer = 1
-	floor_body.collision_mask = 0
-	$Arena.add_child(floor_body)
-	var cs := CollisionShape3D.new()
-	_floor_shape = CylinderShape3D.new()
-	_floor_shape.radius = R_FULL
-	_floor_shape.height = 3.0
-	cs.shape = _floor_shape
-	cs.position.y = -1.5
-	floor_body.add_child(cs)
+	course = LWCourse.new()
+	course.name = "Course"
+	$Arena.add_child(course)
+	course.build()
 
-	_build_decor_islands()
-	_build_ember_field()
+	# base hazard installations (ticked only while the race runs)
+	for gx in LWCourse.PENDULUM_GATES:
+		var pen := LWPendulum.new()
+		spawn_root.add_child(pen)
+		pen.setup(Vector3(float(gx), 0.0, LWCourse.z_center(float(gx))), 90.0, -1, self)
+		pendulums.append(pen)
+	spinner = LWSpinner.new()
+	spawn_root.add_child(spinner)
+	spinner.setup(Vector3(LWCourse.SPINNER_X, 0.0, LWCourse.z_center(LWCourse.SPINNER_X)), self)
+	for wi in LWCourse.WALL_XS.size():
+		var wx := float(LWCourse.WALL_XS[wi])
+		var wall := LWWall.new()
+		spawn_root.add_child(wall)
+		wall.setup(Vector3(wx, 0.0, LWCourse.z_center(wx)), LWCourse.half_width(wx), self,
+			0.0 if wi % 2 == 0 else PI * 0.7)
+		walls.append(wall)
 
-func _build_decor_islands() -> void:
-	# a broken chapel arch drifting behind the yard + stray rock shards
-	var arch := Node3D.new()
-	arch.name = "ArchIsland"
-	$Arena.add_child(arch)
-	arch.position = Vector3(-9.5, -1.4, -7.5)
-	var rock_mat := StandardMaterial3D.new()
-	rock_mat.albedo_color = Color(0.3, 0.27, 0.33)
-	rock_mat.roughness = 1.0
-	var base := MeshInstance3D.new()
-	var bm := CylinderMesh.new()
-	bm.top_radius = 2.4
-	bm.bottom_radius = 0.9
-	bm.height = 2.2
-	base.mesh = bm
-	base.material_override = rock_mat
-	base.position.y = -1.1
-	arch.add_child(base)
-	var stone_mat := StandardMaterial3D.new()
-	stone_mat.albedo_color = Color(0.5, 0.47, 0.52)
-	stone_mat.roughness = 0.92
-	for px in [-1.1, 1.1]:
-		var pillar := MeshInstance3D.new()
-		var pm := BoxMesh.new()
-		pm.size = Vector3(0.7, 3.4, 0.7)
-		pillar.mesh = pm
-		pillar.material_override = stone_mat
-		pillar.position = Vector3(px, 1.7, 0)
-		arch.add_child(pillar)
-	var lintel := MeshInstance3D.new()
-	var lm := BoxMesh.new()
-	lm.size = Vector3(2.0, 0.55, 0.8)
-	lintel.mesh = lm
-	lintel.material_override = stone_mat
-	lintel.position = Vector3(-0.55, 3.55, 0)
-	lintel.rotation_degrees = Vector3(0, 0, 9)
-	arch.add_child(lintel)
-	var arch_lantern := _make_lantern(true)
-	arch_lantern.position = Vector3(1.1, 3.6, 0)
-	arch.add_child(arch_lantern)
-
-	var shard_mat := StandardMaterial3D.new()
-	shard_mat.albedo_color = Color(0.24, 0.22, 0.3)
-	shard_mat.roughness = 1.0
-	for sp in [Vector3(10.5, -2.6, -5.0), Vector3(8.5, -3.4, 6.5), Vector3(-10.0, -3.0, 5.0)]:
-		var shard := MeshInstance3D.new()
-		var sm := CylinderMesh.new()
-		sm.top_radius = 1.3
-		sm.bottom_radius = 0.3
-		sm.height = 1.8
-		shard.mesh = sm
-		shard.material_override = shard_mat
-		shard.position = sp
-		shard.rotation_degrees = Vector3(8, 40, -6)
-		$Arena.add_child(shard)
-
-func _build_ember_field() -> void:
+	# drifting embers follow the camera rig so dusk travels with the race
 	var p := CPUParticles3D.new()
 	p.name = "Embers"
 	p.amount = 40
 	p.lifetime = 7.0
 	p.preprocess = 6.0
+	p.local_coords = false
 	p.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
-	p.emission_box_extents = Vector3(14, 2, 12)
+	p.emission_box_extents = Vector3(16, 2, 12)
 	p.direction = Vector3.UP
 	p.spread = 20.0
 	p.gravity = Vector3(0, 0.25, 0)
@@ -468,367 +425,75 @@ func _build_ember_field() -> void:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.albedo_color = Color(1.0, 0.6, 0.3, 0.35)
 	p.material_override = mat
-	p.position.y = -3.0
+	p.position.y = -2.0
 	p.emitting = true
-	$Arena.add_child(p)
+	cam_rig.add_child(p)
 
-func _make_lantern(with_light: bool) -> Node3D:
-	var root := Node3D.new()
-	var post := MeshInstance3D.new()
-	var pm := BoxMesh.new()
-	pm.size = Vector3(0.09, 1.15, 0.09)
-	post.mesh = pm
-	var post_mat := StandardMaterial3D.new()
-	post_mat.albedo_color = Color(0.16, 0.13, 0.12)
-	post.material_override = post_mat
-	post.position.y = 0.57
-	root.add_child(post)
-	# glowing amber housing (translucent, so the lamp reads from every angle)
-	var cage := MeshInstance3D.new()
-	var cm := BoxMesh.new()
-	cm.size = Vector3(0.28, 0.32, 0.28)
-	cage.mesh = cm
-	var cage_mat := StandardMaterial3D.new()
-	cage_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	cage_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	cage_mat.albedo_color = Color(1.0, 0.76, 0.38, 0.55)
-	cage_mat.emission_enabled = true
-	cage_mat.emission = Color(1.0, 0.7, 0.3)
-	cage_mat.emission_energy_multiplier = 1.9
-	cage.material_override = cage_mat
-	cage.position.y = 1.3
-	root.add_child(cage)
-	# tiny finial knob — the amber housing must stay visible from the high
-	# couch camera (an earlier full-width cap blacked every lantern out)
-	var cap := MeshInstance3D.new()
-	var capm := SphereMesh.new()
-	capm.radius = 0.06
-	capm.height = 0.12
-	cap.mesh = capm
-	cap.material_override = post_mat
-	cap.position.y = 1.5
-	root.add_child(cap)
-	if with_light:
-		var l := OmniLight3D.new()
-		l.light_color = Color(1.0, 0.7, 0.34)
-		l.light_energy = 2.1
-		l.omni_range = 4.2
-		l.position.y = 1.35
-		root.add_child(l)
-	return root
+	_ghost_rail = Node3D.new()
+	_ghost_rail.name = "GhostRail"
+	spawn_root.add_child(_ghost_rail)
 
-func _build_platform() -> void:
-	for r in _ring_roots:
-		if is_instance_valid(r):
-			r.queue_free()
-	_ring_roots.clear()
-	if _pillar_disc != null and is_instance_valid(_pillar_disc):
-		_pillar_disc.queue_free()
-		_pillar_disc = null
-	_ring_segs = [[], [], []]
-	_ring_mats = [[], [], []]
-	_shrink_stage = 0
-	_tele_ring = -1
-	platform_radius = R_FULL
-	_next_radius = R_FULL
-	_shrink_pending = false
-	_floor_shape.radius = R_FULL
+	if _view_mode == "overview":
+		# a hero survey: from over the chapel, down the length of the route,
+		# the crypt glowing at the vanishing point
+		cam_rig.position = Vector3.ZERO
+		cam.position = Vector3(-14.0, 26.0, 30.0)
+		cam.look_at_from_position(cam.position, Vector3(78.0, -2.0, -6.0), Vector3.UP)
+		cam.fov = 58.0
+		env.fog_enabled = false   # the survey shot reads the whole route
 
-	# ring definitions: [inner_r, outer_r, seg_count, ring_id]
-	# ring_id 2 = outer (falls at 20s), 1 = mid (40s), 0 = core ring (falls
-	# at SUDDEN DEATH — only the r=1.8 pillar disc endures)
-	var defs := [[R_MID, R_FULL, 30, 2], [R_CORE, R_MID, 22, 1], [R_LAST, R_CORE, 12, 0]]
-	for d in defs:
-		var inner: float = d[0]
-		var outer: float = d[1]
-		var n: int = d[2]
-		var ring_id: int = d[3]
-		var root := Node3D.new()
-		root.name = "Ring%d" % ring_id
-		$Arena.add_child(root)
-		_ring_roots.append(root)
-		if ring_id == 0:
-			# the last pillar: a disc that never falls, parented to Arena
-			# (NOT this ring root) so the sudden-death crumble spares it
-			var disc := MeshInstance3D.new()
-			var dm := CylinderMesh.new()
-			dm.top_radius = R_LAST + 0.06
-			dm.bottom_radius = R_LAST * 0.62
-			dm.height = 2.6
-			disc.mesh = dm
-			var dmat := StandardMaterial3D.new()
-			dmat.albedo_color = Color(0.5, 0.47, 0.53)
-			dmat.roughness = 0.95
-			disc.material_override = dmat
-			disc.position.y = -1.31
-			$Arena.add_child(disc)
-			_pillar_disc = disc
-			# the last flame: candle stubs + one warm light that NEVER falls,
-			# so the sudden-death brawl isn't fought in the dark
-			var candle_mat := StandardMaterial3D.new()
-			candle_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			candle_mat.albedo_color = Color(1.0, 0.82, 0.5)
-			candle_mat.emission_enabled = true
-			candle_mat.emission = Color(1.0, 0.7, 0.3)
-			candle_mat.emission_energy_multiplier = 1.6
-			for ci in 5:
-				var ca := TAU * ci / 5.0 + 0.4
-				var candle := MeshInstance3D.new()
-				var cyl := CylinderMesh.new()
-				cyl.top_radius = 0.055
-				cyl.bottom_radius = 0.07
-				cyl.height = 0.16 + 0.07 * ((ci * 3) % 3)
-				candle.mesh = cyl
-				candle.material_override = candle_mat
-				candle.position = Vector3(cos(ca) * (R_LAST - 0.28), 0.09, sin(ca) * (R_LAST - 0.28))
-				disc.add_child(candle)
-				candle.position.y += 1.31   # counter the disc's own offset
-			var pl := OmniLight3D.new()
-			pl.light_color = Color(1.0, 0.72, 0.38)
-			pl.light_energy = 1.7
-			pl.omni_range = 5.0
-			pl.position.y = 1.31 + 1.6
-			disc.add_child(pl)
-		var rm := (inner + outer) / 2.0
-		for i in n:
-			var a := TAU * i / n + (0.11 * ring_id)
-			var seg := MeshInstance3D.new()
-			var bm := BoxMesh.new()
-			var tangential := rm * TAU / n * 0.97
-			bm.size = Vector3(outer - inner - 0.04, 1.5, tangential)
-			seg.mesh = bm
-			var mat := StandardMaterial3D.new()
-			var shade := 0.28 + 0.11 * ((i * 7 + ring_id * 3) % 5) / 4.0
-			mat.albedo_color = Color(shade * 0.96, shade * 0.94, shade * 1.14)
-			mat.roughness = 0.95
-			seg.material_override = mat
-			seg.position = Vector3(cos(a) * rm, -0.76 - 0.012 * ((i * 5) % 3), sin(a) * rm)
-			seg.rotation.y = -a
-			root.add_child(seg)
-			_ring_segs[ring_id].append(seg)
-			_ring_mats[ring_id].append(mat)
-		# lanterns per ring — every lantern is LIT; at dusk they carry the scene
-		var lant_counts := {2: 6, 1: 4, 0: 3}
-		var ln: int = lant_counts[ring_id]
-		for i in ln:
-			var a := TAU * i / ln + 0.35 + ring_id * 0.5
-			var lr := outer - 0.45
-			if ring_id == 0:
-				lr = R_CORE - 0.5
-			var lant := _make_lantern(true)
-			lant.position = Vector3(cos(a) * lr, 0, sin(a) * lr)
-			root.add_child(lant)
-	# gravestones + cracked slab flavor on core and mid
-	var grave_mat := StandardMaterial3D.new()
-	grave_mat.albedo_color = Color(0.33, 0.32, 0.38)
-	grave_mat.roughness = 1.0
-	for g in [[1.6, 0.9, -12.0], [-1.9, 2.2, 8.0], [3.9, -2.4, 20.0]]:
-		var stone := Node3D.new()
-		var body := MeshInstance3D.new()
-		var bm2 := BoxMesh.new()
-		bm2.size = Vector3(0.5, 0.7, 0.14)
-		body.mesh = bm2
-		body.material_override = grave_mat
-		body.position.y = 0.35
-		stone.add_child(body)
-		var top := MeshInstance3D.new()
-		var tm := CylinderMesh.new()
-		tm.top_radius = 0.25
-		tm.bottom_radius = 0.25
-		tm.height = 0.14
-		top.mesh = tm
-		top.material_override = grave_mat
-		top.rotation_degrees = Vector3(90, 0, 0)
-		top.position.y = 0.7
-		stone.add_child(top)
-		stone.position = Vector3(g[0], 0, g[1])
-		stone.rotation_degrees = Vector3(0, g[2], 4)
-		# gravestones ride their ring's root so they crumble with the yard
-		var ring_id := 0 if Vector2(g[0], g[1]).length() < R_CORE else 1
-		_ring_roots[ring_root_index(ring_id)].add_child(stone)
+## Solid-road query used by pawns (anti-tunnel + void grace) and boulders.
+func over_ground(pos: Vector3) -> bool:
+	return LWCourse.over_ground(pos.x, pos.z)
 
-func _build_target_ring() -> void:
-	_target_ring = MeshInstance3D.new()
-	var tm := TorusMesh.new()
-	tm.inner_radius = 0.72
-	tm.outer_radius = 0.95
-	_target_ring.mesh = tm
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.albedo_color = Color(1, 1, 1, 0.85)
-	mat.emission_enabled = true
-	mat.emission = Color.WHITE
-	mat.emission_energy_multiplier = 1.8
-	_target_ring.material_override = mat
-	_target_ring.visible = false
-	spawn_root.add_child(_target_ring)
-
-# ================================================================ rounds
-func _start_round() -> void:
-	print("LW_ROUND_START %d/%d t=%.1f" % [round_index + 1, rounds_total, game_time])
+# ================================================================ races
+func _start_race() -> void:
+	# NOTE: no wall-clock stamp here — game_time carries a startup offset that
+	# varies run to run (scene load frames); race_elapsed stamps are the
+	# deterministic ones, and the tally receipt must stay byte-identical.
+	print("LW_RACE_START %d/%d curses=%d" % [race_index + 1, races_total, curses.size()])
 	phase = Phase.INTRO
 	_intro_t = 0.0
-	round_elapsed = 0.0
-	_elim_order.clear()
-	_clear_hazards()
+	race_elapsed = 0.0
+	_race_over = false
+	_finisher = -1
+	_clear_transients()
 	_clear_ghosts()
-	_clear_wisps()
-	_build_platform()
-	_build_schedule()
+	_seed_boulder_lanes()
 	var n := players.size()
 	for i in n:
 		players[i].alive = true
-		var a := TAU * i / n + 0.6
-		pawns[i].revive(Vector3(cos(a) * 4.1, 0.25, sin(a) * 4.1))
+		players[i].lives = LIVES
+		if _dead_hint_demo and i == 0:
+			players[i].lives = 1
+		players[i].best_x = 0.0
+		players[i].checkpoint = 0
+		players[i].finished = false
+		players[i].finish_time = -1.0
+		players[i].deaths_this_race = 0
+		pawns[i].revive(LWCourse.checkpoint_pos(0, i) + Vector3(-1.0, 0.0, 0.0))
 		pawns[i].set_world_frozen(true)
-	# carry-over wills from the previous round's dying breath
-	var carry_lines: Array = []
-	for c in _carry:
-		var tgt: int = c.target
-		if c.kind == "bless":
-			_apply_bless_effect(str(c.effect), int(c.from), tgt)
-			_register_claim(int(c.from), tgt, round_index)
-			carry_lines.append("%s'S BLESSING ENDURES: %s — %s" % [player_name(c.from),
-				player_name(tgt), str(BLESS_DEFS[c.effect].banner)])
-		else:
-			_apply_curse_effect(str(c.effect), int(c.from), tgt)
-			carry_lines.append("%s'S CURSE ENDURES: %s — %s" % [player_name(c.from),
-				player_name(tgt), str(CURSE_DEFS[c.effect].banner)])
-		_tally_stats.carries += 1
-		print("LW_CARRYOVER %s %s %s->%s" % [c.kind, c.effect, player_name(c.from), player_name(tgt)])
-	_carry.clear()
-	if _skip_to > 0.0 and round_index == 0:
-		round_elapsed = _skip_to
-	round_label.text = "ROUND %d / %d" % [round_index + 1, rounds_total]
-	_rebuild_scoreboard()
-	_refresh_hint()   # everyone revived -> back to the living legend
+	race_label.text = "RACE %d / %d" % [race_index + 1, races_total]
+	_refresh_hint()
 	if not _tally:
-		_flash_banner("ROUND %d\nSURVIVE — OR RULE FROM BEYOND" % (round_index + 1), Color(1, 0.85, 0.2), 1.9)
-		if carry_lines.size() > 0:
-			_flash_sub(String("\n".join(carry_lines)), Color(0.8, 1.0, 0.75), 3.2)
+		_flash_banner("RACE %d\nFIRST TO THE CRYPT INHERITS" % (race_index + 1), Color(1, 0.85, 0.2), 2.0)
+		if race_index == 0:
+			_flash_exec(EXEC_DEPART, 3.4)
+		elif curses.size() > 0:
+			_flash_sub("THE COURSE REMEMBERS — %d CURSES ACTIVE" % curses.size(), Color(0.7, 1.0, 0.7), 2.6)
 
-func _build_schedule() -> void:
-	_schedule.clear()
-	_sched_i = 0
-	if _test_mode != "":
-		return   # self-tests drive their own hazards
-	var pend_a := rng.randf_range(0.0, 180.0)
-	_schedule = [
-		{"t": 5.0, "k": "boulder"},
-		{"t": 11.0, "k": "pendulum", "a": pend_a, "swings": 3},
-		{"t": 18.0, "k": "shrink_tele", "ring": 2},
-		{"t": 20.0, "k": "shrink", "ring": 2},
-		{"t": 23.5, "k": "boulder"},
-		{"t": 24.3, "k": "boulder"},
-		{"t": 30.0, "k": "pendulum", "a": pend_a + rng.randf_range(50.0, 130.0), "swings": 3},
-		{"t": 38.0, "k": "shrink_tele", "ring": 1},
-		{"t": 40.0, "k": "shrink", "ring": 1},
-		{"t": 43.0, "k": "boulder"},
-		{"t": 43.8, "k": "boulder"},
-		{"t": 49.0, "k": "pendulum", "a": rng.randf_range(0.0, 180.0), "swings": 4},
-		{"t": 55.0, "k": "boulder"},
-		{"t": 55.8, "k": "boulder"},
-		{"t": 58.0, "k": "shrink_tele", "ring": 0},
-		{"t": 60.0, "k": "sudden"},
-		{"t": 60.05, "k": "shrink", "ring": 0},
-		{"t": 63.0, "k": "boulder"},
-		{"t": 66.5, "k": "boulder"},
-		{"t": 68.8, "k": "boulder"},
-		{"t": 71.0, "k": "pendulum", "a": rng.randf_range(0.0, 180.0), "swings": 4},
-		{"t": 72.4, "k": "boulder"},
-		{"t": 74.6, "k": "boulder"},
-		{"t": 76.4, "k": "boulder"},
-	]
+func _seed_boulder_lanes() -> void:
+	_boulder_lanes.clear()
+	var periods := [5.0, 6.2, 5.6]
+	for i in LWCourse.BOULDER_LANES.size():
+		_boulder_lanes.append({
+			"x": float(LWCourse.BOULDER_LANES[i]),
+			"period": float(periods[i % periods.size()]),
+			"next_t": 2.0 + rng.randf_range(0.0, 1.4) + 1.3 * float(i),
+			"side": 1 if rng.randi_range(0, 1) == 0 else -1,
+		})
 
-func _process_schedule() -> void:
-	while _sched_i < _schedule.size() and round_elapsed >= float(_schedule[_sched_i].t):
-		var ev: Dictionary = _schedule[_sched_i]
-		_sched_i += 1
-		# --willskip fast-forward: stale moving hazards are skipped, but the
-		# shrink chain always replays so the platform state stays honest
-		if round_elapsed - float(ev.t) > 1.5 and str(ev.k) in ["boulder", "pendulum"]:
-			continue
-		match str(ev.k):
-			"boulder":
-				_spawn_boulder()
-			"pendulum":
-				var pen := LWPendulum.new()
-				spawn_root.add_child(pen)
-				pen.setup(float(ev.a), int(ev.swings), self)
-				pendulums.append(pen)
-				if not _tally:
-					_flash_sub("THE PENDULUM STIRS", Color(1.0, 0.5, 0.4), 1.4)
-			"shrink_tele":
-				_tele_ring = int(ev.ring)
-				_shrink_pending = true
-				_next_radius = R_MID if int(ev.ring) == 2 else (R_CORE if int(ev.ring) == 1 else R_LAST)
-				Sfx.play("grudge", -6.0)
-				if not _tally:
-					_flash_sub("THE YARD IS CRUMBLING!", Color(1.0, 0.45, 0.3), 1.8)
-			"shrink":
-				_do_shrink(int(ev.ring))
-			"sudden":
-				if not _tally:
-					_flash_banner("SUDDEN DEATH\nONLY THE PILLAR REMAINS", Color(1.0, 0.35, 0.25), 2.0)
-					Sfx.play("grudge", -2.0)
-
-func _spawn_boulder() -> void:
-	_boulder_side = -_boulder_side
-	var a := rng.randf_range(0.0, 360.0)
-	if _boulder_side < 0:
-		a += 180.0
-	var off := rng.randf_range(-0.55, 0.55) * platform_radius
-	var b := LWBoulder.new()
-	spawn_root.add_child(b)
-	b.setup(a, off, self)
-	boulders.append(b)
-
-func _do_shrink(ring: int) -> void:
-	_tele_ring = -1
-	_shrink_pending = false
-	_shrink_stage = 3 - ring
-	platform_radius = R_MID if ring == 2 else (R_CORE if ring == 1 else R_LAST)
-	_floor_shape.radius = platform_radius
-	Sfx.play("crush", -2.0)
-	_shake = maxf(_shake, 0.5)
-	print("LW_SHRINK ring=%d radius=%.1f t=%.1f" % [ring, platform_radius, round_elapsed])
-	# fall ALL the way past the void sea and free — resting at a shallow
-	# depth left a ghost-ring visible from the top-down camera
-	var segs: Array = _ring_segs[ring]
-	for i in segs.size():
-		var seg: MeshInstance3D = segs[i]
-		if not is_instance_valid(seg):
-			continue
-		var tw := create_tween()
-		var d := 0.03 * (i % 7)
-		tw.tween_interval(d)
-		tw.tween_property(seg, "position:y", seg.position.y - 34.0, 2.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		tw.parallel().tween_property(seg, "rotation:x", rng.randf_range(-2.6, 2.6), 2.1)
-		tw.parallel().tween_property(seg, "rotation:z", rng.randf_range(-2.6, 2.6), 2.1)
-		tw.tween_callback(seg.queue_free)
-	# lanterns and gravestones on that ring fall with their parent segs' root
-	var root: Node3D = _ring_roots[ring_root_index(ring)]
-	for child in root.get_children():
-		if child is MeshInstance3D:
-			continue  # segs handled above
-		var tw2 := create_tween()
-		tw2.tween_property(child, "position:y", child.position.y - 34.0, 2.0).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
-		tw2.parallel().tween_property(child, "rotation:x", 0.9, 2.0)
-		tw2.tween_callback(child.queue_free)
-
-func ring_root_index(ring: int) -> int:
-	# _ring_roots built in order [outer(2), mid(1), core(0)]
-	return 2 - ring
-
-func bot_safe_radius() -> float:
-	return (_next_radius if _shrink_pending else platform_radius) - 0.7
-
-func _clear_hazards() -> void:
-	for p in pendulums:
-		if is_instance_valid(p):
-			p.queue_free()
-	pendulums.clear()
+func _clear_transients() -> void:
 	for b in boulders:
 		if is_instance_valid(b):
 			b.queue_free()
@@ -844,70 +509,78 @@ func _clear_ghosts() -> void:
 			ghosts[k].queue_free()
 	ghosts.clear()
 
-func _clear_wisps() -> void:
-	for k in wisps:
-		if is_instance_valid(wisps[k]):
-			wisps[k].queue_free()
-	wisps.clear()
-
 # ================================================================ tick
 func _physics_process(delta: float) -> void:
 	game_time += delta
 	if _shake > 0.001:
-		cam.h_offset = rng.randf_range(-1, 1) * _shake * 0.3
-		cam.v_offset = rng.randf_range(-1, 1) * _shake * 0.3
+		cam.h_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.3
+		cam.v_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.3
 		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
 
-	if _target_ring != null and _target_ring.visible:
-		var s := 1.0 + 0.1 * sin(game_time * 7.0)
-		_target_ring.scale = Vector3(s, 1.0, s)
-
 	match phase:
 		Phase.INTRO:
 			_intro_t += delta
-			if _intro_t >= (0.2 if _tally else 1.6):
-				phase = Phase.ROUND
+			_update_camera(delta)
+			if _intro_t >= (0.2 if _tally else 1.8):
+				phase = Phase.RACE
 				_set_frozen(false)
-		Phase.ROUND:
-			_tick_round(delta)
+				if not _tally:
+					_flash_sub("WALK WITH PURPOSE", Color(0.9, 0.95, 1.0), 1.4)
+		Phase.RACE:
+			_tick_race(delta)
+			_update_camera(delta)
 		Phase.WILL:
 			_tick_will(delta)
-		Phase.ROUND_END:
-			_tick_round_end(delta)
+		Phase.RACE_END:
+			_tick_race_end(delta)
 		_:
 			pass
 
-func _tick_round(delta: float) -> void:
-	round_elapsed += delta
-	_update_timer_label()
-	_process_schedule()
-	_pulse_telegraph()
+func _process(delta: float) -> void:
+	if hud != null and not players.is_empty():
+		hud.refresh(delta)
 
-	# forced kills (screenshot determinism)
-	if round_index == 0:
+func _tick_race(delta: float) -> void:
+	race_elapsed += delta
+	_update_timer_label()
+
+	# forced kills (screenshot determinism / dead-hint demo)
+	if race_index == 0:
 		for fk in _forced_kills:
-			if not fk.get("done", false) and round_elapsed >= float(fk.t):
+			if not fk.get("done", false) and race_elapsed >= float(fk.t):
 				fk["done"] = true
 				var p: int = int(fk.p)
 				if p >= 0 and p < pawns.size() and pawns[p].alive:
-					print("LW_FORCEKILL p=%d t=%.1f" % [p, round_elapsed])
+					print("LW_FORCEKILL p=%d t=%.1f" % [p, race_elapsed])
 					pawns[p]._die("void")
 					return
 
+	# reset terrain mods, then let the curses re-apply them
+	for pawn in pawns:
+		if pawn.alive:
+			pawn.terrain_speed = 1.0
+			pawn.terrain_accel = 1.0
+	for cu in curses:
+		cu.tick(delta)
+
+	# base hazards
+	_tick_boulder_lanes(delta)
 	for pen in pendulums:
 		pen.tick(delta)
+	spinner.tick(delta)
+	for w in walls:
+		w.tick(delta)
 	for b in boulders:
 		b.tick(delta)
-	_prune_hazards()
+	_prune_boulders()
 	_tick_gusts(delta)
-	_tick_wisps(delta)
 
+	# drive racers + ghosts
 	for i in players.size():
 		if players[i].alive:
-			pawns[i].tick_effects(delta)
 			if _test_mode == "":
 				_drive_pawn(i, delta)
 		elif ghosts.has(i):
@@ -916,35 +589,73 @@ func _tick_round(delta: float) -> void:
 	if _test_mode != "":
 		_tick_test(delta)
 
-	if phase != Phase.ROUND:
+	if phase != Phase.RACE:
 		return  # a death mid-loop flipped us into WILL
-	if round_elapsed >= HARD_CAP:
-		_end_round()
 
-func _prune_hazards() -> void:
-	for i in range(pendulums.size() - 1, -1, -1):
-		if pendulums[i].is_done():
-			pendulums[i].queue_free()
-			pendulums.remove_at(i)
+	# progress + checkpoints + the crypt
+	for i in players.size():
+		if not players[i].alive or players[i].finished:
+			continue
+		var px: float = pawns[i].global_position.x
+		if px > float(players[i].best_x):
+			players[i].best_x = px
+			for ci in range(LWCourse.CHECKPOINTS.size() - 1, -1, -1):
+				if px >= float(LWCourse.CHECKPOINTS[ci]):
+					if ci > int(players[i].checkpoint):
+						players[i].checkpoint = ci
+						pawns[i].safe_spawn = LWCourse.checkpoint_pos(ci, i)
+						if not _tally:
+							_flash_sub("%s CLAIMS THE CHECKPOINT" % players[i].name, players[i].color, 1.3)
+							Sfx.play("confirm", -8.0)
+						print("LW_CHECKPOINT %s cp=%d t=%.1f" % [players[i].name, ci, race_elapsed])
+					break
+		if px >= LWCourse.FINISH_X:
+			_on_finish(i)
+			return
+
+	_update_ghost_rail()
+
+	# tally trace: positions every 20s so stalls are visible in the receipt
+	if _tally and int(race_elapsed / 20.0) != int((race_elapsed - delta) / 20.0):
+		var bits: Array = []
+		for i in players.size():
+			bits.append("%s@%.1f%s" % [players[i].name, pawns[i].global_position.x,
+				"" if players[i].alive else "(dead)"])
+		print("LW_TRACE race=%d t=%.0f %s" % [race_index + 1, race_elapsed, " ".join(bits)])
+
+	if race_elapsed >= HARD_CAP:
+		print("LW_TIMEOUT race=%d" % (race_index + 1))
+		_end_race()
+
+func _tick_boulder_lanes(delta: float) -> void:
+	if _test_mode != "":
+		return
+	for lane in _boulder_lanes:
+		if race_elapsed < float(lane.next_t):
+			continue
+		lane.next_t = race_elapsed + float(lane.period) + rng.randf_range(0.0, 1.4)
+		lane.side = -int(lane.side)
+		var lx := float(lane.x)
+		var zc := LWCourse.z_center(lx)
+		var hw := LWCourse.half_width(lx)
+		var side := float(lane.side)
+		var start := Vector3(lx, 0.0, zc + side * (hw + 5.5))
+		var b := LWBoulder.new()
+		spawn_root.add_child(b)
+		b.setup(start, Vector2(0.0, -side), (hw + 5.5) * 2.0 + 3.0,
+			Vector3(lx, 0.0, zc), hw * 2.0 + 2.0, self)
+		boulders.append(b)
+
+func _prune_boulders() -> void:
 	for i in range(boulders.size() - 1, -1, -1):
 		if boulders[i].is_done():
 			boulders[i].queue_free()
 			boulders.remove_at(i)
 
-func _pulse_telegraph() -> void:
-	if _tele_ring < 0:
-		return
-	var pulse := 0.5 + 0.5 * sin(round_elapsed * 10.0)
-	for mat in _ring_mats[_tele_ring]:
-		var m: StandardMaterial3D = mat
-		m.emission_enabled = true
-		m.emission = Color(1.0, 0.2, 0.12)
-		m.emission_energy_multiplier = 0.9 * pulse
-
 func _drive_pawn(i: int, delta: float) -> void:
 	var pawn: LWPawn = pawns[i]
 	if players[i].is_bot:
-		var d: Dictionary = bots.decide_living(i, self, pawn, delta)
+		var d: Dictionary = bots.decide_racer(i, self, pawn, delta)
 		pawn.move_input = d.move
 		if d.a:
 			pawn.want_shove = true
@@ -967,7 +678,7 @@ func _drive_ghost(i: int, delta: float) -> void:
 			_fire_gust(i)
 	else:
 		# TWIN-STICK CONVENTION: aim the gust with the RIGHT channel — mouse cursor
-		# (KBM) or right stick (pad). The ghost seat never moves, so the LEFT channel
+		# (KBM) or right stick (pad). The ghost seat never steers, so the LEFT channel
 		# is only the fallback when there is no aim device (keyboard halves) or the
 		# right stick is idle.
 		var aim3 := PlayerInput.get_aim_dir(i, g.global_position, cam)   # KBM cursor (world)
@@ -979,6 +690,38 @@ func _drive_ghost(i: int, delta: float) -> void:
 		g.set_aim(aim2)
 		if PlayerInput.just_pressed(i, "a") and g.gust_ready():
 			_fire_gust(i)
+
+# ================================================================ camera
+func _update_camera(delta: float) -> void:
+	if _view_mode == "overview" or _hitkit_cap:
+		return
+	var min_x := 1e9
+	var max_x := -1e9
+	var racers := 0
+	for i in players.size():
+		if players[i].alive and not players[i].finished:
+			var px: float = pawns[i].global_position.x
+			min_x = minf(min_x, px)
+			max_x = maxf(max_x, px)
+			racers += 1
+	if racers == 0:
+		return
+	var spread := max_x - min_x
+	var focus_x := (min_x + max_x) * 0.5
+	if spread > 26.0:
+		focus_x = max_x - 13.0    # the front of the procession matters most
+	var zoom_target := clampf(spread / 20.0, 1.0, 1.45)
+	_cam_zoom = lerpf(_cam_zoom, zoom_target, 1.0 - exp(-3.0 * delta))
+	var target := Vector3(focus_x + 2.0, 0.0, LWCourse.z_center(focus_x) * 0.6)
+	cam_rig.position = cam_rig.position.lerp(target, 1.0 - exp(-4.0 * delta))
+	cam.position = Vector3(0.0, 13.9 * _cam_zoom, 11.8 * _cam_zoom)
+	cam.look_at_from_position(cam_rig.position + cam.position,
+		cam_rig.position + Vector3(0, 0.2, -0.7), Vector3.UP)
+
+func _update_ghost_rail() -> void:
+	if _ghost_rail != null:
+		_ghost_rail.position = Vector3(cam_rig.position.x,
+			0.0, LWCourse.z_center(cam_rig.position.x))
 
 # ================================================================ gusts
 func _fire_gust(i: int) -> void:
@@ -995,7 +738,7 @@ func _fire_gust(i: int) -> void:
 		"hit": [], "from": i})
 	Sfx.play("bounce", -7.0, 0.2)
 	_tally_stats.gusts += 1
-	print("LW_GUST from=%s t=%.1f" % [players[i].name, round_elapsed])
+	print("LW_GUST from=%s t=%.1f" % [players[i].name, race_elapsed])
 
 func _make_gust_node(c: Color) -> Node3D:
 	var root := Node3D.new()
@@ -1064,43 +807,36 @@ func _tick_gusts(delta: float) -> void:
 			node.queue_free()
 			_gusts.remove_at(gi)
 
-func _tick_wisps(delta: float) -> void:
-	for k in wisps.keys():
-		var w: LWWisp = wisps[k]
-		if not w.tick(delta):
-			w.queue_free()
-			wisps.erase(k)
-			if k < pawns.size() and pawns[k].curse_kind == "haunted":
-				pawns[k].clear_curse()
-
 # ================================================================ self-tests
 func _tick_test(_delta: float) -> void:
 	_delta_cache = _delta
 	match _test_mode:
 		"squish":
 			# a stationary pawn 0 must be flattened by a boulder aimed down
-			# its row — proves the squish path end to end
-			if not _test_fired and round_elapsed >= 1.0:
+			# its lane — proves the squish path end to end on the new course
+			if not _test_fired and race_elapsed >= 1.0:
 				_test_fired = true
+				var pp: Vector3 = pawns[0].global_position
 				var b := LWBoulder.new()
 				spawn_root.add_child(b)
-				b.setup(0.0, pawns[0].global_position.z, self)
+				b.setup(Vector3(pp.x - 10.0, 0.0, pp.z), Vector2(1.0, 0.0), 24.0,
+					Vector3(pp.x - 2.0, 0.0, pp.z), 12.0, self)
 				boulders.append(b)
-				print("WILLTEST squish: boulder launched at pawn0 z=%.2f" % pawns[0].global_position.z)
-			if _test_fired and boulders.size() > 0 and int(round_elapsed * 2.0) != int((round_elapsed - _delta_cache) * 2.0):
+				print("WILLTEST squish: boulder launched at pawn0 x=%.2f" % pp.x)
+			if _test_fired and boulders.size() > 0 and int(race_elapsed * 2.0) != int((race_elapsed - _delta_cache) * 2.0):
 				var rp: Vector3 = boulders[0].rock_pos()
 				print("WILLTEST trace rock=(%.2f,%.2f,%.2f) state=%d pawn=(%.2f,%.2f,%.2f) grounded=%s" % [
 					rp.x, rp.y, rp.z, boulders[0].state,
 					pawns[0].global_position.x, pawns[0].global_position.y, pawns[0].global_position.z,
 					str(pawns[0].is_grounded())])
-			if round_elapsed > 12.0:
+			if race_elapsed > 12.0:
 				print("WILLTEST squish RESULT: FAIL (pawn survived)")
 				get_tree().quit(1)
 
 func _test_note_death(cause: String) -> void:
 	if _test_mode == "squish":
 		if cause == "squish":
-			print("WILLTEST squish RESULT: PASS (t=%.2f)" % round_elapsed)
+			print("WILLTEST squish RESULT: PASS (t=%.2f)" % race_elapsed)
 			get_tree().quit(0)
 		else:
 			print("WILLTEST squish RESULT: FAIL (died of %s)" % cause)
@@ -1111,67 +847,86 @@ func _on_pawn_died(index: int, cause: String) -> void:
 	if _test_mode != "":
 		_test_note_death(cause)
 		return
-	if phase == Phase.MATCH_END or phase == Phase.ROUND_END:
+	if phase == Phase.MATCH_END or phase == Phase.RACE_END:
 		return
 	players[index].alive = false
+	players[index].lives = maxi(0, int(players[index].lives) - 1)
 	players[index].deaths += 1
-	_elim_order.append(index)
-	_currency.append({"type": "grudge", "player": index, "amount": 1,
-		"reason": "eliminated (%s)" % cause})
-	if cause == "void":
-		_tally_stats["void"] += 1
-	else:
-		_tally_stats["squish"] += 1
+	players[index].deaths_this_race += 1
+	_tally_stats.deaths += 1
 
-	# attribution for the banner + highlights
+	# attribution: player action > curse authorship > environment
 	var pawn: LWPawn = pawns[index]
 	var line := "THE VOID CLAIMS %s" % players[index].name
 	var lcolor := Color(0.65, 0.8, 1.0)
+	var kev_killer := -1
+	var kev_cause := cause      # "void" | "squish"
 	var atk: Dictionary = pawn.last_attacker
+	var atk_recent: bool = atk.size() > 0 and (game_time - float(atk.get("time", -99.0))) <= 3.0
+	var cur: Dictionary = pawn.last_curse
+	var cur_recent: bool = cur.size() > 0 and (game_time - float(cur.get("time", -99.0))) <= 3.0
 	if cause == "squish":
 		line = "THE BOULDER FLATTENS %s" % players[index].name
 		lcolor = Color(0.85, 0.75, 0.6)
-	elif atk.size() > 0 and (game_time - float(atk.get("time", -99.0))) <= 3.0:
-		var ai := int(atk.get("index", -1))
-		match str(atk.get("type", "")):
-			"shove":
-				if ai >= 0 and ai != index:
-					line = "%s SHOVES %s INTO THE DUSK" % [players[ai].name, players[index].name]
-					lcolor = players[ai].color
-					_highlights.append("%s shoved %s into the dusk" % [players[ai].name, players[index].name])
-			"gust":
-				if ai >= 0 and ai != index:
-					line = "%s'S GUST USHERS %s OFF THE EDGE" % [players[ai].name, players[index].name]
-					lcolor = players[ai].color
-					_highlights.append("%s, already dead, gusted %s into the void" % [players[ai].name, players[index].name])
-			"pendulum":
-				line = "THE PENDULUM SWATS %s AWAY" % players[index].name
-				lcolor = Color(1.0, 0.5, 0.4)
-	if pawn.curse_kind != "" and pawn.curse_from >= 0 and pawn.curse_from != index:
-		_highlights.append("%s's curse dragged %s to the grave" % [players[pawn.curse_from].name, players[index].name])
-	# Anthology kill ledger (reporting only; mirrors the banner attribution
-	# above without altering it). killer -1 = environment/self.
-	var kev_killer := -1
-	var kev_cause := cause      # "void" | "squish"
-	if cause != "squish" and atk.size() > 0 and (game_time - float(atk.get("time", -99.0))) <= 3.0:
-		var kai := int(atk.get("index", -1))
-		match str(atk.get("type", "")):
-			"shove":
-				if kai >= 0 and kai != index:
-					kev_killer = kai
-			"gust":
-				if kai >= 0 and kai != index:
-					kev_killer = kai
-					kev_cause = "gust"
-			"pendulum":
-				kev_cause = "pendulum"
+	else:
+		var handled := false
+		if atk_recent:
+			var ai := int(atk.get("index", -1))
+			match str(atk.get("type", "")):
+				"shove":
+					if ai >= 0 and ai != index:
+						line = "%s SHOVES %s INTO THE DUSK" % [players[ai].name, players[index].name]
+						lcolor = players[ai].color
+						kev_killer = ai
+						kev_cause = "shove"
+						_highlights.append("%s shoved %s into the dusk" % [players[ai].name, players[index].name])
+						handled = true
+				"gust":
+					if ai >= 0 and ai != index:
+						line = "%s'S GUST USHERS %s OFF THE ROAD" % [players[ai].name, players[index].name]
+						lcolor = players[ai].color
+						kev_killer = ai
+						kev_cause = "gust"
+						_currency.append({"type": "royalty", "player": ai, "amount": GUST_ROYALTY,
+							"reason": "gust kill from beyond"})
+						_tally_stats.gust_kills += 1
+						_highlights.append("%s, already dead, gusted %s into the void" % [players[ai].name, players[index].name])
+						handled = true
+				_:
+					pass
+		if not handled and cur_recent:
+			var author := int(cur.get("author", -1))
+			var slug := str(cur.get("slug", ""))
+			if author >= 0 and CURSE_DEFS.has(slug):
+				kev_killer = author
+				kev_cause = slug
+				line = str(CURSE_DEFS[slug].kill_line) % [players[author].name, players[index].name]
+				lcolor = players[author].color
+				if author != index:
+					players[author].curse_kills += 1
+					_currency.append({"type": "royalty", "player": author, "amount": ROYALTY,
+						"reason": "curse kill (%s)" % slug})
+					_tally_stats.curse_kills += 1
+					_highlights.append("%s's %s curse claimed %s" % [players[author].name, slug, players[index].name])
+					if not _tally:
+						_flash_sub("ROYALTIES TO %s +%d" % [players[author].name, ROYALTY],
+							players[author].color, 1.8)
+				handled = true
+		if not handled and atk_recent:
+			match str(atk.get("type", "")):
+				"pendulum":
+					line = "THE PENDULUM SWATS %s INTO THE DUSK" % players[index].name
+					lcolor = Color(1.0, 0.5, 0.4)
+					kev_cause = "pendulum"
+				"spinner":
+					line = "THE SWEEPER ESCORTS %s OFF THE ROAD" % players[index].name
+					lcolor = Color(0.9, 0.7, 0.4)
+					kev_cause = "spinner"
+				_:
+					pass
 	_kill_events.append({"killer": kev_killer, "victim": index, "cause": kev_cause})
-	print("LW_DEATH round=%d t=%.1f %s cause=%s" % [round_index + 1, round_elapsed, line, cause])
-
-	# clear their outgoing wisp target state / incoming wisp
-	if wisps.has(index):
-		wisps[index].queue_free()
-		wisps.erase(index)
+	print("LW_DEATH race=%d t=%.1f %s cause=%s lives_left=%d" % [race_index + 1,
+		race_elapsed, line, kev_cause, int(players[index].lives)])
 
 	if not _tally:
 		Sfx.play("splat")
@@ -1182,7 +937,7 @@ func _on_pawn_died(index: int, cause: String) -> void:
 	_flash_banner(line, lcolor, 1.6)
 
 	_will_queue.append(index)
-	if phase == Phase.ROUND:
+	if phase == Phase.RACE:
 		phase = Phase.WILL
 		_set_frozen(true)
 		_begin_will(_will_queue.pop_front())
@@ -1202,10 +957,6 @@ func _begin_will(deceased: int) -> void:
 		"cards": [],
 		"sel": 0,
 		"card": -1,
-		"bless_target": -1,
-		"curse_target": -1,
-		"targets": [],
-		"mode_sel": 0,
 		"bot": players[deceased].is_bot,
 		"bot_goal": -1,
 		"bot_t": 0.0,
@@ -1224,13 +975,6 @@ func _tick_will(delta: float) -> void:
 	match step:
 		WStep.DEATH_BEAT:
 			if _will.t >= (0.25 if _tally else 1.35):
-				var survivors := _alive_indices()
-				if survivors.is_empty():
-					print("LW_WILL %s: no heirs remain" % players[p].name)
-					_flash_banner("NO HEIRS REMAIN", Color(0.7, 0.7, 0.8), 1.4)
-					_will.step = WStep.CLOSING
-					_will.t = 0.0
-					return
 				_ui.open(players[p].name, players[p].color, players[p].char_path)
 				_set_base_ui(false)
 				Sfx.play("grudge", 0.0, 0.03)
@@ -1243,8 +987,11 @@ func _tick_will(delta: float) -> void:
 			if _will.t >= (0.2 if _tally else 1.0):
 				_will.cards = _draw_cards()
 				_ui.show_cards(_will.cards.map(func(c): return {
-					"bless": {"kind": c.bless, "title": BLESS_DEFS[c.bless].title, "desc": BLESS_DEFS[c.bless].desc},
-					"curse": {"kind": c.curse, "title": CURSE_DEFS[c.curse].title, "desc": CURSE_DEFS[c.curse].desc},
+					"kind": c.kind,
+					"title": CURSE_DEFS[c.kind].title,
+					"desc": CURSE_DEFS[c.kind].desc,
+					"zone": "UPON %s" % str(c.slot.name),
+					"replaces": str(c.replaces),
 				}))
 				_will.sel = 0
 				_ui.set_card_sel(0)
@@ -1253,11 +1000,13 @@ func _tick_will(delta: float) -> void:
 				_will.clock = DRAFT_BUDGET
 				_will.bot_goal = bots.draft_card(p, self, _will.cards) if _will.bot else -1
 				_will.bot_t = 0.0
+				VerifyCapture.snap("draft")
 		WStep.CARDS:
 			_will.clock -= delta
 			_ui.set_timer(_will.clock / DRAFT_BUDGET, _will.clock)
 			if _will.clock <= 0.0:
-				_auto_resolve()
+				_will.card = _will.sel
+				_resolve_will()
 				return
 			var nav := 0
 			var confirm := false
@@ -1280,295 +1029,200 @@ func _tick_will(delta: float) -> void:
 				_will.card = _will.sel
 				_ui.lock_card(_will.sel)
 				Sfx.play("confirm", -2.0)
-				var survivors := _alive_indices()
-				if survivors.size() == 1:
-					var c: Dictionary = _will.cards[_will.card]
-					_ui.show_mode_choice(str(BLESS_DEFS[c.bless].banner), str(CURSE_DEFS[c.curse].banner),
-						players[survivors[0]].name, players[survivors[0]].color)
-					_will.mode_sel = 0
-					_ui.set_mode_sel(0)
-					_will.step = WStep.MODE
-					_will.bot_goal = (0 if bots.draft_mode(p, self, survivors[0]) == "bless" else 1) if _will.bot else -1
-					_point_hand_at(survivors[0])
-				else:
-					_enter_target_step(WStep.BLESS_T, survivors)
-				_will.t = 0.0
-				_will.bot_t = 0.0
-		WStep.BLESS_T, WStep.CURSE_T:
-			_will.clock -= delta
-			_ui.set_timer(_will.clock / DRAFT_BUDGET, _will.clock)
-			if _will.clock <= 0.0:
-				_auto_resolve()
-				return
-			var nav2 := 0
-			var confirm2 := false
-			if _will.bot:
-				_will.bot_t += delta
-				if _will.bot_t >= _will_step_time():
-					_will.bot_t = 0.0
-					if _will.sel != _will.bot_goal:
-						nav2 = 1
-					else:
-						confirm2 = true
-			else:
-				nav2 = _nav_dir(p)
-				confirm2 = PlayerInput.just_pressed(p, "a")
-			var targets: Array = _will.targets
-			if nav2 != 0:
-				_will.sel = wrapi(_will.sel + nav2, 0, targets.size())
-				_show_target(targets[_will.sel])
-				Sfx.play("card", -4.0)
-			if confirm2:
-				var chosen: int = targets[_will.sel]
-				Sfx.play("confirm", -2.0)
-				if step == WStep.BLESS_T:
-					_will.bless_target = chosen
-					var survivors2: Array = _alive_indices().filter(func(s): return s != chosen)
-					if survivors2.is_empty():
-						_go_resolution()
-					else:
-						_enter_target_step(WStep.CURSE_T, survivors2)
-				else:
-					_will.curse_target = chosen
-					_go_resolution()
-		WStep.MODE:
-			_will.clock -= delta
-			_ui.set_timer(_will.clock / DRAFT_BUDGET, _will.clock)
-			if _will.clock <= 0.0:
-				_auto_resolve()
-				return
-			var nav3 := 0
-			var confirm3 := false
-			if _will.bot:
-				_will.bot_t += delta
-				if _will.bot_t >= _will_step_time():
-					_will.bot_t = 0.0
-					if _will.mode_sel != _will.bot_goal:
-						nav3 = 1
-					else:
-						confirm3 = true
-			else:
-				nav3 = _nav_dir(p)
-				confirm3 = PlayerInput.just_pressed(p, "a")
-			if nav3 != 0:
-				_will.mode_sel = wrapi(_will.mode_sel + nav3, 0, 2)
-				_ui.set_mode_sel(_will.mode_sel)
-				Sfx.play("card", -4.0)
-			if confirm3:
-				var survivor: int = _alive_indices()[0]
-				if _will.mode_sel == 0:
-					_will.bless_target = survivor
-				else:
-					_will.curse_target = survivor
-				Sfx.play("confirm", -2.0)
-				_go_resolution()
+				_resolve_will()
 		WStep.RESOLUTION:
-			if _will.t >= (0.3 if _tally else 2.3):
+			if _will.t >= (0.35 if _tally else 2.6):
 				_will.step = WStep.CLOSING
 				_will.t = 0.0
 				_ui.close()
 				_hand.visible = false
-				_target_ring.visible = false
 				if not _tally:
 					var tw := create_tween()
 					tw.tween_property(cam, "fov", _cam_base_fov, 0.4).set_trans(Tween.TRANS_SINE)
+					var tw2 := create_tween()
+					tw2.tween_property(cam_rig, "position", _rig_home, 0.5) \
+						.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		WStep.CLOSING:
-			if _will.t >= (0.1 if _tally else 0.5):
+			if _will.t >= (0.1 if _tally else 0.6):
 				_set_base_ui(true)
-				_seat_ghost(p)
-				_will = {}
-				if not _will_queue.is_empty():
-					_begin_will(_will_queue.pop_front())
-					return
-				if _alive_indices().size() <= 1:
-					_end_round()
-				else:
-					phase = Phase.ROUND
-					_set_frozen(false)
+				_after_will(p)
 
-func _enter_target_step(step: int, targets: Array) -> void:
-	_will.step = step
-	_will.targets = targets
-	_will.sel = 0
-	_will.t = 0.0
-	_will.bot_t = 0.0
-	if _will.bot:
-		var want: int = bots.draft_bless_target(_will.player, self, targets) if step == WStep.BLESS_T \
-			else bots.draft_curse_target(_will.player, self, targets)
-		_will.bot_goal = targets.find(want)
-		if _will.bot_goal < 0:
-			_will.bot_goal = 0
-	_ui.show_target_prompt("bless" if step == WStep.BLESS_T else "curse")
-	_show_target(targets[0])
+func _after_will(p: int) -> void:
+	if int(players[p].lives) > 0 and not _race_over:
+		players[p].alive = true
+		pawns[p].revive(LWCourse.checkpoint_pos(int(players[p].checkpoint), p))
+		pawns[p].set_world_frozen(true)   # stays held until the race resumes
+	elif int(players[p].lives) <= 0:
+		_seat_ghost(p)
+		if not _tally:
+			_flash_exec(EXEC_GHOST, 2.8)
+	_will = {}
+	if not _will_queue.is_empty():
+		_begin_will(_will_queue.pop_front())
+		return
+	if _race_over:
+		_end_race()
+		return
+	# the procession has run out of living marchers: nothing left to race
+	var any_alive := false
+	for pl in players:
+		if pl.alive:
+			any_alive = true
+			break
+	if not any_alive:
+		print("LW_ALL_GHOSTS race=%d t=%.1f" % [race_index + 1, race_elapsed])
+		if not _tally:
+			_flash_banner("THE PROCESSION IS ENTIRELY DECEASED", Color(0.7, 0.75, 0.9), 2.2)
+		_end_race()
+		return
+	phase = Phase.RACE
+	_set_frozen(false)
 
-func _show_target(idx: int) -> void:
-	_ui.set_target_display(players[idx].name, players[idx].color)
-	_point_hand_at(idx)
-
-func _point_hand_at(idx: int) -> void:
-	var pawn: LWPawn = pawns[idx]
-	_hand.visible = true
-	# hover just over the head, biased toward the camera so the finger
-	# reads instead of hiding behind the target-name label
-	_hand.global_position = pawn.global_position + Vector3(0, 2.25, 0.55)
-	_target_ring.visible = true
-	_target_ring.global_position = Vector3(pawn.global_position.x, 0.1, pawn.global_position.z)
-	var mat: StandardMaterial3D = _target_ring.material_override
-	var dc: Color = players[_will.player].color
-	mat.albedo_color = Color(dc.r, dc.g, dc.b, 0.85)
-	mat.emission = dc
-
+## Three curse cards: seeded kinds over seeded stretches, free slots first.
+## A fully-cursed slate offers displacement of the oldest resident instead.
 func _draw_cards() -> Array:
-	var blesses := ["shield", "swift", "coin"]
-	var curses := ["sluggish", "butterfingers", "haunted"]
-	# seeded shuffles; pairing varies, but every draft shows all six effects
-	for i in range(blesses.size() - 1, 0, -1):
+	# kind caps: a course of nothing but blades is unfinishable
+	var scythes := 0
+	var stones := 0
+	for cu0 in curses:
+		if cu0.kind == "scythe":
+			scythes += 1
+		elif cu0.kind == "stones":
+			stones += 1
+	var kinds: Array = ["grease", "gale"]
+	if scythes < MAX_SCYTHES:
+		kinds.append("scythe")
+	if stones < MAX_STONES:
+		kinds.append("stones")
+	for i in range(kinds.size() - 1, 0, -1):
 		var j := rng.randi_range(0, i)
-		var tmp: String = blesses[i]; blesses[i] = blesses[j]; blesses[j] = tmp
-	for i in range(curses.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
-		var tmp2: String = curses[i]; curses[i] = curses[j]; curses[j] = tmp2
+		var tmp: String = kinds[i]; kinds[i] = kinds[j]; kinds[j] = tmp
+	var taken := {}
+	for cu in curses:
+		taken[int(cu.slot.id)] = cu
+	var free_slots: Array = []
+	var used_slots: Array = []
+	for s in LWCourse.SLOTS:
+		if taken.has(int(s.id)):
+			used_slots.append(s)
+		else:
+			free_slots.append(s)
+	for i in range(free_slots.size() - 1, 0, -1):
+		var j2 := rng.randi_range(0, i)
+		var tmp2: Dictionary = free_slots[i]; free_slots[i] = free_slots[j2]; free_slots[j2] = tmp2
+	# oldest residents first for the displacement offers
+	used_slots.sort_custom(func(a, b):
+		return int((taken[int(a.id)] as LWCurse).install_order) < int((taken[int(b.id)] as LWCurse).install_order))
+	var offer_slots: Array = free_slots.slice(0, 3)
+	var k := 0
+	while offer_slots.size() < 3 and k < used_slots.size():
+		offer_slots.append(used_slots[k])
+		k += 1
 	var cards: Array = []
-	for i in 3:
-		cards.append({"bless": blesses[i], "curse": curses[i]})
+	for i in offer_slots.size():
+		var slot: Dictionary = offer_slots[i]
+		var rep := ""
+		if taken.has(int(slot.id)):
+			var old: LWCurse = taken[int(slot.id)]
+			rep = "%s's %s" % [old.author_name, old.title()]
+		cards.append({"kind": kinds[i % kinds.size()], "slot": slot, "replaces": rep})
 	return cards
 
-func _auto_resolve() -> void:
-	## 6 seconds are up: whatever the hand hovers, the will takes.
-	var survivors := _alive_indices()
-	if _will.card < 0:
-		_will.card = _will.sel if _will.step == WStep.CARDS else 0
-	if survivors.size() == 1:
-		if _will.bless_target < 0 and _will.curse_target < 0:
-			if _will.step == WStep.MODE and _will.mode_sel == 1:
-				_will.curse_target = survivors[0]
-			else:
-				_will.bless_target = survivors[0]
-	else:
-		if _will.bless_target < 0:
-			var t: Array = _will.targets if _will.step == WStep.BLESS_T else survivors
-			_will.bless_target = t[_will.sel] if _will.step == WStep.BLESS_T else t[0]
-		if _will.curse_target < 0:
-			var rest: Array = survivors.filter(func(s): return s != _will.bless_target)
-			if not rest.is_empty():
-				if _will.step == WStep.CURSE_T:
-					_will.curse_target = _will.targets[_will.sel]
-				else:
-					_will.curse_target = rest[0]
-	_go_resolution()
-
-func _go_resolution() -> void:
+func _resolve_will() -> void:
 	var p: int = _will.player
-	var card: Dictionary = _will.cards[_will.card] if _will.card >= 0 and _will.card < _will.cards.size() \
-		else {"bless": "coin", "curse": "sluggish"}
-	var round_over := _alive_indices().size() <= 1
-	var lines: Array = []
-	var delay := 0.0
-
-	if _will.bless_target >= 0:
-		var bt: int = _will.bless_target
-		var b := str(card.bless)
-		lines.append({"text": "%s BLESSES %s — %s" % [players[p].name, players[bt].name,
-			BLESS_DEFS[b].banner], "color": LWWillUI.GOLD, "delay": delay})
-		delay += 0.7
-		if b == "coin":
-			players[bt].total += 1
-			if not round_over:
-				_register_claim(p, bt, round_index)
-			elif round_index + 1 < rounds_total:
-				_register_claim(p, bt, round_index + 1)
-			# (final round + round over: coin pays, but no puppetmaster claim —
-			# blessing a champion who has already won is not kingmaking)
-			_spawn_coin_pop(bt)
-		elif round_over:
-			if round_index + 1 < rounds_total:
-				_carry.append({"kind": "bless", "effect": b, "from": p, "target": bt})
-			# else: the match ends here; the timed blessing fades unspent
-		else:
-			_apply_bless_effect(b, p, bt)
-			_register_claim(p, bt, round_index)
-		var b_stored := round_over and b != "coin" and round_index + 1 < rounds_total
-		print("LW_WILL %s blesses %s with %s%s" % [players[p].name, players[bt].name, b,
-			" (carry)" if b_stored else (" (fades: match over)" if round_over and b != "coin" else "")])
-
-	if _will.curse_target >= 0:
-		var ct: int = _will.curse_target
-		var c := str(card.curse)
-		lines.append({"text": "...AND CURSES %s — %s" % [players[ct].name,
-			CURSE_DEFS[c].banner], "color": LWWillUI.GREEN, "delay": delay})
-		if round_over:
-			if round_index + 1 < rounds_total:
-				_carry.append({"kind": "curse", "effect": c, "from": p, "target": ct})
-		else:
-			_apply_curse_effect(c, p, ct)
-		var c_stored := round_over and round_index + 1 < rounds_total
-		print("LW_WILL %s curses %s with %s%s" % [players[p].name, players[ct].name, c,
-			" (carry)" if c_stored else (" (fades: match over)" if round_over else "")])
-
+	var card: Dictionary = _will.cards[clampi(int(_will.card), 0, _will.cards.size() - 1)]
+	var slot: Dictionary = card.slot
+	# displace any resident curse on this stretch
+	for ci in range(curses.size() - 1, -1, -1):
+		var old: LWCurse = curses[ci]
+		if int(old.slot.id) == int(slot.id):
+			print("LW_CURSE_DISPLACED %s's %s on %s" % [old.author_name, old.kind, str(slot.name)])
+			old.queue_free()
+			curses.remove_at(ci)
+	var side_seed := rng.randi_range(0, 3)
+	var cu := LWCurse.new()
+	spawn_root.add_child(cu)
+	cu.setup(slot, str(card.kind), p, players[p].name, players[p].color, side_seed, self)
+	cu.install_order = _curse_order
+	_curse_order += 1
+	curses.append(cu)
 	_tally_stats.wills += 1
+	print("LW_WILL %s condemns %s with %s" % [players[p].name, str(slot.name), str(card.kind)])
+
+	# THE SHOW, part two: the camera visits the condemned stretch while the
+	# skeletal hand points it out and the curse rises from the sod.
+	var lines: Array = [
+		{"text": "%s CONDEMNS" % players[p].name, "color": players[p].color, "delay": 0.0},
+		{"text": str(slot.name), "color": LWWillUI.GOLD, "delay": 0.55},
+		{"text": "— %s —" % str(CURSE_DEFS[card.kind].title), "color": LWWillUI.GREEN, "delay": 1.1},
+	]
 	_ui.show_resolution(lines)
 	Sfx.play("grudge", -1.0)
-	_hand.visible = false
-	_target_ring.visible = false
-	_rebuild_scoreboard()
+	if not _tally:
+		cu.play_install()
+		_rig_home = cam_rig.position
+		var sc := LWCourse.slot_center(slot)
+		var tw := create_tween()
+		tw.tween_property(cam_rig, "position", Vector3(sc.x + 1.0, 0.0, sc.z * 0.6), 0.6) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_hand.visible = true
+		_hand.scale = Vector3(2.6, 2.6, 2.6)   # zone-pointing reads from the pan distance
+		_hand.global_position = sc + Vector3(0, 3.1, 1.2)
+		_snap_after_pan()
 	_will.step = WStep.RESOLUTION
 	_will.t = 0.0
 
-func _apply_bless_effect(kind: String, from: int, target: int) -> void:
-	var pawn: LWPawn = pawns[target]
-	# cap: one active blessing — apply_bless overwrites (newest replaces)
-	pawn.apply_bless(kind, from, float(BLESS_DEFS[kind].dur))
-	if not _tally:
-		Sfx.play("sink", -4.0)
+func _snap_after_pan() -> void:
+	await get_tree().create_timer(0.9, true, false, true).timeout
+	VerifyCapture.snap("curse")
 
-func _apply_curse_effect(kind: String, from: int, target: int) -> void:
-	var pawn: LWPawn = pawns[target]
-	# cap: one active curse — clear any live wisp before the newest replaces
-	if pawn.curse_kind == "haunted" and wisps.has(target):
-		wisps[target].queue_free()
-		wisps.erase(target)
-	pawn.apply_curse(kind, from, float(CURSE_DEFS[kind].dur))
-	if kind == "haunted":
-		var w := LWWisp.new()
-		spawn_root.add_child(w)
-		var edge := pawn.global_position + Vector3(2.5, 0, 2.5)
-		w.setup(target, float(CURSE_DEFS[kind].dur), edge, self)
-		wisps[target] = w
-	if not _tally:
-		Sfx.play("grudge", -6.0)
-
-func _register_claim(from: int, target: int, for_round: int) -> void:
-	_claims.append({"from": from, "target": target, "round": for_round})
-
-func _spawn_coin_pop(target: int) -> void:
-	if _tally:
-		return
-	var pawn: LWPawn = pawns[target]
-	_spawn_burst(pawn.global_position + Vector3(0, 1.4, 0), Color(1.0, 0.85, 0.3), 20)
-	Sfx.play("sink", -2.0)
-
-const SEAT_ANGLES := [0.15, PI - 0.15, 4.25, 5.25]  # east, west, NW, NE —
-	# all inside the camera frame (the south wedge is clipped at 720p)
+# ================================================================ ghosts
+const SEAT_OFFSETS := [Vector3(-10.5, 1.0, -4.2), Vector3(10.5, 1.0, -4.2),
+	Vector3(-10.5, 1.0, 5.2), Vector3(10.5, 1.0, 5.2)]
 
 func _seat_ghost(i: int) -> void:
 	if ghosts.has(i):
 		return
 	var g := LWGhostSeat.new()
 	g.name = "Ghost%d" % i
-	spawn_root.add_child(g)
-	var seat_angle: float = SEAT_ANGLES[i % SEAT_ANGLES.size()]
-	g.setup(i, players[i].color, players[i].name, load(players[i].char_path), seat_angle, self)
+	_ghost_rail.add_child(g)
+	g.setup(i, players[i].color, players[i].name, load(players[i].char_path),
+		SEAT_OFFSETS[ghosts.size() % SEAT_OFFSETS.size()], self)
 	ghosts[i] = g
 	_refresh_hint()
+	print("LW_GHOST %s takes a pew (race %d)" % [players[i].name, race_index + 1])
 	if not _tally:
 		Sfx.play("grudge", -10.0, 0.2)
 
-# ================================================================ round end
-func _end_round() -> void:
-	phase = Phase.ROUND_END
+# ================================================================ race end
+func _on_finish(i: int) -> void:
+	players[i].finished = true
+	players[i].finish_time = race_elapsed
+	players[i].best_x = LWCourse.FINISH_X
+	_race_over = true
+	_finisher = i
+	pawns[i].celebrate()
+	var ft := "%d:%04.1f" % [int(race_elapsed / 60.0), fmod(race_elapsed, 60.0)]
+	print("LW_FINISH race=%d winner=%s t=%.1f" % [race_index + 1, players[i].name, race_elapsed])
+	_tally_stats.finishes.append("race %d: %s at %.1fs" % [race_index + 1, players[i].name, race_elapsed])
+	_flash_banner("%s REACHES THE CRYPT\n%s" % [players[i].name, ft], players[i].color, 2.6)
+	if not _tally:
+		Sfx.play("match_win", -4.0)
+		_flash_exec(EXEC_CRYPT, 4.0)
+		_spawn_burst(pawns[i].global_position + Vector3(0, 1.2, 0), players[i].color, 30)
+		VerifyCapture.snap("finish")
+	# probate closes: pending drafts are dropped with regrets
+	if not _will_queue.is_empty():
+		_will_queue.clear()
+		if not _tally:
+			_flash_exec(EXEC_PROBATE, 3.0)
+	_end_race()
+
+func _end_race() -> void:
+	phase = Phase.RACE_END
 	_re_t = 0.0
 	_re_events.clear()
-	_clear_hazards()   # the yard goes quiet for the ceremony
+	_clear_transients()
 	for pawn in pawns:
 		if pawn.alive:
 			pawn.move_input = Vector2.ZERO
@@ -1576,76 +1230,52 @@ func _end_round() -> void:
 			pawn.want_hop = false
 			pawn.set_world_frozen(true)
 
-	var survivors: Array = _alive_indices()
-	# multi-survivor timeout: closest to the pillar's heart wins (earned
-	# position, not player index)
-	survivors.sort_custom(func(a, b):
-		var da := Vector2(pawns[a].global_position.x, pawns[a].global_position.z).length()
-		var db := Vector2(pawns[b].global_position.x, pawns[b].global_position.z).length()
-		if absf(da - db) > 0.01:
-			return da < db
+	# race placements: the finisher, then furthest progress, ties earlier index
+	var order: Array = range(players.size())
+	order.sort_custom(func(a, b):
+		if bool(players[a].finished) != bool(players[b].finished):
+			return bool(players[a].finished)
+		if absf(float(players[a].best_x) - float(players[b].best_x)) > 0.01:
+			return float(players[a].best_x) > float(players[b].best_x)
 		return a < b)
-	var finishing: Array = survivors.duplicate()
-	var dead_desc := _elim_order.duplicate()
-	dead_desc.reverse()
-	finishing.append_array(dead_desc)
 	var pts := _points_table()
-	for pos in finishing.size():
+	for pos in order.size():
 		if pos < pts.size():
-			players[finishing[pos]].total += pts[pos]
-	var winner: int = finishing[0] if finishing.size() > 0 else 0
-
-	var champ_name: String = players[winner].name
-	var champ_color: Color = players[winner].color
-	if survivors.is_empty():
-		champ_name = "NOBODY"
-		champ_color = Color(0.7, 0.7, 0.8)
-	print("LW_ROUND_END %d winner=%s survivors=%d elims=%d" % [round_index + 1,
-		champ_name, survivors.size(), _elim_order.size()])
+			players[order[pos]].total += pts[pos]
+	var last: int = order[order.size() - 1]
+	_currency.append({"type": "grudge", "player": last, "amount": 1,
+		"reason": "dead last in the procession"})
+	if _finisher >= 0:
+		players[_finisher].races_won += 1
+		if int(players[_finisher].deaths_this_race) == 0:
+			players[_finisher].deathless_win = true
+			_highlights.append("%s reached the crypt without dying once" % players[_finisher].name)
+	print("LW_RACE_END %d placements=%s totals=%s" % [race_index + 1,
+		str(order.map(func(ix): return players[ix].name)),
+		str(players.map(func(pl): return pl.total))])
 	if not _tally:
-		Sfx.play("round_over")
-	_flash_banner("%s SURVIVES ROUND %d" % [champ_name, round_index + 1], champ_color, 2.4)
+		Sfx.play("round_over", -4.0)
+		var bits: Array = []
+		for ix in order:
+			bits.append("%s %d" % [players[ix].name, players[ix].total])
+		_re_events.append({"t": 1.8, "fn": Callable(self, "_standings_banner").bind(" · ".join(bits))})
+	_re_done_t = 0.6 if _tally else 4.2
 
-	# puppetmaster: claims on THIS round whose champion delivered
-	var delay := 1.6
-	for cl in _claims:
-		if int(cl.round) != round_index:
-			continue
-		if int(cl.target) != winner or int(cl.from) == winner or survivors.is_empty():
-			continue
-		var from: int = int(cl.from)
-		players[from].total += ROYALTY
-		players[from].puppet += 1
-		_tally_stats.puppets += 1
-		_currency.append({"type": "royalty", "player": from, "amount": ROYALTY,
-			"reason": "the dead hand moves the world"})
-		_highlights.append("%s backed %s from beyond the grave — %s delivered" %
-			[players[from].name, players[winner].name, players[winner].name])
-		print("LW_PUPPETMASTER %s +2 (blessed %s)" % [players[from].name, players[winner].name])
-		var fname: String = players[from].name
-		var fcolor: Color = players[from].color
-		_re_events.append({"t": delay, "fn": Callable(self, "_puppet_banner").bind(fname, fcolor)})
-		delay += 1.7
-	_re_done_t = delay + (0.4 if _tally else 1.2)
-	_rebuild_scoreboard()
+func _standings_banner(text: String) -> void:
+	_flash_sub("STANDINGS — %s" % text, Color(0.92, 0.9, 1.0), 2.4)
 
-func _puppet_banner(fname: String, fcolor: Color) -> void:
-	_flash_banner("THE DEAD HAND MOVES THE WORLD\n%s +2" % fname, fcolor, 1.8)
-	if not _tally:
-		Sfx.play("match_win", -6.0)
-
-func _tick_round_end(delta: float) -> void:
+func _tick_race_end(delta: float) -> void:
 	_re_t += delta
 	for ev in _re_events:
 		if not ev.get("done", false) and _re_t >= float(ev.t):
 			ev["done"] = true
 			(ev.fn as Callable).call()
 	if _re_t >= _re_done_t:
-		round_index += 1
-		if round_index >= rounds_total:
+		race_index += 1
+		if race_index >= races_total:
 			_finish_match()
 		else:
-			_start_round()
+			_start_race()
 
 func _points_table() -> Array:
 	match players.size():
@@ -1656,7 +1286,7 @@ func _points_table() -> Array:
 # ================================================================ match end
 func _finish_match() -> void:
 	phase = Phase.MATCH_END
-	_tally_stats.rounds = rounds_total
+	_tally_stats.races = races_total
 	var order: Array = range(players.size())
 	order.sort_custom(func(a, b):
 		if players[a].total != players[b].total:
@@ -1668,9 +1298,12 @@ func _finish_match() -> void:
 		points[i] = players[i].total
 	var monuments: Array = []
 	for i in players.size():
-		if players[i].puppet >= 2:
-			monuments.append({"player": i, "kind": "kingmaker",
-				"label": "%s, Kingmaker from the Grave" % players[i].name})
+		if int(players[i].curse_kills) >= 3:
+			monuments.append({"player": i, "kind": "reaper",
+				"label": "%s, Reaper of the Route" % players[i].name})
+		if bool(players[i].deathless_win):
+			monuments.append({"player": i, "kind": "untouched",
+				"label": "%s, the Untouched Procession" % players[i].name})
 	var results := {
 		"placements": order,
 		"points": points,
@@ -1682,6 +1315,8 @@ func _finish_match() -> void:
 	print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
 	print("LW_MATCH_OVER champ=%s pts=%d" % [players[champ].name, players[champ].total])
 	print("LW_RESULTS ", JSON.stringify(results))
+	var problems := Minigame.validate_results(results, players.size())
+	print("LW_VALIDATE problems=%d %s" % [problems.size(), str(problems)])
 	if _tally:
 		_print_tally()
 		get_tree().quit()
@@ -1692,18 +1327,18 @@ func _finish_match() -> void:
 	report_finished(results)
 
 func _print_tally() -> void:
-	var wpr := float(_tally_stats.wills) / float(maxi(1, rounds_total))
 	print("======== LAST WILL TALLY ========")
-	print("WILL_TALLY seed=%d rounds=%d wills=%d wills_per_round=%.2f" % [
-		rng.seed, rounds_total, _tally_stats.wills, wpr])
-	print("deaths: void=%d squish=%d | gusts=%d puppet_bonuses=%d carryovers=%d" % [
-		_tally_stats["void"], _tally_stats["squish"], _tally_stats["gusts"],
-		_tally_stats["puppets"], _tally_stats["carries"]])
+	print("WILL_TALLY seed=%d races=%d wills=%d curse_kills=%d gust_kills=%d deaths=%d gusts=%d" % [
+		rng.seed, races_total, _tally_stats.wills, _tally_stats.curse_kills,
+		_tally_stats.gust_kills, _tally_stats.deaths, _tally_stats.gusts])
+	for f in _tally_stats.finishes:
+		print("FINISH ", f)
 	var bits: Array = []
 	for i in players.size():
 		bits.append("%s=%d" % [players[i].name, players[i].total])
 	print("totals: %s" % " ".join(bits))
-	print("TALLY_RESULT %s (target >=2 wills/round avg across seeds)" % ("PASS" if wpr >= 2.0 else "CHECK"))
+	print("TALLY_RESULT %s (target: every race reaches the crypt or the cap; wills>=races)" %
+		("PASS" if _tally_stats.wills >= races_total else "CHECK"))
 	print("=================================")
 
 func _dedup(arr: Array) -> Array:
@@ -1729,30 +1364,38 @@ func pawn_of(i: int):
 func player_name(i: int) -> String:
 	return players[i].name if i >= 0 and i < players.size() else "???"
 
-func _alive_indices() -> Array:
-	var out: Array = []
-	for i in players.size():
-		if players[i].alive:
-			out.append(i)
-	return out
-
-func round_leader_alive() -> int:
+## The furthest-progressed living racer (ghost target), or -1.
+func race_leader_alive() -> int:
 	var best := -1
 	for i in players.size():
-		if not players[i].alive:
+		if not players[i].alive or players[i].finished:
 			continue
-		if best < 0 or players[i].total > players[best].total:
+		if best < 0 or float(players[i].best_x) > float(players[best].best_x):
 			best = i
 	return best
 
-func wisp_pos_for(i: int):
-	if wisps.has(i):
-		return wisps[i].global_position
-	return null
+func race_leader_x() -> float:
+	var best := 0.0
+	for i in players.size():
+		best = maxf(best, float(players[i].best_x))
+	return best
+
+## Scythe gates (base + curse) for the bots: world blade positions + travel.
+func blade_gates() -> Array:
+	var out: Array = []
+	for pen in pendulums:
+		var info: Dictionary = pen.blade_world_info()
+		out.append({"x": pen.origin2.x, "z": pen.origin2.y + float(info.along),
+			"y": float(info.y), "vs": float(info.vel_sign)})
+	for cu in curses:
+		if cu.kind == "scythe" and cu._pendulum != null:
+			var info2: Dictionary = cu._pendulum.blade_world_info()
+			out.append({"x": cu._pendulum.origin2.x,
+				"z": cu._pendulum.origin2.y + float(info2.along), "y": float(info2.y),
+				"vs": float(info2.vel_sign)})
+	return out
 
 func on_shove_landed(_pos: Vector3) -> void:
-	# _shake is set in BOTH modes exactly as before (it consumes the game rng in
-	# _physics_process, so the --willtally receipt depends on it — never changed).
 	_shake = maxf(_shake, 0.26)
 	if _tally:
 		return
@@ -1895,7 +1538,7 @@ func _shove_arc_mesh(r: float) -> ImmediateMesh:
 	return im
 
 func on_boulder_contact(pawn: LWPawn) -> void:
-	if phase != Phase.ROUND:
+	if phase != Phase.RACE:
 		return
 	if not _tally:
 		Sfx.play("crush", -2.0)
@@ -1906,25 +1549,17 @@ func on_pendulum_hit(_i: int) -> void:
 	if not _tally:
 		Sfx.play("bumper", -2.0)
 
-func on_shield_break(i: int) -> void:
-	_flash_sub("%s'S SHIELD SHATTERS!" % players[i].name, Color(1.0, 0.85, 0.4), 1.4)
-	print("LW_SHIELD_BREAK %s" % players[i].name)
-
-func on_wisp_contact(i: int) -> void:
-	if not _tally:
-		_flash_sub("THE WISP CATCHES %s" % players[i].name, Color(0.6, 1.0, 0.6), 1.2)
-
 func _set_base_ui(v: bool) -> void:
-	round_label.visible = v
+	race_label.visible = v
 	timer_label.visible = v
 	hint_label.visible = v
-	$UI/ScorePanel.visible = v
+	hud.visible = v
 
-const HINT_LIVING := "A = SHOVE   B = HOP   ·   DIE, AND DRAFT YOUR WILL"
+const HINT_LIVING := "A = SHOVE   B = HOP   ·   DIE, AND CURSE THE ROAD"
 
 ## Flip the shared hint bar to a dead-state legend when a HUMAN takes a ghost pew,
 ## so the dead know how to gust: aim with the RIGHT channel, A fires. Bots never
-## trigger this (their seats stay HINT_LIVING), so the tally screenshots are
+## trigger this (their seats stay HINT_LIVING), so the tally receipts are
 ## unchanged.
 func _refresh_hint() -> void:
 	if hint_label == null:
@@ -1974,13 +1609,11 @@ func _time_hit(scale: float, real_duration: float) -> void:
 		Engine.time_scale = 1.0
 
 func _update_timer_label() -> void:
-	var remaining := ROUND_TIME - round_elapsed
-	if remaining >= 0.0:
-		timer_label.text = "%02d" % int(ceil(remaining))
+	timer_label.text = "%d:%02d" % [int(race_elapsed / 60.0), int(fmod(race_elapsed, 60.0))]
+	if race_elapsed < HARD_CAP - 30.0:
 		timer_label.add_theme_color_override("font_color", Color(0.85, 0.97, 1))
 	else:
-		timer_label.text = "SUDDEN DEATH"
-		var pulse := 0.6 + 0.4 * sin(round_elapsed * 8.0)
+		var pulse := 0.6 + 0.4 * sin(race_elapsed * 8.0)
 		timer_label.add_theme_color_override("font_color", Color(1.0, 0.3 * pulse + 0.15, 0.2))
 
 func _flash_banner(text: String, color: Color, duration: float) -> void:
@@ -2021,39 +1654,21 @@ func _flash_sub(text: String, color: Color, duration: float) -> void:
 	tw.tween_interval(duration)
 	tw.tween_callback(Callable(self, "_hide_sub_if").bind(my))
 
-func _rebuild_scoreboard() -> void:
-	for c in score_rows.get_children():
-		c.queue_free()
-	var order: Array = range(players.size())
-	order.sort_custom(func(a, b):
-		if players[a].total != players[b].total:
-			return players[a].total > players[b].total
-		return a < b)
-	for i in order:
-		var p: Dictionary = players[i]
-		var tags := ""
-		if not p.alive:
-			tags += "  †"
-		if i < pawns.size() and pawns[i].alive:
-			if pawns[i].bless_kind != "":
-				tags += "  +"
-			if pawns[i].curse_kind != "":
-				tags += "  −"
-		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 6)
-		var badge := PlayerBadge.make(i, 24)
-		badge.color = p.color
-		if not p.alive:
-			badge.dim = 0.45
-		hb.add_child(badge)
-		var row := Label.new()
-		row.text = "%s  %d%s" % [p.name, p.total, tags]
-		row.add_theme_font_size_override("font_size", 24)
-		row.add_theme_color_override("font_color", p.color)
-		row.add_theme_color_override("font_outline_color", Color(0.08, 0.07, 0.1))
-		row.add_theme_constant_override("outline_size", 5)
-		hb.add_child(row)
-		score_rows.add_child(hb)
+## The Executor's dry registry line — Saki voice, never an exclamation mark.
+func _flash_exec(text: String, duration: float) -> void:
+	if _tally:
+		return
+	exec_label.text = "“%s” — THE EXECUTOR" % text
+	exec_label.visible = true
+	_exec_token += 1
+	var my := _exec_token
+	var tw := create_tween()
+	tw.tween_interval(duration)
+	tw.tween_callback(Callable(self, "_hide_exec_if").bind(my))
+
+func _hide_exec_if(token: int) -> void:
+	if token == _exec_token:
+		exec_label.visible = false
 
 func _spawn_burst(pos: Vector3, color: Color, amount: int) -> void:
 	if _tally:
@@ -2109,7 +1724,7 @@ func _spawn_confetti(pos: Vector3, color: Color) -> void:
 
 # ================================================================ HIT KIT capture
 # --hitkitcap (windowed): stages each feel moment (shove coil+arc, victim impact
-# with sparks+pop, cooldown-ring fill, ready-flash) with the round held, films it,
+# with sparks+pop, cooldown-ring fill, ready-flash) with the race held, films it,
 # then quits. Verify-only; no effect on a normal match or the --willtally receipt.
 func _settle(sec: float) -> void:
 	await get_tree().create_timer(sec, true, false, true).timeout
@@ -2125,19 +1740,19 @@ func _cap_shot(tag: String) -> void:
 	print("LW_HITKIT_CAP ", path)
 
 func _run_hitkit_cap() -> void:
-	while phase != Phase.ROUND:
+	while phase != Phase.RACE:
 		await get_tree().physics_frame
-	_clear_hazards()
-	# BLUE attacker (rings read clearly on the tan stone yard); RED victim. Staged
-	# side-by-side at the same depth so neither body occludes the other's rings.
+	_clear_transients()
+	# BLUE attacker (rings read clearly on the flagstones); RED victim. Staged
+	# side-by-side on the start plaza at the same depth.
 	var atk: LWPawn = pawns[1]     # BLUE attacker
 	var vic: LWPawn = pawns[0]     # RED victim
 	atk._cap_freeze = true
 	vic._cap_freeze = true
 	atk.freeze = true
 	vic.freeze = true
-	var atk_pos := Vector3(-1.5, 0.25, 1.7)
-	var vic_pos := Vector3(1.1, 0.25, 1.7)
+	var atk_pos := Vector3(-4.2, 0.25, 1.5)
+	var vic_pos := Vector3(-1.6, 0.25, 1.5)
 	atk.global_position = atk_pos
 	vic.global_position = vic_pos
 	var face := (vic_pos - atk_pos)
@@ -2148,7 +1763,11 @@ func _run_hitkit_cap() -> void:
 		atk.model_pivot.rotation.y = atan2(face.x, face.z)
 	if vic.model_pivot:
 		vic.model_pivot.rotation.y = atan2(-face.x, -face.z)   # victim faces the shover
-	phase = Phase.WAITING     # hold the round sim; the two pawns are frozen
+	phase = Phase.WAITING     # hold the race sim; the two pawns are frozen
+	cam_rig.position = Vector3(-2.5, 0.0, 0.0)
+	cam.position = Vector3(0, 13.9, 11.8)
+	cam.look_at_from_position(cam_rig.position + cam.position,
+		cam_rig.position + Vector3(0, 0.2, -0.7), Vector3.UP)
 	banner.visible = false
 	sub_banner.visible = false
 	_set_base_ui(false)
@@ -2167,8 +1786,8 @@ func _run_hitkit_cap() -> void:
 	await _settle(0.35)
 	# 3) COOLDOWN RINGS mid-fill — park the victim, center the BLUE attacker so its
 	#    SHOVE (outer) + HOP (thin inner) rings are fully visible and unoccluded.
-	vic.global_position = Vector3(11.0, 0.25, 0.0)
-	atk.global_position = Vector3(0.0, 0.25, 1.8)
+	vic.global_position = Vector3(8.0, 0.25, 0.0)
+	atk.global_position = Vector3(-2.5, 0.25, 1.6)
 	atk._shove_cd = LWPawn.SHOVE_CD * 0.45
 	atk._hop_cd = LWPawn.HOP_CD * 0.45
 	await _settle(0.14)
@@ -2188,8 +1807,8 @@ func get_phase_name() -> String:
 	return Phase.keys()[phase]
 
 func is_turn_ready() -> bool:
-	return phase == Phase.ROUND
+	return phase == Phase.RACE
 
 func debug_force_kill(p: int) -> void:
-	if p >= 0 and p < pawns.size() and pawns[p].alive and phase == Phase.ROUND:
+	if p >= 0 and p < pawns.size() and pawns[p].alive and phase == Phase.RACE:
 		pawns[p]._die("void")

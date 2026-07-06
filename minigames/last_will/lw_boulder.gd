@@ -1,22 +1,22 @@
 class_name LWBoulder
 extends Node3D
-## The rolling boulder. Telegraphs its lane (glowing strip + "!" at the
-## spawn edge), then a big stone sphere rolls straight across the yard and
-## off the far side. Grounded contact = SQUISH (eliminated). Hop (B) over
+## The rolling boulder, generalized for the procession course. Telegraphs its
+## lane (glowing strip + "!" at the spawn edge), then a big stone sphere rolls
+## along `dir` from `start` for `travel` meters — across the walkway, through
+## anyone grounded (SQUISH), and off the far side into the dusk. Hop (B) over
 ## it — airborne pawns are safe, party-game logic. Code-driven; tick(delta)
-## is only called while the round runs.
+## is only called while the race runs.
 
 const SPEED := 5.6
 const RADIUS := 0.95
 const TELEGRAPH_T := 1.35
-const TRAVEL := 20.0          # total distance start->despawn
 
 enum BState { TELEGRAPH, ROLLING, DONE }
 
 var state: int = BState.TELEGRAPH
 var owner_game: Node = null
 var dir := Vector2.RIGHT
-var lane_offset := 0.0
+var travel := 20.0
 var _t := 0.0
 var _traveled := 0.0
 var _start := Vector3.ZERO
@@ -29,23 +29,22 @@ var _bang: Label3D
 var _roll_axis := Vector3.FORWARD
 var _fall_v := 0.0
 
-func setup(angle_deg: float, offset: float, p_owner: Node) -> void:
+## start: spawn point (off the walkway edge). p_dir: unit roll direction (XZ).
+## strip_center/strip_len: telegraph strip clipped to the walkway.
+func setup(start: Vector3, p_dir: Vector2, p_travel: float,
+		strip_center: Vector3, strip_len: float, p_owner: Node) -> void:
 	owner_game = p_owner
-	lane_offset = offset
-	var a := deg_to_rad(angle_deg)
-	dir = Vector2(cos(a), sin(a))
+	dir = p_dir.normalized()
+	travel = p_travel
+	_start = Vector3(start.x, RADIUS, start.z)
 	var perp := Vector2(-dir.y, dir.x)
-	var start2 := perp * offset - dir * (TRAVEL * 0.5)
-	_start = Vector3(start2.x, RADIUS, start2.y)
 	_roll_axis = Vector3(perp.x, 0, perp.y)
 
-	# lane telegraph strip — clipped to the CURRENT yard so it never reads
-	# as a glowing bridge floating over the void
-	var plat_r: float = p_owner.platform_radius if p_owner != null else 7.0
-	var chord := 2.0 * sqrt(maxf(plat_r * plat_r - offset * offset, 1.0)) + 2.2
+	# lane telegraph strip — clipped to the walkway so it never reads as a
+	# glowing bridge floating over the void
 	_strip = MeshInstance3D.new()
 	var sm := BoxMesh.new()
-	sm.size = Vector3(chord, 0.05, RADIUS * 2.1)
+	sm.size = Vector3(strip_len, 0.05, RADIUS * 2.1)
 	_strip.mesh = sm
 	_strip_mat = StandardMaterial3D.new()
 	_strip_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -55,8 +54,8 @@ func setup(angle_deg: float, offset: float, p_owner: Node) -> void:
 	_strip_mat.emission_energy_multiplier = 0.9
 	_strip_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_strip.material_override = _strip_mat
-	_strip.position = Vector3(perp.x * offset, 0.04, perp.y * offset)
-	_strip.rotation.y = -a
+	_strip.position = Vector3(strip_center.x, 0.04, strip_center.z)
+	_strip.rotation.y = -atan2(dir.y, dir.x)
 	add_child(_strip)
 
 	# "!" marker floating at the spawn edge
@@ -119,15 +118,14 @@ func tick(delta: float) -> void:
 			_traveled += step
 			_rock.position += Vector3(dir.x, 0, dir.y) * step
 			_rock_mesh.rotate(_roll_axis.normalized(), -step / RADIUS)
-			# fall off the FAR edge only (spawn side is also off-platform,
+			# fall off the FAR edge only (spawn side is also off-walkway,
 			# and the rock must arrive at deck height, not under it)
-			var flat_r := Vector2(_rock.position.x, _rock.position.z).length()
-			var plat_r: float = owner_game.platform_radius if owner_game != null else 7.0
-			if _traveled > TRAVEL * 0.5 and flat_r > plat_r + RADIUS * 0.4:
+			if _traveled > travel * 0.4 and owner_game != null \
+					and not owner_game.over_ground(_rock.position):
 				_fall_v += 18.0 * delta
 				_rock.position.y -= _fall_v * delta
 			_check_squish()
-			if _traveled >= TRAVEL or _rock.position.y < -8.0:
+			if _traveled >= travel or _rock.position.y < -8.0:
 				state = BState.DONE
 		BState.DONE:
 			pass

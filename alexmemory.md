@@ -22,11 +22,10 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
   SHOVE" not "A = SHOVE") via describe_binding — his best UX note;
   plus a first-night HOUSE RULES card (currencies/bids/trail tutorial).
   THE BIG ONE (your call, endorsed): LAST WILL rebuilt as a Fall Guys
-  obstacle gauntlet — keep death-drafting (die → 6s will → CURSE the
-  course → respawn, 3 lives; out of lives → harassment ghost; first to
-  the crypt wins). Launches the moment the DW/LW feel agent clears the
-  lane. "YO IN TILT I CAN SHIT ON PEOPLE. Beautiful." — carving that
-  into the graffiti wall someday.
+  obstacle gauntlet — **DELIVERED 7/06** (see today's LOG entry: procession
+  race, curse-drafting intact, receipts green; needs its HOWTO card line
+  merged into estate.gd). "YO IN TILT I CAN SHIT ON PEOPLE. Beautiful."
+  — carving that into the graffiti wall someday.
 
 - **🏰 THE FLOW IS THE GAME NOW (your big playtest note, built).**
   PLAY on the title = the full game instantly: nights of (auction →
@@ -354,6 +353,28 @@ Remote Play Together is the zero-code fallback that works TONIGHT (4 pads,
 and par's shared mouse is already RPT-shaped). Biggest risk named: the
 per-game render mirror, not input. Verification runs two instances on one
 machine + your existing TALLY harnesses as the transport regression suite.
+
+### 2026-07-06 — LAST WILL v2: THE FUNERAL PROCESSION RACE (your call, built)
+The rebuild you ordered after two playtests agreed it was too sumo-like.
+Same module id/scene/contract, whole new body: a linear chapel -> winding
+graveyard -> THE CRYPT gauntlet over the dusk void. 3 lives; every death
+still buys the 6-second world-freeze WILL DRAFT (portrait + parchment cards
+preserved) — but now the card is ONE CURSE written into a named stretch of
+the route (SUMMON THE SCYTHE / GREASE THE FLAGSTONES / A GUST CORRIDOR /
+RAISE THE DEAD across nine stretches: Lychgate Road ... the Crypt Steps).
+Curses install in your color WITH A NAME PLAQUE, persist across races
+(Par-style accretion; full slate = displace the oldest), and pay +2
+royalties on kills (kill_events cause = curse slug). Out of lives -> ghost
+pew that drifts alongside the race, same gust kit, +1 per gust kill. First
+to the crypt inherits; Executor: "The first to the crypt inherits. The
+estate finds this poetic."
+Proofs: seeds 1/2/3 tally byte-identical (twice each), all nine 4-bot
+races reach the crypt (41-55s race clock; wills 10-22 per match), squish
+self-test PASS, contract validation 0 problems, 2P clean. Balance war
+story + 7 eye-verified screens in docs/verify/lastwill-v2-VERIFY.md and
+minigames/last_will/shots/. HOWTO card text (estate.gd is fenced from me)
+needs your/the director's one-line merge — suggested lines are in my
+handoff report. (Director: wired post-merge.)
 
 ### 2026-07-05 — MESHY PROPS LIVE IN-GAME (wave closed)
 The tufted golden throne sits on the dais, the gilded cauldron anchors the

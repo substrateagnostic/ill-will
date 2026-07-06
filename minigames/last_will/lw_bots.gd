@@ -1,65 +1,88 @@
 class_name LWBots
 extends RefCounted
 ## Seeded self-play brains (spec MUST). One personality per player drawn
-## from the seeded RNG so runs reproduce per seed. decide_living() runs once
+## from the seeded RNG so runs reproduce per seed. decide_racer() runs once
 ## per physics tick per living bot, in player order — the RNG stream is
 ## deterministic.
 ##
-## Living brain priority: don't be under the boulder > don't be in the
-## pendulum's line > don't be outside the next platform ring > shove someone
-## who is > wander toward the action. Hop skill is deliberately imperfect —
-## the spec REQUIRES bodies (>=2 wills per round avg across 5 seeds).
+## Racer brain priority: don't be under the boulder > don't be in a scythe's
+## strip when the blade is low > hop the ossuary gaps (imperfectly — the race
+## REQUIRES bodies) > thread the stones/wall openings > hold the walkway >
+## run for the crypt. Shove opportunism near edges and gap lips.
 ##
-## Will-draft brain is spiteful by fleet decree: CURSE the current round
-## leader, BLESS the second-worst survivor. Card pick is seeded-random.
-## Ghost brain: aim the gust at the leader, release when the push has an
-## outward component (shoving them toward the void, not to safety).
+## Will-draft brain: seeded-spiteful — prefer the curse card whose stretch
+## lies just AHEAD of the race leader. Ghost brain: aim the gust at the
+## leader, release when the push has a void-ward or backward component.
 
 var rng := RandomNumberGenerator.new()
 var aggr: Array = []          # shove eagerness 0..1
-var hop_skill: Array = []     # chance per tick window to hop the boulder
-var caution: Array = []       # edge margin
+var hop_skill: Array = []     # hop-timing skill 0..1 (gaps + boulders)
+var caution: Array = []       # edge margin personality
+var lane_bias: Array = []     # preferred lateral lane -1..1
 var wander_a: Array = []      # wander angle
 var _gust_hold: Array = []    # how long a ghost has been sitting on a ready gust
+var _stall_t: Array = []      # seconds without forward progress (desperation)
+var _last_px: Array = []
+var _gap_roll: Array = []     # per-bot {gap_index: bool} — ONE hop roll per approach
 
 func setup(seed_value: int, n: int) -> void:
 	rng.seed = seed_value
 	aggr.clear()
 	hop_skill.clear()
 	caution.clear()
+	lane_bias.clear()
 	wander_a.clear()
 	_gust_hold.clear()
+	_stall_t.clear()
+	_last_px.clear()
 	for i in n:
-		aggr.append(rng.randf_range(0.4, 0.95))
-		hop_skill.append(rng.randf_range(0.5, 0.9))
-		caution.append(rng.randf_range(0.9, 1.7))
+		aggr.append(rng.randf_range(0.35, 0.95))
+		hop_skill.append(rng.randf_range(0.45, 0.9))
+		caution.append(rng.randf_range(0.8, 1.6))
+		lane_bias.append(rng.randf_range(-0.8, 0.8))
 		wander_a.append(rng.randf_range(0.0, TAU))
 		_gust_hold.append(0.0)
+		_stall_t.append(0.0)
+		_last_px.append(-999.0)
+		_gap_roll.append({})
 
-## g = last_will.gd root. Returns {move: Vector2, a: bool, b: bool}.
-func decide_living(p: int, g, pawn: LWPawn, delta: float) -> Dictionary:
-	var here := Vector2(pawn.global_position.x, pawn.global_position.z)
+## g = last_will.gd root. Returns {move: Vector2 (x=course dir, y=z), a, b}.
+func decide_racer(p: int, g, pawn: LWPawn, delta: float) -> Dictionary:
+	var px: float = pawn.global_position.x
+	var pz: float = pawn.global_position.z
 	var move := Vector2.ZERO
 	var press_a := false
 	var press_b := false
 	var danger := false
 
-	# -- 1) boulders: hop when one is about to run us over, sidestep early
+	# desperation clock: a bot that has made no forward progress for 5s stops
+	# respecting red lights (better a body than a statue — the race must end)
+	if px > float(_last_px[p]) + 0.4:
+		_last_px[p] = px
+		_stall_t[p] = 0.0
+	else:
+		_stall_t[p] = float(_stall_t[p]) + delta
+	var desperate: bool = float(_stall_t[p]) > 5.0
+	if float(_stall_t[p]) > 8.0 and pawn.is_grounded():
+		if rng.randf() < 0.06:
+			press_b = true   # hop at whatever is pinning us
+
+	# -- 1) boulders crossing the road: hop late, sidestep early
 	for b in g.boulders:
 		if b.state != LWBoulder.BState.ROLLING and b.state != LWBoulder.BState.TELEGRAPH:
 			continue
-		var lane_perp := Vector2(-b.dir.y, b.dir.x)
-		var perp_d: float = (here - lane_perp * b.lane_offset).dot(lane_perp)
-		if absf(perp_d) > LWBoulder.RADIUS + 1.15:
+		var lane_x: float = b.rock_pos().x
+		var off_lane := px - lane_x
+		if absf(off_lane) > LWBoulder.RADIUS + 1.15:
 			continue
 		if b.state == LWBoulder.BState.TELEGRAPH:
-			# lane is only warned: walk out of it, no panic
-			move += lane_perp * signf(perp_d if absf(perp_d) > 0.05 else 1.0) * 1.4
+			# lane is only warned: keep moving through or hold before it
+			move.x += signf(off_lane if absf(off_lane) > 0.05 else 1.0) * 1.2
 			danger = true
 			continue
 		var rp: Vector3 = b.rock_pos()
-		var to_me := here - Vector2(rp.x, rp.z)
-		var closing: float = to_me.dot(b.dir)   # >0 means the rock is behind, rolling at us
+		var to_me := Vector2(px - rp.x, pz - rp.z)
+		var closing: float = to_me.dot(b.dir)   # >0 = the rock is behind, rolling at us
 		var dist := to_me.length()
 		if closing > -0.5 and dist < 4.6:
 			danger = true
@@ -68,32 +91,85 @@ func decide_living(p: int, g, pawn: LWPawn, delta: float) -> Dictionary:
 				if rng.randf() < hop_skill[p] * 0.5:
 					press_b = true
 			else:
-				move += lane_perp * signf(perp_d if absf(perp_d) > 0.05 else 1.0) * 2.0
+				move.x += signf(off_lane if absf(off_lane) > 0.05 else 1.0) * 2.0
 
-	# -- 2) pendulum line
-	for pen in g.pendulums:
-		if pen.state == LWPendulum.PState.DONE or pen.state == LWPendulum.PState.RETRACT:
+	# -- 2) scythe gates as traffic lights: cross only when the blade has
+	#       passed our lane and is receding; otherwise PARK just short of the
+	#       strip (a desperate bot jaywalks — the race must end)
+	for gate in g.blade_gates():
+		var gx := float(gate.x)
+		var dx := gx - px
+		if dx < -1.4 or dx > 4.2:
 			continue
-		var perp: float = here.dot(Vector2(-pen.sweep_dir.y, pen.sweep_dir.x))
-		if absf(perp) < LWPendulum.HIT_PERP + 0.9:
+		var strip := LWPendulum.HIT_PERP + 0.45
+		var rel_z := float(gate.z) - pz
+		var vs := float(gate.vs)
+		var moving_away: bool = (vs > 0.0 and rel_z > 0.05) or (vs < 0.0 and rel_z < -0.05)
+		var safe: bool = (absf(rel_z) > 1.9 and moving_away) or absf(rel_z) > 5.2
+		if absf(dx) <= strip:
+			move.x += 3.0   # inside the strip: clear it, hard
 			danger = true
-			move += Vector2(-pen.sweep_dir.y, pen.sweep_dir.x) * signf(perp if absf(perp) > 0.05 else 1.0) * 2.2
+		elif dx > strip:
+			if safe or desperate:
+				move.x += 1.4
+			else:
+				# red light: park just outside the strip
+				var hold_pt := gx - (strip + 0.8)
+				move.x += clampf((hold_pt - px) * 1.4, -2.8, 0.5)
+				danger = true
 
-	# -- 3) platform edge / shrink urgency
-	var safe_r: float = g.bot_safe_radius() - caution[p] * 0.45
-	if here.length() > safe_r:
-		move += -here.normalized() * (2.5 if here.length() > safe_r + 0.8 else 1.4)
+	# -- 3) the ossuary gaps: ONE timing roll per approach — a failed roll is
+	#       a body in the dusk (the race REQUIRES bodies)
+	for gi in LWCourse.GAPS.size():
+		var g0 := float(LWCourse.GAPS[gi][0])
+		var lead := g0 - px
+		var rolls: Dictionary = _gap_roll[p]
+		if lead > 6.0 or lead < -3.0:
+			rolls.erase(gi)
+			continue
+		if lead > 0.5 and lead <= 2.1 and pawn.is_grounded() and pawn.linear_velocity.x > 1.2:
+			if not rolls.has(gi):
+				rolls[gi] = rng.randf() < (0.5 + hop_skill[p] * 0.48)
+			if bool(rolls[gi]) and lead < 1.7:
+				press_b = true
+			danger = true
+
+	# -- 4) stones ranks + wall pushers: thread the opening. The thread target
+	#       OVERRIDES lane-keeping (v1 bug: the lane spring out-pulled the
+	#       gap steer and parked three bots against the stones forever)
+	var has_thread := false
+	var thread_z := 0.0
+	for cu in g.curses:
+		if cu.kind == "stones":
+			var dxs: float = cu.center_x() - px
+			if dxs > -0.5 and dxs < 5.0:
+				has_thread = true
+				thread_z = cu.stones_gap_z()
+				danger = true
+	for w in g.walls:
+		var dxw: float = w.wall_x() - px
+		if dxw > 0.2 and dxw < 3.5:
+			has_thread = true
+			thread_z = w.gap_z()
+			danger = true
+
+	# -- 5) hold the walkway: thread target if any, else center + personal lane
+	var zc := LWCourse.z_center(px + 1.2)
+	var hw := LWCourse.half_width(px + 1.2)
+	if has_thread:
+		move.y += clampf(thread_z - pz, -2.2, 2.2) * 1.6
+	else:
+		var want_z: float = zc + float(lane_bias[p]) * maxf(hw - 1.2, 0.0)
+		var zerr: float = pz - want_z
+		move.y += -zerr * 0.55
+	if absf(pz - zc) > hw - 0.45 - caution[p] * 0.15:
+		move.y += -signf(pz - zc) * (1.2 if has_thread else 2.4)
 		danger = true
 
-	# -- 3.5) flee the wisp if we are the haunted one
-	if pawn.curse_kind == "haunted":
-		var w = g.wisp_pos_for(p)
-		if w != null:
-			var away := here - Vector2(w.x, w.z)
-			if away.length() < 3.0 and away.length() > 0.01:
-				move += away.normalized() * 1.6
+	# -- 6) the crypt calls
+	move.x += 1.7
 
-	# -- 4) hunt: approach nearest rival from the center side, shove outward
+	# -- 7) shove opportunism: rivals near the edge or a gap lip are invitations
 	var target: LWPawn = null
 	var best_d := 1e9
 	for other in g.living_pawns():
@@ -103,40 +179,32 @@ func decide_living(p: int, g, pawn: LWPawn, delta: float) -> Dictionary:
 		if d < best_d:
 			best_d = d
 			target = other
-	if target != null and not danger:
-		var tp := Vector2(target.global_position.x, target.global_position.z)
-		var outward := tp
-		if outward.length() < 0.4:
-			outward = Vector2(0, 1)
-		outward = outward.normalized()
-		var approach := tp - outward * 1.1
-		if best_d < 1.8:
-			move += (tp - here)
-		else:
-			move += (approach - here).limit_length(1.0)
-	# shove opportunism runs even while fleeing — on the last pillar there
-	# is no "safe", only whoever swings first
-	if target != null and best_d < LWPawn.SHOVE_RANGE + 0.05 and pawn.curse_kind != "butterfingers":
-		var tp2 := Vector2(target.global_position.x, target.global_position.z)
+	if target != null and best_d < LWPawn.SHOVE_RANGE + 0.05:
+		var tz: float = target.global_position.z
+		var tzc := LWCourse.z_center(target.global_position.x)
+		var thw := LWCourse.half_width(target.global_position.x)
 		var kill_bonus := 0.0
-		if tp2.length() > g.platform_radius - 1.6:
+		if absf(tz - tzc) > thw - 1.0:
 			kill_bonus += 0.3
-		if g.platform_radius < 2.5:
-			kill_bonus += 0.4   # pillar brawl: swing constantly
-		if rng.randf() < aggr[p] * 0.14 + kill_bonus:
+		for gap in LWCourse.GAPS:
+			if float(gap[0]) - target.global_position.x < 2.0 and float(gap[0]) > target.global_position.x - 0.5:
+				kill_bonus += 0.35
+		if rng.randf() < aggr[p] * 0.1 + kill_bonus * 0.5:
 			press_a = true
 
-	# -- 5) seeded wander so mirror bots diverge
+	# -- 8) seeded wander so mirror bots diverge
 	wander_a[p] += rng.randf_range(-0.8, 0.8) * delta
-	move += Vector2(cos(wander_a[p]), sin(wander_a[p])) * 0.25
+	move += Vector2(cos(wander_a[p]), sin(wander_a[p])) * 0.2
 
 	if move.length() > 0.01:
 		move = move.normalized()
+	if danger and press_a:
+		press_a = false   # no showboating mid-dodge
 	return {"move": move, "a": press_a, "b": press_b}
 
-## Ghost brain: {aim: Vector2, fire: bool}
+## Ghost brain: {aim: Vector2, fire: bool}. Harass the race leader.
 func decide_ghost(p: int, g, ghost: LWGhostSeat, delta: float) -> Dictionary:
-	var leader: int = g.round_leader_alive()
+	var leader: int = g.race_leader_alive()
 	if leader < 0:
 		return {"aim": ghost.aim_dir, "fire": false}
 	var pawn = g.pawn_of(leader)
@@ -147,40 +215,35 @@ func decide_ghost(p: int, g, ghost: LWGhostSeat, delta: float) -> Dictionary:
 	var lead := Vector2(pawn.linear_velocity.x, pawn.linear_velocity.z) * 0.3
 	var aim := (tp + lead - seat)
 	if aim.length() < 0.05:
-		aim = -seat
+		aim = Vector2(1, 0)
 	aim = aim.normalized()
 	var fire := false
 	if ghost.gust_ready():
 		_gust_hold[p] += delta
-		# only shove when the push sends the leader OUTWARD (or we've waited 4s)
-		var outward_gain: float = aim.dot(tp.normalized() if tp.length() > 0.3 else aim)
-		if outward_gain > 0.15 or _gust_hold[p] > 4.0:
+		# release when the push carries the leader VOID-WARD (off the walkway
+		# center line) or BACKWARD — or we've sat on it for 4 seconds
+		var zc := LWCourse.z_center(tp.x)
+		var edge_gain: float = aim.y * signf(tp.y - zc) if absf(tp.y - zc) > 0.2 else 0.0
+		var back_gain: float = -aim.x
+		if edge_gain > 0.2 or back_gain > 0.55 or _gust_hold[p] > 4.0:
 			fire = true
 			_gust_hold[p] = 0.0
 	return {"aim": aim, "fire": fire}
 
-## --- will draft (random-but-SPITEFUL) ---------------------------------
-func draft_card(_p: int, _g, cards: Array) -> int:
-	return rng.randi_range(0, cards.size() - 1)
-
-## curse the round leader among candidates
-func draft_curse_target(_p: int, g, candidates: Array) -> int:
-	var best: int = candidates[0]
-	for c in candidates:
-		if g.players[c].total > g.players[best].total:
-			best = c
-	return best
-
-## bless the second-worst (lowest total among survivors; the worst is us, dead)
-func draft_bless_target(_p: int, g, candidates: Array) -> int:
-	var best: int = candidates[0]
-	for c in candidates:
-		if g.players[c].total < g.players[best].total:
-			best = c
-	return best
-
-## single-survivor mode (2P rule): curse them if they lead us, else bless
-func draft_mode(p: int, g, survivor: int) -> String:
-	if g.players[survivor].total >= g.players[p].total:
-		return "curse"
-	return "bless"
+## --- will draft (seeded, spiteful) --------------------------------------
+## Prefer the card whose condemned stretch lies just AHEAD of the race
+## leader; a seeded quarter of the time, pure caprice.
+func draft_card(_p: int, g, cards: Array) -> int:
+	var pick := rng.randi_range(0, cards.size() - 1)
+	if rng.randf() < 0.25:
+		return pick
+	var leader_x: float = g.race_leader_x()
+	var best := -1
+	var best_lead := 1e9
+	for i in cards.size():
+		var cx := float(cards[i].slot.x)
+		var lead := cx - leader_x
+		if lead > -2.0 and lead < best_lead:
+			best_lead = lead
+			best = i
+	return best if best >= 0 else pick
