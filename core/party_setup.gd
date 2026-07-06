@@ -61,6 +61,7 @@ func _ready() -> void:
 	_controls_box.name = "CONTROLS"
 	_controls_box.add_theme_constant_override("separation", 6)
 	tabs.add_child(_controls_box)
+	tabs.add_child(_build_game_tab())
 	tabs.add_child(_build_audio_tab())
 	tabs.add_child(_build_video_tab())
 	tabs.add_child(_build_access_tab())
@@ -277,6 +278,61 @@ func _stop_listen() -> void:
 		_listen_btn.text = OS.get_keycode_string(PlayerInput.binding_of(_bind_device, _listen_action))
 	_listen_action = ""
 	_listen_btn = null
+
+## ----- GAME tab (run configuration; applies to the next night) -----
+
+func _build_game_tab() -> Control:
+	var v := VBoxContainer.new()
+	v.name = "GAME"
+	v.add_theme_constant_override("separation", 14)
+	var row1 := HBoxContainer.new()
+	row1.alignment = BoxContainer.ALIGNMENT_CENTER
+	row1.add_theme_constant_override("separation", 16)
+	var l1 := Label.new()
+	l1.text = "GAMES PER NIGHT"
+	row1.add_child(l1)
+	var nights := OptionButton.new()
+	nights.custom_minimum_size = Vector2(140, 44)
+	for opt in [3, 5, 7]:
+		nights.add_item(str(opt))
+	nights.selected = maxi(0, [3, 5, 7].find(int(pref("night_length", 3))))
+	nights.item_selected.connect(func(idx: int):
+		set_pref("night_length", [3, 5, 7][idx])
+		Sfx.play("card"))
+	row1.add_child(nights)
+	v.add_child(row1)
+	var row2 := HBoxContainer.new()
+	row2.alignment = BoxContainer.ALIGNMENT_CENTER
+	row2.add_theme_constant_override("separation", 16)
+	var l2 := Label.new()
+	l2.text = "ROUNDS PER MINIGAME"
+	row2.add_child(l2)
+	var rounds := OptionButton.new()
+	rounds.custom_minimum_size = Vector2(140, 44)
+	for opt in [2, 3, 4, 5]:
+		rounds.add_item(str(opt))
+	rounds.selected = maxi(0, [2, 3, 4, 5].find(int(pref("mg_rounds", 4))))
+	rounds.item_selected.connect(func(idx: int):
+		set_pref("mg_rounds", [2, 3, 4, 5][idx])
+		Sfx.play("card"))
+	row2.add_child(rounds)
+	v.add_child(row2)
+	var theater := CheckButton.new()
+	theater.text = "THEATER GAMES IN THE NIGHT ROTATION (Séance, Understudy)"
+	theater.button_pressed = bool(pref("theater_in_pool", false))
+	theater.toggled.connect(func(on: bool):
+		set_pref("theater_in_pool", on)
+		Sfx.play("card"))
+	var tc := CenterContainer.new()
+	tc.add_child(theater)
+	v.add_child(tc)
+	var note := Label.new()
+	note.text = "The full game runs night after night until someone takes the manor.\nChanges apply from the next night."
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	note.add_theme_font_size_override("font_size", 14)
+	note.modulate.a = 0.65
+	v.add_child(note)
+	return v
 
 ## ----- AUDIO tab -----
 

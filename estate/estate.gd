@@ -117,7 +117,7 @@ func _ready() -> void:
 			# Self-contained: backs up and restores the REAL saves it mutates
 			# (buying writes estate_save.json; equipping writes cosmetics.json).
 			get_tree().create_timer(1.2).timeout.connect(func():
-				var est := ProjectSettings.globalize_path("user://estate_save.json")
+				var est := ProjectSettings.globalize_path(EstateState.slot_path(EstateState.current_slot))
 				var cos := ProjectSettings.globalize_path("user://cosmetics.json")
 				if FileAccess.file_exists(est):
 					DirAccess.copy_absolute(est, est + ".wt_bak")
@@ -196,27 +196,98 @@ func _ready() -> void:
 		return
 	GameState.player_count = 4
 	GameState.reset_match()
-	EstateState.start_night(4)
+	EstateState.ensure_players(4)
 	PlayerInput.auto_assign(4)
 	_spawn_walkers()
 	_spawn_toys()
 	_spawn_executor()
 	$Trail.build(EstateState.players, EstateState.gate_statues)
+	$Trail.seat_all(EstateState.trail_pos)
 	_redraw_monuments()
 	_redraw_graffiti()
 	banner.visible = false
 	_saved_env = $WorldEnvironment.environment
 	if start_night_now:
-		_fill_empty_seats_with_bots()
-		if EstateState.nights_played > 0:
-			_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.5)
-		_enter_grounds()
+		_play_pressed()
 	else:
 		_enter_title()
 
-## ----- TITLE SCREEN (front door; PLAY -> lobby setup -> the night) -----
+## ----- TITLE SCREEN (front door; PLAY -> straight into the night) -----
 
 var _title_layer: Control = null
+
+## PLAY = the full game, immediately. Resumes an in-progress run at its
+## between-nights rest; otherwise begins a fresh run at night one.
+func _play_pressed() -> void:
+	Sfx.play("confirm")
+	_hide_title()
+	_fill_empty_seats_with_bots()
+	PlayerInput.save_setup()
+	GameState.reset_match()
+	if not EstateState.night_length_forced:
+		EstateState.night_length = clampi(int(PartySetup.pref("night_length", 3)), 1, 9)
+	var resuming: bool = EstateState.run_active and EstateState.at_boundary
+	EstateState.start_night(4)
+	$Trail.seat_all(EstateState.trail_pos)
+	$UI/TopBar.visible = true
+	_rebuild_top_bar()
+	if resuming:
+		print("RUN resumed at boundary (night %d next)" % (EstateState.run_night + 1))
+		_enter_grounds()
+		return
+	if EstateState.nights_played > 0:
+		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.2)
+	_enter_auction()
+
+## NEW GAME / slot management: each slot is a whole estate universe.
+func _build_slot_panel() -> void:
+	phase = Phase.LOBBY
+	_hide_title()
+	Sfx.play("card")
+	_clear_panel("THE THREE ESTATES — pick where tonight happens", Color(0.9, 0.95, 0.9))
+	for n in [1, 2, 3]:
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 12)
+		var summary := EstateState.slot_summary(n)
+		var lab := Label.new()
+		lab.text = "SLOT %d — %s" % [n, summary if summary != "" else "an empty deed"]
+		lab.custom_minimum_size = Vector2(360, 0)
+		lab.add_theme_font_size_override("font_size", 18)
+		if n == EstateState.current_slot:
+			lab.add_theme_color_override("font_color", Color(1, 0.85, 0.2))
+		row.add_child(lab)
+		var load_btn := Button.new()
+		load_btn.custom_minimum_size = Vector2(170, 46)
+		load_btn.text = "PLAY THIS ESTATE"
+		load_btn.pressed.connect(func():
+			Sfx.play("confirm")
+			EstateState.load_slot(n)
+			get_tree().reload_current_scene())
+		row.add_child(load_btn)
+		var wipe_btn := Button.new()
+		wipe_btn.custom_minimum_size = Vector2(190, 46)
+		wipe_btn.text = "START FRESH" if summary == "" else "WIPE & START FRESH"
+		wipe_btn.pressed.connect(func():
+			if summary != "" and not wipe_btn.text.begins_with("REALLY"):
+				wipe_btn.text = "REALLY? CLICK AGAIN"
+				Sfx.play("invalid")
+				return
+			Sfx.play("grudge")
+			EstateState.new_game(n)
+			get_tree().reload_current_scene())
+		row.add_child(wipe_btn)
+		phase_box.add_child(row)
+	var hint := Label.new()
+	hint.text = "Wiping a slot erases that estate's monuments, ledger, and wardrobe. The Executor will pretend not to notice."
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.modulate.a = 0.65
+	phase_box.add_child(hint)
+	var back := Button.new()
+	back.text = "BACK TO TITLE"
+	back.pressed.connect(_enter_title)
+	phase_box.add_child(back)
 
 func _enter_title() -> void:
 	phase = Phase.TITLE
@@ -271,32 +342,44 @@ func _enter_title() -> void:
 	play.text = "PLAY"
 	play.custom_minimum_size = Vector2(360, 92)
 	play.add_theme_font_size_override("font_size", 40)
-	play.pressed.connect(func():
-		Sfx.play("confirm")
-		_enter_lobby())
+	play.pressed.connect(_play_pressed)
 	var pc := CenterContainer.new()
 	pc.add_child(play)
 	box.add_child(pc)
 	var row := HBoxContainer.new()
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 18)
+	row.add_theme_constant_override("separation", 14)
+	var newg := Button.new()
+	newg.text = "NEW GAME"
+	newg.custom_minimum_size = Vector2(160, 56)
+	newg.pressed.connect(_build_slot_panel)
+	row.add_child(newg)
 	var settings := Button.new()
 	settings.text = "SETTINGS"
-	settings.custom_minimum_size = Vector2(200, 56)
+	settings.custom_minimum_size = Vector2(160, 56)
 	settings.pressed.connect(func():
 		Sfx.play("card")
 		PartySetup.toggle())
 	row.add_child(settings)
 	var mini := Button.new()
 	mini.text = "MINIGAMES"
-	mini.custom_minimum_size = Vector2(200, 56)
+	mini.custom_minimum_size = Vector2(170, 56)
 	mini.pressed.connect(func():
 		Sfx.play("card")
 		_enter_selector())
 	row.add_child(mini)
+	var ward := Button.new()
+	ward.text = "WARDROBE"
+	ward.custom_minimum_size = Vector2(160, 56)
+	ward.pressed.connect(func():
+		Sfx.play("card")
+		phase = Phase.LOBBY
+		_hide_title()
+		_build_wardrobe_panel())
+	row.add_child(ward)
 	box.add_child(row)
 	var hint := Label.new()
-	hint.text = "PLAY = seats, night length, the estate, the whole ILL WILL night"
+	hint.text = "PLAY = the full game — nights of minigames until someone takes the manor"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.modulate.a = 0.6
@@ -835,10 +918,13 @@ func _build_wardrobe_panel() -> void:
 	center.add_child(grid)
 	phase_box.add_child(center)
 	var back := Button.new()
-	back.text = "BACK TO THE GATES"
+	back.text = "BACK"
 	back.pressed.connect(func():
 		Sfx.play("card")
-		_build_lobby_panel())
+		if phase == Phase.GROUNDS:
+			_build_freeroam_panel()
+		else:
+			_enter_title())
 	phase_box.add_child(back)
 	var hint := Label.new()
 	hint.text = "LEGACY = the estate's memory of your points, paid at each dawn. It buys nothing but respect."
@@ -948,7 +1034,10 @@ func _exit_stroll(open_act := "") -> void:
 		"wardrobe":
 			_build_wardrobe_panel()
 		_:
-			_build_lobby_panel()
+			if phase == Phase.GROUNDS:
+				_build_freeroam_panel()
+			else:
+				_build_lobby_panel()
 
 func _poll_stroll() -> void:
 	var near_spot: Dictionary = {}
@@ -1026,7 +1115,7 @@ func _on_joy_connection_changed(device: int, connected: bool) -> void:
 func _process(delta: float) -> void:
 	if _ready_gate_active:
 		_poll_ready_gate(delta)
-	if phase == Phase.LOBBY:
+	if phase == Phase.LOBBY or phase == Phase.GROUNDS:
 		if _strolling:
 			_poll_stroll()
 		else:
@@ -1043,12 +1132,13 @@ func _process(delta: float) -> void:
 				var w: EstateWalker = bot_walkers[EstateState.rng.randi_range(0, bot_walkers.size() - 1)]
 				w.walk_target = Vector3(EstateState.rng.randf_range(-6.0, 6.0), 0, EstateState.rng.randf_range(-7.0, 1.5))
 	if phase == Phase.GROUNDS:
-		_grounds_timer -= delta
-		_update_grounds_clock()
-		if _grounds_timer <= 0.0 or (_all_bots() and _grounds_timer < GROUNDS_TIME - 1.5):
-			_bots_buy_tiles()
-			_bots_place_bets()
-			_enter_tiles()
+		# Free roam has no countdown for humans — the estate rests until
+		# CONTINUE. Bot-only tables move on after a short breath.
+		if _all_bots():
+			_grounds_timer -= delta
+			if _grounds_timer <= GROUNDS_TIME - 4.0:
+				_bots_buy_tiles()
+				_continue_to_night()
 	elif phase == Phase.AUCTION:
 		_bid_timer -= delta
 		_update_auction_clock()
@@ -1084,82 +1174,82 @@ func _clear_panel(title: String, color := Color(1, 0.9, 0.5)) -> void:
 	phase_box.add_child(t)
 	phase_panel.visible = true
 
+## FREE ROAM — the estate rests between nights. The grounds are walkable
+## (stroll on by default), trap tiles are bought here, and the night
+## begins when someone presses CONTINUE. No countdown for humans.
 func _enter_grounds() -> void:
 	phase = Phase.GROUNDS
 	Music.play_slot("grounds")
 	_grounds_timer = GROUNDS_TIME
-	_bet_targets.clear()
 	_tile_buyers.clear()
 	_rebuild_top_bar()
-	_clear_panel("THE GROUNDS — place your bets on the next game")
-	if EstateState.games_played == 0 and not EstateState.vendetta.is_empty():
-		var v: Dictionary = EstateState.vendetta
-		var hunter = EstateState.players[int(v.hunter)]
-		var prey = EstateState.players[int(v.prey)]
-		var vl := Label.new()
-		vl.text = "“An unsettled matter: %s hunted %s last night. The estate has opened a book on the reprisal (+3♠).”  — The Executor" % [hunter.name, prey.name]
-		vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		vl.custom_minimum_size = Vector2(700, 0)
-		vl.add_theme_font_size_override("font_size", 16)
-		vl.add_theme_color_override("font_color", Color(0.9, 0.75, 0.75))
-		phase_box.add_child(vl)
+	if _all_bots():
+		_build_freeroam_panel()
+		return
+	_enter_stroll()
+
+func _build_freeroam_panel() -> void:
+	_strolling = false
+	banner.remove_theme_font_size_override("font_size")
+	banner.visible = false
+	_clear_panel("THE ESTATE RESTS — night %d awaits" % (EstateState.run_night + 1))
+	var hint := Label.new()
+	hint.text = "Walk the grounds (B closes this desk) · visit the wardrobe or theater · seed a trap tile · continue when ready"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(700, 0)
+	hint.add_theme_font_size_override("font_size", 15)
+	hint.modulate.a = 0.75
+	phase_box.add_child(hint)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 14)
 	for i in EstateState.players.size():
+		if _is_bot(i):
+			continue
 		var pl = EstateState.players[i]
-		var row := HBoxContainer.new()
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		var name_l := Label.new()
-		name_l.text = pl.name + "  "
-		name_l.add_theme_color_override("font_color", pl.color)
-		name_l.add_theme_font_size_override("font_size", 24)
-		row.add_child(name_l)
-		var target_btn := Button.new()
-		_bet_targets[i] = (i + 1) % EstateState.players.size()
-		target_btn.text = "on %s" % EstateState.players[_bet_targets[i]].name
-		target_btn.pressed.connect(func():
-			_bet_targets[i] = (_bet_targets[i] + 1) % EstateState.players.size()
-			target_btn.text = "on %s" % EstateState.players[_bet_targets[i]].name)
-		row.add_child(target_btn)
-		var bet_btn := Button.new()
-		bet_btn.text = "BET 1♠"
-		bet_btn.pressed.connect(func():
-			if EstateState.place_bet(i, _bet_targets[i]):
-				bet_btn.text = "BET PLACED"
-				bet_btn.disabled = true
-				Sfx.play("card")
-				_rebuild_top_bar())
-		row.add_child(bet_btn)
 		var tile_btn := Button.new()
-		tile_btn.text = "TRAP TILE %d♠" % TILE_COST
+		tile_btn.custom_minimum_size = Vector2(190, 48)
+		tile_btn.text = "%s: TRAP TILE %d♠" % [pl.name, TILE_COST]
+		tile_btn.add_theme_color_override("font_color", pl.color)
 		tile_btn.pressed.connect(func():
 			if not _tile_buyers.has(i) and EstateState.spend_grudge(i, TILE_COST):
 				_tile_buyers.append(i)
-				tile_btn.text = "TILE BOUGHT"
+				tile_btn.text = "%s: TILE BOUGHT" % pl.name
 				tile_btn.disabled = true
 				Sfx.play("grudge")
 				_rebuild_top_bar()
 			else:
 				Sfx.play("invalid"))
 		row.add_child(tile_btn)
-		if _is_bot(i):
-			target_btn.disabled = true
-			bet_btn.disabled = true
-			tile_btn.disabled = true
-			bet_btn.text = "BOT"
-		phase_box.add_child(row)
-	var clock := Label.new()
-	clock.name = "Clock"
-	clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	phase_box.add_child(clock)
-	var skip := Button.new()
-	skip.text = "TO THE AUCTION"
-	skip.pressed.connect(_enter_auction)
-	phase_box.add_child(skip)
+	phase_box.add_child(row)
+	var row2 := HBoxContainer.new()
+	row2.alignment = BoxContainer.ALIGNMENT_CENTER
+	row2.add_theme_constant_override("separation", 14)
+	var roam := Button.new()
+	roam.custom_minimum_size = Vector2(220, 56)
+	roam.text = "WALK THE GROUNDS"
+	roam.pressed.connect(_enter_stroll)
+	row2.add_child(roam)
+	var cont := Button.new()
+	cont.custom_minimum_size = Vector2(300, 56)
+	cont.text = "CONTINUE — NIGHT %d" % (EstateState.run_night + 1)
+	cont.pressed.connect(_continue_to_night)
+	row2.add_child(cont)
+	phase_box.add_child(row2)
 
-func _update_grounds_clock() -> void:
-	var clock := phase_box.get_node_or_null("Clock")
-	if clock:
-		clock.text = "%ds" % ceili(_grounds_timer)
+## Leaves free roam for the night's first auction (placing bought tiles
+## first if any).
+func _continue_to_night() -> void:
+	if phase != Phase.GROUNDS:
+		return
+	_strolling = false
+	banner.remove_theme_font_size_override("font_size")
+	banner.visible = false
+	Sfx.play("confirm")
+	if EstateState.nights_played > 0 and EstateState.games_played == 0:
+		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.2)
+	_enter_tiles()
 
 func _bots_place_bets() -> void:
 	for i in EstateState.players.size():
@@ -1224,13 +1314,28 @@ func _enter_auction() -> void:
 	high_bidder = -1
 	_bid_timer = BID_TIME
 	var pool := ["mock", "mock", "mock"] if mockonly else ["par", "echo", "tilt", "orbital", "mower", "greed", "swap", "deadweight", "throne", "lastwill"]
+	if not mockonly and bool(PartySetup.pref("theater_in_pool", false)):
+		for tid in ["seance", "understudy"]:
+			if ResourceLoader.exists(String(MODULES[tid].scene)):
+				pool.append(tid)
 	if not pool_override.is_empty():
 		pool = pool_override
 	auction_options.clear()
 	for k in 3:
 		auction_options.append(pool[EstateState.rng.randi_range(0, pool.size() - 1)])
+	_bots_place_bets()
 	_rebuild_top_bar()
 	_clear_panel("THE AUCTION — bid grudge to choose the game")
+	if EstateState.games_played == 0 and not EstateState.vendetta.is_empty():
+		var v: Dictionary = EstateState.vendetta
+		var vl := Label.new()
+		vl.text = "“An unsettled matter: %s hunted %s last night. The estate has opened a book on the reprisal (+3♠).”  — The Executor" % [EstateState.players[int(v.hunter)].name, EstateState.players[int(v.prey)].name]
+		vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		vl.custom_minimum_size = Vector2(700, 0)
+		vl.add_theme_font_size_override("font_size", 15)
+		vl.add_theme_color_override("font_color", Color(0.9, 0.75, 0.75))
+		phase_box.add_child(vl)
 	var exec_lines := [
 		"The Executor opens the bidding. Spite is legal tender.",
 		"The Executor reminds the room that generosity is not on the block.",
@@ -1261,6 +1366,38 @@ func _enter_auction() -> void:
 		row.add_child(b)
 	row.name = "BidRow"
 	phase_box.add_child(row)
+	# Side bets ride the auction now (free roam replaced the betting phase).
+	var bet_row := HBoxContainer.new()
+	bet_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	bet_row.add_theme_constant_override("separation", 10)
+	for i in EstateState.players.size():
+		if _is_bot(i) or EstateState.bets.has(i):
+			continue
+		var pl = EstateState.players[i]
+		_bet_targets[i] = (i + 1) % EstateState.players.size()
+		var tb := Button.new()
+		tb.custom_minimum_size = Vector2(120, 40)
+		tb.text = "on %s" % EstateState.players[_bet_targets[i]].name
+		tb.add_theme_font_size_override("font_size", 15)
+		tb.pressed.connect(func():
+			_bet_targets[i] = (_bet_targets[i] + 1) % EstateState.players.size()
+			tb.text = "on %s" % EstateState.players[_bet_targets[i]].name)
+		bet_row.add_child(tb)
+		var bb := Button.new()
+		bb.custom_minimum_size = Vector2(150, 40)
+		bb.text = "%s BETS 1♠" % pl.name
+		bb.add_theme_font_size_override("font_size", 15)
+		bb.add_theme_color_override("font_color", pl.color)
+		bb.pressed.connect(func():
+			if EstateState.place_bet(i, _bet_targets[i]):
+				bb.text = "BET PLACED"
+				bb.disabled = true
+				tb.disabled = true
+				Sfx.play("card")
+				_rebuild_top_bar())
+		bet_row.add_child(bb)
+	if bet_row.get_child_count() > 0:
+		phase_box.add_child(bet_row)
 	var clock := Label.new()
 	clock.name = "Clock"
 	clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1483,7 +1620,7 @@ func _do_launch_game(id: String, practice := false) -> void:
 			})
 		_module.begin({
 			"roster": roster,
-			"rounds": 2 if _practice else 4,
+			"rounds": 2 if _practice else clampi(int(PartySetup.pref("mg_rounds", 4)), 2, 6),
 			"rng_seed": EstateState.rng.randi(),
 			"practice": _practice,
 		})
@@ -1564,27 +1701,25 @@ func _enter_reckoning(ticker: Array) -> void:
 			tw.tween_property(c, "modulate:a", 1.0, 0.3)
 			i += 1
 	await get_tree().create_timer(0.35 * ticker.size() + 0.5).timeout
-	var summit := await _run_parade()
-	if summit >= 0:
-		_flash("%s REACHES THE MANOR!" % EstateState.players[summit].name, EstateState.players[summit].color, 3.0)
-		await get_tree().create_timer(2.0).timeout
-		_end_night(summit)
-		return
 	var btn := Button.new()
-	btn.text = "BACK TO THE GROUNDS" if EstateState.games_played < EstateState.night_length else "END THE NIGHT"
+	btn.text = "TO THE AUCTION" if EstateState.games_played < EstateState.night_length else "THE NIGHT SETTLES"
 	btn.pressed.connect(_after_reckoning)
 	phase_box.add_child(btn)
 	if _all_bots():
 		get_tree().create_timer(2.0).timeout.connect(_after_reckoning)
 
-## Advances every pawn by the points just earned, worst first, winner last.
-## Handles tollgate claims/payments. Returns a summit player index or -1.
+## THE PARADE — once per night: every pawn advances by their NIGHT total,
+## worst first, winner last. Handles tollgate claims/payments. Returns a
+## summit player index (the manor is reached — the RUN ends) or -1.
 func _run_parade() -> int:
-	var order: Array = EstateState.last_deltas.keys()
-	order.sort_custom(func(a, b): return EstateState.last_deltas[a] < EstateState.last_deltas[b])
+	var deltas := {}
+	for pl in EstateState.players:
+		deltas[int(pl.index)] = int(pl.points)
+	var order: Array = deltas.keys()
+	order.sort_custom(func(a, b): return deltas[a] < deltas[b])
 	var summit := -1
 	for p in order:
-		var delta: int = EstateState.last_deltas[p]
+		var delta: int = deltas[p]
 		if delta <= 0:
 			continue
 		var from: int = EstateState.trail_pos[p]
@@ -1619,13 +1754,15 @@ func _after_reckoning() -> void:
 	if phase != Phase.RECKONING:
 		return
 	if EstateState.games_played >= EstateState.night_length:
-		_end_night()
+		_night_ceremonies()
 	else:
-		_enter_grounds()
+		_enter_auction()
 
-func _end_night(champ_override := -1) -> void:
+## The night is settled: podium -> will reading -> parade -> free roam
+## (or, if the parade reaches the manor, the RUN is over).
+func _night_ceremonies() -> void:
 	phase = Phase.NIGHT_END
-	var champ = EstateState.end_night(champ_override)
+	var champ = EstateState.end_night(EstateState.standings()[0])
 	$Trail.add_statue(EstateState.gate_statues.back(), EstateState.gate_statues.size() - 1)
 	_redraw_monuments()
 	_rebuild_top_bar()
@@ -1658,7 +1795,7 @@ func _enter_will_reading(champ) -> void:
 	var awards: Array = EstateState.night_superlatives(champ.index)
 	_clear_panel("THE READING OF THE WILL", Color(0.85, 0.75, 1.0))
 	var head := Label.new()
-	head.text = "The estate has reviewed the evening's conduct and finds it, on the whole, actionable.\n%s takes the manor." % champ.name
+	head.text = "The estate has reviewed the evening's conduct and finds it, on the whole, actionable.\n%s wins the night." % champ.name
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_color_override("font_color", champ.color)
 	phase_box.add_child(head)
@@ -1693,23 +1830,80 @@ func _enter_will_reading(champ) -> void:
 	if phase != Phase.NIGHT_END:
 		return
 	var btn := Button.new()
-	btn.text = "DAWN — BACK TO THE GATES"
-	btn.pressed.connect(_return_to_lobby)
+	btn.text = "TO THE PARADE"
+	btn.pressed.connect(_night_parade)
 	phase_box.add_child(btn)
 	if _all_bots():
-		get_tree().create_timer(2.5).timeout.connect(_return_to_lobby)
+		get_tree().create_timer(2.5).timeout.connect(_night_parade)
 
-func _return_to_lobby() -> void:
-	if phase != Phase.NIGHT_END:
+var _parade_running := false
+
+func _night_parade() -> void:
+	if phase != Phase.NIGHT_END or _parade_running:
 		return
-	Sfx.play("confirm")
+	_parade_running = true
+	phase_panel.visible = false
+	Music.play_slot("grounds")
+	var summit := await _run_parade()
+	EstateState.save_estate()
+	_parade_running = false
+	if summit >= 0:
+		_flash("%s REACHES THE MANOR" % EstateState.players[summit].name, EstateState.players[summit].color, 3.0)
+		await get_tree().create_timer(2.2).timeout
+		_run_over(summit)
+		return
+	_start_boundary()
+
+## The rest between nights: arm the next night, then free roam.
+func _start_boundary() -> void:
 	GameState.reset_match()
 	EstateState.start_night(4)
-	$Trail.reset_pawns()
 	_rebuild_top_bar()
 	banner.visible = false
-	print("DAWN back to lobby")
-	_enter_lobby()
+	print("DAWN free roam (night %d next)" % (EstateState.run_night + 1))
+	_enter_grounds()
+
+## Someone took the manor — the full game ends here.
+func _run_over(p: int) -> void:
+	phase = Phase.NIGHT_END
+	var pl = EstateState.finish_run(p)
+	_redraw_monuments()
+	_redraw_graffiti()
+	Music.play_slot("ceremony")
+	var podium := Podium.new()
+	add_child(podium)
+	var order: Array = EstateState.trail_pos.keys()
+	order.sort_custom(func(a, b): return EstateState.trail_pos[a] > EstateState.trail_pos[b])
+	var entries: Array = []
+	for rank in order.size():
+		var q = EstateState.players[order[rank]]
+		entries.append({"name": q.name, "color": q.color, "rank": rank,
+			"char_scene": CHAR_SCENES[order[rank]], "player": order[rank]})
+	podium.present(entries)
+	_flash("%s TAKES THE MANOR\nthe estate has an heir" % pl.name, pl.color, 9999.0)
+	await podium.done
+	podium.queue_free()
+	cam.current = true
+	banner.visible = false
+	_clear_panel("THE ESTATE HAS AN HEIR", Color(1, 0.85, 0.2))
+	var l := Label.new()
+	l.text = "%s took the manor after %d nights.\n“The keys, the grounds, the grudges — all of it passes to %s.\nThe estate offers its condolences to everyone else.”  — The Executor" % [pl.name, maxi(1, EstateState.run_night), pl.name]
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(700, 0)
+	l.add_theme_color_override("font_color", pl.color)
+	phase_box.add_child(l)
+	var btn := Button.new()
+	btn.text = "RETURN TO THE TITLE"
+	btn.pressed.connect(func():
+		GameState.reset_match()
+		_enter_title())
+	phase_box.add_child(btn)
+	if _all_bots():
+		get_tree().create_timer(4.0).timeout.connect(func():
+			if phase == Phase.NIGHT_END:
+				GameState.reset_match()
+				_enter_title())
 
 func _flash(text: String, color: Color, dur: float) -> void:
 	banner.text = text

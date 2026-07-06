@@ -1,12 +1,17 @@
 extends Node
 ## Autoload EstateState: night-level party state + the persistent estate.
 ## Per-night: points ladder, grudge purses, pot, games played.
-## Persistent (user://estate_save.json): monuments, graffiti, night ledger.
+## Per-RUN (a full game): trail positions + tollgates persist across
+## nights until someone reaches the manor — then the run is over.
+## Persistent per SLOT (user://saves/slot_N.json): the whole estate —
+## monuments, graffiti, ledger, legacy, wardrobe, plus the active run.
 
-const SAVE_PATH := "user://estate_save.json"
+const LEGACY_SAVE_PATH := "user://estate_save.json"
+const SAVE_DIR := "user://saves"
 const STARTING_GRUDGE := 2
 
 var night_length := 3
+var night_length_forced := false  # --night=N pins it (soaks) over the pref
 var games_played := 0
 var pot := 0
 var players: Array = []
@@ -25,6 +30,11 @@ var wardrobe := {}
 
 var trail_pos := {}
 var tollgates := {}
+# Run state (a RUN = one full game: nights until someone takes the manor).
+var current_slot := 1
+var run_active := false
+var run_night := 0        # nights completed within this run
+var at_boundary := false  # true while the estate rests between nights
 var last_deltas := {}
 var night_stats := {}
 # Directed kill counts for the night: "killer>victim" -> count. Fed by
@@ -37,27 +47,105 @@ var vendetta_settled_by := -1
 
 func _ready() -> void:
 	rng.randomize()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(SAVE_DIR))
+	_migrate_to_slots()
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--night="):
 			night_length = clampi(int(arg.trim_prefix("--night=")), 1, 9)
+			night_length_forced = true
 		elif arg.begins_with("--seed="):
 			rng.seed = int(arg.trim_prefix("--seed="))
+		elif arg.begins_with("--slot="):
+			current_slot = clampi(int(arg.trim_prefix("--slot=")), 1, 3)
 		elif arg == "--fresh-estate":
 			_wipe_save()
 	load_estate()
+
+## Pre-slots saves become slot 1, once.
+func _migrate_to_slots() -> void:
+	var old := ProjectSettings.globalize_path(LEGACY_SAVE_PATH)
+	var slot1 := ProjectSettings.globalize_path(slot_path(1))
+	if FileAccess.file_exists(old) and not FileAccess.file_exists(slot1):
+		DirAccess.copy_absolute(old, slot1)
+		print("MIGRATE estate_save.json -> saves/slot_1.json")
+
+func slot_path(n: int) -> String:
+	return "%s/slot_%d.json" % [SAVE_DIR, n]
+
+## One-line summary for the slot picker ("" = empty slot).
+func slot_summary(n: int) -> String:
+	if not FileAccess.file_exists(slot_path(n)):
+		return ""
+	var data = JSON.parse_string(FileAccess.open(slot_path(n), FileAccess.READ).get_as_text())
+	if not data is Dictionary:
+		return ""
+	var nights := int(data.get("nights_played", 0))
+	var run: Dictionary = data.get("run", {})
+	var tag := "at rest"
+	if bool(run.get("active", false)):
+		tag = "night %d underway" % (int(run.get("run_night", 0)) + 1)
+	return "estate of %d nights — %s" % [nights, tag]
+
+func load_slot(n: int) -> void:
+	current_slot = clampi(n, 1, 3)
+	monuments = []
+	graffiti = []
+	ledger = []
+	gate_statues = []
+	legacy = {}
+	wardrobe = {}
+	nights_played = 0
+	run_active = false
+	run_night = 0
+	at_boundary = false
+	trail_pos = {}
+	tollgates = {}
+	load_estate()
+
+## NEW GAME: a fresh estate on this slot (wipes its history).
+func new_game(n: int) -> void:
+	current_slot = clampi(n, 1, 3)
+	var p := ProjectSettings.globalize_path(slot_path(current_slot))
+	if FileAccess.file_exists(p):
+		DirAccess.remove_absolute(p)
+	load_slot(current_slot)
+
+## Populate the roster WITHOUT starting a night — the estate scene needs
+## players for walkers/trail/exhibitions while sitting at the title.
+func ensure_players(player_count: int) -> void:
+	if not players.is_empty():
+		return
+	for i in player_count:
+		if not trail_pos.has(i):
+			trail_pos[i] = 0
+		players.append({
+			"index": i,
+			"name": GameState.PLAYER_NAMES[i],
+			"color": GameState.PLAYER_COLORS[i],
+			"points": 0,
+			"grudge": STARTING_GRUDGE,
+		})
 
 func start_night(player_count: int) -> void:
 	games_played = 0
 	pot = 0
 	bets.clear()
 	players.clear()
-	trail_pos.clear()
-	tollgates.clear()
 	last_deltas.clear()
 	night_stats.clear()
 	kill_matrix.clear()
 	vendetta_settled_by = -1
 	vendetta = {}
+	# Trail + tollgates persist across nights WITHIN a run — the climb to
+	# the manor is the full game. A fresh run starts everyone at the gates.
+	if not run_active:
+		run_active = true
+		run_night = 0
+		trail_pos.clear()
+		tollgates.clear()
+		for i in player_count:
+			trail_pos[i] = 0
+	at_boundary = false
 	if not ledger.is_empty():
 		var last: Dictionary = ledger.back()
 		var nem: Dictionary = last.get("nemesis", {})
@@ -65,7 +153,8 @@ func start_night(player_count: int) -> void:
 			vendetta = {"hunter": int(nem.hunter), "prey": int(nem.prey)}
 			print("VENDETTA armed hunter=%d prey=%d" % [vendetta.hunter, vendetta.prey])
 	for i in player_count:
-		trail_pos[i] = 0
+		if not trail_pos.has(i):
+			trail_pos[i] = 0
 		night_stats[i] = {"wins": 0, "lasts": 0, "royalties": 0,
 			"grudge_earned": 0, "bets_won": 0, "tolls": 0, "kills": 0}
 	for i in player_count:
@@ -274,7 +363,21 @@ func end_night(champ_override := -1) -> Dictionary:
 		legacy[int(pl2.index)] = int(legacy.get(int(pl2.index), 0)) + int(pl2.points)
 	legacy[champ] = int(legacy.get(champ, 0)) + 5
 	nights_played += 1
+	run_night += 1
+	at_boundary = true
 	save_estate()
+	return pl
+
+## Someone reached the manor: the RUN (the full game) is over.
+func finish_run(champ: int) -> Dictionary:
+	var pl = players[champ]
+	run_active = false
+	at_boundary = false
+	add_monument(champ, "%s — TOOK THE MANOR (run of %d nights)" % [pl.name, run_night])
+	add_graffiti("%s took the manor after %d nights" % [pl.name, run_night])
+	legacy[champ] = int(legacy.get(champ, 0)) + 15
+	save_estate()
+	print("RUN_OVER heir=%s nights=%d" % [pl.name, run_night])
 	return pl
 
 func legacy_of(p: int) -> int:
@@ -304,25 +407,33 @@ func furthest_on_trail() -> int:
 	return best
 
 func save_estate() -> void:
-	var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	var f := FileAccess.open(slot_path(current_slot), FileAccess.WRITE)
 	if f:
 		var leg := {}
 		var ward := {}
+		var tp := {}
+		var tg := {}
 		for k in legacy:
 			leg[str(k)] = legacy[k]
 		for k in wardrobe:
 			ward[str(k)] = wardrobe[k]
+		for k in trail_pos:
+			tp[str(k)] = trail_pos[k]
+		for k in tollgates:
+			tg[str(k)] = tollgates[k]
 		f.store_string(JSON.stringify({
 			"monuments": monuments, "graffiti": graffiti,
 			"ledger": ledger, "nights_played": nights_played,
 			"gate_statues": gate_statues,
 			"legacy": leg, "wardrobe": ward,
+			"run": {"active": run_active, "run_night": run_night,
+				"at_boundary": at_boundary, "trail_pos": tp, "tollgates": tg},
 		}, "  "))
 
 func load_estate() -> void:
-	if not FileAccess.file_exists(SAVE_PATH):
+	if not FileAccess.file_exists(slot_path(current_slot)):
 		return
-	var f := FileAccess.open(SAVE_PATH, FileAccess.READ)
+	var f := FileAccess.open(slot_path(current_slot), FileAccess.READ)
 	var data = JSON.parse_string(f.get_as_text())
 	if data is Dictionary:
 		monuments = data.get("monuments", [])
@@ -339,7 +450,15 @@ func load_estate() -> void:
 		if not data.has("legacy") and nights_played > 0:
 			for i in 4:
 				legacy[i] = nights_played * 15
+		var run: Dictionary = data.get("run", {})
+		run_active = bool(run.get("active", false))
+		run_night = int(run.get("run_night", 0))
+		at_boundary = bool(run.get("at_boundary", false))
+		for k in run.get("trail_pos", {}):
+			trail_pos[int(k)] = int(run.trail_pos[k])
+		for k in run.get("tollgates", {}):
+			tollgates[int(k)] = int(run.tollgates[k])
 
 func _wipe_save() -> void:
-	if FileAccess.file_exists(SAVE_PATH):
-		DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	if FileAccess.file_exists(slot_path(current_slot)):
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(slot_path(current_slot)))

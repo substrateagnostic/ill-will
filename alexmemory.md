@@ -6,6 +6,25 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🏰 THE FLOW IS THE GAME NOW (your big playtest note, built).**
+  PLAY on the title = the full game instantly: nights of (auction →
+  minigame + quick podium → reckoning) — no settings screen between —
+  and at each night's end: NIGHT PODIUM → READING OF THE WILL → THE
+  PARADE (once per night, by night totals) → **FREE ROAM** (the estate
+  rests: walk the grounds by default, buy trap tiles, wardrobe/theater
+  walk-ups, CONTINUE when ready). The trail now PERSISTS across nights —
+  the run ends only when someone reaches the manor: podium by trail
+  standing, "THE ESTATE HAS AN HEIR", Executor's condolences to everyone
+  else. **SAVE SLOTS**: NEW GAME opens THE THREE ESTATES (each slot a
+  whole estate universe; two-click wipe protection); your old save
+  migrated to Slot 1; quitting mid-run resumes at the last between-nights
+  rest. Side bets moved into the auction; night length (3 default),
+  rounds per minigame, and theater-games-in-rotation live in SETTINGS →
+  GAME. Also queued from your notes: game-feel research done (HIT KIT +
+  COOLDOWN RING specs — greed/throne implementing now, DW/LW next),
+  dead-state controls fix (left=move right=aim + on-screen instructions)
+  and Séance pull-arrows both in flight.
+
 - **🎟️ PLAYTEST BUILD READY — `build\illwill.exe` (rebuilt tonight).**
   Your three fixes, done and verified: (1) **TITLE SCREEN** — hatted
   cast backdrop, big PLAY → seat setup → the full night; SETTINGS +

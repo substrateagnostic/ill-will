@@ -121,6 +121,11 @@ func reset_pawns() -> void:
 	for p in pawns:
 		_seat_pawn(p, 0)
 
+## Seat every pawn at its persisted stone (resuming a run mid-climb).
+func seat_all(positions: Dictionary) -> void:
+	for p in pawns:
+		_seat_pawn(p, int(positions.get(p, 0)))
+
 func add_statue(st: Dictionary, idx: int) -> void:
 	var col := Color.from_string(str(st.color), Color.WHITE)
 	var statue := _make_pawn(col, str(st.owner))
