@@ -44,6 +44,14 @@ var ring: MeshInstance3D
 var _cur_anim := ""
 var _anim_lock := 0.0
 
+# THE ILL WILL HIT KIT / COOLDOWN RING (docs/design/08-gamefeel-research.md).
+# Presentation only — all gated behind owner_game.fx_on() so the reproducible
+# --dwbalance sim runs NONE of it (byte-identical determinism receipt).
+var _shove_ring: CooldownRing      # primary (outer) — SHOVE recharge
+var _hop_ring: CooldownRing        # secondary (thin inner) — HOP recharge
+var _squash_tw: Tween              # owns the coil/stretch/pop scale (one at a time)
+var _cap_freeze := false           # --hitkitcap: hold cooldowns/physics for a staged shot
+
 func setup(p_index: int, p_color: Color, char_scene: PackedScene, p_owner: Node) -> void:
 	index = p_index
 	color = p_color
@@ -90,6 +98,16 @@ func setup(p_index: int, p_color: Color, char_scene: PackedScene, p_owner: Node)
 	ring.material_override = rmat
 	ring.position.y = 0.03
 	add_child(ring)
+
+	# THE COOLDOWN RING — flat, player-colored, concentric just OUTSIDE the
+	# identity feet-ring (outer 0.46). Geometric fill = colorblind-safe. Two
+	# rings max: SHOVE (primary, outer band) + HOP (secondary, thin inner band).
+	_shove_ring = CooldownRing.new()
+	add_child(_shove_ring)
+	_shove_ring.setup(color, 0.64, 0.56, 0.045, 0.9)
+	_hop_ring = CooldownRing.new()
+	add_child(_hop_ring)
+	_hop_ring.setup(color, 0.53, 0.475, 0.045, 0.9)
 
 	model_pivot = Node3D.new()
 	model_pivot.name = "ModelPivot"
@@ -157,6 +175,8 @@ func _update_anim(delta: float) -> void:
 func _physics_process(delta: float) -> void:
 	if not alive:
 		return
+	if _cap_freeze:
+		return   # --hitkitcap: hold cooldowns + physics for a staged shot
 	if _shove_cd > 0.0: _shove_cd -= delta
 	if _hop_cd > 0.0: _hop_cd -= delta
 
@@ -221,7 +241,11 @@ func _do_shove() -> void:
 		_face = aim_face.normalized()
 		if model_pivot:
 			model_pivot.rotation.y = atan2(_face.x, _face.z)
-	Sfx.play("bumper", -4.0)
+	# HIT KIT §B1 Phase 1 — windup whoosh (thud is layered on connect in the
+	# controller's on_shove_landed). Readability arc telegraphs WHEN + WHERE.
+	Sfx.play("bounce", -7.0)
+	if owner_game.has_method("on_shove_fired"):
+		owner_game.on_shove_fired(global_position, _face, color)
 	_cur_anim = "Interact"
 	if anim and anim.has_animation("Interact"):
 		anim.play("Interact")
@@ -248,6 +272,9 @@ func _do_shove() -> void:
 		pto.y = 0.0
 		if pto.length() <= SHOVE_RANGE and _face.dot(pto.normalized()) >= SHOVE_ARC:
 			prop.apply_central_impulse(pto.normalized() * power * 0.5 + Vector3.UP * 0.5)
+	# HIT KIT windup coil (chunky crouch); a landed shove adds a forward
+	# follow-through stretch for mass. Visual only — the hitbox already resolved.
+	windup_coil(hit_any)
 	if hit_any and owner_game.has_method("on_shove_landed"):
 		owner_game.on_shove_landed(global_position)
 
@@ -273,10 +300,59 @@ func hit(dir: Vector3, impulse: float, atk_type: String, atk_index: int, src_nam
 	if owner_game != null:
 		t = owner_game.game_time
 	last_attacker = {"type": atk_type, "index": atk_index, "name": src_name, "color": atk_color, "time": t}
+	# HIT KIT §B1 Phase 2 — victim squash-pop + spark burst along the knockback
+	# (kept even under reduced-motion; a read, not a shake). Covers shoves AND
+	# ghost-fling hits (both route through here). Gated off in the balance sim.
+	if _visuals_on():
+		flash_pop()
+		if owner_game.has_method("spark_at"):
+			var strength := clampf(impulse / (SHOVE_BASE + 5.0 * SHOVE_SPEED_SCALE), 0.5, 1.5)
+			owner_game.spark_at(global_position + Vector3(0, 0.9, 0) - d * 0.3, d, atk_color, strength)
+
+# --- THE ILL WILL HIT KIT (presentation; gated behind owner_game.fx_on()) ---
+func _visuals_on() -> bool:
+	return owner_game != null and owner_game.has_method("fx_on") and owner_game.fx_on()
+
+## HIT KIT §B1 Phase 1 — WINDUP coil (chunky crouch). A landed shove adds a
+## forward follow-through stretch along facing (model_pivot local +Z) for mass;
+## then settles. One tween owns the scale, so pop/coil never fight. Visual only.
+func windup_coil(landed := false) -> void:
+	if model_pivot == null or not _visuals_on():
+		return
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	_squash_tw = create_tween()
+	_squash_tw.tween_property(model_pivot, "scale", Vector3(1.08, 0.90, 1.08), 0.05)
+	if landed:
+		_squash_tw.tween_property(model_pivot, "scale", Vector3(0.92, 1.0, 1.12), 0.06)
+	_squash_tw.tween_property(model_pivot, "scale", Vector3.ONE, 0.11) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## HIT KIT §B1 Phase 2 — victim impact pop (flatten wide, snap back over 0.16s).
+func flash_pop() -> void:
+	if model_pivot == null or not _visuals_on():
+		return
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	model_pivot.scale = Vector3(1.22, 0.85, 1.22)
+	_squash_tw = create_tween()
+	_squash_tw.tween_property(model_pivot, "scale", Vector3.ONE, 0.16) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## THE COOLDOWN RING — SHOVE (outer) + HOP (thin inner) fill 0->ready off their
+## cooldown timers. Geometry = colorblind-safe; hides itself once idle-ready.
+func _drive_rings(delta: float) -> void:
+	if _shove_ring == null:
+		return
+	var reduced := not bool(PartySetup.pref("screen_shake", true))
+	_shove_ring.tick(delta, clampf(1.0 - _shove_cd / SHOVE_CD, 0.0, 1.0), alive, reduced)
+	_hop_ring.tick(delta, clampf(1.0 - _hop_cd / HOP_CD, 0.0, 1.0), alive, reduced)
 
 func _process(delta: float) -> void:
 	if alive:
 		_update_anim(delta)
+	if _visuals_on():
+		_drive_rings(delta)
 
 func _fall() -> void:
 	if not alive:
@@ -309,5 +385,13 @@ func revive(pos: Vector3) -> void:
 	collision_mask = 1 | 2 | 4
 	_anim_lock = 0.0
 	_cur_anim = ""
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	if model_pivot:
+		model_pivot.scale = Vector3.ONE
+	if _shove_ring:
+		_shove_ring.tick(0.0, 1.0, false, false)   # force-hide the cooldown rings
+	if _hop_ring:
+		_hop_ring.tick(0.0, 1.0, false, false)
 	_set_anim("Idle")
 	call_deferred("set", "freeze", false)

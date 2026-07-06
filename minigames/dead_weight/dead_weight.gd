@@ -65,6 +65,9 @@ var _ghost_hold: Dictionary = {}      # ghost bot possession dwell timers
 # fx
 var _shake := 0.0
 var _time_token := 0
+var _last_hitstop := -99.0       # HIT KIT global one-at-a-time hitstop throttle (0.14s)
+var _hitkit_cap := false         # --hitkitcap: stage the HIT KIT / cooldown-ring shots
+var _cap_dir := "verify_out/hitkit"
 
 @onready var cam: Camera3D = $CameraRig/Camera3D
 @onready var banner: Label = $UI/Banner
@@ -248,9 +251,15 @@ func _parse_args() -> void:
 			_aim_probe_on = true
 			_probe_shove = true
 			_aim_probe_deg = float(arg.trim_prefix("--aimshove="))
+		elif arg == "--hitkitcap":
+			_hitkit_cap = true
+		elif arg.begins_with("--outdir="):
+			_cap_dir = arg.trim_prefix("--outdir=")
 	if _aim_probe_on:
 		_dw_probe_manual = not _probe_shove
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
+	if _hitkit_cap:
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://%s" % _cap_dir))
 
 func _seed_from_args() -> int:
 	for arg in OS.get_cmdline_user_args():
@@ -271,6 +280,8 @@ func _default_config() -> Dictionary:
 		count = 3
 	if _aim_probe_on:
 		count = 2   # p0 = KBM human, p1 = inert stand-in (victim / bystander)
+	if _hitkit_cap:
+		count = 2   # p0 = RED attacker, p1 = BLUE victim (staged, frozen)
 	var roster: Array = []
 	PlayerInput.auto_assign(count)
 	if _aim_probe_on:
@@ -368,6 +379,8 @@ func _begin(config: Dictionary) -> void:
 	_start_round()
 	if _aim_probe_on:
 		_run_dw_probe()
+	if _hitkit_cap:
+		_run_hitkit_cap()
 
 func _layout_spawns(count: int) -> void:
 	_spawns.clear()
@@ -945,8 +958,135 @@ func prop_locked_by_spawn(prop: DWProp) -> bool:
 	return false
 
 func on_shove_landed(_pos: Vector3) -> void:
-	_shake = maxf(_shake, 0.28)
-	_time_hit(0.001, 0.05)   # 0.05s hit-pause
+	# Balance mode DISABLES FX so the sim is reproducible — the documented
+	# by-construction argument (dead_weight/VERIFY.md "Known issues": the wall-clock
+	# hit-pause must not run headless or physics alignment drifts run-to-run). This
+	# mirrors the death-FX gating in _on_fighter_fell (both keyed on fx_on()); with
+	# no FX, _shake never fires in --dwbalance, so its rng stream stays deterministic.
+	if not fx_on():
+		return
+	# LIVE: THE ILL WILL HIT KIT — layered thud on connect + (unless reduced-motion)
+	# a capped shake and ONE throttled micro-hitstop (0.15 time_scale, 45ms).
+	Sfx.play("bumper", -3.0)
+	if not _reduced_motion():
+		_shake = maxf(_shake, 0.28)
+		if game_time - _last_hitstop >= 0.14:
+			_last_hitstop = game_time
+			_time_hit(0.15, 0.045)
+
+## Visual FX gate — OFF in the reproducible all-bot balance sim (--dwbalance),
+## so none of the HIT KIT / cooldown-ring code runs there (determinism receipt).
+func fx_on() -> bool:
+	return _balance_rounds == 0
+
+func _reduced_motion() -> bool:
+	return not bool(PartySetup.pref("screen_shake", true))
+
+## HIT KIT §B1 spark burst — a one-shot cone of sparks along the knockback dir at
+## the contact point (kept even under reduced-motion; a read, not a shake).
+func spark_at(pos: Vector3, dir: Vector3, color: Color, strength := 1.0) -> void:
+	if not fx_on():
+		return
+	var p := CPUParticles3D.new()
+	add_child(p)
+	p.global_position = pos
+	p.one_shot = true
+	p.emitting = true
+	p.amount = clampi(int(round(8.0 * strength)), 3, 14)
+	p.lifetime = 0.25
+	p.explosiveness = 1.0
+	p.spread = 55.0
+	var d := dir
+	d.y = 0.0
+	p.direction = (d.normalized() if d.length() > 0.05 else Vector3.UP)
+	p.initial_velocity_min = 4.0
+	p.initial_velocity_max = 8.0
+	p.gravity = Vector3(0, -6.0, 0)
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.09, 0.09, 0.09)
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color.WHITE
+	mat.emission_enabled = true
+	mat.emission = color.lerp(Color.WHITE, 0.5)
+	mat.emission_energy_multiplier = 2.4
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	p.material_override = mat
+	get_tree().create_timer(0.6).timeout.connect(p.queue_free)
+
+## HIT KIT §A6/§B1 readability arc — fired the instant a shove releases (hit OR
+## whiff): a bright windup ring (WHEN) + a directional arc to SHOVE_RANGE (WHERE),
+## in the shover's color. Presentation only; skipped in the balance sim.
+func on_shove_fired(pos: Vector3, dir: Vector3, col: Color) -> void:
+	if not fx_on():
+		return
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length() < 0.01:
+		flat = Vector3(0, 0, 1)
+	flat = flat.normalized()
+	var root := Node3D.new()
+	add_child(root)
+	root.global_position = pos + Vector3(0, 0.12, 0)
+	root.rotation.y = atan2(flat.x, flat.z)
+	var gc := col.lerp(Color(1, 1, 1), 0.35)
+	var arc := MeshInstance3D.new()
+	arc.mesh = _shove_arc_mesh(DWFighter.SHOVE_RANGE)
+	var am := StandardMaterial3D.new()
+	am.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	am.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	am.cull_mode = BaseMaterial3D.CULL_DISABLED
+	am.albedo_color = Color(gc.r, gc.g, gc.b, 0.5)
+	am.emission_enabled = true
+	am.emission = gc
+	am.emission_energy_multiplier = 2.0
+	arc.material_override = am
+	arc.scale = Vector3(0.55, 1.0, 0.55)
+	root.add_child(arc)
+	var ring2 := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.34
+	tm.outer_radius = 0.5
+	ring2.mesh = tm
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rm.albedo_color = Color(1, 1, 1, 0.9)
+	rm.emission_enabled = true
+	rm.emission = gc
+	rm.emission_energy_multiplier = 3.0
+	ring2.material_override = rm
+	ring2.rotation.x = PI / 2.0
+	root.add_child(ring2)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(arc, "scale", Vector3(1.05, 1.0, 1.05), 0.26).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(am, "albedo_color:a", 0.0, 0.28)
+	tw.tween_property(ring2, "scale", Vector3(2.2, 2.2, 2.2), 0.28).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(rm, "albedo_color:a", 0.0, 0.22)
+	tw.chain().tween_callback(root.queue_free)
+
+## Filled front-arc (annular sector, ~160°) opening along local +Z, radius r.
+func _shove_arc_mesh(r: float) -> ImmediateMesh:
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var half := deg_to_rad(80.0)
+	var steps := 16
+	var inner := 0.26
+	for s in steps:
+		var a0 := lerpf(-half, half, s / float(steps))
+		var a1 := lerpf(-half, half, (s + 1) / float(steps))
+		var i0 := Vector3(sin(a0) * inner, 0.0, cos(a0) * inner)
+		var i1 := Vector3(sin(a1) * inner, 0.0, cos(a1) * inner)
+		var o0 := Vector3(sin(a0) * r, 0.0, cos(a0) * r)
+		var o1 := Vector3(sin(a1) * r, 0.0, cos(a1) * r)
+		im.surface_add_vertex(i0)
+		im.surface_add_vertex(o0)
+		im.surface_add_vertex(o1)
+		im.surface_add_vertex(i0)
+		im.surface_add_vertex(o1)
+		im.surface_add_vertex(i1)
+	im.surface_end()
+	return im
 
 func on_possess(_g: DWGhost, _p: DWProp) -> void:
 	if _balance_rounds > 0:
@@ -1182,6 +1322,83 @@ func _dw_grab(tag: String) -> void:
 	img.save_png(path)
 	print("DW_AIMPROBE_CAP ", path)
 
+
+# ---------------------------------------------------------------- HIT KIT capture
+# --hitkitcap (windowed): stages each feel moment (shove coil+arc, victim impact
+# with sparks+pop, cooldown-ring fill, ready-flash) with gameplay frozen, films
+# it, then quits. Verify-only; no effect on a normal match.
+func _settle(sec: float) -> void:
+	await get_tree().create_timer(sec, true, false, true).timeout
+
+func _cap_shot(tag: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		print("DW_HITKIT_SKIP_HEADLESS ", tag)
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := "res://%s/dead_weight_%s.png" % [_cap_dir, tag]
+	img.save_png(path)
+	print("DW_HITKIT_CAP ", path)
+
+func _run_hitkit_cap() -> void:
+	while phase != Phase.ROUND:
+		await get_tree().physics_frame
+	# BLUE attacker (its player-colored rings read clearly on the warm red rug);
+	# RED victim. Staged side-by-side at the same depth so neither body occludes
+	# the other's feet rings.
+	var atk: DWFighter = _fighters[1]     # BLUE attacker
+	var vic: DWFighter = _fighters[0]     # RED victim
+	if atk == null or vic == null:
+		print("DW_HITKIT_CAP_ABORT no fighters")
+		get_tree().quit()
+		return
+	atk._cap_freeze = true
+	vic._cap_freeze = true
+	atk.freeze = true
+	vic.freeze = true
+	var atk_pos := Vector3(-1.55, 0.1, 1.9)
+	var vic_pos := Vector3(1.15, 0.1, 1.9)
+	atk.global_position = atk_pos
+	vic.global_position = vic_pos
+	var face := (vic_pos - atk_pos)
+	face.y = 0.0
+	face = face.normalized()
+	atk._face = face
+	if atk.model_pivot:
+		atk.model_pivot.rotation.y = atan2(face.x, face.z)
+	if vic.model_pivot:
+		vic.model_pivot.rotation.y = atan2(-face.x, -face.z)   # victim faces the shover
+	banner.visible = false
+	await _settle(0.35)
+	# 1) WINDUP COIL + readability arc (BLUE attacker mid crouch-and-lunge at RED)
+	atk.windup_coil(true)
+	on_shove_fired(atk_pos, face, players[1].color)
+	await _settle(0.05)
+	await _cap_shot("hitkit_coil")
+	await _settle(0.3)
+	# 2) IMPACT — RED victim squash-popped + spark cone along the knockback
+	vic.flash_pop()
+	spark_at(vic_pos + Vector3(0, 0.9, 0) - face * 0.3, face, players[1].color, 1.35)
+	await _settle(0.06)
+	await _cap_shot("hitkit_impact")
+	await _settle(0.35)
+	# 3) COOLDOWN RINGS mid-fill — park the victim, center the BLUE attacker so its
+	#    SHOVE (outer) + HOP (thin inner) rings are fully visible and unoccluded.
+	vic.global_position = Vector3(5.6, 0.1, 5.6)
+	atk.global_position = Vector3(0.0, 0.1, 2.0)
+	atk._shove_cd = DWFighter.SHOVE_CD * 0.45
+	atk._hop_cd = DWFighter.HOP_CD * 0.45
+	await _settle(0.14)
+	await _cap_shot("hitkit_ring_fill")
+	# 4) READY-FLASH — drive the SHOVE ring to full so it flashes bright
+	atk._shove_cd = 0.04
+	await _settle(0.06)
+	atk._shove_cd = 0.0
+	await _settle(0.05)
+	await _cap_shot("hitkit_ring_ready")
+	await _settle(0.15)
+	print("DW_HITKIT_CAP_DONE")
+	get_tree().quit()
 
 # ---------------------------------------------------------------- verify hooks
 func get_phase_name() -> String:

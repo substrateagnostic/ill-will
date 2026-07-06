@@ -64,6 +64,14 @@ var _name_label: Label3D
 var _cur_anim := ""
 var _anim_lock := 0.0
 
+# THE ILL WILL HIT KIT / COOLDOWN RING (docs/design/08-gamefeel-research.md).
+# Presentation only — gated behind owner_game.fx_on() so --willtally runs NONE of
+# it (the WILL_TALLY receipt stays byte-identical).
+var _shove_ring: CooldownRing      # primary (outer) — SHOVE recharge
+var _hop_ring: CooldownRing        # secondary (thin inner) — HOP recharge
+var _squash_tw: Tween              # owns the coil/stretch/pop scale (one at a time)
+var _cap_freeze := false           # --hitkitcap: hold cooldowns/physics for a staged shot
+
 func setup(p_index: int, p_color: Color, p_name: String, char_scene: PackedScene, p_owner: Node) -> void:
 	index = p_index
 	color = p_color
@@ -108,6 +116,16 @@ func setup(p_index: int, p_color: Color, p_name: String, char_scene: PackedScene
 	ring.material_override = rmat
 	ring.position.y = 0.03
 	add_child(ring)
+
+	# THE COOLDOWN RING — flat, player-colored, concentric just OUTSIDE the
+	# identity feet-ring (outer 0.46). Two rings max: SHOVE (primary, outer band)
+	# + HOP (secondary, thin inner band). Geometric fill = colorblind-safe.
+	_shove_ring = CooldownRing.new()
+	add_child(_shove_ring)
+	_shove_ring.setup(color, 0.64, 0.56, 0.045, 0.9)
+	_hop_ring = CooldownRing.new()
+	add_child(_hop_ring)
+	_hop_ring.setup(color, 0.53, 0.475, 0.045, 0.9)
 
 	model_pivot = Node3D.new()
 	model_pivot.name = "ModelPivot"
@@ -375,6 +393,8 @@ func set_world_frozen(v: bool) -> void:
 func _physics_process(delta: float) -> void:
 	if not alive or world_frozen:
 		return
+	if _cap_freeze:
+		return   # --hitkitcap: hold cooldowns + physics for a staged shot
 	if _shove_cd > 0.0: _shove_cd -= delta
 	if _hop_cd > 0.0: _hop_cd -= delta
 	if _squish_immune > 0.0: _squish_immune -= delta
@@ -430,13 +450,17 @@ func _do_shove() -> void:
 		Sfx.play("invalid", -6.0)
 		return
 	_shove_cd = SHOVE_CD
-	Sfx.play("bumper", -4.0)
+	# HIT KIT §B1 Phase 1 — windup whoosh (the thud is layered on connect in the
+	# controller's on_shove_landed).
+	Sfx.play("bounce", -7.0)
 	_cur_anim = "Interact"
 	if anim and anim.has_animation("Interact"):
 		anim.play("Interact")
 	_anim_lock = 0.35
 	# READABILITY (presentation only — no change to range/power/timing): flash a
 	# directional arc so you can see WHEN the shove fires and WHERE it reaches.
+	# This is the KIT's swing-arc element (already in-tree); the coil below adds
+	# the anticipation, and the victim pop/spark land in hit().
 	if owner_game != null and owner_game.has_method("on_shove_fired"):
 		owner_game.on_shove_fired(global_position, _face, color)
 	var power := SHOVE_BASE + speed() * SHOVE_SPEED_SCALE
@@ -452,6 +476,9 @@ func _do_shove() -> void:
 			continue
 		other.call_deferred("hit", to, power, "shove", index, owner_game.player_name(index), color)
 		hit_any = true
+	# HIT KIT windup coil (chunky crouch); a landed shove adds a forward
+	# follow-through stretch for mass. Visual only — hitbox already resolved.
+	windup_coil(hit_any)
 	if hit_any and owner_game.has_method("on_shove_landed"):
 		owner_game.on_shove_landed(global_position)
 
@@ -484,6 +511,53 @@ func hit(dir: Vector3, impulse: float, atk_type: String, atk_index: int, src_nam
 	if owner_game != null:
 		t = owner_game.game_time
 	last_attacker = {"type": atk_type, "index": atk_index, "name": src_name, "color": atk_color, "time": t}
+	# HIT KIT §B1 Phase 2 — victim squash-pop + spark burst along the knockback
+	# (kept even under reduced-motion). Gated off in --willtally.
+	if _visuals_on():
+		flash_pop()
+		if owner_game.has_method("spark_at"):
+			var strength := clampf(impulse / (SHOVE_BASE + 5.0 * SHOVE_SPEED_SCALE), 0.5, 1.5)
+			owner_game.spark_at(global_position + Vector3(0, 0.9, 0) - d * 0.3, d, atk_color, strength)
+
+# --- THE ILL WILL HIT KIT (presentation; gated behind owner_game.fx_on()) ---
+func _visuals_on() -> bool:
+	return owner_game != null and owner_game.has_method("fx_on") and owner_game.fx_on()
+
+## HIT KIT §B1 Phase 1 — WINDUP coil (chunky crouch). A landed shove adds a
+## forward follow-through stretch along facing (model_pivot local +Z); then
+## settles. One tween owns the scale so pop/coil never fight. Visual only.
+func windup_coil(landed := false) -> void:
+	if model_pivot == null or not _visuals_on():
+		return
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	_squash_tw = create_tween()
+	_squash_tw.tween_property(model_pivot, "scale", Vector3(1.08, 0.90, 1.08), 0.05)
+	if landed:
+		_squash_tw.tween_property(model_pivot, "scale", Vector3(0.92, 1.0, 1.12), 0.06)
+	_squash_tw.tween_property(model_pivot, "scale", Vector3.ONE, 0.11) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## HIT KIT §B1 Phase 2 — victim impact pop (flatten wide, snap back over 0.16s).
+func flash_pop() -> void:
+	if model_pivot == null or not _visuals_on():
+		return
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	model_pivot.scale = Vector3(1.22, 0.85, 1.22)
+	_squash_tw = create_tween()
+	_squash_tw.tween_property(model_pivot, "scale", Vector3.ONE, 0.16) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## THE COOLDOWN RING — SHOVE (outer) + HOP (thin inner) fill 0->ready off their
+## cooldown timers. Hidden during a will-draft world-freeze and once idle-ready.
+func _drive_rings(delta: float) -> void:
+	if _shove_ring == null:
+		return
+	var reduced := not bool(PartySetup.pref("screen_shake", true))
+	var active := alive and not world_frozen
+	_shove_ring.tick(delta, clampf(1.0 - _shove_cd / SHOVE_CD, 0.0, 1.0), active, reduced)
+	_hop_ring.tick(delta, clampf(1.0 - _hop_cd / HOP_CD, 0.0, 1.0), active, reduced)
 
 ## A soft push (ghost gust). Never blocked by shield; small, aimable spite.
 func gust_push(dir: Vector3, impulse: float, ghost_index: int, ghost_name: String, ghost_color: Color) -> void:
@@ -492,11 +566,16 @@ func gust_push(dir: Vector3, impulse: float, ghost_index: int, ghost_name: Strin
 	dir.y = 0.0
 	if dir.length() < 0.01:
 		return
-	apply_central_impulse(dir.normalized() * impulse + Vector3.UP * 0.8)
+	var gd := dir.normalized()
+	apply_central_impulse(gd * impulse + Vector3.UP * 0.8)
 	var t := 0.0
 	if owner_game != null:
 		t = owner_game.game_time
 	last_attacker = {"type": "gust", "index": ghost_index, "name": ghost_name, "color": ghost_color, "time": t}
+	# A gust is SOFT spite — a small readability spark only (NO hitstop, NO pop,
+	# per the research table). Gated off in --willtally.
+	if _visuals_on() and owner_game.has_method("spark_at"):
+		owner_game.spark_at(global_position + Vector3(0, 0.8, 0) - gd * 0.3, gd, ghost_color, 0.5)
 
 ## Haunted wisp contact: a stumble, not a launch.
 func stumble() -> void:
@@ -527,6 +606,8 @@ func squish() -> void:
 	_die("squish")
 
 func _process(delta: float) -> void:
+	if _visuals_on():
+		_drive_rings(delta)
 	if alive and not world_frozen:
 		_update_anim(delta)
 		if _shield_orb.visible:
@@ -566,8 +647,14 @@ func revive(pos: Vector3) -> void:
 	collision_mask = 1 | 2
 	_anim_lock = 0.0
 	_cur_anim = ""
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
 	if model_pivot:
 		model_pivot.scale = Vector3.ONE
+	if _shove_ring:
+		_shove_ring.tick(0.0, 1.0, false, false)   # force-hide the cooldown rings
+	if _hop_ring:
+		_hop_ring.tick(0.0, 1.0, false, false)
 	if anim:
 		anim.speed_scale = 1.0
 	clear_bless()
