@@ -44,7 +44,7 @@ const GRAVITY := 24.0
 const SPAWN_PROTECT := 1.0
 const STAGGER_T := 0.18
 const TURN_LERP := 18.0
-const MODEL_YAW_OFFSET := PI          # KayKit adventurers face +Z natively
+const MODEL_YAW_OFFSET := 0.0         # KayKit adventurers face +Z; atan2(x,z) needs no flip (they moonwalked with PI)
 
 # ---- v1.1 heavy / parry / riposte ----
 const HEAVY_CHARGE_T := 0.35          # hold A this long to arm a heavy

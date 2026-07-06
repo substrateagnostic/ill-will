@@ -14,7 +14,7 @@ extends Node3D
 ## assertion stays honest (transform == recorded sample, max_err 0.000000).
 
 const REC_HZ := 30.0
-const MODEL_YAW_OFFSET := PI          # must match EchoFighter
+const MODEL_YAW_OFFSET := 0.0         # must match EchoFighter
 
 # anim-state ids mirror EchoFighter
 const ST_IDLE := 0

@@ -2,7 +2,7 @@ extends Node3D
 ## THE ESTATE — night-loop shell: GROUNDS -> AUCTION -> GAME -> RECKONING.
 ## v1 "clipboard" grounds (panel UI); walkable grounds is phase E2.
 
-enum Phase { LOBBY, SELECTOR, GROUNDS, TILES, AUCTION, CHOOSING, GAME, RECKONING, NIGHT_END }
+enum Phase { LOBBY, SELECTOR, GROUNDS, TILES, AUCTION, CHOOSING, GAME, RECKONING, NIGHT_END, TITLE }
 
 const TILE_COST := 2
 
@@ -70,12 +70,19 @@ func _ready() -> void:
 			start_night_now = true
 		elif arg.begins_with("--pool="):
 			pool_override = Array(arg.trim_prefix("--pool=").split(","))
+		elif arg.begins_with("--exhibtest="):
+			var gid := arg.trim_prefix("--exhibtest=")
+			get_tree().create_timer(1.2).timeout.connect(func():
+				exhibition = true
+				_launch_game(gid))
 		elif arg == "--howtotest":
 			get_tree().create_timer(1.2).timeout.connect(func():
+				_hide_title()
 				_show_howto("orbital")
 				VerifyCapture.snap("howto"))
 		elif arg == "--wardrobetest":
 			get_tree().create_timer(1.2).timeout.connect(func():
+				_enter_lobby()
 				EstateState.legacy[0] = 50
 				_build_wardrobe_panel()
 				_wardrobe_tap("viking_helm")
@@ -101,12 +108,105 @@ func _ready() -> void:
 			_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.5)
 		_enter_grounds()
 	else:
-		_enter_lobby()
+		_enter_title()
 
-## ----- LOBBY (the estate IS the main menu) -----
+## ----- TITLE SCREEN (front door; PLAY -> lobby setup -> the night) -----
+
+var _title_layer: Control = null
+
+func _enter_title() -> void:
+	phase = Phase.TITLE
+	Music.play_slot("lobby")
+	$UI/TopBar.visible = false
+	phase_panel.visible = false
+	banner.visible = false
+	if _title_layer != null:
+		_title_layer.visible = true
+		return
+	_title_layer = Control.new()
+	_title_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	$UI.add_child(_title_layer)
+	if ResourceLoader.exists("res://assets/ui/title_bg.png"):
+		var bg := TextureRect.new()
+		bg.texture = load("res://assets/ui/title_bg.png")
+		bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bg.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		_title_layer.add_child(bg)
+	var shade := ColorRect.new()
+	shade.color = Color(0.05, 0.03, 0.08, 0.45)
+	shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_title_layer.add_child(shade)
+	var box := VBoxContainer.new()
+	box.set_anchors_preset(Control.PRESET_CENTER)
+	box.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	box.grow_vertical = Control.GROW_DIRECTION_BOTH
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 14)
+	_title_layer.add_child(box)
+	var logo := Label.new()
+	logo.text = "ILL WILL"
+	logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if ResourceLoader.exists("res://assets/fonts/LuckiestGuy-Regular.ttf"):
+		logo.add_theme_font_override("font", load("res://assets/fonts/LuckiestGuy-Regular.ttf"))
+	logo.add_theme_font_size_override("font_size", 120)
+	logo.add_theme_color_override("font_color", Color(1, 0.85, 0.2))
+	logo.add_theme_color_override("font_outline_color", Color(0.2, 0.12, 0.05))
+	logo.add_theme_constant_override("outline_size", 22)
+	box.add_child(logo)
+	var sub := Label.new()
+	sub.text = "a party nobody asked for"
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.add_theme_font_size_override("font_size", 20)
+	sub.modulate.a = 0.85
+	box.add_child(sub)
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0, 18)
+	box.add_child(spacer)
+	var play := Button.new()
+	play.text = "PLAY"
+	play.custom_minimum_size = Vector2(360, 92)
+	play.add_theme_font_size_override("font_size", 40)
+	play.pressed.connect(func():
+		Sfx.play("confirm")
+		_enter_lobby())
+	var pc := CenterContainer.new()
+	pc.add_child(play)
+	box.add_child(pc)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 18)
+	var settings := Button.new()
+	settings.text = "SETTINGS"
+	settings.custom_minimum_size = Vector2(200, 56)
+	settings.pressed.connect(func():
+		Sfx.play("card")
+		PartySetup.toggle())
+	row.add_child(settings)
+	var mini := Button.new()
+	mini.text = "MINIGAMES"
+	mini.custom_minimum_size = Vector2(200, 56)
+	mini.pressed.connect(func():
+		Sfx.play("card")
+		_enter_selector())
+	row.add_child(mini)
+	box.add_child(row)
+	var hint := Label.new()
+	hint.text = "PLAY = seats, night length, the estate, the whole ILL WILL night"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.modulate.a = 0.6
+	box.add_child(hint)
+
+func _hide_title() -> void:
+	if _title_layer != null:
+		_title_layer.visible = false
+
+## ----- LOBBY (PLAY setup: seats, night length, wardrobe) -----
 
 func _enter_lobby() -> void:
 	phase = Phase.LOBBY
+	_hide_title()
 	Music.play_slot("lobby")
 	$UI/TopBar.visible = false
 	_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0)
@@ -175,6 +275,11 @@ func _build_lobby_panel() -> void:
 	ward_btn.text = "WARDROBE"
 	ward_btn.pressed.connect(_build_wardrobe_panel)
 	btn_row.add_child(ward_btn)
+	var title_btn := Button.new()
+	title_btn.custom_minimum_size = Vector2(120, 56)
+	title_btn.text = "◄ TITLE"
+	title_btn.pressed.connect(_enter_title)
+	btn_row.add_child(title_btn)
 	phase_box.add_child(btn_row)
 	var quote := Label.new()
 	quote.text = "“%s”  — The Executor" % _executor_greeting()
@@ -208,6 +313,7 @@ func _start_night_from_lobby() -> void:
 
 func _enter_selector() -> void:
 	phase = Phase.SELECTOR
+	_hide_title()
 	Music.play_slot("lobby")
 	Sfx.play("card")
 	_clear_panel("PICK A GAME — exhibition match, no stakes", Color(0.9, 0.95, 0.9))
@@ -230,8 +336,8 @@ func _enter_selector() -> void:
 	center.add_child(grid)
 	phase_box.add_child(center)
 	var back := Button.new()
-	back.text = "BACK"
-	back.pressed.connect(_enter_lobby)
+	back.text = "BACK TO TITLE"
+	back.pressed.connect(_enter_title)
 	phase_box.add_child(back)
 
 ## How-to-Play cards (UFO 50 pattern): goal + LIVE controls per seat via
@@ -836,6 +942,8 @@ func _launch_game(id: String, practice := false) -> void:
 		return
 	phase = Phase.GAME
 	Music.stop()
+	_hide_title()
+	banner.visible = false
 	_practice = practice
 	phase_panel.visible = false
 	Sfx.play("confirm")

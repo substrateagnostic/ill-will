@@ -34,10 +34,10 @@ enum Phase { WAITING, INTRO, CASTING, REHEARSAL, VOTE, RESOLVE, ROUND_END, MATCH
 enum Cast { CALL, PEEK }
 
 const CHAR_FALLBACKS := [
-	"res://assets/models/kaykit/Knight.glb",
-	"res://assets/models/kaykit/Rogue.glb",
-	"res://assets/models/kaykit/Mage.glb",
 	"res://assets/models/kaykit/Barbarian.glb",
+	"res://assets/models/kaykit/Knight.glb",
+	"res://assets/models/kaykit/Mage.glb",
+	"res://assets/models/kaykit/Rogue.glb",
 ]
 
 ## Tonight's repertory. Each play: a title and six on-script cue words. Words

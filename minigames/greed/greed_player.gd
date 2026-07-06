@@ -21,7 +21,7 @@ const TURN_LERP := 16.0
 const TACKLE_LOCK := 0.28              # rooted while a tackle swing animates
 const STUN_TIME := 1.0                 # stunned 1s after being dropped (spec)
 const KNOCK_DECAY := 26.0
-const MODEL_YAW_OFFSET := PI           # KayKit adventurers face +Z natively
+const MODEL_YAW_OFFSET := 0.0          # KayKit adventurers face +Z; atan2(x,z) needs no flip
 
 var player_index := 0
 var color := Color.WHITE

@@ -294,7 +294,7 @@ func vanish() -> void:
 ## Compose world transform from the disc: pawn stands ON the tilted disc,
 ## leaning with it, rotated around the local up axis to face `facing`.
 func _apply_platter_transform() -> void:
-	var yaw := atan2(-facing.x, -facing.y)
+	var yaw := atan2(facing.x, facing.y)
 	var xf := _disc.global_transform
 	global_transform = Transform3D(
 		xf.basis * Basis(Vector3.UP, yaw),
