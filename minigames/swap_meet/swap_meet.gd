@@ -39,6 +39,9 @@ const FINISH_PTS := [5, 3, 2, 1]
 const ORB_CD := 3.0
 const SWAP_IMMUNITY := 1.0
 const FREEZE_TICKS := 5          # 0.083s hit-stop on every swap
+const PHOTO_FREEZE_TICKS := 10   # doc 09 §7.1: 10-tick line freeze on a photo finish
+const PHOTO_MARGIN_UNITS := 1.2  # doc 09 §7.1: arm only when P2 is within 1.2 progress-units
+const OVERTAKE_STING_CD := 1.5   # throttle so drafting duels don't machine-gun the sting
 const GOLD_EVERY := 40.0
 const GOLD_SPOT_FRACS := [0.16, 0.38, 0.60, 0.84]
 const BOOM_LEN := 4.9
@@ -117,6 +120,14 @@ var _row_labels: Array = []
 var _event_until := 0.0
 var _banner_gen := 0
 
+# --- overtake sting + photo finish (doc 09 §7.1-2, presentation only) ---
+var _sting_player: AudioStreamPlayer = null   # dedicated pitched 'sink' = lead-change identity
+var _overtake_next := 0.0                      # sim-clock gate for the sting cooldown
+var _crown_flash_tw: Tween = null
+var _flash_rect: ColorRect = null              # flashbulb overlay (paparazzi frame)
+var _photofin := false                         # verify demo: forced close finish
+var _photo_shots := false                      # capture the photo-finish frames (demo)
+
 func _ready() -> void:
 	_parse_args()
 	_build_static()
@@ -142,6 +153,12 @@ func _parse_args() -> void:
 			time_cap = float(arg.trim_prefix("--timecap="))
 		elif arg.begins_with("--swaptest="):
 			_test_mode = arg.trim_prefix("--swaptest=")
+		elif arg == "--photofin":
+			# verify demo: two bot karts staged a hair apart on the final
+			# approach so a genuine photo finish fires through the real path
+			_photofin = true
+			_photo_shots = true
+			bots_enabled = true
 		elif arg.begins_with("--shotsec="):
 			for s in arg.trim_prefix("--shotsec=").split(","):
 				_shotsec.append(float(s))
@@ -214,6 +231,9 @@ func begin(cfg: Dictionary) -> void:
 	if _test_mode != "":
 		_setup_test()
 		return
+	if _photofin:
+		_setup_photofin()
+		return
 	phase = Phase.INTRO
 	_intro_t = 0.0
 	_intro_stage = -1
@@ -255,6 +275,17 @@ func _build_static() -> void:
 	add_child(_fx_root)
 	_build_booms()
 	_build_ui()
+	_build_sting_player()
+
+## A dedicated one-shot for the overtake sting: the same 'sink' asset the
+## Sfx bank uses, but pitched up to 1.3 (doc 09 §7.2) so a lead change has
+## its own audio identity, distinct from the swap's own 1.0-pitch sink.
+func _build_sting_player() -> void:
+	_sting_player = AudioStreamPlayer.new()
+	_sting_player.bus = "SFX"
+	var key: String = Sfx.BANK["sink"][0]
+	_sting_player.stream = load("res://assets/audio/%s.ogg" % key)
+	add_child(_sting_player)
 
 ## Windmill boom hazards at the two pinch points: a candy-striped arm
 ## sweeps across the track; getting clipped knocks you sideways
@@ -619,11 +650,102 @@ func _finish_kart(kart: SwapKart) -> void:
 	kart.finish_place = _finish_count
 	_points[kart.index] += FINISH_PTS[kart.finish_place - 1]
 	kart.cheer_forever()
-	Sfx.play("round_over")
-	_confetti(kart.center(), kart.color)
-	_flash_banner("[color=%s]%s[/color] FINISHES P%d!" % [kart.color.to_html(false), kart.pname, kart.finish_place], 1.6)
+	# The race winner crossing with P2 a kart-length behind gets the money
+	# shot instead of a plain banner (doc 09 §7.1). Everything below is
+	# presentation - placements/points/physics are already decided above.
+	var photo := kart.finish_place == 1 and _try_photo_finish(kart)
+	if not photo:
+		Sfx.play("round_over")
+		_confetti(kart.center(), kart.color)
+		_flash_banner("[color=%s]%s[/color] FINISHES P%d!" % [kart.color.to_html(false), kart.pname, kart.finish_place], 1.6)
 	print("FINISH t=%.1f p=%d place=%d laps=%s" % [race_t, kart.index, kart.finish_place, str(kart.lap_times)])
 	_update_score_rows()
+
+## Arm+fire the photo finish if the winner just pipped the chaser. Returns
+## true if the photo-finish presentation took over the finish beat. Reads
+## only decided state (progress order); it never mutates the sim.
+func _try_photo_finish(winner: SwapKart) -> bool:
+	var chaser: SwapKart = null
+	for i in _positions_list():
+		var k: SwapKart = karts[i]
+		if not k.finished:
+			chaser = k
+			break
+	if chaser == null:
+		return false
+	var line := laps_total * track.total_len
+	var margin_units: float = maxf(line - chaser.progress, 0.0)
+	if margin_units > PHOTO_MARGIN_UNITS:
+		return false
+	# project the gap into a time delta from the chaser's current pace
+	var est_delta: float = margin_units / maxf(absf(chaser.speed), 3.0)
+	_photo_finish(winner, chaser, margin_units, est_delta)
+	return true
+
+## The freeze/flash/reveal sequence. Uses the tick-counted freeze (never
+## Engine.time_scale) so it adds zero sim-time: placements stay identical.
+func _photo_finish(winner: SwapKart, chaser: SwapKart, margin_units: float, est_delta: float) -> void:
+	_freeze_ticks = maxi(_freeze_ticks, PHOTO_FREEZE_TICKS)   # 10-tick line freeze
+	_shake = maxf(_shake, 0.5)
+	_fov_punch(38.0, 0.85)                                    # camera punch to the line
+	_flashbulb()
+	Sfx.play("bumper", -2.0)
+	_flash_banner("[color=#ffd84d]PHOTO FINISH![/color]", 3.4)
+	var line_pos := winner.center()
+	_confetti(line_pos, winner.color)                          # double confetti (doc §7.1)
+	_confetti(line_pos + Vector3(1.4, 0.6, 0.0), chaser.color)
+	# staged winner reveal on a process-always timer, so it still fires
+	# while the physics tick loop is frozen
+	var wname := winner.pname
+	var wcol := winner.color.to_html(false)
+	get_tree().create_timer(0.55, true, false, true).timeout.connect(func() -> void:
+		_flashbulb()
+		Sfx.play("match_win", -3.0)
+		_confetti(winner.center(), winner.color)
+		_confetti(winner.center() + Vector3(-1.4, 0.6, 0.0), Color(1, 0.9, 0.4))
+		_flash_banner("[color=#ffd84d]PHOTO FINISH[/color]\n[font_size=30][color=#%s]%s[/color] BY %.1fs![/font_size]" % [wcol, wname, est_delta], 3.0))
+	print("PHOTO_FINISH t=%.1f winner=%d chaser=%d margin=%.2fu delta=%.2fs" %
+		[race_t, winner.index, chaser.index, margin_units, est_delta])
+	if _photo_shots:
+		_schedule_photo_shots()
+
+## FOV zoom-in and back on the fixed overhead cam - a "punch" to the line.
+## Runs on the render tick, so it animates through the sim freeze.
+func _fov_punch(target_fov: float, dur: float) -> void:
+	if _cam == null:
+		return
+	var tw := create_tween()
+	tw.tween_property(_cam, "fov", target_fov, dur * 0.32).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_cam, "fov", CAM_FOV, dur * 0.68).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+
+## A single white paparazzi pop over the viewport.
+func _flashbulb() -> void:
+	if _flash_rect == null:
+		return
+	_flash_rect.color = Color(1, 1, 1, 0.0)
+	_flash_rect.visible = true
+	var tw := create_tween()
+	tw.tween_property(_flash_rect, "color:a", 0.85, 0.03)
+	tw.tween_property(_flash_rect, "color:a", 0.0, 0.32)
+	tw.tween_callback(func() -> void:
+		if _flash_rect != null:
+			_flash_rect.visible = false)
+
+func _schedule_photo_shots() -> void:
+	# beat 1: mid-freeze, karts pinned at the line under the PHOTO FINISH banner
+	get_tree().create_timer(0.12, true, false, true).timeout.connect(func() -> void: _capture_photo(1))
+	# beat 2: the winner reveal + confetti
+	get_tree().create_timer(0.78, true, false, true).timeout.connect(func() -> void: _capture_photo(2))
+	if _autoquit:
+		get_tree().create_timer(1.7, true, false, true).timeout.connect(func() -> void: get_tree().quit())
+
+func _capture_photo(n: int) -> void:
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
+	var path := "res://verify_out/photofinish_%02d.png" % n
+	img.save_png(path)
+	print("PHOTOFINISH_SHOT ", path)
 
 ## --- kart-kart bumps ------------------------------------------------------------
 
@@ -961,9 +1083,13 @@ func leader_unfinished() -> int:
 func _update_crown() -> void:
 	var lead := leader_unfinished()
 	if lead != _crown_on:
+		var prev := _crown_on
 		_crown_on = lead
 		if lead >= 0 and phase == Phase.PLAY:
 			_flash_event("%s LEADS - AIM AT THE CROWN" % _names[lead], _colors[lead])
+			# a genuine overtake (not the opening leader from -1): sting it
+			if prev >= 0:
+				_overtake_sting()
 	if lead < 0:
 		_crown.visible = false
 		return
@@ -971,6 +1097,26 @@ func _update_crown() -> void:
 	_crown.visible = phase != Phase.WAIT
 	_crown.global_position = kart.global_position + Vector3(0, 1.42 + 0.08 * sin(now * 4.0), 0)
 	_crown.rotation.y += get_physics_process_delta_time() * 1.5
+
+## The overtake sting (doc 09 §7.2): a pitched 'sink' + a crown pop, gated
+## by a cooldown on the sim clock so a drafting duel of rapid swaps can't
+## machine-gun it. Presentation only - no sim state touched.
+func _overtake_sting() -> void:
+	if now < _overtake_next:
+		return
+	_overtake_next = now + OVERTAKE_STING_CD
+	if _sting_player != null:
+		_sting_player.pitch_scale = 1.3
+		_sting_player.play()
+	# crown flash x1.5 for 0.4s
+	var base := Vector3.ONE * 2.1
+	if _crown_flash_tw != null and _crown_flash_tw.is_valid():
+		_crown_flash_tw.kill()
+	_crown.scale = base * 1.5
+	_crown_flash_tw = create_tween()
+	_crown_flash_tw.tween_property(_crown, "scale", base, 0.4) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	print("OVERTAKE t=%.1f leader=%d" % [race_t, _crown_on])
 
 ## --- race end -------------------------------------------------------------------------
 
@@ -1121,6 +1267,35 @@ func _test_tick() -> void:
 			_test_stage = 1
 			karts[0].orb_cd = 0.0
 			_throw_orb(karts[0])
+
+## Verify demo (--photofin): stage two bot karts a hair apart on the final
+## approach to the line, laps set so the next crossing finishes the race.
+## They race the last ~2 units and pip each other -> the real _finish_kart
+## path fires the photo finish. Run with --players=2. Not a sim path used
+## by normal play, so it can't affect same-seed determinism.
+func _setup_photofin() -> void:
+	laps_total = 1
+	phase = Phase.PLAY
+	var line := track.total_len
+	var setups := [[2.2, -0.5], [3.0, 0.5]]   # [distance before line, lateral]
+	var n := mini(karts.size(), 2)
+	for i in n:
+		var kart: SwapKart = karts[i]
+		var s0: float = line - float(setups[i][0])
+		kart.place_at(s0, float(setups[i][1]))
+		kart.progress = s0            # a hair under one full lap
+		kart.last_s_eff = s0
+		kart.laps_hw = 0              # next line-cross => finish (laps_total == 1)
+		kart.gates_credited = _gates_below(kart.progress)
+		kart.orb_cd = 999.0           # no orb throws to disturb the run
+		kart.locked = false
+	for i in range(2, karts.size()):
+		var k: SwapKart = karts[i]
+		k.place_at(line - 16.0, 1.6)  # parked well back, out of the way
+		k.locked = true
+		k.parked = true
+	_update_score_rows()
+	print("PHOTOFIN demo armed laps=%d line=%.1f seats=%d" % [laps_total, line, n])
 
 ## --- FX -------------------------------------------------------------------------------------
 
@@ -1286,6 +1461,14 @@ func _build_ui() -> void:
 	_event_label.offset_top = 88
 	_event_label.visible = false
 	ui.add_child(_event_label)
+	# flashbulb overlay (photo finish). Added BEFORE the banner so the
+	# "PHOTO FINISH" text still reads on top of the white pop.
+	_flash_rect = ColorRect.new()
+	_flash_rect.color = Color(1, 1, 1, 0.0)
+	_flash_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_flash_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_flash_rect.visible = false
+	ui.add_child(_flash_rect)
 	_banner = RichTextLabel.new()
 	_banner.bbcode_enabled = true
 	_banner.fit_content = true
