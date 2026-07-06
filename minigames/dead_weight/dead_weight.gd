@@ -53,6 +53,7 @@ var _decider := "none"                # what ended the round (balance metric)
 var _started := false
 var _all_bots := false
 var _aim_probe_on := false
+var _dead_hint_demo := false     # --deadhint: seat 0 = KBM human, starts as a ghost
 var _aim_probe_deg := 0.0
 var _probe_shove := false        # false => poltergeist fling probe, true => living shove
 var _dw_probe_manual := false    # skip driving p0 (fling probe steers it directly)
@@ -232,6 +233,8 @@ func _parse_args() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg == "--dwbots":
 			_all_bots = true
+		elif arg == "--deadhint":
+			_dead_hint_demo = true
 		elif arg.begins_with("--dwbalance="):
 			_balance_rounds = maxi(1, int(arg.trim_prefix("--dwbalance=")))
 			_all_bots = true
@@ -275,14 +278,21 @@ func _default_config() -> Dictionary:
 		PlayerInput.assign(1, -99)
 		var av := deg_to_rad(_aim_probe_deg)
 		PlayerInput.set_debug_aim(0, Vector3(sin(av), 0.0, cos(av)))
+	if _dead_hint_demo:
+		PlayerInput.assign(0, -4)   # seat 0 is a KBM human so its ghost hint reads MOUSE/LMB
 	for i in count:
+		var seat_bot: bool = PlayerInput.standalone_bot_default(i)
+		if _aim_probe_on:
+			seat_bot = false
+		elif _dead_hint_demo:
+			seat_bot = (i != 0)   # seat 0 human (dead), the rest bots so the round plays
 		roster.append({
 			"index": i,
 			"name": GameState.PLAYER_NAMES[i],
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": "",
 			"device": PlayerInput.device_of(i),
-			"bot": false if _aim_probe_on else PlayerInput.standalone_bot_default(i),
+			"bot": seat_bot,
 		})
 	# roles: default all living; balance = last player is a permanent ghost;
 	# --dwghosts=N starts the last N players as ghosts.
@@ -295,6 +305,8 @@ func _default_config() -> Dictionary:
 			roles[i] = "ghost"
 	if _aim_probe_on and not _probe_shove:
 		roles[0] = "ghost"   # p0 rises as a poltergeist to fling furniture
+	if _dead_hint_demo:
+		roles[0] = "ghost"   # p0 (KBM human) starts dead so the ghost hint shows
 	return {"roster": roster, "rounds": rounds_total, "rng_seed": _seed_from_args(),
 		"practice": false, "roles": roles}
 
@@ -351,7 +363,7 @@ func _begin(config: Dictionary) -> void:
 	_layout_spawns(players.size())
 	_build_props()
 	_rebuild_scoreboard()
-	hint_label.text = "A = SHOVE   B = HOP   ·   THE DEAD POSSESS THE FURNITURE"
+	hint_label.text = HINT_LIVING
 	round_index = 0
 	_start_round()
 	if _aim_probe_on:
@@ -436,6 +448,7 @@ func _start_round() -> void:
 			f.revive(_spawns[i] + jitter)
 	round_label.text = "ROUND %d / %d" % [round_index + 1, rounds_total]
 	_rebuild_scoreboard()
+	_refresh_hint()
 	if _balance_rounds == 0:
 		_flash_banner("ROUND %d\nFIGHT!" % (round_index + 1), Color(1, 0.85, 0.2), 1.6)
 
@@ -510,6 +523,7 @@ func _on_fighter_fell(index: int) -> void:
 	# rise as a poltergeist for the rest of the round
 	_spawn_ghost(index, death_pos)
 	_rebuild_scoreboard()
+	_refresh_hint()
 	call_deferred("_check_round_end")
 
 func _check_round_end() -> void:
@@ -680,6 +694,38 @@ func _clear_ghosts() -> void:
 		g.queue_free()
 	_ghosts.clear()
 
+const HINT_LIVING := "A = SHOVE   B = HOP   ·   THE DEAD POSSESS THE FURNITURE"
+
+## Swap the shared hint bar to a dead-state legend the moment a HUMAN becomes a
+## poltergeist — the dead need the twin-stick controls spelled out (LEFT drifts,
+## RIGHT aims, A flings). Bots never trigger this, so bot demos keep HINT_LIVING.
+func _refresh_hint() -> void:
+	if hint_label == null:
+		return
+	var dead_humans: Array = []
+	for i in players.size():
+		if i < players.size() and not players[i].is_bot and _ghosts.has(i):
+			dead_humans.append(i)
+	if dead_humans.is_empty():
+		hint_label.text = HINT_LIVING
+	elif dead_humans.size() == 1:
+		hint_label.text = _ghost_hint_line(int(dead_humans[0]))
+	else:
+		hint_label.text = "YOU'RE DEAD — MOVE drift the furniture · AIM · A = FLING · B = release"
+
+## Per-player poltergeist control line with LIVE bindings (device-accurate).
+func _ghost_hint_line(i: int) -> String:
+	var d: int = PlayerInput.device_of(i)
+	var mv: String = PlayerInput.describe_binding(i, "move")
+	var fling: String = PlayerInput.describe_binding(i, "a")
+	var rel: String = PlayerInput.describe_binding(i, "b")
+	var aim := "MOUSE"
+	if d >= 0:
+		aim = "RIGHT STICK"
+	elif d != -4:
+		aim = mv   # keyboard halves: no aim channel, fling follows the drift
+	return "%s IS DEAD — %s drift · %s aim · %s FLING · %s release" % [players[i].name, mv, aim, fling, rel]
+
 # ---------------------------------------------------------------- input/AI
 func _physics_process(delta: float) -> void:
 	game_time += delta
@@ -732,14 +778,25 @@ func _drive_ghost(i: int) -> void:
 	if players[i].is_bot:
 		_bot_ghost(g)
 	else:
+		# LEFT channel = MOVE: WASD / left stick both free-fly the wisp AND drift a
+		# possessed prop (the owner's convention fix — the dead now steer with the
+		# left hand, not the cursor).
 		g.move_input = PlayerInput.get_move(i)
-		# while possessing, fling the prop toward the cursor (anchor on the prop);
-		# free-flying stays WASD. ZERO for non-KBM => unchanged move_input drive.
+		# RIGHT channel = AIM the fling: mouse cursor (KBM) or right stick (pad),
+		# anchored on the prop. ZERO for keyboard halves / bots => fling falls back
+		# to the drift direction. Only sampled while possessing.
 		if g.possessing != null:
-			g.aim_drive = PlayerInput.get_aim_dir(i, g.possessing.global_position, cam)
+			var aim3 := PlayerInput.get_aim_dir(i, g.possessing.global_position, cam)  # KBM cursor
+			if aim3 == Vector3.ZERO:
+				var st := PlayerInput.get_aim_stick(i)                                 # pad right stick
+				if st != Vector2.ZERO:
+					aim3 = Vector3(st.x, 0.0, st.y)
+			g.aim_fling = aim3
+			g.want_fling = PlayerInput.just_pressed(i, "a")                            # LMB / A hurls it
 		else:
-			g.aim_drive = Vector3.ZERO
-		g.want_possess = PlayerInput.is_down(i, "a")
+			g.aim_fling = Vector3.ZERO
+			g.want_fling = false
+		g.want_possess = PlayerInput.is_down(i, "a")   # free-fly: hold to grab
 		g.want_release = PlayerInput.just_pressed(i, "b")
 
 func _bot_living(f: DWFighter) -> void:
@@ -1037,19 +1094,24 @@ func _dw_probe_fling() -> void:
 	prop.angular_velocity = Vector3.ZERO
 	g.global_position = Vector3(0, DWGhost.HOVER_Y, 0)
 	g._begin_possession(prop)
-	g.aim_drive = Vector3.ZERO
+	g.aim_fling = Vector3.ZERO
+	g.want_fling = false
 	g.move_input = Vector2(wasd_dir.x, wasd_dir.z)
-	_dw_probe_arrow(Vector3.ZERO, atan2(wasd_dir.x, wasd_dir.z), Color(1, 1, 1), 3.0)     # WASD (white)
+	_dw_probe_arrow(Vector3.ZERO, atan2(wasd_dir.x, wasd_dir.z), Color(1, 1, 1), 3.0)     # WASD drift (white)
 	_dw_probe_arrow(Vector3.ZERO, aim_yaw, Color(0.2, 0.95, 1.0), 3.0)                    # cursor (cyan)
 	await get_tree().create_timer(0.45).timeout
 	await _dw_grab("fling_facing")
-	print("DW_AIMPROBE fling baseline prop_vel=%s (WASD +X)" % str(prop.linear_velocity))
+	print("DW_AIMPROBE fling baseline prop_vel=%s (WASD +X drift)" % str(prop.linear_velocity))
 	prop.global_position = Vector3(0, prop.rest_height() + 0.1, 0)
 	prop.linear_velocity = Vector3.ZERO
 	g.global_position = Vector3(0, DWGhost.HOVER_Y, 0)
 	g.move_input = Vector2.ZERO
-	g.aim_drive = Vector3(sin(aim_yaw), 0.0, cos(aim_yaw))
-	await get_tree().create_timer(0.85).timeout
+	# aim the FLING at the cursor and pull the trigger (LMB / A) once. The fling is
+	# a one-shot velocity burst, so measure it while it is still in flight (before
+	# linear_damp bleeds it off or it rams a scattered prop 3.6m out).
+	g.aim_fling = Vector3(sin(aim_yaw), 0.0, cos(aim_yaw))
+	g.want_fling = true
+	await get_tree().create_timer(0.22).timeout
 	await _dw_grab("fling_acting")
 	var vdir := rad_to_deg(atan2(prop.linear_velocity.x, prop.linear_velocity.z))
 	print("DW_AIMPROBE fling prop_vel=%s dir=%.0fdeg aim=%.0fdeg matches=%s" % [

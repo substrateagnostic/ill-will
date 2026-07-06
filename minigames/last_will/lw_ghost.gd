@@ -2,7 +2,8 @@ class_name LWGhostSeat
 extends Node3D
 ## Spectral onlooker: after willing, the dead take a floating stone pew at
 ## the platform edge (Lie/Sit idle poses) and every GUST_COOLDOWN seconds may
-## send a gust — aim with move, A to release. Never out of the game.
+## send a gust — the seat is fixed, so aim comes from the RIGHT channel (mouse
+## cursor / right stick, set via set_aim), A fires. Never out of the game.
 ##
 ## The seat bobs; the ghost body is a KayKit char re-skinned in a translucent
 ## ghost material tinted toward the owner's color. While the living are

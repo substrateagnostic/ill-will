@@ -14,6 +14,8 @@ const KILL_SPEED := 3.0       # min prop speed to count as a lethal slam
 const KNOCK_SCALE := 1.0      # momentum -> knockback impulse on the victim
 const KNOCK_MAX := 24.0
 const HIT_COOLDOWN := 0.28
+const FLING_SPEED := 9.0      # velocity set on a poltergeist FLING (mass-independent
+                              # so lamp and wardrobe both reach a readable, lethal slam)
 
 const TIER_DISPLAY := {"lamp": "THE LAMP", "crate": "THE CRATE", "chair": "THE CHAIR", "wardrobe": "THE WARDROBE"}
 
@@ -244,6 +246,19 @@ func apply_drive(dir: Vector3) -> void:
 	dir.y = 0.0
 	if dir.length() > 0.05:
 		apply_central_force(dir.normalized() * DRIVE_FORCE)
+
+## A discrete poltergeist FLING: hurl the possessed prop along `dir` at a fixed,
+## readable speed. Aimed by the RIGHT channel (mouse cursor / right stick); the
+## ghost keeps possession so it can re-aim and fling again. Bots never call this
+## (they only apply_drive), so the balance sim is byte-identical.
+func fling(dir: Vector3) -> void:
+	if possessed_by < 0:
+		return
+	dir.y = 0.0
+	if dir.length() < 0.05:
+		return
+	var d := dir.normalized()
+	linear_velocity = Vector3(d.x * FLING_SPEED, linear_velocity.y, d.z * FLING_SPEED)
 
 func _physics_process(delta: float) -> void:
 	if _hit_cd > 0.0:

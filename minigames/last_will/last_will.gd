@@ -141,6 +141,9 @@ var _cli_players := 4
 var _cli_seed := 1
 var _rounds_override := 0
 var _test_mode := ""               # --willtest=squish|gust
+var _dead_hint_demo := false       # --deadhint: seat 0 human, dies at t=1
+var _shove_cue_probe := false      # --shovecue: snap the first shove's readability arc
+var _shove_cue_done := false
 var _test_fired := false
 var _delta_cache := 0.016
 var _skip_to := 0.0                # --willskip=T: screenshot aid, round 1 only
@@ -198,6 +201,14 @@ func _parse_args() -> void:
 			_test_mode = arg.trim_prefix("--willtest=")
 		elif arg.begins_with("--willskip="):
 			_skip_to = maxf(0.0, float(arg.trim_prefix("--willskip=")))
+		elif arg == "--deadhint":
+			_dead_hint_demo = true
+		elif arg == "--shovecue":
+			_shove_cue_probe = true
+			_all_bots = true
+	if _dead_hint_demo:
+		# seat 0 (KBM human) dies at t=1.0 so the dead-state hint bar is on screen
+		_forced_kills.append({"t": 1.0, "p": 0})
 	if _tally:
 		# faster-than-realtime with dt pinned to exactly 1/60 (Swap Meet trick)
 		var fast := 8.0
@@ -208,16 +219,21 @@ func _parse_args() -> void:
 
 func _default_config() -> Dictionary:
 	PlayerInput.auto_assign(_cli_players)
+	if _dead_hint_demo:
+		PlayerInput.assign(0, -4)   # seat 0 = KBM human so its ghost hint reads MOUSE
 	var r: Array = []
 	for i in _cli_players:
 		var dev := PlayerInput.device_of(i)
+		var seat_bot := _all_bots or dev == -3 or dev == -99
+		if _dead_hint_demo:
+			seat_bot = (i != 0)   # seat 0 human (dies at t=1), the rest bots
 		r.append({
 			"index": i,
 			"name": GameState.PLAYER_NAMES[i],
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": CHAR_FALLBACKS[i % CHAR_FALLBACKS.size()],
 			"device": dev,
-			"bot": _all_bots or dev == -3 or dev == -99,
+			"bot": seat_bot,
 		})
 	return {"roster": r, "rounds": 3, "rng_seed": _cli_seed, "practice": false}
 
@@ -264,7 +280,7 @@ func begin(config: Dictionary) -> void:
 		pawns.append(pawn)
 	print("LW_BEGIN players=%d seed=%d rounds=%d bots=%s" % [players.size(),
 		rng.seed, rounds_total, str(players.map(func(p): return p.is_bot))])
-	hint_label.text = "A = SHOVE   B = HOP   ·   DIE, AND DRAFT YOUR WILL"
+	hint_label.text = HINT_LIVING
 	round_index = 0
 	_start_round()
 
@@ -674,6 +690,7 @@ func _start_round() -> void:
 		round_elapsed = _skip_to
 	round_label.text = "ROUND %d / %d" % [round_index + 1, rounds_total]
 	_rebuild_scoreboard()
+	_refresh_hint()   # everyone revived -> back to the living legend
 	if not _tally:
 		_flash_banner("ROUND %d\nSURVIVE — OR RULE FROM BEYOND" % (round_index + 1), Color(1, 0.85, 0.2), 1.9)
 		if carry_lines.size() > 0:
@@ -937,7 +954,17 @@ func _drive_ghost(i: int, delta: float) -> void:
 		if d.fire and g.gust_ready():
 			_fire_gust(i)
 	else:
-		g.set_aim(PlayerInput.get_move(i))
+		# TWIN-STICK CONVENTION: aim the gust with the RIGHT channel — mouse cursor
+		# (KBM) or right stick (pad). The ghost seat never moves, so the LEFT channel
+		# is only the fallback when there is no aim device (keyboard halves) or the
+		# right stick is idle.
+		var aim3 := PlayerInput.get_aim_dir(i, g.global_position, cam)   # KBM cursor (world)
+		var aim2 := Vector2(aim3.x, aim3.z)
+		if aim2 == Vector2.ZERO:
+			aim2 = PlayerInput.get_aim_stick(i)                         # pad right stick
+		if aim2 == Vector2.ZERO:
+			aim2 = PlayerInput.get_move(i)                              # fallback: LEFT channel
+		g.set_aim(aim2)
 		if PlayerInput.just_pressed(i, "a") and g.gust_ready():
 			_fire_gust(i)
 
@@ -1520,6 +1547,7 @@ func _seat_ghost(i: int) -> void:
 	var seat_angle: float = SEAT_ANGLES[i % SEAT_ANGLES.size()]
 	g.setup(i, players[i].color, players[i].name, load(players[i].char_path), seat_angle, self)
 	ghosts[i] = g
+	_refresh_hint()
 	if not _tally:
 		Sfx.play("grudge", -10.0, 0.2)
 
@@ -1715,6 +1743,97 @@ func on_shove_landed(_pos: Vector3) -> void:
 	if not _tally:
 		_time_hit(0.001, 0.05)
 
+## Readability cue fired the instant a shove releases (hit OR whiff): a bright
+## windup ring + a directional arc filling the shove's front-hemisphere reach, in
+## the shover's color. Presentation only — spawns nothing physical, samples no RNG,
+## and is skipped entirely in the headless tally, so determinism is untouched.
+func on_shove_fired(pos: Vector3, dir: Vector3, col: Color) -> void:
+	if _tally:
+		return
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length() < 0.01:
+		flat = Vector3(0, 0, 1)
+	flat = flat.normalized()
+	var root := Node3D.new()
+	spawn_root.add_child(root)
+	root.global_position = pos + Vector3(0, 0.12, 0)
+	root.rotation.y = atan2(flat.x, flat.z)   # local +Z -> shove direction
+	var gc := col.lerp(Color(1, 1, 1), 0.35)
+	# directional arc — WHERE the shove reaches (front hemisphere to SHOVE_RANGE)
+	var arc := MeshInstance3D.new()
+	arc.mesh = _shove_arc_mesh(LWPawn.SHOVE_RANGE)
+	var am := StandardMaterial3D.new()
+	am.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	am.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	am.cull_mode = BaseMaterial3D.CULL_DISABLED
+	am.albedo_color = Color(gc.r, gc.g, gc.b, 0.5)
+	am.emission_enabled = true
+	am.emission = gc
+	am.emission_energy_multiplier = 2.0
+	arc.material_override = am
+	arc.scale = Vector3(0.55, 1.0, 0.55)
+	root.add_child(arc)
+	# windup/impact ring — WHEN it fires (a bright pop at the shover's feet)
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.34
+	tm.outer_radius = 0.5
+	ring.mesh = tm
+	var rm := StandardMaterial3D.new()
+	rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	rm.albedo_color = Color(1, 1, 1, 0.9)
+	rm.emission_enabled = true
+	rm.emission = gc
+	rm.emission_energy_multiplier = 3.0
+	ring.material_override = rm
+	ring.rotation.x = PI / 2.0
+	root.add_child(ring)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(arc, "scale", Vector3(1.05, 1.0, 1.05), 0.26).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(am, "albedo_color:a", 0.0, 0.28)
+	tw.tween_property(ring, "scale", Vector3(2.2, 2.2, 2.2), 0.28).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(rm, "albedo_color:a", 0.0, 0.22)
+	tw.chain().tween_callback(root.queue_free)
+	# verification: snap the very first shove's arc mid-expansion, then quit
+	if _shove_cue_probe and not _shove_cue_done:
+		_shove_cue_done = true
+		_snap_shove_cue()
+
+func _snap_shove_cue() -> void:
+	await get_tree().create_timer(0.07).timeout   # let the arc bloom
+	await RenderingServer.frame_post_draw
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
+	var img := get_viewport().get_texture().get_image()
+	img.save_png("res://verify_out/lw_shove_cue.png")
+	print("LW_SHOVE_CUE_SNAP res://verify_out/lw_shove_cue.png")
+	await get_tree().create_timer(0.5).timeout
+	get_tree().quit()
+
+## Filled front-arc (annular sector, ~160°) opening along local +Z, radius r.
+func _shove_arc_mesh(r: float) -> ImmediateMesh:
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var half := deg_to_rad(80.0)
+	var steps := 16
+	var inner := 0.26
+	for s in steps:
+		var a0 := lerpf(-half, half, s / float(steps))
+		var a1 := lerpf(-half, half, (s + 1) / float(steps))
+		var i0 := Vector3(sin(a0) * inner, 0.0, cos(a0) * inner)
+		var i1 := Vector3(sin(a1) * inner, 0.0, cos(a1) * inner)
+		var o0 := Vector3(sin(a0) * r, 0.0, cos(a0) * r)
+		var o1 := Vector3(sin(a1) * r, 0.0, cos(a1) * r)
+		im.surface_add_vertex(i0)
+		im.surface_add_vertex(o0)
+		im.surface_add_vertex(o1)
+		im.surface_add_vertex(i0)
+		im.surface_add_vertex(o1)
+		im.surface_add_vertex(i1)
+	im.surface_end()
+	return im
+
 func on_boulder_contact(pawn: LWPawn) -> void:
 	if phase != Phase.ROUND:
 		return
@@ -1740,6 +1859,36 @@ func _set_base_ui(v: bool) -> void:
 	timer_label.visible = v
 	hint_label.visible = v
 	$UI/ScorePanel.visible = v
+
+const HINT_LIVING := "A = SHOVE   B = HOP   ·   DIE, AND DRAFT YOUR WILL"
+
+## Flip the shared hint bar to a dead-state legend when a HUMAN takes a ghost pew,
+## so the dead know how to gust: aim with the RIGHT channel, A fires. Bots never
+## trigger this (their seats stay HINT_LIVING), so the tally screenshots are
+## unchanged.
+func _refresh_hint() -> void:
+	if hint_label == null:
+		return
+	var dead_humans: Array = []
+	for i in players.size():
+		if not players[i].is_bot and ghosts.has(i):
+			dead_humans.append(i)
+	if dead_humans.is_empty():
+		hint_label.text = HINT_LIVING
+	elif dead_humans.size() == 1:
+		hint_label.text = _ghost_hint_line(int(dead_humans[0]))
+	else:
+		hint_label.text = "YOU'RE DEAD — AIM the gust (RIGHT) · A = GUST the living (every %ds)" % int(LWGhostSeat.GUST_COOLDOWN)
+
+func _ghost_hint_line(i: int) -> String:
+	var d: int = PlayerInput.device_of(i)
+	var fire: String = PlayerInput.describe_binding(i, "a")
+	var aim := "MOUSE"
+	if d >= 0:
+		aim = "RIGHT STICK"
+	elif d != -4:
+		aim = PlayerInput.describe_binding(i, "move")   # keyboard halves aim with their move keys
+	return "%s IS DEAD — %s aim the gust · %s = GUST (every %ds)" % [players[i].name, aim, fire, int(LWGhostSeat.GUST_COOLDOWN)]
 
 # ================================================================ input helpers
 func _nav_dir(p: int) -> int:

@@ -237,6 +237,20 @@ func get_aim_screen(p: int, world_anchor: Vector3, cam: Camera3D) -> Vector2:
 		return Vector2.ZERO
 	return Vector2(d.x, -d.y).normalized()   # screen y is down; flip to y-up
 
+## Right-stick AIM for pad devices: the raw right-stick vector (x = screen right,
+## y = screen down, matching get_move's left-stick convention) or ZERO when the
+## device is not a gamepad OR the stick sits inside a 0.25 deadzone. This is the
+## twin-stick partner to get_move: callers wire LEFT (get_move) = MOVE and RIGHT
+## (this / get_aim_dir cursor) = AIM. Non-pad devices (KBM cursor -4, keyboard
+## halves -1/-2, shared -3, bots) get ZERO so they fall back to the mouse-cursor
+## aim or the move direction — no existing device path changes.
+func get_aim_stick(p: int) -> Vector2:
+	var d := device_of(p)
+	if d < 0:
+		return Vector2.ZERO
+	var v := Vector2(Input.get_joy_axis(d, JOY_AXIS_RIGHT_X), Input.get_joy_axis(d, JOY_AXIS_RIGHT_Y))
+	return v if v.length() > 0.25 else Vector2.ZERO
+
 ## Verification hook (--aimprobe): pin a synthetic world-space aim for player p.
 ## Pass Vector3.ZERO to clear. Never called during normal play.
 func set_debug_aim(p: int, world_dir: Vector3) -> void:
