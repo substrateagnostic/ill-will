@@ -110,6 +110,7 @@ var _b_hold := 0.0
 var _pivot: Node3D
 var _anim: AnimationPlayer
 var _ring: MeshInstance3D
+var _warn_label: Label3D
 var _cur_anim := ""
 var _base_scale := 1.0
 var _mesh_instances: Array = []
@@ -180,8 +181,30 @@ func setup(seed_base: int) -> void:
 	_ring.position.y = 0.03
 	add_child(_ring)
 
+	# ring-out warning banner (floats above the head, flashes when outside the ring)
+	_warn_label = Label3D.new()
+	_warn_label.text = "THE RING DEMANDS"
+	_warn_label.font_size = 60
+	_warn_label.pixel_size = 0.006
+	_warn_label.modulate = Color(1.0, 0.28, 0.2)
+	_warn_label.outline_size = 14
+	_warn_label.outline_modulate = Color(0.1, 0.05, 0.05)
+	_warn_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	_warn_label.no_depth_test = true
+	_warn_label.position = Vector3(0, 2.7, 0)
+	_warn_label.visible = false
+	add_child(_warn_label)
+
 	_bot_rng.seed = seed_base * 131 + player_index * 977 + 7
 	_play("Idle")
+
+
+## Toggle the "THE RING DEMANDS" ring-out warning above this fighter. `blink`
+## drives the flash (the controller passes an ~4Hz square wave); off hides it.
+func set_ring_warning(on: bool, blink := true) -> void:
+	if _warn_label == null:
+		return
+	_warn_label.visible = on and blink
 
 
 func _collect_meshes(node: Node) -> void:
@@ -571,7 +594,9 @@ func _flash_pop() -> void:
 # throws lights on a cadence, dashes occasionally.
 # ---------------------------------------------------------------------------
 func _bot_tick(delta: float) -> void:
-	var platform_r_v: float = main.platform_r() if main else 6.0
+	# roam inside the enforced ring (not the physical floor) so bots fight in the
+	# arena instead of camping the apron and ringing themselves out.
+	var ring_r_v: float = main.ring_r() if main else 5.6
 
 	# charge-a-heavy in progress: root, show windup, release when timer expires
 	if _bot_charge_hold > 0.0:
@@ -609,7 +634,7 @@ func _bot_tick(delta: float) -> void:
 	if _bot_wander_t <= 0.0 or global_position.distance_to(_bot_target) < 0.8:
 		_bot_wander_t = _bot_rng.randf_range(0.9, 2.1)
 		var ang := _bot_rng.randf_range(0.0, TAU)
-		var rad := platform_r_v * _bot_rng.randf_range(0.35, 0.9)
+		var rad := ring_r_v * _bot_rng.randf_range(0.35, 0.85)
 		_bot_target = Vector3(cos(ang) * rad, 0.0, sin(ang) * rad)
 	var to := _bot_target - global_position
 	to.y = 0.0

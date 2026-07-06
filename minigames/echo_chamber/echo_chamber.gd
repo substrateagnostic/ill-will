@@ -20,6 +20,8 @@ const MAX_GHOSTS := 12
 const HP_MAX := 3
 const ARENA_R := 8.0
 const SHRINK := 0.7
+const RING_R := ARENA_R * SHRINK   # 5.6 — the yellow boundary ring & enforced edge
+const RING_WARN_T := 1.5           # grace after leaving the ring before a ring-out KO
 const RESPAWN_TIME := 2.0
 const TRANSITION_TIME := 2.4
 const INTRO_TIME := 1.6
@@ -52,12 +54,15 @@ var roster: Array = []
 var rng := RandomNumberGenerator.new()
 var _seed := 1
 var _bots := false
+var _rounds := ROUNDS             # honored from config.rounds (shell contract)
 var round_len := ROUND_LEN_DEFAULT
 var _cap_on := false
 var _cap_dir := "verify_out"
 var _cap_done: Dictionary = {}
 var _aim_probe_on := false
 var _aim_probe_deg := 0.0
+var _ring_test := false            # dev: park fighter 0 outside the ring to film warning+KO
+var _ringtest_state := 0
 var _names: Dictionary = {}
 var _colors: Dictionary = {}
 
@@ -75,6 +80,7 @@ var ghosts: Array = []
 var _takes: Array = []            # every stored round-recording (all rounds)
 var _samples: Array = []          # this round's in-progress recorders
 var _respawns: Array = []
+var _ring_warn: Dictionary = {}   # player_index -> seconds spent outside the ring
 var _deaths_round: Dictionary = {}
 var points: Dictionary = {}
 var _currency: Array = []
@@ -172,6 +178,9 @@ func begin(config: Dictionary) -> void:
 		roster = _default_config()["roster"]
 	_seed = int(config.get("rng_seed", 1))
 	rng.seed = _seed
+	# Honor the shell's requested match length (contract: config.rounds). The
+	# standalone default stays ROUNDS (5) via _default_config(); clamp to [1,ROUNDS].
+	_rounds = clampi(int(config.get("rounds", ROUNDS)), 1, ROUNDS)
 	_parse_args()
 
 	for pl in roster:
@@ -196,14 +205,20 @@ func _parse_args() -> void:
 			_bots = true
 		elif arg.begins_with("--echofast="):
 			round_len = maxf(2.0, float(arg.trim_prefix("--echofast=")))
+		elif arg.begins_with("--echorounds="):
+			# standalone override of the match length (mirrors the shell's
+			# config.rounds contract, honored via _rounds); clamp to [1, ROUNDS].
+			_rounds = clampi(int(arg.trim_prefix("--echorounds=")), 1, ROUNDS)
 		elif arg == "--echocap":
 			_cap_on = true
+		elif arg == "--ringtest":
+			_ring_test = true
 		elif arg.begins_with("--aimprobe="):
 			_aim_probe_on = true
 			_aim_probe_deg = float(arg.trim_prefix("--aimprobe="))
 		elif arg.begins_with("--outdir="):
 			_cap_dir = arg.trim_prefix("--outdir=")
-	if _cap_on or _aim_probe_on:
+	if _cap_on or _aim_probe_on or _ring_test:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
 
 
@@ -484,13 +499,16 @@ func _enter_intro(n: int) -> void:
 	round_no = n
 	state = St.INTRO
 	_phase_timer = INTRO_TIME
-	round_label.text = "ROUND %d / %d" % [n, ROUNDS]
+	round_label.text = "ROUND %d / %d" % [n, _rounds]
 	round_label.add_theme_color_override("font_color", Color(0.95, 0.95, 1.0))
 	_spawn_ghosts_for_round()
 	_det_ghost_total = ghosts.size()
 	_det_max_err = 0.0
 	_logged_ghost_heavy = false
-	_reset_arena(n == ROUNDS)
+	_reset_arena(n == _rounds)
+	_ring_warn.clear()
+	for f in fighters:
+		f.set_ring_warning(false)
 	_deaths_round.clear()
 	for pl in roster:
 		_deaths_round[int(pl["index"])] = 0
@@ -505,7 +523,7 @@ func _enter_intro(n: int) -> void:
 	_round_time = 0.0
 	_rec_count = 0
 	_shrunk = false
-	_shrink_at = round_len * 0.45 if n == ROUNDS else 999.0
+	_shrink_at = round_len * 0.45 if n == _rounds else 999.0
 	var sub := "%d GHOSTS HAUNT THE ARENA" % ghosts.size() if ghosts.size() > 0 else "NO GHOSTS YET — MAKE SOME"
 	_flash_banner("ROUND %d\n%s" % [n, sub], Color(1, 0.85, 0.2), 0.0)
 	Sfx.play("round_over")
@@ -603,7 +621,7 @@ func _end_round() -> void:
 	_verify_determinism()
 	_rebuild_scoreboard()
 	print("ECHO_ROUND_END round=%d points=%s" % [round_no, str(points)])
-	if round_no >= ROUNDS:
+	if round_no >= _rounds:
 		_finish_match()
 	else:
 		Sfx.play("round_over")
@@ -711,13 +729,24 @@ func _physics_process(delta: float) -> void:
 func _tick_play(delta: float) -> void:
 	_round_time += delta
 
-	# round-5 collapse telegraph
-	if not _shrunk and round_no == ROUNDS and _round_time >= _shrink_at:
+	# final-round collapse telegraph
+	if not _shrunk and round_no == _rounds and _round_time >= _shrink_at:
 		_do_shrink()
 
 	# 1. tick live fighters in index order
 	for f in fighters:
 		f.tick(delta)
+
+	# dev: hold fighter 0 outside the ring (after its own tick, before enforcement)
+	if _ring_test and fighters[0].alive and _ringtest_state < 2:
+		fighters[0].global_position = Vector3(7.0, 0.1, 0.0)
+		fighters[0].velocity = Vector3.ZERO
+
+	# 1b. enforce the ring boundary on LIVE fighters only (ghosts never checked)
+	_enforce_ring(delta)
+
+	if _ring_test:
+		_ringtest_capture()
 
 	# 2. sample the recorder from post-move state, keyed to the round clock
 	var target := int(_round_time * REC_HZ)
@@ -931,6 +960,49 @@ func on_fall_death(idx: int) -> void:
 	_on_death(idx, true, -1, "ring_out")
 
 
+## Dev harness (--ringtest): film the two required beats — the flashing warning
+## while fighter 0 is held outside the ring, then the ring-out KO ~1.5s later.
+func _ringtest_capture() -> void:
+	var f: EchoFighter = fighters[0]
+	if _ringtest_state == 0 and float(_ring_warn.get(0, 0.0)) >= 0.7:
+		_ringtest_state = 1
+		f.set_ring_warning(true, true)   # force the flash ON for the frame we grab
+		_grab("ringwarn", false)
+	elif _ringtest_state == 1 and not f.alive:
+		_ringtest_state = 2
+		print("ECHO_RINGTEST ko fighter=0 at r=%.1f" % Vector2(f.global_position.x, f.global_position.z).length())
+		_grab("ringko", true)
+
+
+## THE RING DEMANDS. A LIVE fighter standing beyond the yellow boundary ring
+## (RING_R) gets a flashing 1.5s warning, then a ring-out KO down the existing
+## fall-death path (killer -1). Called every PLAY tick with live fighters only —
+## ghosts are separate nodes and are NEVER checked, so replayed past selves that
+## wandered outside the ring trigger nothing.
+func _enforce_ring(delta: float) -> void:
+	for f in fighters:
+		var idx: int = f.player_index
+		if not f.alive:
+			if _ring_warn.has(idx):
+				_ring_warn.erase(idx)
+				f.set_ring_warning(false)
+			continue
+		var r := Vector2(f.global_position.x, f.global_position.z).length()
+		if r > RING_R:
+			var t: float = float(_ring_warn.get(idx, 0.0)) + delta
+			_ring_warn[idx] = t
+			# flash the warning ~4Hz so it reads as an alarm, not a static label
+			f.set_ring_warning(true, fmod(t, 0.26) < 0.13)
+			if t >= RING_WARN_T:
+				_ring_warn.erase(idx)
+				f.set_ring_warning(false)
+				_flash_credit("%s — THE RING DEMANDS" % _names[idx], _colors[idx])
+				on_fall_death(idx)
+		elif _ring_warn.has(idx):
+			_ring_warn.erase(idx)
+			f.set_ring_warning(false)
+
+
 func _on_death(victim: int, is_fall: bool, killer: int = -1, cause: String = "shatter") -> void:
 	# Optional contract reporting: one kill_event per KO. Every death funnels
 	# through here (swing kills + fall deaths), so this is the single sink.
@@ -940,7 +1012,7 @@ func _on_death(victim: int, is_fall: bool, killer: int = -1, cause: String = "sh
 	Sfx.play("death")
 	var mode := "edge"
 	var hp_amt := HP_MAX
-	if round_no == ROUNDS and is_fall:
+	if round_no == _rounds and is_fall:
 		mode = "center"
 		hp_amt = 2   # respawn center at half HP
 	_respawns.append({"f": fighters[victim], "t": RESPAWN_TIME, "hp": hp_amt, "mode": mode})
@@ -956,6 +1028,13 @@ func platform_r() -> float:
 	return ARENA_R * SHRINK if _shrunk else ARENA_R
 
 
+## The enforced play boundary (the yellow ring). Constant across rounds — the
+## round-final floor collapse just makes stepping past it physical too. Spawns
+## and bot wander targets stay inside this so nobody spawns into a ring-out.
+func ring_r() -> float:
+	return RING_R
+
+
 func _start_pos(i: int) -> Vector3:
 	var n := fighters.size()
 	var ang := TAU * float(i) / float(maxi(1, n))
@@ -964,8 +1043,10 @@ func _start_pos(i: int) -> Vector3:
 
 
 func _edge_spawn() -> Vector3:
+	# spawn just inside the ring (never on the apron) so a respawn can't drop the
+	# fighter straight into a ring-out warning.
 	var ang := rng.randf_range(0.0, TAU)
-	var rad := platform_r() * 0.82
+	var rad := RING_R * 0.82
 	return Vector3(cos(ang) * rad, 0.1, sin(ang) * rad)
 
 

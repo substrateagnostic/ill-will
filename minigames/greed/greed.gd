@@ -461,10 +461,37 @@ func _handle_action(p: int, me: GreedPlayer, inp: Dictionary, delta: float) -> v
 				me.grab_hold += delta
 				me.show_grab_progress(me.grab_hold / GRAB_TIME)
 				if me.grab_hold >= GRAB_TIME:
-					_do_grab(p)
+					_do_grab(_grab_winner_over(p, delta))
 				return
 	me.grab_hold = 0.0
 	me.show_grab_progress(0.0)
+
+
+## Tie-break for the 0.6s grab hold. `p` (processed in index order, so no lower
+## index has grabbed yet this tick) just reached GRAB_TIME. If `p` is a bot and a
+## HUMAN is tied on progress — equal hold, still holding A within range, and thus
+## crossing the same tick — the HUMAN gets the pot instead. Humans win grab ties.
+## No humans in the contest -> returns `p` unchanged, so bot-only sims are byte-
+## identical (bots still obey the same hold; only the human tie-break is new).
+func _grab_winner_over(p: int, delta: float) -> int:
+	if not bot_enabled[p]:
+		return p
+	var me: GreedPlayer = players[p]
+	var pot2: Vector2 = pot_world_2d()
+	for q in roster.size():
+		if q == p or bot_enabled[q]:
+			continue
+		var hq: GreedPlayer = players[q]
+		if hq.is_carrier or not hq.can_act() or not PlayerInput.is_down(q, "a"):
+			continue
+		var dq: float = Vector2(hq.global_position.x, hq.global_position.z).distance_to(pot2)
+		if dq >= GRAB_RANGE:
+			continue
+		# hq.grab_hold is a tick behind (q not ticked yet); +delta is its effective
+		# progress this frame. Equal-or-better than the bot -> the human takes it.
+		if hq.grab_hold + delta >= me.grab_hold - 0.0001:
+			return q
+	return p
 
 
 func _do_grab(p: int) -> void:
