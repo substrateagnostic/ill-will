@@ -43,6 +43,15 @@ var _pad_swap := {}
 var _dbg_aim := {}          # p -> Vector3  (world-space horizontal dir)
 var _dbg_aim_screen := {}   # p -> Vector2  (x = screen right, y = screen UP)
 
+# ONLINE PHASE 1 — the _remote seam (docs/design/10-online-first-architecture.md
+# §4.2). NetSession injects remote peers' 30 Hz input packets here; every query
+# below consults _remote FIRST, so a remote human is architecturally identical
+# to a local device. Empty in all couch play — zero behavior change offline.
+# Packet shape per seat: {move:Vector2, a:bool, b:bool, presses_a:int,
+#   presses_b:int, aim:Vector3, aim_screen:Vector2, stick:Vector2, seq:int}
+var _remote := {}         # p -> latest injected packet state
+var _remote_edge := {}    # p -> press-counter bookkeeping (dropped-tap rescue)
+
 func assign(p: int, device: int) -> void:
 	_devices[p] = device
 
@@ -138,6 +147,8 @@ func pad_swapped(pad: int) -> bool:
 ## How-to-Play cards call this so onboarding always reflects real settings.
 ## Actions: "a", "b", "move".
 func describe_binding(p: int, action: String) -> String:
+	if _remote.has(p):
+		return "REMOTE"
 	var d := device_of(p)
 	if d == -99:
 		return "—"
@@ -175,7 +186,62 @@ func auto_assign(n: int) -> void:
 		else:
 			assign(p, -3)
 
+## ----- the _remote injection API (host side; called by NetSession only) -----
+
+## Latest-state injection for a remote seat. Also settles the press-counter
+## ledger: presses that arrived BETWEEN packets (or in dropped datagrams) are
+## owed a synthesized one-tick hold so the edge detector fires exactly once.
+func set_remote_state(p: int, state: Dictionary) -> void:
+	var first := not _remote.has(p)
+	_remote[p] = state
+	if first:
+		# Opening balance: never fire phantom taps from a counter that started
+		# mid-life; a currently-held button credits itself via its rising edge.
+		_remote_edge[p] = {
+			"a_credited": maxi(0, int(state.get("presses_a", 0)) - (1 if bool(state.get("a", false)) else 0)),
+			"b_credited": maxi(0, int(state.get("presses_b", 0)) - (1 if bool(state.get("b", false)) else 0)),
+			"a_eff": false, "b_eff": false, "a_prev": false, "b_prev": false,
+		}
+		return
+	# Cap the synthesized-press backlog so a network stall can't burst-fire.
+	var e: Dictionary = _remote_edge[p]
+	for act in ["a", "b"]:
+		var total := int(state.get("presses_" + act, 0))
+		if total - int(e[act + "_credited"]) > 3:
+			e[act + "_credited"] = total - 3
+
+func clear_remote(p: int) -> void:
+	_remote.erase(p)
+	_remote_edge.erase(p)
+
+func is_remote(p: int) -> bool:
+	return _remote.has(p)
+
+## Per physics tick: fold raw down-states + press counters into effective
+## down-states. A natural rising edge credits one press; each still-owed press
+## synthesizes a one-tick hold (from a released state, so the edge detector in
+## _physics_process sees a clean rise). ~15 lines, per the spec's estimate.
+func _tick_remote_edges() -> void:
+	for p in _remote:
+		var st: Dictionary = _remote[p]
+		var e: Dictionary = _remote_edge[p]
+		for act in ["a", "b"]:
+			var raw := bool(st.get(act, false))
+			var eff := raw
+			if raw and not bool(e[act + "_prev"]):
+				e[act + "_credited"] = int(e[act + "_credited"]) + 1
+			elif not raw:
+				var pending := int(st.get("presses_" + act, 0)) - int(e[act + "_credited"])
+				if pending > 0 and not bool(e[act + "_eff"]):
+					eff = true
+					e[act + "_credited"] = int(e[act + "_credited"]) + 1
+			e[act + "_prev"] = raw
+			e[act + "_eff"] = eff
+
 func get_move(p: int) -> Vector2:
+	if _remote.has(p):
+		var mv: Vector2 = _remote[p].get("move", Vector2.ZERO)
+		return mv if mv.length() <= 1.0 else mv.normalized()  # never trust the wire
 	var d := device_of(p)
 	if d >= 0:
 		var v := Vector2(Input.get_joy_axis(d, JOY_AXIS_LEFT_X), Input.get_joy_axis(d, JOY_AXIS_LEFT_Y))
@@ -191,6 +257,9 @@ func get_move(p: int) -> Vector2:
 	return v.normalized() if v.length() > 1.0 else v
 
 func is_down(p: int, action: String) -> bool:
+	if _remote.has(p):
+		var e: Dictionary = _remote_edge.get(p, {})
+		return bool(e.get(action + "_eff", bool(_remote[p].get(action, false))))
 	var d := device_of(p)
 	if d >= 0:
 		var want_a := (action == "a") != pad_swapped(d)
@@ -204,6 +273,11 @@ func is_down(p: int, action: String) -> bool:
 ## cursor projected on the horizontal plane at from_pos.y. Returns ZERO for
 ## non-KBM devices (caller falls back to facing/move direction).
 func get_aim_dir(p: int, from_pos: Vector3, cam: Camera3D) -> Vector3:
+	if _remote.has(p):
+		# Remote peers relay PRE-COMPUTED world-space unit vectors (computed
+		# against their own mirrored render) — the _dbg_aim seam, networked.
+		var ad: Vector3 = _remote[p].get("aim", Vector3.ZERO)
+		return ad.normalized() if ad.length() > 0.05 else Vector3.ZERO
 	if device_of(p) != -4:
 		return Vector3.ZERO
 	if _dbg_aim.has(p):
@@ -225,6 +299,9 @@ func get_aim_dir(p: int, from_pos: Vector3, cam: Camera3D) -> Vector3:
 ## non-KBM devices, a null/absent camera, an anchor behind the camera, or a
 ## cursor essentially on top of the anchor.
 func get_aim_screen(p: int, world_anchor: Vector3, cam: Camera3D) -> Vector2:
+	if _remote.has(p):
+		var asv: Vector2 = _remote[p].get("aim_screen", Vector2.ZERO)
+		return asv.normalized() if asv.length() > 0.05 else Vector2.ZERO
 	if device_of(p) != -4:
 		return Vector2.ZERO
 	if _dbg_aim_screen.has(p):
@@ -245,6 +322,9 @@ func get_aim_screen(p: int, world_anchor: Vector3, cam: Camera3D) -> Vector2:
 ## halves -1/-2, shared -3, bots) get ZERO so they fall back to the mouse-cursor
 ## aim or the move direction — no existing device path changes.
 func get_aim_stick(p: int) -> Vector2:
+	if _remote.has(p):
+		var stv: Vector2 = _remote[p].get("stick", Vector2.ZERO)
+		return stv if stv.length() <= 1.0 else stv.normalized()
 	var d := device_of(p)
 	if d < 0:
 		return Vector2.ZERO
@@ -272,10 +352,15 @@ func just_pressed(p: int, action: String) -> bool:
 	return _down.get(key, false) and not _prev_down.get(key, false)
 
 func _physics_process(_delta: float) -> void:
+	_tick_remote_edges()
 	_prev_down = _down.duplicate()
 	for p in _devices:
 		for action in ["a", "b"]:
 			_down["%d_%s" % [p, action]] = is_down(p, action)
+	for p in _remote:
+		if not _devices.has(p):
+			for action in ["a", "b"]:
+				_down["%d_%s" % [p, action]] = is_down(p, action)
 
 func _keymap(d: int) -> Dictionary:
 	if _custom_maps.has(d):

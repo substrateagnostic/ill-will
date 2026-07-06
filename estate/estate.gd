@@ -53,6 +53,17 @@ var _tile_buyers: Array = []
 var exhibition := false
 var _practice := false
 
+# ----- ONLINE PHASE 1 (doc 10): the estate IS the shared lobby -----
+var _netprobe := ""               # "" | "host" | "join" | "couch" (NETPROBE rig)
+var _np_last_trace := -2
+var _net_game_name := ""          # what the spectate card names mid-game
+var _net_state_accum := 0.0       # 5 Hz lobby-fact broadcast
+var _net_walker_accum := 0.0      # 15 Hz walker snapshot broadcast
+var _net_walker_seq := 0
+var _client_last_state := {}      # client: last mirrored lobby facts
+var _client_panel_sig := ""       # client: rebuild panel only when facts change
+var _client_walker_targets := {}  # client: p -> {pos, rot, moving} interp targets
+
 # ----- READY ROOM v2 (seat tri-state, join/ready, pre-game GET READY card) -----
 var _lobby_ready := {}            # seat -> bool: lobby READY chip toggled on
 var _kb_join_held := {}           # keyboard device (-1/-2) -> bool: A-key edge
@@ -86,6 +97,8 @@ func _ready() -> void:
 			start_night_now = true
 		elif arg.begins_with("--pool="):
 			pool_override = Array(arg.trim_prefix("--pool=").split(","))
+		elif arg.begins_with("--netprobe="):
+			_netprobe = arg.trim_prefix("--netprobe=")
 		elif arg.begins_with("--exhibtest="):
 			var gid := arg.trim_prefix("--exhibtest=")
 			get_tree().create_timer(1.2).timeout.connect(func():
@@ -212,10 +225,17 @@ func _ready() -> void:
 	_redraw_graffiti()
 	banner.visible = false
 	_saved_env = $WorldEnvironment.environment
+	_net_wire_signals()
 	if start_night_now:
 		_play_pressed()
 	else:
 		_enter_title()
+	if _netprobe != "":
+		_netprobe_run()
+	elif NetSession.is_host():
+		# --net=host CLI boot: straight to the open lobby with the invite code.
+		_hide_title()
+		_enter_lobby()
 
 ## ----- TITLE SCREEN (front door; PLAY -> straight into the night) -----
 
@@ -383,6 +403,20 @@ func _enter_title() -> void:
 		_build_wardrobe_panel())
 	row.add_child(ward)
 	box.add_child(row)
+	var net_row := HBoxContainer.new()
+	net_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	net_row.add_theme_constant_override("separation", 14)
+	var host_btn := Button.new()
+	host_btn.text = "HOST NIGHT"
+	host_btn.custom_minimum_size = Vector2(200, 50)
+	host_btn.pressed.connect(_host_night_pressed)
+	net_row.add_child(host_btn)
+	var join_btn := Button.new()
+	join_btn.text = "JOIN NIGHT"
+	join_btn.custom_minimum_size = Vector2(200, 50)
+	join_btn.pressed.connect(_build_join_panel)
+	net_row.add_child(join_btn)
+	box.add_child(net_row)
 	var hint := Label.new()
 	hint.text = "PLAY = the full game — nights of minigames until someone takes the manor"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -428,6 +462,7 @@ func _build_lobby_panel() -> void:
 		var status_btn := Button.new()
 		status_btn.custom_minimum_size = Vector2(120, 44)
 		status_btn.text = status
+		status_btn.disabled = status == "REMOTE"
 		status_btn.pressed.connect(func():
 			_cycle_seat_status(i)
 			Sfx.play("card")
@@ -435,20 +470,33 @@ func _build_lobby_panel() -> void:
 		row.add_child(status_btn)
 		var dev_btn := Button.new()
 		dev_btn.custom_minimum_size = Vector2(210, 44)
-		dev_btn.text = PartySetup.DEVICE_NAMES.get(PlayerInput.device_of(i), "UNASSIGNED")
-		dev_btn.pressed.connect(func():
-			var cur := PartySetup.DEVICE_CYCLE.find(PlayerInput.device_of(i))
-			var nxt: int = PartySetup.DEVICE_CYCLE[(cur + 1) % PartySetup.DEVICE_CYCLE.size()]
-			PlayerInput.assign(i, nxt)
-			PlayerInput.set_bot(i, false)
-			Sfx.play("card")
-			_build_lobby_panel())
+		if status == "REMOTE":
+			dev_btn.text = "REMOTE LINK · %d ms" % NetSession.rtt_of_seat(i)
+			dev_btn.disabled = true
+		else:
+			dev_btn.text = PartySetup.DEVICE_NAMES.get(PlayerInput.device_of(i), "UNASSIGNED")
+			dev_btn.pressed.connect(func():
+				var cur := PartySetup.DEVICE_CYCLE.find(PlayerInput.device_of(i))
+				var nxt: int = PartySetup.DEVICE_CYCLE[(cur + 1) % PartySetup.DEVICE_CYCLE.size()]
+				PlayerInput.assign(i, nxt)
+				PlayerInput.set_bot(i, false)
+				Sfx.play("card")
+				_build_lobby_panel())
 		row.add_child(dev_btn)
 		var chip := _make_ready_chip()
 		chip.name = "ReadyChip"
-		chip.visible = status == "HUMAN" and _lobby_ready.get(i, false)
+		chip.visible = (status == "HUMAN" or status == "REMOTE") and _lobby_ready.get(i, false)
 		row.add_child(chip)
 		phase_box.add_child(row)
+	if NetSession.is_host():
+		var online := Label.new()
+		var code := NetSession.invite_code()
+		online.text = "OPEN NIGHT — CODE %s  ·  %s  ·  %d guest(s) at the gate" % [
+			code if code != "" else "(share the address)", NetSession.listen_addr(), NetSession.guest_count()]
+		online.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		online.add_theme_font_size_override("font_size", 17)
+		online.add_theme_color_override("font_color", Color(0.55, 0.85, 1.0))
+		phase_box.add_child(online)
 	# Two button rows — six buttons in one row overflowed the panel.
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -530,8 +578,11 @@ func _start_night_from_lobby() -> void:
 
 ## ----- READY ROOM SEATS: tri-state, join, ready chips -----
 
-## HUMAN (device + not bot) / BOT / EMPTY (unassigned + not bot).
+## HUMAN (device + not bot) / BOT / EMPTY (unassigned + not bot) /
+## REMOTE (a networked guest drives this seat through the PlayerInput relay).
 func _seat_status(i: int) -> String:
+	if NetSession.is_seat_remote(i):
+		return "REMOTE"
 	if PlayerInput.is_bot(i):
 		return "BOT"
 	if PlayerInput.device_of(i) == -99:
@@ -541,6 +592,8 @@ func _seat_status(i: int) -> String:
 ## The seat button cycle: HUMAN -> BOT -> EMPTY -> HUMAN. Leaving HUMAN drops
 ## the READY chip; EMPTY frees the device so a joiner can take it.
 func _cycle_seat_status(i: int) -> void:
+	if _seat_status(i) == "REMOTE":
+		return  # a guest's presence is not the host's to cycle
 	match _seat_status(i):
 		"HUMAN":
 			PlayerInput.set_bot(i, true)
@@ -587,7 +640,8 @@ func _make_ready_chip() -> Label:
 func _waiting_seats() -> Array:
 	var out: Array = []
 	for i in 4:
-		if _seat_status(i) == "HUMAN" and not _lobby_ready.get(i, false):
+		var st := _seat_status(i)
+		if (st == "HUMAN" or st == "REMOTE") and not _lobby_ready.get(i, false):
 			out.append(i)
 	return out
 
@@ -644,11 +698,13 @@ func _claim_seat_for_device(dev: int) -> int:
 ## (KB+MOUSE / SHARED A collides with clicking the lobby's own buttons).
 func _poll_lobby_ready() -> void:
 	for i in 4:
-		if _seat_status(i) != "HUMAN":
+		var st := _seat_status(i)
+		if st != "HUMAN" and st != "REMOTE":
 			continue
-		var d := PlayerInput.device_of(i)
-		if d != -1 and d != -2 and d < 0:
-			continue  # skip -3 (shared) and -4 (KB+mouse)
+		if st != "REMOTE":  # remote seats always have a discrete relayed A
+			var d := PlayerInput.device_of(i)
+			if d != -1 and d != -2 and d < 0:
+				continue  # skip -3 (shared) and -4 (KB+mouse)
 		# A freshly joined seat swallows its still-held join press; only once A
 		# is released does the same button start toggling READY.
 		if _join_ready_lock.get(i, false):
@@ -744,6 +800,8 @@ func _show_howto(id: String) -> void:
 		if PlayerInput.is_bot(i):
 			l.text = "%s — bot, needs no manual" % GameState.PLAYER_NAMES[i]
 			l.modulate.a = 0.5
+		elif NetSession.is_seat_remote(i):
+			l.text = "%s — REMOTE — plays from their own machine" % GameState.PLAYER_NAMES[i]
 		elif id == "par":
 			l.text = "%s — MOUSE: aim, hold, release to putt (hotseat — pass it on)" % GameState.PLAYER_NAMES[i]
 		else:
@@ -991,7 +1049,7 @@ func _spawn_toys() -> void:
 		b.global_position = Vector3(-2.0 + i * 2.0, 0.4, -1.5)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if phase == Phase.GAME or _module != null or _ready_gate_active:
+	if phase == Phase.GAME or _module != null or _ready_gate_active or NetSession.is_client():
 		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var origin := cam.project_ray_origin(event.position)
@@ -1048,7 +1106,9 @@ func _poll_stroll() -> void:
 	var near_spot: Dictionary = {}
 	var near_player := -1
 	for i in EstateState.players.size():
-		if PlayerInput.is_bot(i) or i >= walkers.size() or not is_instance_valid(walkers[i]):
+		# Remote walkers stroll but never open the host's desks/panels — panel
+		# authority stays with the machine that owns the screen (spec §5.3).
+		if PlayerInput.is_bot(i) or NetSession.is_seat_remote(i) or i >= walkers.size() or not is_instance_valid(walkers[i]):
 			continue
 		for spot in STROLL_SPOTS:
 			var d: float = walkers[i].global_position.distance_to(spot.pos)
@@ -1067,7 +1127,7 @@ func _poll_stroll() -> void:
 	else:
 		banner.text = "WALK THE GROUNDS — approach a landmark, A to enter, B back to the desk"
 	for i in EstateState.players.size():
-		if not PlayerInput.is_bot(i) and PlayerInput.just_pressed(i, "b"):
+		if not PlayerInput.is_bot(i) and not NetSession.is_seat_remote(i) and PlayerInput.just_pressed(i, "b"):
 			Sfx.play("card")
 			_exit_stroll()
 			return
@@ -1118,6 +1178,11 @@ func _on_joy_connection_changed(device: int, connected: bool) -> void:
 				_build_lobby_panel()
 
 func _process(delta: float) -> void:
+	if NetSession.is_client():
+		_client_process(delta)
+		return
+	if NetSession.is_host():
+		_net_host_broadcast(delta)
 	if _ready_gate_active:
 		_poll_ready_gate(delta)
 	if phase == Phase.LOBBY or phase == Phase.GROUNDS:
@@ -1128,7 +1193,9 @@ func _process(delta: float) -> void:
 			_poll_kb_join()
 			_poll_lobby_ready()
 			_update_lobby_start_btn()
-	if _module == null and not walkers.is_empty():
+	# NETPROBE holds bot wander still: its rng draws are wall-clock-timed, which
+	# would desync the seeded draw order between couch and relay proof runs.
+	if _module == null and not walkers.is_empty() and _netprobe == "":
 		_bot_wander_timer -= delta
 		if _bot_wander_timer <= 0.0:
 			_bot_wander_timer = 1.6
@@ -1210,7 +1277,7 @@ func _build_freeroam_panel() -> void:
 	row.alignment = BoxContainer.ALIGNMENT_CENTER
 	row.add_theme_constant_override("separation", 14)
 	for i in EstateState.players.size():
-		if _is_bot(i):
+		if _is_bot(i) or NetSession.is_seat_remote(i):
 			continue
 		var pl = EstateState.players[i]
 		var tile_btn := Button.new()
@@ -1372,7 +1439,9 @@ func _enter_auction() -> void:
 		var pl = EstateState.players[i]
 		var b := Button.new()
 		b.text = "%s: RAISE TO %d♠" % [pl.name, high_bid + 1]
-		b.disabled = _is_bot(i)
+		# Remote seats bid via panel intents (phase 2) — the host's cursor
+		# never spends another player's grudge.
+		b.disabled = _is_bot(i) or NetSession.is_seat_remote(i)
 		b.pressed.connect(_on_bid.bind(i))
 		row.add_child(b)
 	row.name = "BidRow"
@@ -1382,7 +1451,7 @@ func _enter_auction() -> void:
 	bet_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	bet_row.add_theme_constant_override("separation", 10)
 	for i in EstateState.players.size():
-		if _is_bot(i) or EstateState.bets.has(i):
+		if _is_bot(i) or EstateState.bets.has(i) or NetSession.is_seat_remote(i):
 			continue
 		var pl = EstateState.players[i]
 		_bet_targets[i] = (i + 1) % EstateState.players.size()
@@ -1507,6 +1576,8 @@ func _show_get_ready(id: String, practice := false) -> void:
 		if PlayerInput.is_bot(i):
 			l.text = "%s — bot, needs no manual" % GameState.PLAYER_NAMES[i]
 			l.modulate.a = 0.5
+		elif NetSession.is_seat_remote(i):
+			l.text = "%s — REMOTE — readies from their own estate" % GameState.PLAYER_NAMES[i]
 		elif id == "par":
 			l.text = "%s — MOUSE: aim, hold, release to putt (hotseat — pass it on)" % GameState.PLAYER_NAMES[i]
 		else:
@@ -1601,6 +1672,7 @@ func _do_launch_game(id: String, practice := false) -> void:
 	phase_panel.visible = false
 	Sfx.play("confirm")
 	var info: Dictionary = MODULES[id]
+	_net_game_name = String(info.name)
 	var scene: PackedScene = load(info.scene)
 	_module = scene.instantiate()
 	$Grounds.visible = false
@@ -1970,3 +2042,552 @@ func _redraw_monuments() -> void:
 func _redraw_graffiti() -> void:
 	var lines: Array = EstateState.graffiti.slice(-10)
 	wall_text.text = "\n".join(PackedStringArray(lines))
+
+## ===== ONLINE PHASE 1 — the estate as the shared lobby (doc 10 §5) =====
+## Host: remote peers claim seats; their walkers stroll these grounds on
+## relayed input; READY and the GET READY gate poll PlayerInput as ever
+## (relay-transparent). Client: renders a mirror of the lobby facts + walker
+## snapshots; minigames stay host-screen-only this phase (spectate card).
+
+func _net_wire_signals() -> void:
+	NetSession.seat_requested.connect(_on_net_seat_requested)
+	NetSession.peer_left_seat.connect(_on_net_peer_left_seat)
+	NetSession.panel_intent_received.connect(_on_net_panel_intent)
+	NetSession.seat_granted.connect(_on_net_seat_granted)
+	NetSession.lobby_state_received.connect(_on_net_lobby_state)
+	NetSession.walker_state_received.connect(_on_net_walker_state)
+	NetSession.session_closed.connect(_on_net_session_closed)
+	NetSession.probe_first_input.connect(_on_net_probe_first_input)
+
+## ----- host side -----
+
+func _host_night_pressed() -> void:
+	if not NetSession.is_online():
+		var err: int = NetSession.host_night()
+		if err != OK:
+			Sfx.play("invalid")
+			_flash("THE ESTATE COULD NOT OPEN ITS DOORS (port %d is otherwise engaged)" % NetSession.DEFAULT_PORT, Color(0.9, 0.6, 0.6), 3.0)
+			return
+	Sfx.play("confirm")
+	_enter_lobby()
+
+## A guest knocked. Seat policy is the shell's: first BOT/EMPTY chair becomes
+## theirs; a couch full of humans declines politely. Mid-game joins wait for
+## the boundary (rejoin-at-boundary is phase 3).
+func _on_net_seat_requested(peer_id: int) -> void:
+	if phase != Phase.LOBBY and phase != Phase.GROUNDS and phase != Phase.TITLE:
+		NetSession.grant_seat(peer_id, -1, "the estate is mid-game — knock again between games")
+		return
+	for i in 4:
+		var st := _seat_status(i)
+		if st == "BOT" or st == "EMPTY":
+			PlayerInput.assign(i, -99)
+			PlayerInput.set_bot(i, false)
+			_lobby_ready.erase(i)
+			_join_ready_lock.erase(i)
+			NetSession.grant_seat(peer_id, i)
+			Sfx.play("confirm")
+			_flash("%s JOINS FROM AFAR" % GameState.PLAYER_NAMES[i], GameState.PLAYER_COLORS[i], 2.2)
+			get_tree().create_timer(2.3).timeout.connect(func():
+				if phase == Phase.LOBBY:
+					_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0))
+			if phase == Phase.LOBBY:
+				_build_lobby_panel()
+			return
+	NetSession.grant_seat(peer_id, -1, "the couch is full of humans")
+
+## The wire dropped: the seat flips BOT on the existing Executor register.
+## Mid-game the relay already feeds neutral input (the pawn idles); the bot
+## flag takes over at the next boundary, exactly the couch unplug behavior.
+func _on_net_peer_left_seat(seat: int, _peer_id: int) -> void:
+	if seat < 0 or seat > 3:
+		return
+	PlayerInput.set_bot(seat, true)
+	_lobby_ready.erase(seat)
+	_join_ready_lock.erase(seat)
+	Sfx.play("grudge", -4.0)
+	_flash("THE WIRE TO %s WENT DEAD — %s PLAYS ITSELF UNTIL FURTHER NOTICE" % [GameState.PLAYER_NAMES[seat], GameState.PLAYER_NAMES[seat]], GameState.PLAYER_COLORS[seat], 2.6)
+	if phase == Phase.LOBBY:
+		get_tree().create_timer(2.7).timeout.connect(func():
+			if phase == Phase.LOBBY:
+				_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0))
+		_build_lobby_panel()
+
+## Semantic UI intents from guests (spec §5.3): the client clicked a mirrored
+## control, the host runs the seat-parameterized handler. Phase 1 ships the
+## ready toggle; auction raises/bets/tiles ride the same pipe in phase 2.
+func _on_net_panel_intent(seat: int, intent: Dictionary) -> void:
+	match String(intent.get("kind", "")):
+		"ready_toggle":
+			if _ready_gate_active and seat in _ready_gate_needed:
+				if not _ready_gate_ready.get(seat, false):
+					_ready_gate_ready[seat] = true
+					Sfx.play("confirm")
+					_refresh_ready_gate_countdown()
+			elif phase == Phase.LOBBY or phase == Phase.GROUNDS:
+				_lobby_ready[seat] = not _lobby_ready.get(seat, false)
+				Sfx.play("card")
+				if phase == Phase.LOBBY:
+					_build_lobby_panel()
+
+## 5 Hz lobby facts (reliable) + 15 Hz walker snapshots (unreliable_ordered).
+func _net_host_broadcast(delta: float) -> void:
+	if not NetSession.has_guests():
+		return
+	_net_state_accum += delta
+	if _net_state_accum >= 0.2:
+		_net_state_accum = 0.0
+		NetSession.send_lobby_state(_net_build_lobby_state())
+	_net_walker_accum += delta
+	if _net_walker_accum >= 1.0 / 15.0:
+		_net_walker_accum = 0.0
+		_net_walker_seq += 1
+		var ws := _net_build_walker_state(_net_walker_seq)
+		NetSession.send_walker_state(ws)
+		if _netprobe != "" and _net_walker_seq % 15 == 0:
+			print("NETHASH side=host seq=%d h=%s" % [_net_walker_seq, NetSession.snapshot_hash(ws)])
+
+func _net_build_lobby_state() -> Dictionary:
+	var seats: Array = []
+	for i in 4:
+		seats.append({
+			"name": GameState.PLAYER_NAMES[i],
+			"status": _seat_status(i),
+			"ready": _lobby_ready.get(i, false),
+			"ping": NetSession.rtt_of_seat(i),
+		})
+	var standings: Array = []
+	for i in EstateState.standings():
+		var pl = EstateState.players[i]
+		standings.append({"name": pl.name, "points": pl.points, "grudge": pl.grudge})
+	var state := {
+		"phase": get_phase_name(),
+		"night": EstateState.run_night + 1,
+		"code": NetSession.invite_code(),
+		"addr": NetSession.listen_addr(),
+		"seats": seats,
+		"standings": standings,
+	}
+	if _ready_gate_active:
+		var waiting: Array = []
+		for i in _ready_gate_needed:
+			if not _ready_gate_ready.get(i, false):
+				waiting.append(GameState.PLAYER_NAMES[i])
+		state["gate"] = {
+			"name": String(MODULES[_ready_gate_id].name),
+			"goal": String(HOWTO.get(_ready_gate_id, {"goal": ""}).goal),
+			"waiting": waiting,
+			"countdown": ceili(maxf(_ready_gate_countdown, 0.0)),
+		}
+	if phase == Phase.GAME:
+		state["game"] = _net_game_name
+	return state
+
+func _net_build_walker_state(seq: int) -> Dictionary:
+	var w := {}
+	for i in walkers.size():
+		if not is_instance_valid(walkers[i]):
+			continue
+		var wk: EstateWalker = walkers[i]
+		w[i] = [
+			snappedf(wk.global_position.x, 0.001), snappedf(wk.global_position.y, 0.001),
+			snappedf(wk.global_position.z, 0.001), snappedf(wk.rotation.y, 0.001),
+			Vector2(wk.velocity.x, wk.velocity.z).length() > 0.5,
+		]
+	return {"seq": seq, "w": w}
+
+## ----- client side (the estate-only mirror) -----
+
+func _build_join_panel() -> void:
+	phase = Phase.LOBBY
+	_hide_title()
+	Sfx.play("card")
+	_clear_panel("JOIN A NIGHT — the host reads you their code", Color(0.9, 0.95, 0.9))
+	var entry := LineEdit.new()
+	entry.name = "JoinEntry"
+	entry.placeholder_text = "6-char code or IP:PORT"
+	entry.custom_minimum_size = Vector2(360, 50)
+	entry.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var ec := CenterContainer.new()
+	ec.add_child(entry)
+	phase_box.add_child(ec)
+	var status := Label.new()
+	status.name = "JoinStatus"
+	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	status.add_theme_font_size_override("font_size", 15)
+	status.modulate.a = 0.8
+	phase_box.add_child(status)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 14)
+	var join := Button.new()
+	join.text = "KNOCK"
+	join.custom_minimum_size = Vector2(180, 52)
+	join.pressed.connect(func():
+		var err: int = NetSession.join_night(entry.text)
+		if err != OK:
+			Sfx.play("invalid")
+			status.text = "that code does not parse — check it with the host"
+		else:
+			Sfx.play("card")
+			status.text = "knocking at the estate gate...")
+	row.add_child(join)
+	var back := Button.new()
+	back.text = "BACK"
+	back.custom_minimum_size = Vector2(120, 52)
+	back.pressed.connect(func():
+		NetSession.leave()
+		_enter_title())
+	row.add_child(back)
+	phase_box.add_child(row)
+	var hint := Label.new()
+	hint.text = "LAN or port-forwarded internet this phase — Steam invites arrive with phase 3"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.modulate.a = 0.6
+	phase_box.add_child(hint)
+
+func _on_net_seat_granted(seat: int, reason: String) -> void:
+	if seat < 0:
+		_flash("THE ESTATE DECLINED: %s" % reason, Color(0.9, 0.6, 0.6), 3.2)
+		var status := phase_box.get_node_or_null("JoinStatus")
+		if status and status is Label:
+			status.text = reason
+		NetSession.leave()
+		return
+	# Local device feeds the relay through the SAME per-index API; a pad if
+	# one is connected, else the WASD keyboard half. Tape mode samples nothing.
+	if not NetSession.tape_mode():
+		var pads := Input.get_connected_joypads()
+		PlayerInput.assign(seat, pads[0] if pads.size() > 0 else -1)
+		PlayerInput.set_bot(seat, false)
+	_enter_client_lobby()
+
+func _enter_client_lobby() -> void:
+	phase = Phase.LOBBY
+	_hide_title()
+	Music.play_slot("lobby")
+	$UI/TopBar.visible = false
+	# Walkers become mirror puppets: the host owns every transform.
+	for w in walkers:
+		if is_instance_valid(w):
+			w.set_physics_process(false)
+	_flash("SEAT CLAIMED — YOUR WALKER IS ON THE HOST'S GROUNDS", Color(0.35, 0.9, 0.5), 3.0)
+	_client_panel_sig = ""
+	_client_build_panel()
+
+func _on_net_lobby_state(state: Dictionary) -> void:
+	_client_last_state = state
+	var sig := JSON.stringify(state)
+	if sig != _client_panel_sig:
+		_client_panel_sig = sig
+		_client_build_panel()
+
+func _on_net_walker_state(state: Dictionary) -> void:
+	var w: Dictionary = state.get("w", {})
+	for k in w:
+		var arr: Array = w[k]
+		if arr.size() < 5:
+			continue
+		_client_walker_targets[int(str(k))] = {
+			"pos": Vector3(float(arr[0]), float(arr[1]), float(arr[2])),
+			"rot": float(arr[3]), "moving": bool(arr[4]),
+		}
+	if _netprobe != "" and int(state.get("seq", 0)) % 15 == 0:
+		print("NETHASH side=client seq=%d h=%s" % [int(state.get("seq", 0)), NetSession.snapshot_hash(state)])
+
+func _client_process(delta: float) -> void:
+	for p in _client_walker_targets:
+		if p >= walkers.size() or not is_instance_valid(walkers[p]):
+			continue
+		var t: Dictionary = _client_walker_targets[p]
+		var w: EstateWalker = walkers[p]
+		w.global_position = w.global_position.lerp(t.pos, 1.0 - exp(-12.0 * delta))
+		w.rotation.y = lerp_angle(w.rotation.y, float(t.rot), 1.0 - exp(-10.0 * delta))
+		if w.anim:
+			var want: String = "Walking_A" if bool(t.moving) else "Idle"
+			if w.anim.current_animation != want and w.anim.has_animation(want):
+				w.anim.play(want)
+
+## The client lobby: rebuilt from mirrored facts, never from local state.
+func _client_build_panel() -> void:
+	var state := _client_last_state
+	var phase_name := String(state.get("phase", "LOBBY"))
+	if phase_name == "GAME":
+		_client_build_spectate_panel(state)
+		return
+	_clear_panel("AN ONLINE NIGHT — hosted across the wire", Color(0.9, 0.95, 0.9))
+	var seats: Array = state.get("seats", [])
+	if seats.is_empty():
+		var wait := Label.new()
+		wait.text = "waiting for the estate to describe itself..."
+		wait.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		wait.modulate.a = 0.7
+		phase_box.add_child(wait)
+		return
+	for i in seats.size():
+		var s: Dictionary = seats[i]
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 12)
+		if String(s.get("status", "")) == "EMPTY":
+			row.modulate.a = 0.5
+		row.add_child(PlayerBadge.make(i, 20))
+		var name_l := Label.new()
+		name_l.text = String(s.get("name", "?")) + ("  (you)" if i == NetSession.my_seat() else "")
+		name_l.custom_minimum_size = Vector2(170, 0)
+		name_l.add_theme_font_size_override("font_size", 22)
+		name_l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
+		row.add_child(name_l)
+		var st_l := Label.new()
+		st_l.text = String(s.get("status", "?"))
+		st_l.custom_minimum_size = Vector2(110, 0)
+		st_l.add_theme_font_size_override("font_size", 18)
+		st_l.modulate.a = 0.85
+		row.add_child(st_l)
+		if bool(s.get("ready", false)):
+			row.add_child(_make_ready_chip())
+		phase_box.add_child(row)
+	var gate: Dictionary = state.get("gate", {})
+	if not gate.is_empty():
+		var g_t := Label.new()
+		g_t.text = "GET READY — %s" % String(gate.get("name", "?"))
+		g_t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		g_t.add_theme_font_size_override("font_size", 22)
+		g_t.add_theme_color_override("font_color", Color(1, 0.9, 0.5))
+		phase_box.add_child(g_t)
+		var g_goal := Label.new()
+		g_goal.text = String(gate.get("goal", ""))
+		g_goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		g_goal.custom_minimum_size = Vector2(640, 0)
+		g_goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		phase_box.add_child(g_goal)
+		var g_w := Label.new()
+		var waiting: Array = gate.get("waiting", [])
+		g_w.text = "all ready — curtain up" if waiting.is_empty() else "waiting on %s  ·  begins in %ds" % [", ".join(PackedStringArray(waiting)), int(gate.get("countdown", 0))]
+		g_w.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		g_w.add_theme_font_size_override("font_size", 16)
+		g_w.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
+		phase_box.add_child(g_w)
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 14)
+	var ready_btn := Button.new()
+	ready_btn.text = "READY"
+	ready_btn.custom_minimum_size = Vector2(200, 52)
+	ready_btn.pressed.connect(func():
+		Sfx.play("card")
+		NetSession.send_panel_intent({"kind": "ready_toggle"}))
+	btn_row.add_child(ready_btn)
+	var leave_btn := Button.new()
+	leave_btn.text = "LEAVE THE NIGHT"
+	leave_btn.custom_minimum_size = Vector2(200, 52)
+	leave_btn.pressed.connect(func():
+		NetSession.leave())
+	btn_row.add_child(leave_btn)
+	phase_box.add_child(btn_row)
+	var hint := Label.new()
+	hint.text = "MOVE strolls your walker on the host's grounds  ·  your A (or READY) toggles ready  ·  the host holds the keys to the night"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.custom_minimum_size = Vector2(700, 0)
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.modulate.a = 0.7
+	phase_box.add_child(hint)
+
+## Phase-1 posture (spec §8): games not yet mirrored render host-side only;
+## the client keeps its seat, its input still relays, and this card says so.
+func _client_build_spectate_panel(state: Dictionary) -> void:
+	_clear_panel("NIGHT %d — %s" % [int(state.get("night", 1)), String(state.get("game", "A GAME"))], Color(1, 0.9, 0.5))
+	var body := Label.new()
+	body.text = "The game is on the host's screen — your inputs still reach your pawn.\nFull remote mirrors arrive in phase 2; the estate keeps your seat warm."
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	body.custom_minimum_size = Vector2(660, 0)
+	phase_box.add_child(body)
+	var standings: Array = state.get("standings", [])
+	if not standings.is_empty():
+		var s_t := Label.new()
+		s_t.text = "— THE LADDER TONIGHT —"
+		s_t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		s_t.add_theme_font_size_override("font_size", 15)
+		s_t.modulate.a = 0.7
+		phase_box.add_child(s_t)
+		for s in standings:
+			var l := Label.new()
+			l.text = "%s  %d pts  ♠%d" % [String(s.get("name", "?")), int(s.get("points", 0)), int(s.get("grudge", 0))]
+			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			phase_box.add_child(l)
+
+func _on_net_session_closed(reason: String) -> void:
+	_client_last_state = {}
+	_client_walker_targets.clear()
+	_client_panel_sig = ""
+	for w in walkers:
+		if is_instance_valid(w):
+			w.set_physics_process(true)
+	if _netprobe != "":
+		return  # the probe script owns its own exit
+	if phase == Phase.LOBBY or phase == Phase.GROUNDS:
+		_flash("THE NIGHT WENT DARK — %s" % reason, Color(0.9, 0.6, 0.6), 3.0)
+		_enter_title()
+
+## ===== NETPROBE — two-instance verification rig (doc 10 §7) =====
+## host:  windowed, --net=host --netprobe=host --mockonly-equivalent night
+## join:  windowed, --net=join=127.0.0.1:8910 --nettape --netprobe=join
+## couch: headless, --netprobe=couch — SAME tape through the SAME injector
+##        with no wire, for the determinism diff. Traces print as
+##        NETPROBE_TRACE lines; results as NETPROBE_RESULTS.
+
+func _physics_process(_delta: float) -> void:
+	if _netprobe == "" or NetSession.is_client() or walkers.size() < 2 or not is_instance_valid(walkers[1]):
+		return
+	var t: int = NetSession.trace_tick()
+	if t >= 0 and t <= 300 and t % 30 == 0 and t != _np_last_trace:
+		_np_last_trace = t
+		var pos: Vector3 = walkers[1].global_position
+		print("NETPROBE_TRACE tick=%d p1=(%.3f,%.3f,%.3f)" % [t, pos.x, pos.y, pos.z])
+
+func _np_snap(tag: String) -> void:
+	if DisplayServer.get_name() != "headless":
+		VerifyCapture.snap(tag)
+
+func _on_net_probe_first_input(seat: int) -> void:
+	if _netprobe == "" or seat != 1:
+		return
+	_np_anchor_walker()
+
+## Pin the probed walker to a fixed mark the instant its input stream begins,
+## so couch and relay traces share an origin (bot wander history differs).
+func _np_anchor_walker() -> void:
+	if walkers.size() > 1 and is_instance_valid(walkers[1]):
+		walkers[1].global_position = Vector3(0.0, 0.1, -2.5)
+		walkers[1].velocity = Vector3.ZERO
+		walkers[1].walk_target = Vector3.INF
+		print("NETPROBE anchor seat1 (0.0,0.1,-2.5)")
+
+func _netprobe_run() -> void:
+	print("NETPROBE mode=%s" % _netprobe)
+	NetSession.code_selftest()
+	var ps := ProjectSettings.globalize_path("user://party_setup.json")
+	var pf := ProjectSettings.globalize_path("user://prefs.json")
+	if _netprobe != "join":
+		for f in [ps, pf]:
+			if FileAccess.file_exists(f):
+				DirAccess.copy_absolute(f, f + ".npbak")
+	await get_tree().create_timer(1.0).timeout
+	if _netprobe == "join":
+		await _netprobe_join_flow()
+	else:
+		await _netprobe_host_flow(ps, pf)
+
+func _np_wait(cond: Callable, timeout_s: float) -> bool:
+	var deadline := Time.get_ticks_msec() + int(timeout_s * 1000.0)
+	while not cond.call():
+		if Time.get_ticks_msec() >= deadline:
+			return false
+		await get_tree().create_timer(0.2).timeout
+	return true
+
+func _netprobe_host_flow(ps: String, pf: String) -> void:
+	mockonly = true
+	_hide_title()
+	PlayerInput.assign(0, -1)
+	PlayerInput.set_bot(0, false)
+	for i in [1, 2, 3]:
+		PlayerInput.set_bot(i, true)
+	if _netprobe == "host" and not NetSession.is_host():
+		NetSession.host_night()
+	_enter_lobby()
+	if _netprobe == "couch":
+		await get_tree().create_timer(1.0).timeout
+		PlayerInput.assign(1, -99)
+		PlayerInput.set_bot(1, false)
+		_lobby_ready.erase(1)
+		_np_anchor_walker()
+		NetSession.start_local_tape(1)
+		_build_lobby_panel()
+	else:
+		var claimed := func() -> bool: return NetSession.is_seat_remote(1)
+		if not await _np_wait(claimed, 60.0):
+			print("NETPROBE FAIL: no remote claim on seat 1")
+			await _netprobe_finish(ps, pf)
+			return
+		print("NETPROBE seat 1 claimed by peer %d" % NetSession.peer_of_seat(1))
+	await get_tree().create_timer(1.0).timeout
+	_np_snap("online_host_claim")
+	# tape: 5 s stroll (traced) + READY press at tick 300
+	var seat1_ready := func() -> bool: return bool(_lobby_ready.get(1, false))
+	var got_ready: bool = await _np_wait(seat1_ready, 30.0)
+	print("NETPROBE seat1 lobby ready=%s" % str(got_ready))
+	await get_tree().create_timer(0.5).timeout
+	_np_snap("online_host_ready")
+	_start_night_from_lobby()
+	await get_tree().create_timer(1.5).timeout
+	_continue_to_night()
+	var gate_up := func() -> bool: return _ready_gate_active
+	if await _np_wait(gate_up, 40.0):
+		_ready_gate_ready[0] = true
+		_refresh_ready_gate_countdown()
+		await get_tree().create_timer(0.6).timeout
+		_np_snap("online_host_gate")
+	var in_game := func() -> bool: return phase == Phase.GAME
+	if not await _np_wait(in_game, 40.0):
+		print("NETPROBE FAIL: night never reached GAME")
+		await _netprobe_finish(ps, pf)
+		return
+	await get_tree().create_timer(1.2).timeout
+	_np_snap("online_host_game")
+	var reckoned := func() -> bool: return phase == Phase.RECKONING
+	if await _np_wait(reckoned, 40.0):
+		await get_tree().create_timer(1.2).timeout
+		_np_snap("online_host_reckoning")
+	var parts := "NETPROBE_RESULTS"
+	for pl in EstateState.players:
+		parts += " %s:pts=%d,grudge=%d" % [pl.name, pl.points, pl.grudge]
+	print(parts)
+	await _netprobe_finish(ps, pf)
+
+func _netprobe_finish(ps: String, pf: String) -> void:
+	for f in [ps, pf]:
+		if FileAccess.file_exists(f + ".npbak"):
+			DirAccess.copy_absolute(f + ".npbak", f)
+			DirAccess.remove_absolute(f + ".npbak")
+	print("NETPROBE saves restored")
+	print("NETPROBE_DONE")
+	await get_tree().create_timer(0.8).timeout
+	get_tree().quit()
+
+func _netprobe_join_flow() -> void:
+	var seated := func() -> bool: return NetSession.my_seat() >= 0
+	if not await _np_wait(seated, 60.0):
+		print("NETPROBE FAIL: never granted a seat")
+		get_tree().quit()
+		return
+	print("NETPROBE granted seat %d" % NetSession.my_seat())
+	await get_tree().create_timer(2.0).timeout
+	_np_snap("online_client_lobby")
+	var my := NetSession.my_seat()
+	var see_ready := func() -> bool:
+		var seats: Array = _client_last_state.get("seats", [])
+		return my < seats.size() and bool(seats[my].get("ready", false))
+	var ready_seen: bool = await _np_wait(see_ready, 30.0)
+	print("NETPROBE client sees own ready=%s" % str(ready_seen))
+	await get_tree().create_timer(0.5).timeout
+	_np_snap("online_client_ready")
+	var gate_seen := func() -> bool: return _client_last_state.has("gate")
+	if await _np_wait(gate_seen, 40.0):
+		await get_tree().create_timer(0.6).timeout
+		_np_snap("online_client_gate")
+	var game_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "GAME"
+	if await _np_wait(game_seen, 40.0):
+		await get_tree().create_timer(1.2).timeout
+		_np_snap("online_client_spectate")
+	var reck_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "RECKONING"
+	if await _np_wait(reck_seen, 40.0):
+		await get_tree().create_timer(1.0).timeout
+		_np_snap("online_client_reckoning")
+	print("NETPROBE_CLIENT_DONE")
+	# outlive the host by a breath so its quit lands first, then leave
+	await get_tree().create_timer(6.0).timeout
+	get_tree().quit()

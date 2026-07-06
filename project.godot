@@ -26,6 +26,7 @@ Music="*res://core/music.gd"
 Cosmetics="*res://core/cosmetics.gd"
 Transition="*res://core/transition.gd"
 VerifyCapture="*res://scripts/verify_capture.gd"
+NetSession="*res://core/net_session.gd"
 
 [display]
 
