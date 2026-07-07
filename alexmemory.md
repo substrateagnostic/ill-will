@@ -805,3 +805,50 @@ KNOWN LIMIT (flagging for wave 2): bot MATCH OUTCOMES are not run-to-run
 reproducible (pre-existing v3 — bot think timers are wall-clock; tick-phased
 traps amplify). The physics receipts sidestep it; wave 2's "reproducible chaos"
 exit should move bot cadence to physics ticks.
+
+---
+
+## ONLINE PHASE 2, GAME MIRROR #1 — THE SÉANCE (2026-07-06, overnight)
+
+The first minigame now plays ONLINE end to end, and the port doubles as the
+house pattern every other game copies. Séance was chosen by the spec (100%
+PlayerInput, kinematic, deterministic, hidden-info showcase) — and the
+verification night's randomly drawn secret word turned out to be **MIRROR**.
+The spirits know what we're building.
+
+WHAT WORKS NOW (all receipts in docs/verify/online-seance-VERIFY.md):
+- A remote player in the estate lobby rides the night into a full séance:
+  their inputs chant/steer/vote through the phase-1 relay (zero séance input
+  changes), while their machine renders a live mirror of the sitting —
+  planchette, letters, focus candles, pull-arrows, vote chips, verdict,
+  settlement, all driven by a 20 Hz state dict (~1 kB → ≈21 kB/s per guest).
+- **Hidden info got BETTER online, as promised:** the charlatan card goes
+  rpc_id to that seat's machine ONLY. Screenshot pair: host shows "THE CARD
+  IS DELIVERED TO THEIR SCREEN ALONE"; the client shows "THE WORD IS
+  'MIRROR' — Bury it." The eyes-closed voice summons is likewise
+  per-peer-private online — no honor system across the wire.
+- Chant fairness: remote presses carry a beat-stamp of what THEIR screen
+  showed (±150 ms trust window). 14/14 accepted on loopback; this is the
+  piece that keeps rhythm judgment fair at real ping.
+- Receipts: SEANCE_TALLY byte-identical to a pristine-HEAD worktree (seeds
+  7/11/42) — the transport provably didn't touch the sim; NETHASH_MOD 56/56
+  + 61/61 snapshot digests matched; user:// saves restored, md5-verified.
+
+DECISIONS ALEX MAY WANT TO REVIEW:
+1. Mirror juice fires from STATE DELTAS (counters), not an event channel —
+   one pipe, drop-tolerant, and it's the pattern fan-out agents copy. If a
+   game later needs guaranteed one-shot theater, private/reliable sends
+   exist (the cast card uses one).
+2. Other sitters' chant ticks on a mirror are quantized to 20 Hz (~50 ms) —
+   the audible off-beat tell survives but is coarser than couch. Flagged in
+   the doc; per-tap timestamps can ride the snapshot later if playtests care.
+3. The podium isn't mirrored yet (client sees the spectate card for ~4 s
+   between game end and reckoning). Phase-3 chore, listed.
+4. NETPROBE tape now runs to tick 13500 (was 5400) so it can chant and vote
+   through a real séance night; --seancechar=N exists as an evidence-only
+   pin (logged loudly, never set in real play).
+
+NEXT (fan-out wave, per the spec's port order): understudy rides this
+pattern nearly free (same hidden-info shape), then throne/tilt/mower...
+PATTERN NOTES section in the VERIFY doc says exactly what to copy verbatim
+and what is séance-specific.

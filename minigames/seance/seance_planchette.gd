@@ -133,7 +133,11 @@ func tick(delta: float) -> void:
 		if out > 0.0:
 			vel -= n * out
 	position.y = board_center.y
-	# ripple anim
+	tick_fx(delta)
+
+## Ripple anim only — the ONLINE render mirror calls this INSTEAD of tick()
+## (no motion integration on a mirror; position is applied host state).
+func tick_fx(delta: float) -> void:
 	if _ripple_t > 0.0:
 		_ripple_t = maxf(0.0, _ripple_t - delta)
 		var k := 1.0 - _ripple_t / 0.4

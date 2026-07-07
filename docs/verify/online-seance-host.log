@@ -1,0 +1,388 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET host port=8910 err=0 code=80CMWE addr=192.168.0.101:8910
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 176969403 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE seat 1 claimed by peer 176969403
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+NETHASH side=host seq=15 h=1503d1f4
+NETPROBE_TRACE tick=60 p1=(-3.400,0.001,-2.500)
+VERIFY_SNAP res://docs/verify/seance_netshots_host/snap_online_host_claim_0288.png
+NETPROBE_TRACE tick=90 p1=(-3.400,0.001,-4.200)
+NETPROBE_TRACE tick=120 p1=(-3.400,0.001,-5.900)
+NETHASH side=host seq=30 h=083f47fe
+NETPROBE_TRACE tick=150 p1=(-1.870,0.001,-6.070)
+NETPROBE_TRACE tick=180 p1=(-0.170,0.001,-6.070)
+NETHASH side=host seq=45 h=ab37c032
+NETPROBE_TRACE tick=210 p1=(0.170,0.001,-4.710)
+NETPROBE_TRACE tick=240 p1=(0.170,0.001,-3.010)
+NETHASH side=host seq=60 h=84d89a47
+NETPROBE_TRACE tick=270 p1=(0.170,0.001,-2.613)
+NETPROBE_TRACE tick=300 p1=(0.170,0.001,-2.613)
+NETPROBE toggle seat=1 ready=true pf=544
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/seance_netshots_host/snap_online_host_ready_0527.png
+NETHASH side=host seq=75 h=5e149d6d
+NETHASH side=host seq=90 h=ad53442a
+NETHASH side=host seq=105 h=fa4f8ad7
+NETHASH side=host seq=120 h=498e3194
+NETHASH side=host seq=135 h=22ca34ba
+NETHASH side=host seq=150 h=7208db77
+NETHASH side=host seq=165 h=4b44de9d
+NETHASH side=host seq=180 h=9a83855a
+NETHASH side=host seq=195 h=73bf8880
+NETHASH side=host seq=210 h=f95545b4
+NETHASH side=host seq=225 h=d29148da
+VERIFY_SNAP res://docs/verify/seance_netshots_host/snap_online_host_gate_1190.png
+NETHASH side=host seq=240 h=21cfef97
+NETHASH side=host seq=255 h=fb0bf2bd
+NETHASH side=host seq=270 h=4a4a997a
+SEANCE_FORCECHAR idx=1 (evidence pin — never real play)
+SEANCE_BEGIN players=4 seed=3300865038 practice=false bots=[false, false, true, true]
+SEANCE_WORD word=MIRROR clue="Six letters. It shows you everything except yourself."
+SEANCE_CAST charlatan=BLUE idx=1 fee=2 grudge
+NETHASH side=host seq=285 h=23869ca0
+NETHASH side=host seq=300 h=a91c59d4
+VERIFY_SNAP res://docs/verify/seance_netshots_host/snap_online_host_game_1487.png
+NETHASH_MOD side=host seq=40 h=393719a6 bytes=776
+NETHASH side=host seq=315 h=82585cfa
+NETHASH side=host seq=330 h=d19703b7
+NETHASH side=host seq=345 h=aad306dd
+NETHASH_MOD side=host seq=80 h=2a01593b bytes=992
+SEANCE_SUMMONS p=0 RED pitch=0.90
+SEANCE_SUMMONS p=0 RED pitch=0.90
+SEANCE_SUMMONS p=0 RED pitch=0.90
+NETHASH side=host seq=360 h=fa11ad9a
+SEANCE_SUMMONS p=1 BLUE pitch=1.00
+SEANCE_SUMMONS p=1 BLUE pitch=1.00
+NETHASH side=host seq=375 h=d34db0c0
+SEANCE_SUMMONS p=1 BLUE pitch=1.00
+NETHASH_MOD side=host seq=120 h=b1400941 bytes=992
+SEANCE_SUMMONS p=2 GOLD pitch=1.12
+NETHASH side=host seq=390 h=228c577d
+SEANCE_SUMMONS p=2 GOLD pitch=1.12
+SEANCE_SUMMONS p=2 GOLD pitch=1.12
+NETHASH side=host seq=405 h=321f711a
+NETHASH_MOD side=host seq=160 h=e507dc13 bytes=992
+SEANCE_SUMMONS p=3 MINT pitch=1.26
+SEANCE_SUMMONS p=3 MINT pitch=1.26
+SEANCE_SUMMONS p=3 MINT pitch=1.26
+NETHASH side=host seq=420 h=815e17d7
+NETHASH side=host seq=435 h=5a9a1afd
+NETHASH_MOD side=host seq=200 h=e43b38dd bytes=1000
+NETHASH side=host seq=450 h=a9d8c1ba
+SEANCE_SUMMONS p=0 RED pitch=0.90
+SEANCE_SUMMONS p=0 RED pitch=0.90
+NETHASH side=host seq=465 h=8314c4e0
+SEANCE_SUMMONS p=0 RED pitch=0.90
+NETHASH_MOD side=host seq=240 h=26f8cae1 bytes=1000
+NETHASH side=host seq=480 h=d2536b9d
+SEANCE_SUMMONS p=0 RED pitch=0.90
+NETHASH side=host seq=495 h=ab8f6ec3
+NETHASH_MOD side=host seq=280 h=bb36b953 bytes=1100
+NETHASH side=host seq=510 h=31252bf7
+NETHASH side=host seq=525 h=0a612f1d
+NETHASH_MOD side=host seq=320 h=4df05784 bytes=988
+NETHASH side=host seq=540 h=599fd5da
+NETHASH side=host seq=555 h=32dbd900
+SEANCE_SUMMONS p=1 BLUE pitch=1.00
+SEANCE_SUMMONS p=1 BLUE pitch=1.00
+SEANCE_SUMMONS p=1 BLUE pitch=1.00
+NETHASH_MOD side=host seq=360 h=90ade988 bytes=988
+NETHASH side=host seq=570 h=821a7fbd
+SEANCE_SUMMONS p=1 BLUE pitch=1.00
+VERIFY_SNAP res://docs/verify/seance_netshots_host/snap_cast_2896.png
+NETHASH side=host seq=585 h=5b5682e3
+NETHASH side=host seq=600 h=e0ec4017
+NETHASH_MOD side=host seq=400 h=7db791d1 bytes=1104
+NETHASH side=host seq=615 h=ba28433d
+NETHASH side=host seq=630 h=0966e9fa
+NETHASH_MOD side=host seq=440 h=55eb1527 bytes=988
+NETHASH side=host seq=645 h=e2a2ed20
+SEANCE_SUMMONS p=2 GOLD pitch=1.12
+SEANCE_SUMMONS p=2 GOLD pitch=1.12
+NETHASH side=host seq=660 h=31e193dd
+SEANCE_SUMMONS p=2 GOLD pitch=1.12
+NETHASH_MOD side=host seq=480 h=98a8a72b bytes=988
+NETHASH side=host seq=675 h=0b1d9703
+SEANCE_SUMMONS p=2 GOLD pitch=1.12
+NETHASH side=host seq=690 h=5a5c3dc0
+NETHASH_MOD side=host seq=520 h=bf25dfc7 bytes=1100
+NETHASH side=host seq=705 h=69ef575d
+NETHASH side=host seq=720 h=b92dfe1a
+NETHASH_MOD side=host seq=560 h=01e371cb bytes=1100
+NETHASH side=host seq=735 h=926a0140
+NETHASH side=host seq=750 h=e1a8a7fd
+NETHASH_MOD side=host seq=600 h=e0656c65 bytes=988
+SEANCE_SUMMONS p=3 MINT pitch=1.26
+NETHASH side=host seq=765 h=bae4ab23
+SEANCE_SUMMONS p=3 MINT pitch=1.26
+SEANCE_SUMMONS p=3 MINT pitch=1.26
+NETHASH side=host seq=780 h=0a2351e0
+NETHASH_MOD side=host seq=640 h=0c51177b bytes=1072
+SEANCE_SUMMONS p=3 MINT pitch=1.26
+NETHASH side=host seq=795 h=e35f5506
+NETHASH side=host seq=810 h=68f5123a
+NETHASH_MOD side=host seq=680 h=3082cde7 bytes=1100
+NETHASH side=host seq=825 h=42311560
+NETHASH side=host seq=840 h=916fbc1d
+NETHASH_MOD side=host seq=720 h=b3026782 bytes=1100
+NETHASH side=host seq=855 h=6aabbf43
+NETHASH side=host seq=870 h=b9ea6600
+NETHASH_MOD side=host seq=760 h=2b1dbc0c bytes=988
+NETHASH side=host seq=885 h=93266926
+NETHASH side=host seq=900 h=18bc265a
+SEANCE_SITTING_START t=49.0
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=0
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=0
+NETHASH_MOD side=host seq=800 h=5d5ec3ce bytes=1052
+SEANCE_STAMP p=1 stamp_dist=0.367 host_dist=0.417 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=false beat=0
+NETHASH side=host seq=915 h=f1f82980
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=1
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=1
+NETHASH side=host seq=930 h=4136d03d
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=2
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=2
+SEANCE_STAMP p=1 stamp_dist=0.167 host_dist=0.217 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=false beat=2
+NETHASH_MOD side=host seq=840 h=47e7ef26 bytes=1044
+NETHASH side=host seq=945 h=1a72d363
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=3
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=3
+SEANCE_COMMIT letter=M correct=true focus=92 t=2.8
+SEANCE_STAMP p=1 stamp_dist=0.033 host_dist=0.017 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=true beat=4
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=4
+NETHASH side=host seq=960 h=69b17a20
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=4
+NETHASH_MOD side=host seq=880 h=9536278e bytes=992
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=5
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=5
+NETHASH side=host seq=975 h=42ed7d46
+SEANCE_COMMIT letter=F correct=false focus=78 t=4.8
+SEANCE_STAMP p=1 stamp_dist=0.233 host_dist=0.183 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=false beat=5
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=6
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=6
+NETHASH side=host seq=990 h=922c2403
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=7
+NETHASH_MOD side=host seq=920 h=a2cde218 bytes=1000
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=7
+SEANCE_STAMP p=1 stamp_dist=0.417 host_dist=0.383 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=false beat=7
+NETHASH side=host seq=1005 h=8d87f207
+SEANCE_COMMIT letter=O correct=true focus=80 t=6.7
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=8
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=8
+NETHASH side=host seq=1020 h=dcc698c4
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=9
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=9
+SEANCE_STAMP p=1 stamp_dist=0.217 host_dist=0.267 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=false beat=9
+VERIFY_SNAP res://docs/verify/seance_netshots_host/snap_net_sitting_4808.png
+NETHASH_MOD side=host seq=960 h=013b6c26 bytes=988
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=10
+NETHASH side=host seq=1035 h=b6029bea
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=10
+SEANCE_STAMP p=1 stamp_dist=0.017 host_dist=0.033 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=true beat=11
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=11
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=11
+NETHASH side=host seq=1050 h=054142a7
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=12
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=12
+NETHASH_MOD side=host seq=1000 h=75a0b6d3 bytes=992
+NETHASH side=host seq=1065 h=de7d45cd
+SEANCE_STAMP p=1 stamp_dist=0.183 host_dist=0.167 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=false beat=12
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=13
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=13
+NETHASH side=host seq=1080 h=2dbbec8a
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=14
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=14
+SEANCE_STAMP p=1 stamp_dist=0.383 host_dist=0.350 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=false beat=14
+NETHASH_MOD side=host seq=1040 h=4ca85fc7 bytes=992
+SEANCE_COMMIT letter=H correct=false focus=62 t=12.6
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=15
+NETHASH side=host seq=1095 h=06f7efb0
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=15
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=16
+NETHASH side=host seq=1110 h=8c8dace4
+SEANCE_STAMP p=1 stamp_dist=0.267 host_dist=0.300 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=false beat=16
+NETHASH_MOD side=host seq=1080 h=ec305b5f bytes=984
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=17
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=17
+NETHASH side=host seq=1125 h=65c9b00a
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=18
+SEANCE_STAMP p=1 stamp_dist=0.067 host_dist=0.083 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=true beat=18
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=false beat=18
+NETHASH side=host seq=1140 h=b50856c7
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=19
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=19
+SEANCE_COMMIT letter=I correct=true focus=63 t=16.4
+NETHASH_MOD side=host seq=1120 h=d1b2bbe4 bytes=988
+NETHASH side=host seq=1155 h=8e4459ed
+SEANCE_STAMP p=1 stamp_dist=0.133 host_dist=0.100 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=true beat=19
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=20
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=false beat=20
+NETHASH side=host seq=1170 h=dd8300aa
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=21
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=21
+SEANCE_COMMIT letter=Q correct=false focus=48 t=18.3
+SEANCE_STAMP p=1 stamp_dist=0.333 host_dist=0.300 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=false beat=21
+NETHASH_MOD side=host seq=1160 h=f6e64450 bytes=984
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=22
+NETHASH side=host seq=1185 h=b6bf03d0
+SEANCE_TICK p=3 MINT pitch=1.26 on_beat=true beat=22
+SEANCE_TICK p=2 GOLD pitch=1.12 on_beat=true beat=23
+NETHASH side=host seq=1200 h=3c54c104
+SEANCE_STAMP p=1 stamp_dist=0.317 host_dist=0.333 used=true
+SEANCE_TICK p=1 BLUE pitch=1.00 on_beat=false beat=23
+SEANCE_COMMIT letter=R correct=true focus=49 t=20.3
+SEANCE_TAPS p=0 RED on=0 off=0 suspicion=0.00
+SEANCE_TAPS p=1 BLUE on=4 off=10 suspicion=1.57
+SEANCE_TAPS p=2 GOLD on=23 off=0 suspicion=1.65
+SEANCE_TAPS p=3 MINT on=21 off=2 suspicion=0.49
+SEANCE_TASK success=true cause=spelled focus=49 t=20.3 right=4 wrong=3
+NETHASH_MOD side=host seq=1200 h=f202091f bytes=1064
+NETHASH side=host seq=1215 h=1590c42a
+NETHASH side=host seq=1230 h=64cf6ae7
+NETHASH_MOD side=host seq=1240 h=40c19da3 bytes=1064
+NETHASH side=host seq=1245 h=3e0b6e0d
+NETHASH side=host seq=1260 h=8d4a14ca
+NETHASH_MOD side=host seq=1280 h=d05a4ca4 bytes=1100
+NETHASH side=host seq=1275 h=668617f0
+NETHASH side=host seq=1290 h=b5c4bead
+NETHASH_MOD side=host seq=1320 h=1d44da5d bytes=1100
+NETHASH side=host seq=1305 h=c557d84a
+NETHASH side=host seq=1320 h=14967f07
+NETHASH_MOD side=host seq=1360 h=3ba4785f bytes=1100
+NETHASH side=host seq=1335 h=edd2822d
+NETHASH side=host seq=1350 h=3d1128ea
+NETHASH_MOD side=host seq=1400 h=888f0618 bytes=1100
+NETHASH side=host seq=1365 h=164d2c10
+NETHASH side=host seq=1380 h=658bd2cd
+NETHASH_MOD side=host seq=1440 h=a6eea41a bytes=1100
+NETHASH side=host seq=1395 h=3ec7d5f3
+NETHASH side=host seq=1410 h=c45d9327
+NETHASH_MOD side=host seq=1480 h=4583fbc5 bytes=1100
+NETHASH side=host seq=1425 h=9d99964d
+NETHASH side=host seq=1440 h=ecd83d0a
+NETHASH_MOD side=host seq=1520 h=926e897e bytes=1100
+NETHASH side=host seq=1455 h=c6144030
+NETHASH side=host seq=1470 h=1552e6ed
+NETHASH_MOD side=host seq=1560 h=b0ce2780 bytes=1100
+NETHASH side=host seq=1485 h=ee8eea13
+NETHASH side=host seq=1500 h=7424a747
+NETHASH_MOD side=host seq=1600 h=fdb8b539 bytes=1100
+NETHASH side=host seq=1515 h=4d60aa6d
+NETHASH side=host seq=1530 h=9c9f512a
+NETHASH_MOD side=host seq=1640 h=1c18533b bytes=1100
+NETHASH side=host seq=1545 h=75db5450
+NETHASH side=host seq=1560 h=c519fb0d
+NETHASH_MOD side=host seq=1680 h=baadaae6 bytes=1100
+NETHASH side=host seq=1575 h=9e55fe33
+NETHASH side=host seq=1590 h=ed94a4f0
+NETHASH_MOD side=host seq=1720 h=0798389f bytes=1100
+NETHASH side=host seq=1605 h=fd27be8d
+NETHASH side=host seq=1620 h=4c66654a
+NETHASH_MOD side=host seq=1760 h=36ac42e0 bytes=1100
+NETHASH side=host seq=1635 h=25a26870
+NETHASH side=host seq=1650 h=74e10f2d
+NETHASH_MOD side=host seq=1800 h=8396d099 bytes=1100
+NETHASH side=host seq=1665 h=4e1d1253
+NETHASH side=host seq=1680 h=9d5bb910
+SEANCE_VOTE_OPEN t=101.7
+SEANCE_VOTE p=1 BLUE -> RED t=0.2
+VERIFY_SNAP res://docs/verify/seance_netshots_host/snap_accuse_7489.png
+NETHASH_MOD side=host seq=1840 h=654a826a bytes=1096
+NETHASH side=host seq=1695 h=7697bc36
+NETHASH side=host seq=1710 h=fc2d796a
+NETHASH_MOD side=host seq=1880 h=cf53954f bytes=1096
+NETHASH side=host seq=1725 h=d5697c90
+SEANCE_VOTE p=3 MINT -> BLUE t=4.5
+NETHASH side=host seq=1740 h=24a8234d
+NETHASH side=host seq=1755 h=fde42673
+NETHASH_MOD side=host seq=1920 h=4aca8c1c bytes=1096
+NETHASH side=host seq=1770 h=4d22cd30
+SEANCE_VOTE p=2 GOLD -> BLUE t=7.3
+NETHASH side=host seq=1785 h=265ed056
+NETHASH_MOD side=host seq=1960 h=2dfc17d9 bytes=1096
+NETHASH side=host seq=1800 h=abf48d8a
+NETHASH side=host seq=1815 h=853090b0
+NETHASH_MOD side=host seq=2000 h=80480b48 bytes=1096
+NETHASH side=host seq=1830 h=d46f376d
+NETHASH side=host seq=1845 h=adab3a93
+NETHASH_MOD side=host seq=2040 h=960a478a bytes=1096
+NETHASH side=host seq=1860 h=fce9e150
+SEANCE_VERDICT caught=true correct_votes=2 charlatan=1 success=true
+NETHASH side=host seq=1875 h=d625e476
+NETHASH_MOD side=host seq=2080 h=53537b0e bytes=1060
+SEANCE_DRUMROLL pitch=0.90 db=-15.0
+SEANCE_DRUMROLL pitch=0.94 db=-14.2
+SEANCE_DRUMROLL pitch=0.98 db=-13.3
+SEANCE_DRUMROLL pitch=1.02 db=-12.5
+NETHASH side=host seq=1890 h=25648b33
+SEANCE_DRUMROLL pitch=1.07 db=-11.7
+SEANCE_DRUMROLL pitch=1.11 db=-10.8
+SEANCE_DRUMROLL pitch=1.15 db=-10.0
+SEANCE_DRUMROLL pitch=1.19 db=-9.2
+SEANCE_DRUMROLL pitch=1.23 db=-8.3
+SEANCE_DRUMROLL pitch=1.27 db=-7.5
+SEANCE_DRUMROLL pitch=1.32 db=-6.7
+SEANCE_DRUMROLL pitch=1.36 db=-5.8
+SEANCE_DRUMROLL pitch=1.40 db=-5.0
+NETHASH side=host seq=1905 h=34f7a4d0
+VERIFY_SNAP res://docs/verify/seance_netshots_host/snap_reveal_8563.png
+NETHASH_MOD side=host seq=2120 h=272eaac9 bytes=1128
+NETHASH side=host seq=1920 h=84364b8d
+NETHASH side=host seq=1935 h=5d724eb3
+NETHASH_MOD side=host seq=2160 h=002a4da9 bytes=1132
+SEANCE_LEDGER row=0 "the seance HELD — the faithful collect royalties"
+NETHASH side=host seq=1950 h=acb0f570
+SEANCE_LEDGER row=1 "BLUE eats 2 grudge, dragged into the light"
+SEANCE_LEDGER row=2 "GOLD fingered the charlatan — +1 royalty"
+NETHASH side=host seq=1965 h=85ecf896
+SEANCE_LEDGER row=3 "MINT fingered the charlatan — +1 royalty"
+WARNING: Sending 1468 bytes unreliably which is above the MTU (1392), this will result in higher packet loss
+   at: put_packet (modules/enet/enet_multiplayer_peer.cpp:363)
+   GDScript backtrace (most recent call first):
+       [0] send_module_state (res://core/net_session.gd:402)
+       [1] _net_host_broadcast (res://estate/estate.gd:2217)
+       [2] _process (res://estate/estate.gd:1232)
+NETHASH_MOD side=host seq=2200 h=fd2f0ae0 bytes=1464
+VERIFY_SNAP res://docs/verify/seance_netshots_host/snap_settle_8876.png
+NETHASH side=host seq=1980 h=d52b9f53
+NETHASH side=host seq=1995 h=ae67a279
+NETHASH_MOD side=host seq=2240 h=07ba60cf bytes=1464
+NETHASH side=host seq=2010 h=35374504
+KILL_EVENTS n=1 [{"cause":"seance","killer":3,"victim":1}]
+SEANCE_RESULTS {"currency_events":[{"amount":2,"player":1,"reason":"took the spirits' coin to bury the seance","type":"grudge"},{"amount":1,"player":0,"reason":"held the circle against a paid hand","type":"royalty"},{"amount":1,"player":2,"reason":"held the circle against a paid hand","type":"royalty"},{"amount":1,"player":3,"reason":"held the circle against a paid hand","type":"royalty"},{"amount":2,"player":1,"reason":"dragged into the light","type":"grudge"},{"amount":1,"player":2,"reason":"fingered the charlatan","type":"royalty"},{"amount":1,"player":3,"reason":"fingered the charlatan","type":"royalty"}],"highlights":["MINT fingered the charlatan first","BLUE sold the seance for 2 grudge and got dragged into the light","the circle spelled MIRROR through a paid hand"],"kill_events":[{"cause":"seance","killer":3,"victim":1}],"monuments":[],"placements":[2,3,0,1],"points":{"0":2,"1":0,"2":3,"3":3}}
+NETHASH side=host seq=2025 h=0e73482a
+NETHASH side=host seq=2040 h=5db1eee7
+NETHASH side=host seq=2055 h=36edf20d
+NETHASH side=host seq=2070 h=862c98ca
+NETHASH side=host seq=2085 h=5f689bf0
+NETHASH side=host seq=2100 h=e4fe5924
+VERIFY_SNAP res://docs/verify/seance_netshots_host/snap_online_host_reckoning_9384.png
+NETPROBE_RESULTS RED:pts=2,grudge=3 BLUE:pts=1,grudge=7 GOLD:pts=5,grudge=2 MINT:pts=3,grudge=1
+NETPROBE saves restored
+NETPROBE_DONE
+NETHASH side=host seq=2115 h=be3a5c4a
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)
