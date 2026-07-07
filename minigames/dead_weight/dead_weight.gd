@@ -15,6 +15,10 @@ const CHAR_SCENES := [
 ]
 
 const ROUND_TIME := 75.0
+const HOUSE_AWAKENS_WINDOW := 30.0   # final stretch (doc 09 §8.3, Alex-signed):
+                                     # ghost possess-cooldowns halve + the room
+                                     # dims to candlelight — the dead get lively
+                                     # exactly when the living are winning
 const KILL_CREDIT_WINDOW := 4.0      # safety cap; recovery-clear is the real gate
 const SPAWN_LOCK_TIME := 3.0         # props near spawns unpossessable this long
 const SPAWN_LOCK_RADIUS := 2.0
@@ -48,6 +52,13 @@ var round_elapsed := 0.0
 var _between_timer := 0.0             # counts down to the next round start
 var _round_resolving := false
 var _decider := "none"                # what ended the round (balance metric)
+var _house_awake := false             # final-stretch ghost buff live this round
+var _awaken_override := -1.0          # --dwawaken=S (verify): film the moment early
+var _env: Environment = null          # stage refs for the candlelight dim (fx)
+var _sun: DirectionalLight3D = null
+var _dim_tw: Tween = null
+var _candle_root: Node3D = null
+var _candle_lights: Array = []
 
 # modes
 var _started := false
@@ -114,6 +125,7 @@ func _build_stage() -> void:
 	env.glow_bloom = 0.12
 	env.glow_hdr_threshold = 0.95
 	we.environment = env
+	_env = env
 
 	cam.global_position = Vector3(0, 13.5, 11.5)
 	cam.look_at(Vector3(0, 0.3, -0.4), Vector3.UP)
@@ -127,6 +139,7 @@ func _build_stage() -> void:
 	sun.light_energy = 1.25
 	sun.light_color = Color(1.0, 0.93, 0.8)
 	sun.shadow_enabled = true
+	_sun = sun
 
 	# warm bounce fill (was cool blue — the last cold accent)
 	var fill := DirectionalLight3D.new()
@@ -251,6 +264,11 @@ func _parse_args() -> void:
 			_aim_probe_on = true
 			_probe_shove = true
 			_aim_probe_deg = float(arg.trim_prefix("--aimshove="))
+		elif arg.begins_with("--dwawaken="):
+			# verify-only: force THE HOUSE AWAKENS this many seconds into each
+			# round so the candlelight moment can be filmed without waiting out
+			# 45s of brawl. Ignored by the --dwbalance sim (receipts unchanged).
+			_awaken_override = maxf(0.5, float(arg.trim_prefix("--dwawaken=")))
 		elif arg == "--hitkitcap":
 			_hitkit_cap = true
 		elif arg.begins_with("--outdir="):
@@ -449,6 +467,7 @@ func _start_round() -> void:
 	_decider = "none"
 	_elim_order.clear()
 	_clear_ghosts()
+	_house_asleep()
 	var darken := round_index * 0.22
 	for prop in _props:
 		prop.reset_for_round(darken)
@@ -679,6 +698,9 @@ func _print_balance() -> void:
 	print("LIVING WIN %% = %.1f%%   ghost-decided %% = %.1f%%   [target living 55-75%%]" % [living_pct, 100.0 - living_pct])
 	print("telemetry: possessions=%d ghost_hits=%d avg_round=%.1fs" % [_dbg.possess, _dbg.ghost_hits, _dbg.round_len / float(maxi(total, 1))])
 	print("DRIVE_FORCE=%.1f KNOCK_SCALE=%.2f KNOCK_MAX=%.1f" % [DWProp.DRIVE_FORCE, DWProp.KNOCK_SCALE, DWProp.KNOCK_MAX])
+	print("HOUSE_AWAKENS at=%.1fs of %.1fs cap (live: %.0fs of %.0fs) POSSESS_CD %.1f->%.1f" % [
+		_house_awakens_at(), _round_cap(), ROUND_TIME - HOUSE_AWAKENS_WINDOW, ROUND_TIME,
+		DWGhost.POSSESS_CD, DWGhost.POSSESS_CD * 0.5])
 	print("=====================================")
 
 func _dedup(arr: Array) -> Array:
@@ -800,6 +822,8 @@ func _physics_process(delta: float) -> void:
 		return
 	round_elapsed += delta
 	_update_timer_label()
+	if not _house_awake and round_elapsed >= _house_awakens_at():
+		_awaken_house()
 
 	for i in players.size():
 		if _dw_probe_manual and i == 0:
@@ -814,6 +838,109 @@ func _physics_process(delta: float) -> void:
 
 func _round_cap() -> float:
 	return 22.0 if _balance_rounds > 0 else ROUND_TIME
+
+# ---------------------------------------------------------------- house awakens
+## When the dead rise: the final HOUSE_AWAKENS_WINDOW (30s) of the live 75s
+## round. The shortened balance-sim rounds (22s cap) use the same fraction of
+## the cap (45/75 = 60%) so --dwbalance measures the same regime, reproducibly.
+func _house_awakens_at() -> float:
+	if _awaken_override > 0.0 and _balance_rounds == 0:
+		return _awaken_override
+	return maxf(_round_cap() - HOUSE_AWAKENS_WINDOW, _round_cap() * 0.6)
+
+## THE HOUSE AWAKENS (doc 09 §8.3, Alex-signed): ghost possess-cooldowns halve
+## (running cooldowns halved on the spot) — the teeth. The candlelight dim is
+## presentation only, gated behind fx_on() so --dwbalance stays reproducible.
+func _awaken_house() -> void:
+	_house_awake = true
+	for k in _ghosts:
+		(_ghosts[k] as DWGhost).house_awakens()
+	print("DW_HOUSE_AWAKENS round=%d t=%.1fs at=%.1fs cd_scale=0.5 ghosts=%d" % [
+		round_index + 1, round_elapsed, _house_awakens_at(), _ghosts.size()])
+	if fx_on():
+		Sfx.play("grudge")
+		_flash_banner("THE HOUSE AWAKENS", Color(0.72, 0.55, 0.95), 2.2)
+		_dim_to_candlelight()
+
+## Ghost possess-cooldown scale — poltergeist.gd reads this on every release().
+func ghost_possess_cd_scale() -> float:
+	return 0.5 if _house_awake else 1.0
+
+## The room drops to candlelight: ambient + sun ease down, four candles gutter
+## to life around the attic. Pure fx (never runs in --dwbalance).
+func _dim_to_candlelight() -> void:
+	if _env != null:
+		if _dim_tw != null and _dim_tw.is_valid():
+			_dim_tw.kill()
+		_dim_tw = create_tween()
+		_dim_tw.set_parallel(true)
+		_dim_tw.tween_property(_env, "ambient_light_energy", 0.40, 1.4)
+		if _sun != null:
+			_dim_tw.tween_property(_sun, "light_energy", 0.85, 1.4)
+	_candle_root = Node3D.new()
+	_candle_root.name = "Candles"
+	add_child(_candle_root)
+	_candle_lights.clear()
+	for corner in [Vector3(4.9, 0, 4.9), Vector3(-4.9, 0, 4.9), Vector3(4.9, 0, -4.9), Vector3(-4.9, 0, -4.9)]:
+		var wax := MeshInstance3D.new()
+		var wm := CylinderMesh.new()
+		wm.top_radius = 0.09
+		wm.bottom_radius = 0.11
+		wm.height = 0.42
+		wax.mesh = wm
+		wax.position = corner + Vector3(0, 0.21, 0)
+		var wmat := StandardMaterial3D.new()
+		wmat.albedo_color = Color(0.92, 0.86, 0.72)
+		wmat.roughness = 0.6
+		wax.material_override = wmat
+		_candle_root.add_child(wax)
+		var flame := MeshInstance3D.new()
+		var fm2 := SphereMesh.new()
+		fm2.radius = 0.06
+		fm2.height = 0.16
+		flame.mesh = fm2
+		flame.position = corner + Vector3(0, 0.52, 0)
+		var fmat2 := StandardMaterial3D.new()
+		fmat2.albedo_color = Color(1.0, 0.72, 0.3)
+		fmat2.emission_enabled = true
+		fmat2.emission = Color(1.0, 0.6, 0.18)
+		fmat2.emission_energy_multiplier = 3.6
+		flame.material_override = fmat2
+		_candle_root.add_child(flame)
+		var lt := OmniLight3D.new()
+		lt.position = corner + Vector3(0, 0.7, 0)
+		lt.light_color = Color(1.0, 0.62, 0.28)
+		lt.light_energy = 1.4
+		lt.omni_range = 5.5
+		lt.set_meta("base_energy", 1.4)
+		_candle_root.add_child(lt)
+		_candle_lights.append(lt)
+
+## Reset the awakening between rounds: buff off, candles out, lighting restored.
+func _house_asleep() -> void:
+	_house_awake = false
+	if _dim_tw != null and _dim_tw.is_valid():
+		_dim_tw.kill()
+	_dim_tw = null
+	if _candle_root != null and is_instance_valid(_candle_root):
+		_candle_root.queue_free()
+	_candle_root = null
+	_candle_lights.clear()
+	if fx_on() and _env != null:
+		_env.ambient_light_energy = 0.62
+		if _sun != null:
+			_sun.light_energy = 1.25
+
+## Candle gutter — visual only, fx-gated, global randf (never the seeded rng).
+func _process(_delta: float) -> void:
+	if not fx_on() or _candle_lights.is_empty():
+		return
+	for c in _candle_lights:
+		if not is_instance_valid(c):
+			continue
+		var base: float = float(c.get_meta("base_energy", 1.4))
+		(c as OmniLight3D).light_energy = base \
+			+ sin(game_time * 13.0 + c.position.x * 7.0) * 0.35 + randf_range(-0.12, 0.12)
 
 func _drive_fighter(i: int) -> void:
 	var f: DWFighter = _fighters[i]
