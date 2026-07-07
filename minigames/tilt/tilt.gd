@@ -130,6 +130,11 @@ var _last_status := 0.0
 var _cam_base: Transform3D
 var _slowmo := false
 var _vc: Node = null
+# THE FINAL STRETCH kit (doc 09 §Q1): sudden death IS tilt's stretch — the kit
+# unifies music (light->tense) + last-10s ticks + timer pulse around the
+# bespoke "SUDDEN DEATH / THE PIN RISES" drama. Never attached in --tilttest,
+# so the idle/edge/gull receipts stay byte-identical.
+var _stretch: FinalStretch = null
 
 # --- ONLINE PHASE 2: the render mirror (docs/design/10 §4.3; house pattern
 # copied from minigames/seance/seance.gd). Host runs the WHOLE sim exactly as
@@ -194,6 +199,8 @@ func begin(config: Dictionary) -> void:
 		rounds_total = clampi(_cli_rounds, 1, 5)
 	if _cli_roundtime > 0.0:
 		round_time = clampf(_cli_roundtime, 8.0, 120.0)
+	if _test_mode == "":
+		_stretch = FinalStretch.attach(self, timer_label)
 	if not _mirror:
 		# fenced from the mirror: bot construction (spec §4.3 begin() split)
 		bots = TiltBots.new()
@@ -471,6 +478,10 @@ func _process(delta: float) -> void:
 		var hot := sudden_death or remain <= 10
 		timer_label.add_theme_color_override("font_color",
 			Color(1, 0.3, 0.2) if hot else Color(1, 0.92, 0.6))
+		# FINAL STRETCH ticks + timer pulse over the last 10s (host AND mirror:
+		# both run this HUD block off the same authoritative round clock)
+		if _stretch != null and phase == Phase.PLAY:
+			_stretch.tick(deadline - round_t)
 	else:
 		timer_label.text = ""
 
@@ -649,7 +660,15 @@ func _on_edge_fall(p: int) -> void:
 		_kill_events.append({"killer": shover, "victim": p, "cause": "ring_out"})
 	Sfx.play("death")
 	_shake = maxf(_shake, 0.3)
-	_slow_mo()
+	# THE DECIDING MOMENT (doc 09 §Q2): the fall that ENDS the round gets the
+	# deep freeze + fov punch; every other fall gets the demoted 0.5x/0.2s
+	# beat (doc 08's anti-goal — deep slow-mo is reserved, not routine).
+	var deciding := _standing_count() <= 1 and roster.size() >= 2 and _test_mode == ""
+	if deciding and not _reduced_motion():
+		_slow_mo(0.25, 0.8)
+		FinalStretch.fov_punch(cam, 50.0, 6.0, 0.8)
+	else:
+		_slow_mo()
 	if assist >= 0:
 		shove_falls[assist] = int(shove_falls[assist]) + 1
 		var an: Dictionary = roster[assist]
@@ -857,6 +876,8 @@ func _standing_count() -> int:
 func _start_sudden_death() -> void:
 	sudden_death = true
 	platter.set_sudden_death(true)
+	if _stretch != null:
+		_stretch.escalate()   # FINAL STRETCH: game_light -> game_tense + nudge
 	_flash_banner("SUDDEN DEATH\nTHE PIN RISES", Color(1, 0.3, 0.2), 2.2)
 	Sfx.play("grudge")
 	_shake = maxf(_shake, 0.2)
@@ -902,6 +923,8 @@ func _start_round() -> void:
 		var pawn: TiltPawn = pawns[i]
 		pawn.reset_for_round(_spawn_pos(i))
 	round_label.text = "ROUND %d / %d" % [round_num, rounds_total]
+	if _stretch != null:
+		_stretch.round_reset()   # light bed back on; tick ladder re-arms
 	_flash_banner("ROUND %d" % round_num, Color(1, 0.85, 0.2), 1.2)
 	if round_num == 1:
 		hint_label.text = _controls_bar()
@@ -975,6 +998,8 @@ func _finish_match() -> void:
 	var champ: int = order[0]
 	var champ_pl: Dictionary = roster[champ]
 	_match_winner = champ
+	if _stretch != null:
+		_stretch.match_ended()
 	_flash_banner("%s WINS TILT!" % champ_pl.name, champ_pl.color, 9999.0)
 	Sfx.play("match_win")
 	if NetSession.has_guests():
@@ -1203,14 +1228,20 @@ func _build_world() -> void:
 	cam.fov = 50.0
 	_cam_base = cam.global_transform
 
-func _slow_mo() -> void:
+## Deciding-moment standard (doc 09 §Q2): ordinary falls demoted to 0.5x/0.2s
+## (was a flat 0.35x/0.32s on EVERY fall); the round-ending fall promotes to
+## 0.25x/0.8s via the explicit args. Restore timer is real-time, as before.
+func _slow_mo(scale := 0.5, dur := 0.2) -> void:
 	if _slowmo:
 		return
 	_slowmo = true
-	Engine.time_scale = 0.35
-	await get_tree().create_timer(0.32, true, false, true).timeout
+	Engine.time_scale = scale
+	await get_tree().create_timer(dur, true, false, true).timeout
 	Engine.time_scale = 1.0
 	_slowmo = false
+
+func _reduced_motion() -> bool:
+	return not bool(PartySetup.pref("screen_shake", true))
 
 func _shove_fx(pawn: TiltPawn) -> void:
 	var p := CPUParticles3D.new()
@@ -1493,6 +1524,8 @@ func _net_apply(state: Dictionary) -> void:
 		platter.set_sudden_death(true)
 		Sfx.play("grudge")
 		_shake = maxf(_shake, 0.2)
+		if _stretch != null:
+			_stretch.escalate()   # FINAL STRETCH fires client-side off the sd fact
 	sudden_death = sd
 	var ot: bool = bool(state.get("ot", false))
 	if ot and not overtime:
@@ -1546,6 +1579,15 @@ func _net_apply(state: Dictionary) -> void:
 				pawn.mirror_begin_fall()
 				Sfx.play("death")
 				_shake = maxf(_shake, 0.3)
+				# DECIDING MOMENT on the mirror: the host's deep freeze already
+				# slows the snapshot stream; add only the local fov punch when
+				# this fall leaves <=1 standing in the new snapshot.
+				var standing_now := 0
+				for e in pw:
+					if int((e as Array)[0]) == int(TiltPawn.PState.STANDING):
+						standing_now += 1
+				if standing_now <= 1 and roster.size() >= 2:
+					FinalStretch.fov_punch(cam, 50.0, 6.0, 0.8)
 			elif st == TiltPawn.PState.GONE and pst != TiltPawn.PState.GONE:
 				_splash_fx(pawn.global_position, 1.0)
 				Sfx.play("splat", -2.0)
@@ -1594,6 +1636,8 @@ func _net_apply(state: Dictionary) -> void:
 				(roster[w] as Dictionary).color)
 	var mwv := int(state.get("mw", -1))
 	if mwv >= 0 and int(prev.get("mw", -1)) < 0:
+		if _stretch != null:
+			_stretch.match_ended()
 		Sfx.play("match_win")
 		var champ_pawn: TiltPawn = pawns[mwv]
 		var cpos: Vector3 = champ_pawn.global_position + Vector3(0, 1.6, 0) \
@@ -1673,6 +1717,8 @@ func _mirror_round_reset(rn: int, first: bool) -> void:
 	round_num = rn
 	sudden_death = false
 	overtime = false
+	if _stretch != null:
+		_stretch.round_reset()   # light bed + re-armed ladder, same as the host
 	klaxon_t = 0.0
 	platter.reset()
 	_mir_tilt = Vector2.ZERO

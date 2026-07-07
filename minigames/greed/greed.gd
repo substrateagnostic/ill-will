@@ -141,6 +141,12 @@ var _strobe_base := 0.9            # chute pad emission at rest
 var _tick_players: Array = []      # local pitched pool (bell ticks; séance style)
 var _tick_next := 0
 var _tick_stream: AudioStream = null
+# THE FINAL STRETCH kit (doc 09 §Q1): the CLOSING BELL *is* greed's final
+# stretch — the bell keeps its ticks/banners (ticks:false, no double-trigger,
+# doc 09's reconciliation rule); the kit adds the missing music escalation
+# (light -> tense at LAST BANKS), the lighting nudge, and the timer pulse.
+# By construction: no rng, no sim writes — --greedtest receipts untouched.
+var _stretch: FinalStretch = null
 
 # ONLINE PHASE 2 (docs/design/10 §4.3) — the render mirror, house pattern per
 # docs/verify/online-seance-VERIFY.md. Host runs the WHOLE sim as couch; the
@@ -214,6 +220,7 @@ func begin(config: Dictionary) -> void:
 		rounds_total = clampi(_cli_rounds, 1, ROUNDS)
 	if _cli_roundtime > 0.0:
 		round_time = clampf(_cli_roundtime, 8.0, 180.0)
+	_stretch = FinalStretch.attach(self, timer_label, {"ticks": false})
 	# Per-player: a seat is bot-driven if the roster says so (shell sets this
 	# from estate._is_bot; standalone fills it from PlayerInput) OR the legacy
 	# --greedbots flag forces ALL bots. Decided at begin() from roster data.
@@ -285,6 +292,8 @@ func _start_round() -> void:
 		var face := atan2(-pos.x, -pos.z)   # face the vault centre
 		(players[i] as GreedPlayer).reset_for_round(pos, face)
 	round_label.text = "ROUND %d / %d" % [round_num, rounds_total]
+	if _stretch != null:
+		_stretch.round_reset()   # FINAL STRETCH: light bed back on between rounds
 	_flash_banner("ROUND %d" % round_num, Color(1, 0.85, 0.2), 1.2)
 	hint_label.visible = round_num == 1
 	if round_num == 1:
@@ -338,6 +347,8 @@ func _finish_match() -> void:
 	var champ: int = order[0]
 	_net_champ = champ
 	var champ_pl: Dictionary = roster[champ]
+	if _stretch != null:
+		_stretch.match_ended()
 	_flash_banner("%s WINS GREED INC.!" % champ_pl.name, champ_pl.color, 9999.0)
 	Sfx.play("match_win")
 	(players[champ] as GreedPlayer).cheer()
@@ -510,6 +521,9 @@ func _process(delta: float) -> void:
 			var hot := remain <= 10
 			timer_label.add_theme_color_override("font_color",
 				Color(1, 0.3, 0.2) if hot else Color(1, 0.92, 0.6))
+			# FINAL STRETCH: timer pulse only — the CLOSING BELL owns the ticks
+			if _stretch != null and phase == Phase.PLAY:
+				_stretch.tick(round_time - round_t)
 		else:
 			timer_label.text = ""
 	# CLOSING BELL §6.2: the carrier's chute pad strobes at 3 Hz while the
@@ -977,6 +991,8 @@ func _tick_closing_bell(delta: float) -> void:
 	# §6.1 the bell itself
 	if not _bell_last and remain <= BELL_LAST_AT:
 		_bell_last = true
+		if _stretch != null:
+			_stretch.escalate()   # FINAL STRETCH: the bell brings the tense track
 		_flash_banner("LAST BANKS!", Color(1.0, 0.85, 0.2), 1.5)
 		Sfx.play("grudge", -6.0)
 		pot.bell_pulse()
@@ -1159,6 +1175,8 @@ func _net_apply(state: Dictionary) -> void:
 		return
 	var prev := _mir
 	_mir = state
+	if prev.is_empty() and _stretch != null:
+		_stretch.play_started()   # FINAL STRETCH: light bed on first snapshot
 	phase = (int(state.get("ph", phase))) as Phase   # render/probe fact only
 	round_label.text = str(state.get("rl", ""))
 	hint_label.visible = bool(state.get("hv", hint_label.visible))
@@ -1226,6 +1244,8 @@ func _net_apply(state: Dictionary) -> void:
 		var champ := int(state.get("champ", -1))
 		if champ >= 0 and champ < players.size():
 			_mir_champ_done = true
+			if _stretch != null:
+				_stretch.match_ended()
 			(players[champ] as GreedPlayer).cheer()
 			_confetti((players[champ] as GreedPlayer).global_position + Vector3(0, 1.8, 0),
 				roster[champ].color)
@@ -1245,6 +1265,9 @@ func _apply_mir_timer(tmr: String, ptmr: String) -> void:
 	# final-stretch tick ladder plays LOCALLY off the mirrored countdown
 	if remain <= 10 and remain >= 1 and ptmr.is_valid_int() and int(ptmr) == remain + 1:
 		_bell_tick(lerpf(1.0, 1.55, (10 - remain) / 9.0), -9.0)
+	# FINAL STRETCH timer pulse (kit ticks stay off — the bell owns the audio)
+	if _stretch != null:
+		_stretch.tick(float(remain))
 
 
 func _apply_mir_banner(arr: Array, parr: Array) -> void:
@@ -1357,7 +1380,11 @@ func _mir_bell(bell: Array, pbell: Array) -> void:
 	if int(bell[0]) > int(pbell[0]):      # LAST BANKS! (banner rides the state)
 		Sfx.play("grudge", -6.0)
 		pot.bell_pulse()
+		if _stretch != null:
+			_stretch.escalate()   # FINAL STRETCH fires client-side off the bell fact
 		_mir_snap_once("greed_mirror_bell")
+	elif int(bell[0]) < int(pbell[0]) and _stretch != null:
+		_stretch.round_reset()    # bell fact cleared = a fresh round began
 	if int(bell[1]) > int(pbell[1]):      # the pot grows restless
 		pot.restless(1.6)
 		Sfx.play("grudge", -10.0)

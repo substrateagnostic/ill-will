@@ -53,6 +53,11 @@ var _between_timer := 0.0             # counts down to the next round start
 var _round_resolving := false
 var _decider := "none"                # what ended the round (balance metric)
 var _house_awake := false             # final-stretch ghost buff live this round
+# THE FINAL STRETCH kit (doc 09 §Q1): THE HOUSE AWAKENS is dead weight's
+# stretch — the kit adds music (light->tense at the awakening) + last-10s
+# ticks + timer pulse around the bespoke banner/candlelight dim. Gated on
+# fx_on() so --dwbalance receipts never construct it.
+var _stretch: FinalStretch = null
 var _awaken_override := -1.0          # --dwawaken=S (verify): film the moment early
 var _evict_pin := -1                  # --dwevict=N (evidence pin, --seancechar
                                       # precedent): fell seat N through the REAL
@@ -371,6 +376,8 @@ func _begin(config: Dictionary) -> void:
 	_started = true
 	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.get("rng_seed", 1))
+	if _balance_rounds == 0:
+		_stretch = FinalStretch.attach(self, timer_label)
 	rounds_total = clampi(int(config.get("rounds", 3)), 1, 9)
 	if _balance_rounds > 0:
 		rounds_total = _balance_rounds
@@ -524,6 +531,8 @@ func _start_round() -> void:
 	round_label.text = "ROUND %d / %d" % [round_index + 1, rounds_total]
 	_rebuild_scoreboard()
 	_refresh_hint()
+	if _stretch != null:
+		_stretch.round_reset()   # FINAL STRETCH: light bed until the house wakes
 	if _balance_rounds == 0:
 		_flash_banner("ROUND %d\nFIGHT!" % (round_index + 1), Color(1, 0.85, 0.2), 1.6)
 	# --dwevict evidence pin (probe nights only; --seancechar precedent): fell
@@ -597,7 +606,15 @@ func _on_fighter_fell(index: int) -> void:
 		_spawn_death_fx(death_pos, players[index].color)
 		_flash_banner(credit_line, credit_color, 2.0)
 		_shake = maxf(_shake, 0.5)
-		_time_hit(0.32, 0.4)
+		# THE DECIDING MOMENT (doc 09 §8.2/§Q2): the fall that leaves one body
+		# standing gets the deep freeze + fov punch ("LAST ONE STANDING" rides
+		# the round banner below); ordinary falls demote to 0.5x/0.2s.
+		var deciding := _living_count() <= 1 and _living_participants() >= 2
+		if deciding and not _reduced_motion():
+			_time_hit(0.25, 0.8)
+			FinalStretch.fov_punch(cam, 52.0, 6.0, 0.8)
+		else:
+			_time_hit(0.5, 0.2)
 
 	# record what ended the round for the balance metric + banner spotlight
 	if _living_count() <= 1 and _decider == "none":
@@ -672,7 +689,9 @@ func _resolve_round() -> void:
 	var text := "%s SURVIVES\nROUND %d" % [champ, round_index + 1]
 	var text_color := champ_color
 	if _last_kill_line != "":
-		text = "%s\n%s SURVIVES ROUND %d" % [_last_kill_line, champ, round_index + 1]
+		# the deciding KO's name banner (doc 09 §8.2): the kill that ended it
+		# keeps the spotlight, stamped LAST ONE STANDING
+		text = "LAST ONE STANDING\n%s\n%s SURVIVES ROUND %d" % [_last_kill_line, champ, round_index + 1]
 		text_color = _last_kill_color
 		_last_kill_line = ""
 	_flash_banner(text, text_color, 2.8)
@@ -705,6 +724,8 @@ func _finish_match() -> void:
 	var champ: int = order[0]
 	_net_champ = champ
 	print("DW_MATCH_OVER champ=%s pts=%d" % [players[champ].name, players[champ].total])
+	if _stretch != null:
+		_stretch.match_ended()
 	_flash_banner("%s WINS DEAD WEIGHT" % players[champ].name, players[champ].color, 6.0)
 	Sfx.play("match_win")
 	_spawn_confetti(_spawns[champ] + Vector3(0, 1.2, 0), players[champ].color)
@@ -926,6 +947,8 @@ func _awaken_house() -> void:
 	print("DW_HOUSE_AWAKENS round=%d t=%.1fs at=%.1fs cd_scale=0.5 ghosts=%d" % [
 		round_index + 1, round_elapsed, _house_awakens_at(), _ghosts.size()])
 	if fx_on():
+		if _stretch != null:
+			_stretch.escalate()   # FINAL STRETCH: the awakening brings the tense track
 		Sfx.play("grudge")
 		_flash_banner("THE HOUSE AWAKENS", Color(0.72, 0.55, 0.95), 2.2)
 		_dim_to_candlelight()
@@ -1351,6 +1374,8 @@ func _time_hit(scale: float, real_duration: float) -> void:
 func _update_timer_label() -> void:
 	var remaining: int = int(ceil(maxf(0.0, _round_cap() - round_elapsed)))
 	timer_label.text = "%02d" % remaining
+	if _stretch != null:
+		_stretch.tick(_round_cap() - round_elapsed)   # FINAL STRETCH ladder + pulse
 
 func _flash_banner(text: String, color: Color, duration: float) -> void:
 	banner.text = text
@@ -1727,17 +1752,29 @@ func _net_apply(state: Dictionary) -> void:
 		return
 	var prev := _mir
 	_mir = state
+	if prev.is_empty() and _stretch != null:
+		_stretch.play_started()   # FINAL STRETCH: light bed on first snapshot
 	phase = (int(state.get("ph", phase))) as Phase   # render/probe fact only
 	round_label.text = str(state.get("rl", ""))
 	timer_label.text = str(state.get("tmr", ""))
+	# FINAL STRETCH ladder/pulse off the mirrored countdown text ("%02d")
+	if _stretch != null:
+		if str(state.get("tmr", "")).is_valid_int() and phase == Phase.ROUND:
+			_stretch.tick(float(int(str(state.get("tmr", "99")))))
+		elif phase == Phase.DONE:
+			_stretch.match_ended()
 	_apply_mir_banner(state.get("ban", []), prev.get("ban", []))
 	# --- round rollover: candles out, ghosts folded, furniture dent applied
 	var ri := int(state.get("ri", 0))
 	if ri != int(prev.get("ri", ri)):
 		_mir_round_reset(ri)
+		if _stretch != null:
+			_stretch.round_reset()
 	# --- THE HOUSE AWAKENS: the mood shift, fired locally from the fact
 	if int(state.get("aw", 0)) == 1 and int(prev.get("aw", 0)) == 0:
 		Sfx.play("grudge")
+		if _stretch != null:
+			_stretch.escalate()   # FINAL STRETCH fires client-side off the aw fact
 		_dim_to_candlelight()
 		_mir_snap_once("dw_mirror_awakens")
 	elif int(state.get("aw", 1)) == 0 and int(prev.get("aw", 0)) == 1:
@@ -1796,7 +1833,13 @@ func _net_apply(state: Dictionary) -> void:
 			_spawn_death_fx(at, players[i].color)
 			if not _reduced_motion():
 				_shake = maxf(_shake, 0.5)
-				_time_hit(0.32, 0.4)
+				# DECIDING MOMENT on the mirror (§8.2): alive flags in this same
+				# snapshot say whether that fall left one body standing
+				if _living_count() <= 1 and players.size() >= 2:
+					_time_hit(0.25, 0.8)
+					FinalStretch.fov_punch(cam, 52.0, 6.0, 0.8)
+				else:
+					_time_hit(0.5, 0.2)
 	# --- ghosts + THE FURNITURE possession glow
 	_mir_apply_ghosts(state.get("g", []), prev.get("g", []))
 	# --- scoreboard facts
