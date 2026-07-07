@@ -199,6 +199,11 @@ now waits 6-8 s so frames read.
 | green | 6 | `MATCH_OVER champ=RED`, err=0 |
 | the_gauntlet | 6 | `MATCH_OVER champ=BLUE`, err=0 — gutters alive |
 
+Per-tee no-build survives the scaling (round-2 guard): `--placetest
+--forcetrap=crusher` on the scaled fairway — `PLACETEST tee-probe at
+(-1.50,0.15,1.60) valid=false` (a crusher parked ON relocated tee 0 is
+illegal).
+
 `finished(results)` shape unchanged (placements/points/currency_events/
 kill_events/highlights/monuments). Estate boot smoke (`--estate
 --quitafter=400`): **0 script errors**. Killcam signed test: full-cap replay +
