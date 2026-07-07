@@ -53,6 +53,12 @@ var _grounded := false
 var safe_spawn := Vector3.ZERO
 var grace_until := 0.0
 
+# ONLINE wire facts (phase 2): pure counters the mirror diffs for impact
+# juice. The sim never reads them; --willtally receipts stay byte-identical.
+var net_hits := 0
+var net_hit_dir := Vector3.ZERO
+var net_shoves := 0
+
 var model_pivot: Node3D
 var anim: AnimationPlayer
 var ring: MeshInstance3D
@@ -274,6 +280,7 @@ func _do_shove() -> void:
 	if _shove_cd > 0.0 or owner_game == null:
 		return
 	_shove_cd = SHOVE_CD
+	net_shoves += 1   # wire fact (whiffs included — the couch whooshes both)
 	# HIT KIT §B1 Phase 1 — windup whoosh (the thud is layered on connect in the
 	# controller's on_shove_landed).
 	Sfx.play("bounce", -7.0)
@@ -323,6 +330,8 @@ func hit(dir: Vector3, impulse: float, atk_type: String, atk_index: int, src_nam
 		return
 	dir.y = 0.0
 	var d := dir.normalized()
+	net_hits += 1     # wire fact: the mirror fires pop/spark off this counter
+	net_hit_dir = d
 	apply_central_impulse(d * impulse + Vector3.UP * impulse * 0.14)
 	_stun = STUN_TIME
 	var t := 0.0

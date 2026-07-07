@@ -22,6 +22,7 @@ var author_name := ""
 var author_color := Color.WHITE
 var slot: Dictionary = {}
 var install_order := 0
+var side_seed := 0           # ONLINE: kept so mirrors rebuild the same node
 
 var owner_game: Node = null
 var _cx := 0.0
@@ -37,12 +38,13 @@ var _install_nodes: Array = []   # visuals that rise in on install (live only)
 ## side_seed: 0/1 drawn from the game rng at install (gale direction /
 ## stones gap side) so the receipt stays deterministic.
 func setup(p_slot: Dictionary, p_kind: String, p_author: int, a_name: String,
-		a_color: Color, side_seed: int, p_owner: Node) -> void:
+		a_color: Color, p_side_seed: int, p_owner: Node) -> void:
 	slot = p_slot
 	kind = p_kind
 	author = p_author
 	author_name = a_name
 	author_color = a_color
+	side_seed = p_side_seed
 	owner_game = p_owner
 	_cx = float(p_slot.x)
 	_len = float(p_slot.len)
@@ -174,10 +176,10 @@ func _build_gale() -> void:
 	add_child(wind)
 	_gale_parts.append(wind)
 
-func _build_stones(side_seed: int) -> void:
+func _build_stones(seed_v: int) -> void:
 	var zc := LWCourse.z_center(_cx)
 	var hw := LWCourse.half_width(_cx)
-	var gap_side := 1.0 if (side_seed / 2) % 2 == 0 else -1.0
+	var gap_side := 1.0 if (seed_v / 2) % 2 == 0 else -1.0
 	_stones_gap_z = zc + gap_side * (hw - 0.85)
 	var body := StaticBody3D.new()
 	body.collision_layer = 1

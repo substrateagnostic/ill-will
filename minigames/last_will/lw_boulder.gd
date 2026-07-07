@@ -14,6 +14,7 @@ const TELEGRAPH_T := 1.35
 enum BState { TELEGRAPH, ROLLING, DONE }
 
 var state: int = BState.TELEGRAPH
+var net_id := -1            # ONLINE: host spawn id; mirrors puppet by this key
 var owner_game: Node = null
 var dir := Vector2.RIGHT
 var travel := 20.0
