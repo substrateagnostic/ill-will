@@ -6,6 +6,44 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **☀️☀️☀️ MORNING MENU #3 — THE FINAL FABLE MORNING. Read this one.**
+  The overnight run delivered EVERYTHING on the board. Headlines:
+  1. **THE WHOLE GAME IS ONLINE.** 12 of 13 games mirror across the
+     wire (all but par — phase 3 by design), PLUS the auction board,
+     match podiums (with hats), THE READING word-for-word, and the
+     parade stone-by-stone. A guest joins with a 6-char code and lives
+     the whole night. Best receipts of the night: a remote player WON
+     Masked Ball and took a "Belle of the Ball" monument; another
+     gusted the living from beyond the grave in Last Will; another was
+     killed by its own echo with the irony banner synced tick-for-tick.
+  2. **PAR v4 IS COMPLETE (all 3 waves).** Live chaos griefing — your
+     day-one wish: four avatars brawling on the course, shoves flinch
+     shots mid-swing, early-trigger traps — plus THE WIDOW'S WALK
+     flagship (chasm, land bridge, elevated green) and 1.4x courses.
+     Physics still frozen, byte-identical receipts throughout.
+  3. **YOUR MUSIC IS WIRED DEEP**: the FINAL STRETCH kit escalates
+     every game into your game_tense track at its own dramatic
+     threshold (crisis, sudden death, final lap, final orbit, the
+     house awakening). Deciding moments get the deep freeze.
+  4. **STEAM IS PREPPED**: GodotSteam vendored behind the transport
+     seam; ENet untouched; publish-day checklist in doc 12. Needs only
+     a real appid whenever you decide.
+  5. Round-2 bugs: ALL DEAD (zombie module stacking, NEW GAME dead-end,
+     audio pop at the waveform level, tee glare, trap theft = your
+     crusher ghost, per-tee no-build). Plus HOUSE RULES card (45s to
+     read), package: build/illwill-0.1.0.zip + icon + blurb + name scan.
+  **TONIGHT'S PLAYTEST CHECKLIST (evening, before the ~6h bugfix
+  window):** (a) a full night start to finish — listen for your own
+  tracks turning tense; (b) par chaos griefing feel on a pad + the
+  Widow's Walk chasm (fair or cruel?); (c) LAST WILL v2 race + curse
+  drafting; (d) MASKED BALL with eyes open; (e) online: second machine
+  on the LAN joins with the code, or two instances on one box
+  (--net=host / --net=join=127.0.0.1:8910); (f) known watch-items: MP3
+  loop seams (tell me which track breathes), DW bot lip-stalemate
+  (documented, unfixed — needs your ruling), echo bot matches aren't
+  byte-reproducible on ANY build (chaotic physics, pre-existing,
+  documented). Report bugs in one dump; I'll triage into the 6 hours.
+
 - **☀️☀️ MORNING MENU #2 — play this before the 5pm reset. Everything
   landed. THIRTEEN games, and the estate reaches across the wire.**
   1. **`build\illwill.exe`** — rebuilt from final master (all of tonight
