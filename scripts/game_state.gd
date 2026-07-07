@@ -42,7 +42,9 @@ const PLAYER_NAMES := ["RED", "BLUE", "GOLD", "MINT"]
 const POINTS_TABLE := {2: [3, 1], 3: [4, 2, 1], 4: [5, 3, 2, 1]}
 ## Chaos round pays double, winner-take-more.
 const CHAOS_POINTS_TABLE := {2: [6, 2], 3: [10, 6, 4], 4: [10, 6, 4, 2]}
-const COURSE_IDS := ["fairway", "dogleg", "green", "the_gauntlet"]
+## WAVE 3: widows_walk is the v4 flagship — multi-lane spine, chasm crossing,
+## elevated switchback green. Same random-per-match draw as the original four.
+const COURSE_IDS := ["fairway", "dogleg", "green", "the_gauntlet", "widows_walk"]
 
 var player_count := 4
 ## rounds_total INCLUDES the final chaos round. Default 4 = 3 normal + chaos.

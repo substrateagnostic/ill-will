@@ -42,17 +42,17 @@ height = 0.02
 
 [node name="Course" type="Node3D"]
 script = ExtResource("1_course")
-play_rects = Array[Rect2]([Rect2(-7.2, -7.2, 14.4, 14.4)])
-tee_slots = Array[Vector3]([Vector3(-6.6, 0.15, 6.3), Vector3(-6.0, 0.15, 6.3), Vector3(-5.4, 0.15, 6.3), Vector3(-4.8, 0.15, 6.3)])
-extra_no_build = [{"pos": Vector3(-2.6, 0, 2.6), "radius": 2.0}, {"pos": Vector3(2.6, 0, -2.6), "radius": 2.0}]
+play_rects = Array[Rect2]([Rect2(-8, -8, 16, 16)])
+tee_slots = Array[Vector3]([Vector3(-7.3, 0.15, 7.0), Vector3(-6.7, 0.15, 7.0), Vector3(-6.1, 0.15, 7.0), Vector3(-5.5, 0.15, 7.0)])
+extra_no_build = [{"pos": Vector3(-2.9, 0, 2.9), "radius": 2.0}, {"pos": Vector3(2.9, 0, -2.9), "radius": 2.0}]
 course_center = Vector3(0, 0, 0)
-course_extent = Vector3(7.5, 0, 7.5)
-camera_position = Vector3(0, 22, 8.5)
-camera_fov = 58.0
+course_extent = Vector3(8.3, 0, 8.3)
+camera_position = Vector3(0, 26, 9.5)
+camera_fov = 62.0
 
 [node name="Table" type="CSGBox3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.75, 0)
-size = Vector3(18, 0.7, 18)
+size = Vector3(20, 0.7, 20)
 material = SubResource("mat_table")
 
 [node name="Geo" type="CSGCombiner3D" parent="."]
@@ -60,37 +60,37 @@ use_collision = true
 
 [node name="Floor" type="CSGBox3D" parent="Geo"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, 0)
-size = Vector3(15, 0.4, 15)
+size = Vector3(16.7, 0.4, 16.7)
 material = SubResource("mat_green")
 
 [node name="CupHole" type="CSGCylinder3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.3, -0.2, -6.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.0, -0.2, -7.0)
 operation = 2
 radius = 0.3
 height = 0.6
 
 [node name="WallN" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.155, -7.55)
-size = Vector3(15.35, 0.71, 0.25)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.155, -8.39)
+size = Vector3(17.03, 0.71, 0.25)
 material = SubResource("mat_wood")
 
 [node name="WallS" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.155, 7.55)
-size = Vector3(15.35, 0.71, 0.25)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.155, 8.39)
+size = Vector3(17.03, 0.71, 0.25)
 material = SubResource("mat_wood")
 
 [node name="WallW" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.55, 0.155, 0)
-size = Vector3(0.25, 0.71, 15.35)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -8.39, 0.155, 0)
+size = Vector3(0.25, 0.71, 17.03)
 material = SubResource("mat_wood")
 
 [node name="WallE" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.55, 0.155, 0)
-size = Vector3(0.25, 0.71, 15.35)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.39, 0.155, 0)
+size = Vector3(0.25, 0.71, 17.03)
 material = SubResource("mat_wood")
 
 [node name="Hump1" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.6, 0, 2.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -2.9, 0, 2.9)
 
 [node name="Shape" type="CollisionShape3D" parent="Hump1"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
@@ -100,7 +100,7 @@ shape = SubResource("hump_shape")
 transform = Transform3D(2.9, 0, 0, 0, 3.2, 0, 0, 0, 2.9, 0, 0, 0)
 
 [node name="Hump2" type="StaticBody3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.6, 0, -2.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.9, 0, -2.9)
 
 [node name="Shape" type="CollisionShape3D" parent="Hump2"]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.25, 0)
@@ -114,24 +114,24 @@ transform = Transform3D(2.9, 0, 0, 0, 3.2, 0, 0, 0, 2.9, 0, 0, 0)
 [node name="GravestoneContainer" type="Node3D" parent="."]
 
 [node name="CupLiner" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.3, -0.47, -6.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.0, -0.47, -7.0)
 mesh = SubResource("liner_mesh")
 surface_material_override/0 = SubResource("mat_hole")
 
 [node name="CupArea" type="Area3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.3, -0.32, -6.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.0, -0.32, -7.0)
 
 [node name="Shape" type="CollisionShape3D" parent="CupArea"]
 shape = SubResource("cup_shape")
 
 [node name="Flag" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.3, 0, -6.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 7.0, 0, -7.0)
 
 [node name="FlagModel" parent="Flag" instance=ExtResource("3_flag")]
 transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0.28, 0, 0)
 
 [node name="TeePad" type="CSGCylinder3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -6.3, 0.005, 6.3)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -7.0, 0.005, 7.0)
 radius = 0.3
 height = 0.012
 material = SubResource("mat_white")

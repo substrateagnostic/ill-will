@@ -791,7 +791,13 @@ func _credit_grief(victim: int, killer: Trap) -> void:
 ## A griefer avatar fell past the pit line (the widow's walk chasm, or clean
 ## off the table). Shoved = the shover's highlight; walked = the course's dry
 ## register. No score either way — the avatar respawns at its last safe step.
+## Banner + highlight are throttled (3s) so a scrappy chaos round can't spam
+## the ledger; GRIEF_PIT still logs every fall.
+var _pit_drama_tick := -999999
 func on_avatar_pitfall(p: int, by: int) -> void:
+	if Engine.get_physics_frames() - _pit_drama_tick < 180:
+		return
+	_pit_drama_tick = Engine.get_physics_frames()
 	var chasm := GameState.course_id == "widows_walk"
 	if by >= 0 and by != p:
 		var what := "INTO THE CHASM" if chasm else "OFF THE EDGE"
@@ -1026,7 +1032,12 @@ func _bot_putt(actor: int) -> void:
 	var dist := to.length()
 	var dir := to.normalized() if dist > 0.001 else Vector3(0, 0, -1)
 	var angle := rad_to_deg(atan2(-dir.x, -dir.z)) + _bot_rng.randf_range(-4.0, 4.0)
-	var power := clampf(dist * 0.5 + _bot_rng.randf_range(0.0, 1.0), 2.0, 13.0)
+	# WAVE 3: elevation-aware power (widow's walk ramp — the cup can sit above
+	# the lie). Pure bot HEURISTIC: extra launch speed to buy the climb, with
+	# margin for rolling losses. Same rng draw count; the sim is untouched.
+	var climb := maxf(course.cup_height() - b.global_position.y, 0.0)
+	var climb_boost: float = sqrt(2.0 * 9.8 * climb) * 1.25 if climb > 0.05 else 0.0
+	var power := clampf(dist * 0.5 + climb_boost + _bot_rng.randf_range(0.0, 1.0), 2.0, 13.0)
 	putt_controller.ball = b
 	# v4: the same seeded numbers, fired through the swing's contact frame. The
 	# rng draw count per stroke is unchanged, so --parbots stays reproducible.

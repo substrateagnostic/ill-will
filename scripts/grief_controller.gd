@@ -58,11 +58,23 @@ var _seek_t := {}         # p -> s until goal re-pick
 var _hop_wish := {}       # p -> bool
 var _stuck_t := {}        # p -> s without progress
 var _last_pos := {}       # p -> Vector3
-var _last_safe := {}      # p -> last grounded position (pit respawn)
+## Pit respawn points are double-buffered: _safe_old is the grounded spot from
+## ~20-40 ticks ago, so a respawn lands well BACK from the lip you fell off
+## (respawning on the exact edge just tipped you straight back in).
+var _safe_old := {}       # p -> Vector3
+var _safe_new := {}       # p -> Vector3
+var _safe_tick := {}      # p -> on-floor tick counter
+var _pit_grace := {}      # p -> ticks of pit-check grace after a respawn
+## After a chasm fall the seek-bot stays NEAR its respawn anchor for a few
+## seconds instead of marching straight back over the lip (direct move_toward
+## has no pathing — spec OQ5 — so this is the anti-lemming rule).
+var _pit_anchor := {}     # p -> Vector3
+var _side_lock := {}      # p -> s of local-wander lockdown
 var _last_shove_on := {}  # victim p -> {"by": int, "t": ticks}
 var _hitstop_cd := 0.0
 var _cup_log_cd := 0.0
 var _snapped := {}
+var _active_t := 0.0   # s since activation (snap receipts wait out the intro banner)
 
 ## --griefprobe=verb,tick[,verb,tick...] — deterministically inject one griefer
 ## action at an exact physics tick (verbs: shove, cup, trigger, hop).
@@ -94,7 +106,10 @@ func activate(course: Course, avatars: Array, balls: Array) -> void:
 		_stuck_t[p] = 0.0
 		_revive_t[p] = 0.0
 		_last_pos[p] = _avatars[p].global_position
-		_last_safe[p] = _avatars[p].global_position
+		_safe_old[p] = _avatars[p].global_position
+		_safe_new[p] = _avatars[p].global_position
+		_safe_tick[p] = 0
+		_pit_grace[p] = 0
 		_avatars[p].set_brawl(true)
 	print("GRIEF_ON players=%d" % _avatars.size())
 
@@ -110,6 +125,7 @@ func deactivate() -> void:
 func _physics_process(delta: float) -> void:
 	if not active or _main == null:
 		return
+	_active_t += delta
 	_hitstop_cd = maxf(_hitstop_cd - delta, 0.0)
 	_cup_log_cd = maxf(_cup_log_cd - delta, 0.0)
 	for k in _immune.keys():
@@ -167,6 +183,8 @@ func _is_direct_human(p: int) -> bool:
 	return d >= 0 or d == -1 or d == -2 or d == -4
 
 func _bot_drive(p: int, av: PlayerAvatar, delta: float) -> void:
+	if _side_lock.get(p, 0.0) > 0.0:
+		_side_lock[p] = float(_side_lock[p]) - delta
 	_seek_t[p] -= delta
 	if _seek_t[p] <= 0.0:
 		_seek_t[p] = _rng.randf_range(0.5, 1.1)
@@ -206,6 +224,10 @@ func _pick_goal(p: int, av: PlayerAvatar) -> void:
 	var roll := _rng.randf()
 	_hop_wish[p] = _rng.randf() < 0.14
 	var jitter := Vector3(_rng.randf_range(-0.7, 0.7), 0.0, _rng.randf_range(-0.7, 0.7))
+	if _side_lock.get(p, 0.0) > 0.0:
+		# fresh out of the pit: brawl locally, don't lemming back over the lip
+		_seek_goal[p] = _pit_anchor.get(p, av.global_position) + jitter * 2.0
+		return
 	if roll < 0.22:
 		var t := _nearest_powered_trap(av)
 		if t != null:
@@ -275,7 +297,9 @@ func _strike(p: int, av: PlayerAvatar, dir: Vector3) -> void:
 	_last_shove_on[victim] = {"by": p, "t": Engine.get_physics_frames()}
 	_main.note_grief(p, victim, "shove")
 	print("GRIEF_SHOVE by=%d victim=%d flinch=%s phys=%d" % [p, victim, flinch, Engine.get_physics_frames()])
-	if not _snapped.has("griefshove") and flinch != "":
+	# Snap receipt: a shove CONNECTING with the acting golfer mid-shot — but
+	# only once the round-intro banner is gone, so the frame reads.
+	if not _snapped.has("griefshove") and flinch != "" and _active_t > 6.0:
 		_snapped["griefshove"] = true
 		VerifyCapture.snap("griefshove")
 
@@ -322,21 +346,32 @@ func _cup_exclusion(p: int, av: PlayerAvatar, delta: float) -> void:
 		_cup_log_cd = 0.4
 		print("GRIEF_CUP_PUSH p=%d d=%.2f r=%.2f" % [p, away.length(), r])
 
-## Fell into the chasm (widow's walk) or off the world: respawn at the last
-## grounded spot; a fresh shove earns the shover the highlight.
+## Fell into the chasm (widow's walk) or off the world: respawn at a grounded
+## spot from ~half a second BACK (never the lip itself); a fresh shove earns
+## the shover the highlight.
 func _pit_check(p: int, av: PlayerAvatar) -> void:
+	if _pit_grace.get(p, 0) > 0:
+		_pit_grace[p] = int(_pit_grace[p]) - 1
+		return
 	if av.global_position.y > PIT_Y:
 		if av.is_on_floor() and av.global_position.y > -0.1:
-			_last_safe[p] = av.global_position
+			_safe_tick[p] = int(_safe_tick[p]) + 1
+			if int(_safe_tick[p]) % 20 == 0:
+				_safe_old[p] = _safe_new[p]
+				_safe_new[p] = av.global_position
 		return
 	var by := -1
 	if _last_shove_on.has(p):
 		var e: Dictionary = _last_shove_on[p]
 		if Engine.get_physics_frames() - int(e["t"]) <= int(PIT_WINDOW * 60.0):
 			by = int(e["by"])
-	var home: Vector3 = _last_safe.get(p, _main._tee_pos(p))
+	var home: Vector3 = _safe_old.get(p, _main._tee_pos(p))
 	av.teleport_to(home + Vector3.UP * 0.1)
 	av.play_action("Hit_A", 0.4)
+	_pit_grace[p] = 30
+	_pit_anchor[p] = home
+	_side_lock[p] = 6.0
+	_seek_t[p] = 0.0   # bot: pick a fresh goal from the respawn spot
 	print("GRIEF_PIT p=%d by=%d phys=%d" % [p, by, Engine.get_physics_frames()])
 	_main.on_avatar_pitfall(p, by)
 
@@ -432,7 +467,7 @@ func _spark(pos: Vector3, color: Color, dir: Vector3) -> void:
 
 ## Once per chaos round: 3+ avatars scrumming while a ball rolls = the brawl shot.
 func _brawl_snap() -> void:
-	if _snapped.has("brawl") or not VerifyCapture.active:
+	if _snapped.has("brawl") or not VerifyCapture.active or _active_t < 8.0:
 		return
 	var alive: Array = []
 	for a in _avatars:

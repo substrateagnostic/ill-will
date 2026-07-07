@@ -20,6 +20,15 @@ const MAGNET_FORCE := 26.0
 ## size = extent along +X and +Z). A point counts as "on the green" if inside
 ## ANY rect. These are already inset from the walls a little.
 @export var play_rects: Array[Rect2] = []
+## WAVE 3: regions that count as ON THE GREEN for ball rest/return logic but
+## are NOT legal trap ground (the widow's walk elevated green + its ramp — the
+## floor there is raised, so a y=0 ghost would be wrong). Empty on flat courses,
+## which keeps every existing course byte-identical.
+@export var green_rects: Array[Rect2] = []
+## WAVE 3: griefer aprons/catwalks — walk furniture OUTSIDE the ball lanes
+## (hop the knee-high wall to reach them). Declarative course data: never
+## buildable, never ball-legal; the chaos seek-bots may roam them freely.
+@export var walk_rects: Array[Rect2] = []
 ## Four tee anchor points (world space, y = ball spawn height). main picks a
 ## centered subset when fewer than 4 players.
 @export var tee_slots: Array[Vector3] = []
@@ -72,6 +81,18 @@ func is_point_on_green(p: Vector3) -> bool:
 	for r in play_rects:
 		if r.has_point(pt):
 			return true
+	for r in green_rects:
+		if r.has_point(pt):
+			return true
+	return false
+
+## Trap placement legality is play_rects ONLY: the extra green_rects (elevated
+## green/ramp) are rest-legal for balls but never build ground.
+func is_point_buildable(p: Vector3) -> bool:
+	var pt := Vector2(p.x, p.z)
+	for r in play_rects:
+		if r.has_point(pt):
+			return true
 	return false
 
 func tee_positions() -> Array:
@@ -80,6 +101,12 @@ func tee_positions() -> Array:
 func cup_position() -> Vector3:
 	var c := cup_area.global_position
 	return Vector3(c.x, 0.0, c.z)
+
+## WAVE 3: height of the green surface the cup sits in, above base level.
+## 0.0 on every flat course; 0.3 on the widow's walk elevated green. The cup
+## area sits 0.32 below its floor surface on every course, so derive from it.
+func cup_height() -> float:
+	return maxf(cup_area.global_position.y + 0.32, 0.0)
 
 func no_build_zones() -> Array:
 	var zones: Array = []
