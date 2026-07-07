@@ -29,13 +29,24 @@ func _ready() -> void:
 	for key in BANK:
 		var list: Array = []
 		for name in BANK[key]:
-			list.append(load("res://assets/audio/%s.ogg" % name))
+			list.append(_load_sample(name))
 		_streams[key] = list
 	for i in 10:
 		var p := AudioStreamPlayer.new()
 		p.bus = "SFX"
 		add_child(p)
 		_pool.append(p)
+
+## Prefer a declicked .wav (baked so the waveform starts AND ends at exactly
+## zero — a non-zero edge is a step discontinuity = the button-click "pop" the
+## r2 tester heard in the wardrobe and join-night menus) over the shipped .ogg.
+## Only the one-shot UI samples have a .wav; everything else falls back to .ogg.
+## See tools/declick_sfx.py for the exact fade/DC-removal that bakes the edges.
+func _load_sample(sample: String) -> AudioStream:
+	var wav := "res://assets/audio/%s.wav" % sample
+	if ResourceLoader.exists(wav):
+		return load(wav)
+	return load("res://assets/audio/%s.ogg" % sample)
 
 ## Runtime bus creation so the AUDIO settings sliders have something to
 ## drive; Music bus sits empty until the soundtrack lands.
@@ -49,8 +60,19 @@ func play(key: String, volume_db := 0.0, pitch_wobble := 0.07) -> void:
 	if not _streams.has(key):
 		return
 	var list: Array = _streams[key]
-	var p: AudioStreamPlayer = _pool[_next]
-	_next = (_next + 1) % _pool.size()
+	# Prefer a voice that is NOT currently sounding — restarting a still-playing
+	# voice hard-cuts its wave mid-cycle, itself a pop. Only when all ten are
+	# busy do we steal round-robin (the oldest). Declicked samples already fade
+	# in from zero, so the fresh voice starts clean either way.
+	var p: AudioStreamPlayer = null
+	for i in _pool.size():
+		var cand: AudioStreamPlayer = _pool[i]
+		if not cand.playing:
+			p = cand
+			break
+	if p == null:
+		p = _pool[_next]
+		_next = (_next + 1) % _pool.size()
 	p.stream = list[randi() % list.size()]
 	p.volume_db = volume_db
 	p.pitch_scale = 1.0 + randf_range(-pitch_wobble, pitch_wobble)

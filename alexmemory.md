@@ -805,3 +805,27 @@ KNOWN LIMIT (flagging for wave 2): bot MATCH OUTCOMES are not run-to-run
 reproducible (pre-existing v3 — bot think timers are wall-clock; tick-phased
 traps amplify). The physics receipts sidestep it; wave 2's "reproducible chaos"
 exit should move bot cadence to physics ticks.
+
+---
+
+SFX BUTTON-CLICK "POP" (playtest r2: "pop sound when I click buttons... wardrobe
+and join night... sound isnt fully rendering") — ROOT-CAUSED + FIXED.
+
+Not voice-stealing and not "generated samples" (Sfx loads Kenney .ogg, no synth).
+The real cause: several UI .ogg samples start/end at a NON-ZERO amplitude, which is
+a step discontinuity = a click by definition. Measured worst offenders: click_001
+(played on every "card") starts at 6.1% of peak; click_003 is a 7ms tick that ends
+at 3.5% of peak with a 2% DC offset, cut off mid-ring -> literally "isn't fully
+rendering." bong_001 ("grudge") ends at 1.1%.
+
+Fix (presentation only, Sfx.play() API unchanged): baked declicked 16-bit PCM WAVs
+for the 7 one-shot UI samples (DC removal + ~2ms raised-cosine fade in/out) so each
+starts AND ends at exactly 0; Sfx prefers the .wav, everything else still .ogg.
+Deliberately did NOT re-encode as ogg (lossy Vorbis left a 13.5% tail on the 12ms
+click_002 = a new pop) and did NOT touch looped samples (mower engine, orbital tone).
+Also made the pool prefer a free voice before stealing the oldest.
+
+Receipts (docs/verify/sfx-pop-VERIFY.md): in-engine probe shows all 7 imported WAVs
+first==last==0, peak preserved; headless boot VERIFY_DONE 0 errors; windowed
+--wardrobetest clean. I can't hear it — verified by waveform math. Join-night shares
+the same card/confirm path as wardrobe, so it's covered.
