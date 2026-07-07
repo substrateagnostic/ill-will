@@ -975,3 +975,69 @@ NEXT (fan-out wave, per the spec's port order): understudy rides this
 pattern nearly free (same hidden-info shape), then throne/tilt/mower...
 PATTERN NOTES section in the VERIFY doc says exactly what to copy verbatim
 and what is séance-specific.
+
+================================================================================
+2026-07-07 — PAR v4 WAVES 2+3: LIVE CHAOS GRIEFING + THE WIDOW'S WALK
+(flagship builder; branch worktree-agent-a17949b6b8362a717, commits b7582ab +
+e84199c + verify doc; docs/verify/par-v4-wave23-VERIFY.md has all receipts)
+================================================================================
+
+WHAT SHIPPED:
+- WAVE 2 — your day-one wish, live griefing in chaos: all four characters are
+  ON the course during the chaos round. Pads/kb-halves/KBM direct-control
+  their griefer (MOVE, A=SHOVE with the full HIT KIT feel, B=HOP over the
+  knee-high walls — or, standing at a powered trap, TRIGGER it early: crusher
+  slams NOW, fan gusts, bumper kicks, windmill lurches). Pure-mouse seats
+  auto-grief via a seeded seek-bot; their own shots stay mouse. Shoving the
+  golfer mid-shot flinches the SHOT: aiming = staggered (no stroke lost), a
+  live charge fires immediately with a 13-degree jolt. Griefing pays GRUDGE +
+  a "GRIEFED" highlight — never points. Cup has a hard exclusion disc (no
+  camping the hole, receipt: probe walked at the cup for 10s, held at 1.24m
+  vs the 1.30m ring). Dead players' characters get back up and keep griefing.
+- THE INVARIANT HELD, ADAPTED PER YOUR NOTE: avatars still never touch balls
+  (wave-1 collision exceptions permanent). Ball paths v3-vs-embodied are
+  still BYTE-identical to 0.1mm (old fairway, scaled fairway, and the
+  widow's walk chasm line, tick-aligned).
+- WAVE 3 — five courses now: fairway x1.4 (8x29, hop-over walk aprons),
+  dogleg x1.4 (elbow cut-corner deck), green 16x16, gauntlet + raised north
+  catwalk, and THE WIDOW'S WALK: 9x30 spine, mausoleum on the tee meadow, a
+  3m chasm with a 2.5m land bridge (miss = gutter channel that delivers
+  NEAR but not AT the green; shoved characters fall in — "X SHOVED Y INTO
+  THE CHASM"), switchback around a second monument, elevated green ringed by
+  a knee-high wall with a funnel-banked ramp mouth, catwalk highways down
+  both flanks. Random course draw + --course= include it.
+- Real-keys bars in par per your tester's note: putt bar shows the CURRENT
+  seat's live verbs ("AIM: MOUSE - HOLD LMB..." / "AIM: W/A/S/D - HOLD
+  Space..."), chaos bar merges the griefers' real keys.
+
+RECEIPTS (all in the VERIFY doc, screenshots read by eye):
+- Wave-2 exit criterion DONE: bot cadence now counts PHYSICS TICKS (was
+  wall-clock). Same-seed 4-round bot matches, run twice: every stroke, grief
+  action, death and result BYTE-IDENTICAL (fairway 328/168 lines, widow's
+  231). Receipt harness = --fixed-fps 60.
+- 8 full matches to MATCH_OVER, zero script errors (fairway/dogleg/widow's
+  x2 seeds + green + gauntlet). Estate boot + killcam + import clean.
+
+DECISIONS ALEX MAY WANT TO REVIEW:
+1. Spec's wave-2 ball-contact verbs (body-block/shove the BALL) were replaced
+   by avatar-vs-avatar per your directive; the trap early-trigger survived on
+   the B button (hop when not at a trap). Trap trigger zones are distance-
+   based (footprint + 1m), not the spec's GriefTrigger Areas — same behavior,
+   no trap-scene surgery.
+2. Flinch penalty design (spec left it open): stagger at address (no stroke
+   lost), instant fire + 13-degree deflection mid-charge, deflection
+   mid-swing; 1.2s immunity so chain-stuns can't lock a seat. Numbers all
+   feed the same frozen debug_putt.
+3. Bots got one new heuristic: elevation-aware putt power (sqrt(2g*climb)
+   boost) so they can buy the widow's ramp — without it a full bot match
+   ended 0-0-0-0 (nobody could climb). Same rng draw count, sim untouched.
+4. Chaos stays on the overview camera (readability with 4 live balls), so
+   brawls read small at flagship scale — if you want hero shots of shoves,
+   a punch-in chaos cam is a v5 polish candidate.
+5. Widow's walk gutter delivers at the ramp mouth centerline (0,-11.8) —
+   generous, but bots and humans both need the funnel; move it off-axis if
+   playtests say the gutter line is too kind.
+
+NEXT: your hands on the couch — grief feel (shove/hop on pads), whether the
+chasm reads as fair, and whether the flagship's bot DNF rate (higher by
+design) plays as drama or drag.
