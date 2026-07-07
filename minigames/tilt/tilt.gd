@@ -12,6 +12,15 @@ extends Minigame
 ## — rim defense is a timing mind-game. Blindside shoves stay uncounterable
 ## (the victim's cone can't contain an attacker behind them).
 ##
+## v1.2 — BALANCE (doc 09 §3.3-3.4, Alex-signed):
+## * OVERTIME INSTEAD OF SPLIT: a timeout with >1 survivor no longer splits
+##   the pot. THE ESTATE SPLITS NOTHING — 20s of overtime on a sudden-death
+##   platter tilting 1.5x harder. Only if the sea still refuses a verdict at
+##   +20s do the survivors split (the old path, now the exception).
+## * GULL ASSIST ROYALTY: when a seagull's guano KOs someone (fall within 2s
+##   of a slip), the player who most recently shoved that victim (within 3s)
+##   collects the +1 royalty — kill_events cause "gull_assist", killer=shover.
+##
 ## Anthology module: root of minigames/tilt/tilt.tscn, extends Minigame.
 ## Runs standalone too — if begin() hasn't been called 0.5s after _ready,
 ## self-starts with a 4-player config (GameState colors/names, KayKit
@@ -27,6 +36,9 @@ extends Minigame
 ##                        (impulse injected at t=5s must settle by t=9s)
 ##   --tilttest=edge      pawn at rim, platter forced to 20 deg: must slide
 ##                        off within 8s (proves manual slide model)
+##   --tilttest=gull      v1.2 credit chain: recent shove + guano slip + fall
+##                        must yield cause "gull_assist", killer = shover,
+##                        +1 royalty to the shover
 ##   --shots=N,...        handled by the VerifyCapture autoload (PNGs)
 
 enum Phase { WAITING, INTRO, PLAY, ROUND_END, MATCH_END }
@@ -47,6 +59,9 @@ const SHOVE_POWER := 7.5
 const CLASH_WINDOW := 0.25       # both shoves pressed within this -> CLASH
 const CLASH_KB := 0.4            # clash knockback factor (vs full shove)
 const ROYALTY_WINDOW := 1.5      # s between shove contact and the fall
+const OVERTIME_TIME := 20.0      # tie at the horn: sudden-death overtime length
+const GULL_KO_WINDOW := 2.0      # fall this soon after a guano slip = gull KO
+const GULL_ASSIST_WINDOW := 3.0  # shove this recent still pays on a gull KO
 const BANNER_FONT := preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 const GUANO_GRAV := 14.0
 const SLIP_RADIUS := 1.25
@@ -74,8 +89,11 @@ var phase_t := 0.0
 var round_t := 0.0
 var game_t := 0.0
 var sudden_death := false
+var overtime := false
 var coin_timer := 0.0
 var klaxon_t := 0.0
+var _slip_gull := {}           # player -> gull owner of the last guano slip
+var _slip_t := {}              # player -> game_t of that slip
 
 var points := {}
 var coins_banked := {}
@@ -234,7 +252,11 @@ func _tick_play(delta: float) -> void:
 				Sfx.play("confirm", -4.0)
 			if inp.a:
 				_try_shove(p)
-			pawn.in_slip = _in_slip(pawn.lpos)
+			var slip_owner := _slip_owner(pawn.lpos)
+			pawn.in_slip = slip_owner >= 0
+			if slip_owner >= 0:
+				_slip_gull[p] = slip_owner
+				_slip_t[p] = game_t
 			pawn.tick(delta, inp.move, platter.tilt)
 		elif gulls.has(p):
 			var inp := _input_for(p, delta)
@@ -273,9 +295,15 @@ func _tick_play(delta: float) -> void:
 	if phase == Phase.PLAY and not sudden_death and _test_mode == "" \
 			and round_t >= round_time * 0.75 and _standing_count() > 1:
 		_start_sudden_death()
-	# timeout
+	# timeout — a tie at the horn triggers overtime instead of a split (v1.2)
 	if phase == Phase.PLAY and round_t >= round_time:
-		_end_round("timeout")
+		if not overtime:
+			if _standing_count() > 1 and _test_mode == "":
+				_start_overtime()
+			else:
+				_end_round("timeout")
+		elif round_t >= round_time + OVERTIME_TIME:
+			_end_round("overtime_split")
 	# periodic status for verification logs
 	if round_t - _last_status >= 5.0:
 		_last_status = round_t
@@ -381,10 +409,11 @@ func _process(delta: float) -> void:
 		var left := float(s.until) - game_t
 		if left < 1.0:
 			(s.mat as StandardMaterial3D).albedo_color.a = maxf(0.0, left) * 0.8
-	# HUD timer
+	# HUD timer (overtime counts down its own 20s window, always hot)
 	if phase == Phase.PLAY or phase == Phase.INTRO:
-		var remain := int(ceil(maxf(0.0, round_time - round_t)))
-		timer_label.text = str(remain)
+		var deadline := round_time + (OVERTIME_TIME if overtime else 0.0)
+		var remain := int(ceil(maxf(0.0, deadline - round_t)))
+		timer_label.text = ("OT %d" % remain) if overtime else str(remain)
 		var hot := sudden_death or remain <= 10
 		timer_label.add_theme_color_override("font_color",
 			Color(1, 0.3, 0.2) if hot else Color(1, 0.92, 0.6))
@@ -511,11 +540,13 @@ func _do_clash(p: int, q: int) -> void:
 	_log("clash p%d<->p%d kb=%.1f r=[%.1f,%.1f]" % [
 		p, q, CLASH_KB, pa.lpos.length(), pb.lpos.length()])
 
-func _in_slip(lp: Vector2) -> bool:
+## Which gull owns the splat underfoot (-1 = dry footing). The owner feeds the
+## GULL ASSIST credit chain: slip -> fall within GULL_KO_WINDOW = a gull KO.
+func _slip_owner(lp: Vector2) -> int:
 	for s in splats:
 		if (s.l as Vector2).distance_to(lp) < SLIP_RADIUS:
-			return true
-	return false
+			return int(s.owner)
+	return -1
 
 func _separate_pawns() -> void:
 	for a in roster.size():
@@ -543,14 +574,33 @@ func _on_edge_fall(p: int) -> void:
 	if pawn.last_shover >= 0 and pawn.last_shover != p \
 			and game_t - pawn.last_shove_t <= ROYALTY_WINDOW:
 		shover = pawn.last_shover
+	# GULL ASSIST (v1.2): a fall within GULL_KO_WINDOW of a guano slip is the
+	# seagull's KO. The most recent shover (inside the wider assist window)
+	# collects the royalty — the shove softened them up, the bomb finished it.
+	var gull_ko: bool = _slip_t.has(p) and game_t - float(_slip_t[p]) <= GULL_KO_WINDOW
+	var assist := -1
+	if gull_ko and pawn.last_shover >= 0 and pawn.last_shover != p \
+			and game_t - pawn.last_shove_t <= GULL_ASSIST_WINDOW:
+		assist = pawn.last_shover
 	# Optional contract reporting: one kill_event per overboard fall. killer is
-	# the crediting shover (same test as the royalty below) or -1 for a solo
-	# fall. Pure bookkeeping — the sim is untouched by this line.
-	_kill_events.append({"killer": shover, "victim": p, "cause": "ring_out"})
+	# the crediting shover (gull_assist on a gull KO, ring_out otherwise) or -1
+	# for a solo fall. Pure bookkeeping — the sim is untouched by this line.
+	if assist >= 0:
+		_kill_events.append({"killer": assist, "victim": p, "cause": "gull_assist"})
+	else:
+		_kill_events.append({"killer": shover, "victim": p, "cause": "ring_out"})
 	Sfx.play("death")
 	_shake = maxf(_shake, 0.3)
 	_slow_mo()
-	if shover >= 0:
+	if assist >= 0:
+		shove_falls[assist] = int(shove_falls[assist]) + 1
+		var an: Dictionary = roster[assist]
+		var gn: Dictionary = roster[int(_slip_gull.get(p, assist))]
+		_currency.append({"type": "royalty", "player": assist, "amount": 1,
+			"reason": "softened %s for %s's gull" % [pl.name, gn.name]})
+		_flash_banner("AIR RAID!  %s'S GULL SINKS %s — %s COLLECTS" % [gn.name, pl.name, an.name],
+			an.color, 2.0)
+	elif shover >= 0:
 		shove_falls[shover] = int(shove_falls[shover]) + 1
 		var sn: Dictionary = roster[shover]
 		_currency.append({"type": "royalty", "player": shover, "amount": 1,
@@ -558,7 +608,8 @@ func _on_edge_fall(p: int) -> void:
 		_flash_banner("%s SHOVED %s OVERBOARD!" % [sn.name, pl.name], sn.color, 1.8)
 	else:
 		_flash_banner("%s OVERBOARD!" % pl.name, pl.color, 1.6)
-	_log("fall p%d shover=%d tilt=%.1f" % [p, shover, platter.tilt_deg()])
+	_log("fall p%d shover=%d gull_ko=%s assist=%d tilt=%.1f" % [
+		p, shover, str(gull_ko), assist, platter.tilt_deg()])
 	_rebuild_scoreboard()
 	if _standing_count() <= 1 and _test_mode == "":
 		_end_round("last_stand")
@@ -679,14 +730,17 @@ func _make_splat(l: Vector2, owner_p: int) -> void:
 	node.material_override = mat
 	platter.disc.add_child(node)
 	node.position = Vector3(l.x, TiltPlatter.TOP_Y + 0.085, l.y)
-	splats.append({"node": node, "mat": mat, "l": l, "until": game_t + SLIP_TIME})
+	splats.append({"node": node, "mat": mat, "l": l, "until": game_t + SLIP_TIME, "owner": owner_p})
 	Sfx.play("splat", -6.0)
-	# direct hit: staggers anyone underneath
+	# direct hit: staggers anyone underneath (and counts as a fresh slip for the
+	# gull-KO window — the bomb IS the slip)
 	for q in roster.size():
 		var pawn: TiltPawn = pawns[q]
 		if pawn.state == TiltPawn.PState.STANDING and pawn.lpos.distance_to(l) < 1.0:
 			pawn.slide += platter.downhill() * 2.2 + (pawn.lpos - l).normalized() * 1.2
 			gull_hits[owner_p] = int(gull_hits[owner_p]) + 1
+			_slip_gull[q] = owner_p
+			_slip_t[q] = game_t
 			_log("guano_hit p%d by gull p%d" % [q, owner_p])
 
 func _spawn_coin() -> void:
@@ -727,6 +781,21 @@ func _start_sudden_death() -> void:
 	_shake = maxf(_shake, 0.2)
 	_log("sudden_death")
 
+## OVERTIME (v1.2): >1 survivor at the horn. The estate splits nothing — 20
+## more seconds on a sudden-death platter tilting 1.5x harder. Only if the sea
+## still refuses a verdict at +20s does the old split fire (the exception now).
+func _start_overtime() -> void:
+	overtime = true
+	if not sudden_death:
+		_start_sudden_death()
+	platter.set_overtime(true)
+	_flash_banner("THE ESTATE SPLITS NOTHING\nOVERTIME", Color(1, 0.3, 0.2), 2.6)
+	Sfx.play("grudge")
+	Sfx.play("round_over", -6.0)
+	_shake = maxf(_shake, 0.25)
+	_log("overtime start standing=%d gain=%.2fx window=%.0fs" % [
+		_standing_count(), platter.gain_scale * platter.overtime_scale, OVERTIME_TIME])
+
 # -- round / match flow -------------------------------------------------------
 
 func _start_round() -> void:
@@ -735,8 +804,11 @@ func _start_round() -> void:
 	round_t = 0.0
 	_last_status = 0.0
 	sudden_death = false
+	overtime = false
 	coin_timer = COIN_INTERVAL
 	elim_order.clear()
+	_slip_gull.clear()
+	_slip_t.clear()
 	platter.reset()
 	for arr in [loose_coins, splats, guanos]:
 		for e in arr:
@@ -791,8 +863,10 @@ func _end_round(kind: String) -> void:
 		for w in survivors:
 			points[w] = int(points[w]) + share
 			(pawns[w] as TiltPawn).cheer()
-		_flash_banner("TIME!  %d SURVIVORS SPLIT THE WIN  +%d" % [survivors.size(), share],
-			Color(1, 0.85, 0.2), 2.8)
+		var split_msg := "TIME!  %d SURVIVORS SPLIT THE WIN  +%d" % [survivors.size(), share]
+		if kind == "overtime_split":
+			split_msg = "THE SEA REFUSES A VERDICT\n%d SURVIVORS SPLIT  +%d" % [survivors.size(), share]
+		_flash_banner(split_msg, Color(1, 0.85, 0.2), 2.8)
 		var rank2 := survivors.size()
 		for i in range(elim_order.size() - 1, -1, -1):
 			if rank2 < ROUND_POINTS.size():
@@ -918,6 +992,10 @@ func _setup_test() -> void:
 		(pawns[0] as TiltPawn).reset_for_round(Vector2(6.55, 0.0))
 		platter.debug_force_tilt(Vector2(1, 0), 20.0)
 		_log("tilttest edge: pawn0 at r=6.55, forced 20deg toward +X")
+	elif _test_mode == "gull":
+		(pawns[0] as TiltPawn).reset_for_round(Vector2(5.9, 0.0))
+		platter.debug_force_tilt(Vector2(1, 0), 20.0)
+		_log("tilttest gull: pawn0 at r=5.9, forced 20deg; shove+splat inject at t=0.5")
 	else:
 		_log("tilttest idle: 4 pawns symmetric, impulse at t=5s")
 
@@ -949,6 +1027,32 @@ func _tick_test(delta: float) -> void:
 			get_tree().quit(0)
 		elif _test_t > 8.0:
 			print("TILTTEST edge RESULT: FAIL (still aboard after 8s)")
+			get_tree().quit(1)
+	elif _test_mode == "gull":
+		# v1.2 GULL ASSIST chain, deterministically: p1's shove connects (the
+		# real apply_knock path), p2's gull splats the same spot, the knockback
+		# carries p0 over the rim inside both windows -> the fall must credit
+		# cause "gull_assist", killer=1, +1 royalty to p1.
+		var pawn: TiltPawn = pawns[0]
+		if not _test_injected and _test_t >= 0.5:
+			_test_injected = true
+			pawn.apply_knock(Vector2(1, 0), SHOVE_POWER, 1, game_t)
+			_make_splat(pawn.lpos, 2)
+			print("TILTTEST gull: shove(p1) + splat(gull p2) injected at t=%.2f r=%.2f" % [
+				_test_t, pawn.lpos.length()])
+		if pawn.state != TiltPawn.PState.STANDING and not _kill_events.is_empty():
+			var ev: Dictionary = _kill_events[-1]
+			var royal := false
+			for c in _currency:
+				if str(c.type) == "royalty" and int(c.player) == 1:
+					royal = true
+			var ok: bool = str(ev.cause) == "gull_assist" and int(ev.killer) == 1 \
+					and int(ev.victim) == 0 and royal
+			print("TILTTEST gull RESULT: %s (cause=%s killer=%d victim=%d royalty_p1=%s t=%.2f)" % [
+				"PASS" if ok else "FAIL", str(ev.cause), int(ev.killer), int(ev.victim), str(royal), _test_t])
+			get_tree().quit(0 if ok else 1)
+		elif _test_t > 8.0:
+			print("TILTTEST gull RESULT: FAIL (no fall after 8s)")
 			get_tree().quit(1)
 
 # -- world & juice -------------------------------------------------------------
