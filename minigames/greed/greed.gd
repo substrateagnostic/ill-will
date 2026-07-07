@@ -20,6 +20,7 @@ extends Minigame
 ##   --greedcap           state/event-based screenshots -> verify_out, then quit
 ##   --outdir=DIR         output dir for --greedcap (default verify_out)
 ##   --greedtest=intercept  run the pursuit-tuning test, print tally, quit
+##   --greedbellcap       stage + film the CLOSING BELL beats (windowed), quit
 ##   --shots=N,...        handled by the house VerifyCapture autoload (PNGs)
 
 enum Phase { WAITING, INTRO, PLAY, ROUND_END, MATCH_END }
@@ -109,6 +110,7 @@ var _cap_done := {}
 var _aim_probe_on := false
 var _aim_probe_deg := 0.0
 var _hitkit_cap := false        # verify: stage the HIT KIT / cooldown-ring shots
+var _bell_cap := false          # verify: stage + film the CLOSING BELL beats
 var _freeze := false            # verify: pause gameplay so a moment can be filmed
 
 # juice
@@ -253,6 +255,8 @@ func begin(config: Dictionary) -> void:
 		_run_greed_probe()
 	if _hitkit_cap:
 		_run_hitkit_cap()
+	if _bell_cap:
+		_run_bell_cap()
 
 
 # ===========================================================================
@@ -1828,7 +1832,9 @@ func _parse_args() -> void:
 			_aim_probe_deg = float(arg.trim_prefix("--aimprobe="))
 		elif arg == "--hitkitcap":
 			_hitkit_cap = true
-	if _cap_on or _aim_probe_on or _hitkit_cap:
+		elif arg == "--greedbellcap":
+			_bell_cap = true
+	if _cap_on or _aim_probe_on or _hitkit_cap or _bell_cap:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
 
 
@@ -1850,7 +1856,7 @@ func _default_config() -> Dictionary:
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": CHAR_FALLBACKS[i],
 			"device": PlayerInput.device_of(i),
-			"bot": false if _aim_probe_on else PlayerInput.standalone_bot_default(i),
+			"bot": false if (_aim_probe_on or _bell_cap) else PlayerInput.standalone_bot_default(i),
 		})
 	return {"roster": r, "rounds": ROUNDS, "rng_seed": _cli_seed, "practice": false}
 
@@ -2103,6 +2109,42 @@ func _run_hitkit_cap() -> void:
 	await _grab_shot("hitkit_ring_ready", false)
 	await _settle(0.15)
 	print("GREED_HITKIT_CAP_DONE")
+	get_tree().quit()
+
+
+# ===========================================================================
+# CLOSING BELL capture (--greedbellcap, windowed): stages each §6.1-3 beat on
+# a LIVE round clock (the bell code runs untouched — we only move round_t and
+# park a staged carrier) and films it. Verify-only; no effect on normal play.
+# ===========================================================================
+func _run_bell_cap() -> void:
+	while phase != Phase.PLAY:
+		await get_tree().physics_frame
+	banner.visible = false
+	hint_label.visible = false
+	# 1) §6.2 approach drama: a 22-coin pot parked 2.4 m from its OWN chute
+	#    (inside the 3.0 m drama ring, outside the 1.75 m bank ring)
+	round_t = round_time - 26.0          # remain 26: no other bell beat yet
+	_do_grab(0)
+	pot_value = 22
+	var c := chute_pos(0)
+	var inward := (-c).normalized() * 2.4
+	(players[0] as GreedPlayer).global_position = Vector3(c.x + inward.x, 0.1, c.y + inward.y)
+	await _settle(0.9)
+	await _grab_shot("bell_approach", false)
+	# 2) §6.3 the T-20 straight line (nobody has banked)
+	round_t = round_time - 20.2
+	await _settle(0.7)
+	await _grab_shot("bell_warn", false)
+	# 3) §6.1 the bell: LAST BANKS! + pot Label3D pulse
+	round_t = round_time - 15.2
+	await _settle(0.45)
+	await _grab_shot("bell_lastbanks", false)
+	# 4) the final stretch: red timer + rising tick ladder
+	round_t = round_time - 9.6
+	await _settle(0.8)
+	await _grab_shot("bell_ticks", false)
+	print("GREED_BELLCAP_DONE")
 	get_tree().quit()
 
 
