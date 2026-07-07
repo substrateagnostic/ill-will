@@ -1,0 +1,393 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET transports: enet ready · steam offline
+NET host port=9762 err=0 code=80CNQ2 addr=192.168.0.101:9762
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 1975268938 connected
+NETPROBE seat 1 claimed by peer 1975268938
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_online_host_claim_0787.png
+NETPROBE_TRACE tick=60 p1=(-3.400,0.001,-2.500)
+NETHASH side=host seq=15 h=835fd361
+NETPROBE_TRACE tick=90 p1=(-3.797,0.001,-3.803)
+NETPROBE_TRACE tick=120 p1=(-3.797,0.001,-5.503)
+NETHASH side=host seq=30 h=42c42771
+NETPROBE_TRACE tick=150 p1=(-2.153,0.001,-5.560)
+NETPROBE_TRACE tick=180 p1=(-0.453,0.001,-5.560)
+NETHASH side=host seq=45 h=80be937e
+NETPROBE_TRACE tick=210 p1=(-0.340,0.001,-3.973)
+NETPROBE_TRACE tick=240 p1=(-0.340,0.001,-2.273)
+NETHASH side=host seq=60 h=dc978be3
+NETPROBE_TRACE tick=270 p1=(-0.353,0.001,-2.010)
+NETPROBE_TRACE tick=300 p1=(-0.353,0.001,-2.010)
+NETPROBE toggle seat=1 ready=true pf=601
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_online_host_ready_1382.png
+NETHASH side=host seq=75 h=2cccb209
+NETHASH side=host seq=90 h=fe664a45
+NETHASH side=host seq=105 h=7b8ef032
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_online_host_auction_1719.png
+NETHASH side=host seq=120 h=95123a2f
+NETHASH side=host seq=135 h=ad5b9ed5
+NETHASH side=host seq=150 h=c6dee8d2
+NETHASH side=host seq=165 h=df284d78
+NETHASH side=host seq=180 h=f8ab9775
+NETHASH side=host seq=195 h=10f4fc1b
+NETHASH side=host seq=210 h=52eed64f
+NETHASH side=host seq=225 h=6b383af5
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_online_host_gate_2948.png
+NETHASH side=host seq=240 h=84bb84f2
+NETHASH side=host seq=255 h=9d04e998
+NETHASH side=host seq=270 h=b6883395
+LW_BEGIN players=4 seed=3300865038 races=2 bots=[false, false, true, true]
+LW_RACE_START 1/2 curses=0
+WARNING: Sending 1852 bytes unreliably which is above the MTU (1392), this will result in higher packet loss
+   at: put_packet (modules/enet/enet_multiplayer_peer.cpp:363)
+   GDScript backtrace (most recent call first):
+       [0] send_module_state (res://core/net_session.gd:604)
+       [1] _net_host_broadcast (res://estate/estate.gd:2462)
+       [2] _process (res://estate/estate.gd:1293)
+NETHASH side=host seq=285 h=ced1983b
+NETHASH side=host seq=300 h=10cb726f
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_online_host_game_3617.png
+NETHASH_MOD side=host seq=40 h=493cd399 bytes=1920
+NETHASH side=host seq=315 h=2914d715
+NETHASH side=host seq=330 h=42982112
+NETHASH side=host seq=345 h=5ae185b8
+NETHASH_MOD side=host seq=80 h=a57a0d32 bytes=1916
+NETHASH side=host seq=360 h=7464cfb5
+NETHASH side=host seq=375 h=8cae345b
+NETHASH_MOD side=host seq=120 h=3163b287 bytes=2120
+NETHASH side=host seq=390 h=a6317e58
+LW_FORCEKILL p=1 t=6.0
+LW_DEATH race=1 t=6.0 THE VOID CLAIMS BLUE cause=void lives_left=2
+NETHASH side=host seq=405 h=e6f17335
+NETHASH_MOD side=host seq=160 h=7b4e6680 bytes=2208
+NETHASH side=host seq=420 h=0074bd32
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_draft_4904.png
+LW_WILL BLUE condemns THE PALLBEARERS' GAP with grease
+NETHASH side=host seq=435 h=18be21d8
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_curse_5030.png
+NETHASH_MOD side=host seq=200 h=727e2de0 bytes=2340
+NETHASH side=host seq=450 h=32416bd5
+NETHASH side=host seq=465 h=4a8ad07b
+NETHASH_MOD side=host seq=240 h=7fa9ca25 bytes=2340
+NETHASH side=host seq=480 h=640e1a78
+NETHASH side=host seq=495 h=7c577f1e
+NETHASH_MOD side=host seq=280 h=38a62b22 bytes=2260
+NETHASH side=host seq=510 h=be515952
+NETHASH side=host seq=525 h=d69abdf8
+NETHASH_MOD side=host seq=320 h=9bd0af88 bytes=2168
+NETHASH side=host seq=540 h=f01e07f5
+NETHASH side=host seq=555 h=08676c9b
+NETHASH_MOD side=host seq=360 h=3cc12cc7 bytes=2368
+NETHASH side=host seq=570 h=21eab698
+NETHASH side=host seq=585 h=3a341b3e
+LW_CHECKPOINT MINT cp=1 t=14.2
+LW_CHECKPOINT GOLD cp=1 t=14.6
+NETHASH side=host seq=600 h=7c2df572
+NETHASH_MOD side=host seq=400 h=02a250fa bytes=2276
+NETHASH side=host seq=615 h=94775a18
+LW_FORCEKILL p=1 t=16.0
+LW_DEATH race=1 t=16.0 THE VOID CLAIMS BLUE cause=void lives_left=1
+NETHASH side=host seq=630 h=adfaa415
+NETHASH_MOD side=host seq=440 h=b5126081 bytes=2168
+NETHASH side=host seq=645 h=c64408bb
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_draft_7148.png
+NETHASH side=host seq=660 h=dfc752b8
+LW_WILL BLUE condemns THE OSSUARY RIDGE with grease
+NETHASH_MOD side=host seq=480 h=f17ec8c0 bytes=2300
+NETHASH side=host seq=675 h=f810b75e
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_curse_7393.png
+NETHASH side=host seq=690 h=1194015b
+NETHASH_MOD side=host seq=520 h=8e108ddb bytes=2300
+NETHASH side=host seq=705 h=5253f638
+NETHASH side=host seq=720 h=6bd74035
+NETHASH_MOD side=host seq=560 h=6290b3f7 bytes=2220
+NETHASH side=host seq=735 h=8420a4db
+NETHASH side=host seq=750 h=9da3eed8
+NETHASH_MOD side=host seq=600 h=101a0de9 bytes=2324
+NETHASH side=host seq=765 h=b5ed537e
+NETHASH side=host seq=780 h=cf709d7b
+NETHASH_MOD side=host seq=640 h=f0f4e311 bytes=2436
+NETHASH side=host seq=795 h=e7ba0221
+NETHASH side=host seq=810 h=29b3dc55
+NETHASH_MOD side=host seq=680 h=832e59c7 bytes=2136
+NETHASH side=host seq=825 h=41fd40fb
+NETHASH side=host seq=840 h=5b808af8
+LW_DEATH race=1 t=25.4 THE PENDULUM SWATS GOLD INTO THE DUSK cause=pendulum lives_left=2
+NETHASH side=host seq=855 h=73c9ef9e
+NETHASH_MOD side=host seq=720 h=cbf00500 bytes=2444
+NETHASH side=host seq=870 h=8d4d399b
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_draft_9425.png
+NETHASH side=host seq=885 h=a5969e41
+NETHASH_MOD side=host seq=760 h=64959ad0 bytes=2520
+NETHASH side=host seq=900 h=e7907875
+LW_WILL GOLD condemns THE CRYPT STEPS with grease
+NETHASH side=host seq=915 h=ffd9dd1b
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_curse_9782.png
+NETHASH_MOD side=host seq=800 h=489fde61 bytes=2576
+NETHASH side=host seq=930 h=195d2718
+NETHASH side=host seq=945 h=31a68bbe
+NETHASH_MOD side=host seq=840 h=3dd0ead8 bytes=2488
+LW_FORCEKILL p=1 t=26.0
+LW_DEATH race=1 t=26.0 THE VOID CLAIMS BLUE cause=void lives_left=0
+NETHASH side=host seq=960 h=4b29d5bb
+NETHASH side=host seq=975 h=63733a61
+NETHASH_MOD side=host seq=880 h=63cc8137 bytes=2376
+NETHASH side=host seq=990 h=7cf6845e
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_draft_10540.png
+LW_WILL BLUE condemns THE MOURNERS' MILE with scythe
+NETHASH side=host seq=1005 h=be7de362
+NETHASH_MOD side=host seq=920 h=4455667a bytes=2512
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_curse_10805.png
+NETHASH side=host seq=1020 h=d8012d5f
+NETHASH side=host seq=1035 h=f04a9205
+NETHASH_MOD side=host seq=960 h=925f273f bytes=2512
+NETHASH side=host seq=1050 h=09cddc02
+LW_GHOST BLUE takes a pew (race 1)
+NETHASH side=host seq=1065 h=221740a8
+NETHASH_MOD side=host seq=1000 h=a800b3b6 bytes=2540
+NETHASH side=host seq=1080 h=3b9a8aa5
+NETHASH side=host seq=1095 h=53e3ef4b
+NETHASH side=host seq=1110 h=95ddc97f
+NETHASH_MOD side=host seq=1040 h=faf55e7b bytes=2432
+LW_CHECKPOINT MINT cp=2 t=31.1
+NETHASH side=host seq=1125 h=ae272e25
+NETHASH side=host seq=1140 h=c7aa7822
+NETHASH_MOD side=host seq=1080 h=4ab84cfe bytes=2540
+NETHASH side=host seq=1155 h=dff3dcc8
+NETHASH side=host seq=1170 h=f97726c5
+NETHASH_MOD side=host seq=1120 h=2f637c0f bytes=2336
+NETHASH side=host seq=1185 h=11c08b6b
+LW_GUST from=BLUE t=36.0
+NETHASH side=host seq=1200 h=53ba659f
+NETHASH_MOD side=host seq=1160 h=e7604c6d bytes=2360
+NETHASH side=host seq=1215 h=6c03ca45
+NETHASH side=host seq=1230 h=85871442
+NETHASH_MOD side=host seq=1200 h=17d755e5 bytes=2552
+NETHASH side=host seq=1245 h=9dd078e8
+NETHASH side=host seq=1260 h=b753c2e5
+NETHASH_MOD side=host seq=1240 h=214b873e bytes=2464
+LW_DEATH race=1 t=41.5 THE PENDULUM SWATS MINT INTO THE DUSK cause=pendulum lives_left=2
+NETHASH side=host seq=1275 h=cf9d278b
+NETHASH side=host seq=1290 h=e9207188
+NETHASH_MOD side=host seq=1280 h=ceb6e2ba bytes=2472
+NETHASH side=host seq=1305 h=29e06665
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_draft_13712.png
+LW_WILL MINT condemns THE LANTERN WALK with gale
+NETHASH side=host seq=1320 h=4363b062
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_curse_13910.png
+NETHASH_MOD side=host seq=1320 h=c9cbbbec bytes=2604
+NETHASH side=host seq=1335 h=5bad1508
+NETHASH side=host seq=1350 h=75305f05
+NETHASH side=host seq=1365 h=8d79c3ab
+NETHASH_MOD side=host seq=1360 h=52bde7ce bytes=2432
+LW_CHECKPOINT GOLD cp=2 t=42.7
+NETHASH side=host seq=1380 h=a6fd0da8
+NETHASH side=host seq=1395 h=bf46724e
+NETHASH_MOD side=host seq=1400 h=8965824d bytes=2544
+NETHASH side=host seq=1410 h=01404c82
+NETHASH side=host seq=1425 h=1989b128
+LW_GUST from=BLUE t=46.3
+NETHASH_MOD side=host seq=1440 h=23904020 bytes=2544
+NETHASH side=host seq=1440 h=330cfb25
+NETHASH side=host seq=1455 h=4b565fcb
+NETHASH_MOD side=host seq=1480 h=74818bd0 bytes=2528
+NETHASH side=host seq=1470 h=64d9a9c8
+NETHASH side=host seq=1485 h=7d230e6e
+NETHASH_MOD side=host seq=1520 h=7adddbb3 bytes=2536
+NETHASH side=host seq=1500 h=bf1ce8a2
+NETHASH side=host seq=1515 h=d7664d48
+LW_DEATH race=1 t=52.9 THE PENDULUM SWATS GOLD INTO THE DUSK cause=pendulum lives_left=1
+NETHASH_MOD side=host seq=1560 h=d7438fa0 bytes=2444
+NETHASH side=host seq=1530 h=f0e99745
+NETHASH side=host seq=1545 h=0932fbeb
+NETHASH_MOD side=host seq=1600 h=3cb13507 bytes=2444
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_draft_16234.png
+NETHASH side=host seq=1560 h=22b645e8
+LW_WILL GOLD condemns THE PROCESSION ROW with scythe
+NETHASH side=host seq=1575 h=3affaa8e
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_curse_16513.png
+NETHASH_MOD side=host seq=1640 h=39d21e3e bytes=2584
+NETHASH side=host seq=1590 h=5482f48b
+NETHASH side=host seq=1605 h=9542e968
+NETHASH side=host seq=1620 h=aec63365
+NETHASH_MOD side=host seq=1680 h=33a3d5e8 bytes=2604
+NETHASH side=host seq=1635 h=c70f980b
+NETHASH side=host seq=1650 h=e092e208
+NETHASH_MOD side=host seq=1720 h=37b311af bytes=2612
+NETHASH side=host seq=1665 h=f8dc46ae
+NETHASH side=host seq=1680 h=125f90ab
+NETHASH_MOD side=host seq=1760 h=8a8d99e3 bytes=2508
+LW_GUST from=BLUE t=57.5
+NETHASH side=host seq=1695 h=2aa8f551
+NETHASH side=host seq=1710 h=6ca2cf85
+NETHASH_MOD side=host seq=1800 h=5eae64ef bytes=2612
+NETHASH side=host seq=1725 h=84ec342b
+NETHASH side=host seq=1740 h=9e6f7e28
+NETHASH_MOD side=host seq=1840 h=5b0190dc bytes=2728
+NETHASH side=host seq=1755 h=b6b8e2ce
+LW_DEATH race=1 t=63.2 THE PENDULUM SWATS GOLD INTO THE DUSK cause=pendulum lives_left=0
+NETHASH side=host seq=1770 h=d03c2ccb
+NETHASH_MOD side=host seq=1880 h=53feb2c5 bytes=2608
+NETHASH side=host seq=1785 h=e8859171
+NETHASH side=host seq=1800 h=2a7f6ba5
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_draft_18678.png
+LW_WILL GOLD condemns THE LYCHGATE ROAD with stones
+NETHASH_MOD side=host seq=1920 h=8e0e651e bytes=2740
+NETHASH side=host seq=1815 h=42c8d04b
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_curse_18877.png
+NETHASH side=host seq=1830 h=5c4c1a48
+NETHASH side=host seq=1845 h=74957eee
+NETHASH_MOD side=host seq=1960 h=6c5ce122 bytes=2740
+LW_GHOST GOLD takes a pew (race 1)
+NETHASH side=host seq=1860 h=8e18c8eb
+NETHASH side=host seq=1875 h=a6622d91
+NETHASH_MOD side=host seq=2000 h=9cb78238 bytes=2664
+LW_FINISH race=1 winner=MINT t=65.0
+LW_RACE_END 1 placements=["MINT", "GOLD", "RED", "BLUE"] totals=[1, 0, 2, 4]
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_finish_19461.png
+NETHASH side=host seq=1890 h=bfe5778e
+NETHASH side=host seq=1905 h=00a56c6b
+NETHASH_MOD side=host seq=2040 h=7d5358cb bytes=2404
+NETHASH side=host seq=1920 h=1a28b668
+NETHASH side=host seq=1935 h=32721b0e
+LW_RACE_START 2/2 curses=7
+NETHASH_MOD side=host seq=2080 h=183c14c3 bytes=2376
+NETHASH side=host seq=1950 h=4bf5650b
+NETHASH side=host seq=1965 h=643ec9b1
+NETHASH_MOD side=host seq=2120 h=79645a44 bytes=2348
+NETHASH side=host seq=1980 h=7dc213ae
+NETHASH side=host seq=1995 h=960b7854
+NETHASH_MOD side=host seq=2160 h=38e6031c bytes=2448
+NETHASH side=host seq=2010 h=0f4de99f
+NETHASH side=host seq=2025 h=27974e45
+NETHASH_MOD side=host seq=2200 h=67c274d9 bytes=2556
+NETHASH side=host seq=2040 h=411a9842
+LW_DEATH race=2 t=5.4 THE BOULDER FLATTENS GOLD cause=squish lives_left=2
+NETHASH side=host seq=2055 h=5963fce8
+NETHASH_MOD side=host seq=2240 h=2bb946a1 bytes=2552
+NETHASH side=host seq=2070 h=72e746e5
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_draft_21464.png
+NETHASH side=host seq=2085 h=8b30ab8b
+LW_WILL GOLD condemns THE WILLOW TURN with grease
+NETHASH side=host seq=2100 h=cd2a85bf
+NETHASH_MOD side=host seq=2280 h=44a634c8 bytes=2712
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_curse_21748.png
+NETHASH side=host seq=2115 h=e573ea65
+NETHASH side=host seq=2130 h=fef73462
+NETHASH_MOD side=host seq=2320 h=8a350dc4 bytes=2712
+NETHASH side=host seq=2145 h=17409908
+NETHASH side=host seq=2160 h=30c3e305
+NETHASH_MOD side=host seq=2360 h=533b4f5b bytes=2616
+NETHASH side=host seq=2175 h=490d47ab
+NETHASH side=host seq=2190 h=629091a8
+NETHASH_MOD side=host seq=2400 h=f0166d97 bytes=2728
+NETHASH side=host seq=2205 h=a3508685
+NETHASH side=host seq=2220 h=bcd3d082
+NETHASH_MOD side=host seq=2440 h=a7e5f909 bytes=2608
+NETHASH side=host seq=2235 h=d51d3528
+NETHASH side=host seq=2250 h=eea07f25
+NETHASH_MOD side=host seq=2480 h=9520f1e9 bytes=2820
+LW_CHECKPOINT MINT cp=1 t=14.0
+NETHASH side=host seq=2265 h=06e9e3cb
+LW_DEATH race=2 t=14.7 THE BOULDER FLATTENS GOLD cause=squish lives_left=1
+NETHASH side=host seq=2280 h=206d2dc8
+NETHASH_MOD side=host seq=2520 h=b932bbe1 bytes=2820
+NETHASH side=host seq=2295 h=38b6926e
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_draft_23758.png
+NETHASH side=host seq=2310 h=7ab06ca2
+LW_WILL GOLD condemns THE SEXTON'S BEND with stones
+NETHASH_MOD side=host seq=2560 h=fb8f8b97 bytes=3008
+NETHASH side=host seq=2325 h=92f9d148
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_curse_23961.png
+NETHASH side=host seq=2340 h=ac7d1b45
+NETHASH side=host seq=2355 h=c4c67feb
+NETHASH_MOD side=host seq=2600 h=b1b562d3 bytes=3008
+NETHASH side=host seq=2370 h=de49c9e8
+NETHASH side=host seq=2385 h=f6932e8e
+NETHASH_MOD side=host seq=2640 h=844180ba bytes=2780
+NETHASH side=host seq=2400 h=388d08c2
+NETHASH side=host seq=2415 h=50d66d68
+NETHASH_MOD side=host seq=2680 h=f05f04c9 bytes=2672
+NETHASH side=host seq=2430 h=6a59b765
+NETHASH side=host seq=2445 h=82a31c0b
+NETHASH_MOD side=host seq=2720 h=1008ee88 bytes=2872
+NETHASH side=host seq=2460 h=9c266608
+NETHASH side=host seq=2475 h=b46fcaae
+NETHASH_MOD side=host seq=2760 h=db416fe0 bytes=2684
+NETHASH side=host seq=2490 h=cdf314ab
+NETHASH side=host seq=2505 h=0eb30988
+NETHASH_MOD side=host seq=2800 h=1d2c7221 bytes=2768
+NETHASH side=host seq=2520 h=28365385
+NETHASH side=host seq=2535 h=407fb82b
+NETHASH_MOD side=host seq=2840 h=bba58042 bytes=2888
+NETHASH side=host seq=2550 h=5a030228
+NETHASH side=host seq=2565 h=724c66ce
+LW_CHECKPOINT GOLD cp=1 t=29.7
+NETHASH side=host seq=2580 h=8bcfb0cb
+NETHASH_MOD side=host seq=2880 h=64d289e6 bytes=2684
+LW_CHECKPOINT MINT cp=2 t=30.6
+NETHASH side=host seq=2595 h=a4191571
+NETHASH side=host seq=2610 h=e612efa5
+NETHASH_MOD side=host seq=2920 h=a9a283cf bytes=2780
+NETHASH side=host seq=2625 h=fe5c544b
+NETHASH side=host seq=2640 h=17df9e48
+NETHASH_MOD side=host seq=2960 h=ff8ac90f bytes=2888
+NETHASH side=host seq=2655 h=302902ee
+NETHASH side=host seq=2670 h=49ac4ceb
+NETHASH_MOD side=host seq=3000 h=1d7c57be bytes=2676
+NETHASH side=host seq=2685 h=61f5b191
+NETHASH side=host seq=2700 h=a3ef8bc5
+NETHASH_MOD side=host seq=3040 h=73bc27d0 bytes=2888
+NETHASH side=host seq=2715 h=bc38f06b
+NETHASH side=host seq=2730 h=d5bc3a68
+NETHASH_MOD side=host seq=3080 h=1bade744 bytes=2788
+NETHASH side=host seq=2745 h=ee059f0e
+NETHASH side=host seq=2760 h=0788e90b
+NETHASH_MOD side=host seq=3120 h=c409c7db bytes=2680
+NETHASH side=host seq=2775 h=1fd24db1
+NETHASH side=host seq=2790 h=395597ae
+NETHASH_MOD side=host seq=3160 h=a36f6565 bytes=2796
+NETHASH side=host seq=2805 h=7a158c8b
+LW_CHECKPOINT GOLD cp=2 t=46.1
+NETHASH side=host seq=2820 h=9398d688
+NETHASH side=host seq=2835 h=abe23b2e
+NETHASH_MOD side=host seq=3200 h=dfeb4cc1 bytes=2796
+NETHASH side=host seq=2850 h=c565852b
+LW_FINISH race=2 winner=MINT t=49.5
+LW_RACE_END 2 placements=["MINT", "GOLD", "RED", "BLUE"] totals=[2, 0, 4, 8]
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_finish_29294.png
+NETHASH side=host seq=2865 h=ddaee9d1
+NETHASH_MOD side=host seq=3240 h=101449ba bytes=2476
+NETHASH side=host seq=2880 h=f73233ce
+NETHASH side=host seq=2895 h=0f7b9874
+NETHASH_MOD side=host seq=3280 h=b40a1d06 bytes=2500
+NETHASH side=host seq=2910 h=517572a8
+KILL_EVENTS n=9 [{ "killer": -1, "victim": 1, "cause": "void" }, { "killer": -1, "victim": 1, "cause": "void" }, { "killer": -1, "victim": 2, "cause": "pendulum" }, { "killer": -1, "victim": 1, "cause": "void" }, { "killer": -1, "victim": 3, "cause": "pendulum" }, { "killer": -1, "victim": 2, "cause": "pendulum" }, { "killer": -1, "victim": 2, "cause": "pendulum" }, { "killer": -1, "victim": 2, "cause": "squish" }, { "killer": -1, "victim": 2, "cause": "squish" }]
+LW_MATCH_OVER champ=MINT pts=8
+LW_RESULTS {"currency_events":[{"amount":1,"player":1,"reason":"dead last in the procession","type":"grudge"},{"amount":1,"player":1,"reason":"dead last in the procession","type":"grudge"}],"highlights":["MINT reached the crypt without dying once"],"kill_events":[{"cause":"void","killer":-1,"victim":1},{"cause":"void","killer":-1,"victim":1},{"cause":"pendulum","killer":-1,"victim":2},{"cause":"void","killer":-1,"victim":1},{"cause":"pendulum","killer":-1,"victim":3},{"cause":"pendulum","killer":-1,"victim":2},{"cause":"pendulum","killer":-1,"victim":2},{"cause":"squish","killer":-1,"victim":2},{"cause":"squish","killer":-1,"victim":2}],"monuments":[{"kind":"untouched","label":"MINT, the Untouched Procession","player":3}],"placements":[3,2,0,1],"points":{"0":2,"1":0,"2":4,"3":8}}
+LW_VALIDATE problems=0 []
+NETHASH side=host seq=2925 h=69bed74e
+NETHASH side=host seq=2940 h=8342214b
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_online_host_matchpodium_30106.png
+NETHASH side=host seq=2955 h=9b8b85f1
+NETHASH side=host seq=2970 h=b50ecfee
+NETHASH side=host seq=2985 h=cd583494
+VERIFY_SNAP res://docs/verify/lw_netshots_host/snap_online_host_reckoning_30641.png
+NETPROBE_RESULTS RED:pts=2,grudge=3 BLUE:pts=1,grudge=5 GOLD:pts=3,grudge=2 MINT:pts=5,grudge=1
+NETPROBE saves restored
+NETPROBE_DONE
+NETHASH side=host seq=3000 h=469aa5df
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)

@@ -1543,3 +1543,61 @@ deciding freeze in tilt/dw/echo (fov punch visibly IN on all three).
 WITH THE REAL TRACKS IN assets/music/, THIS IS THE WAVE WHERE THE WHOLE
 ANTHOLOGY LIGHTS UP AT ONCE — the kit was a no-op until your soundtrack
 landed; now every game's last seconds are heard.
+
+================================================================
+2026-07-07 — ONLINE MIRRORS, THE FINAL PAIR: ORBITAL + LAST WILL
+(online-mirror agent; branch worktree-agent-ac940a8125f5036c9)
+================================================================
+
+WHAT LANDED: the last two game mirrors. Every game in the anthology
+except par now plays across the wire — a guest's screen runs the real
+scene as a render mirror while the host owns every fact.
+
+- ORBITAL: the whole threat ladder crossed for FREE — heat glow, trail
+  burn, threat tones and the danger vignette are all derived from ball
+  VELOCITY, which is exactly what the snapshot carries. Balls dead-reckon
+  between 20 Hz beats; the aim preview reads the mirrored basis frame;
+  the hold-fill charge advances locally like greed's grab. The probe's
+  remote seat STOLE an 11-second orbit out of the sky, threw it back and
+  killed GOLD with it — catch, throw, kill, all over the relay.
+- LAST WILL: the course's MEMORY is the payload. The active curse set
+  (slot + kind + author + side seed) streams complete every snapshot, so
+  a curse installing mid-race rises on the client with its author color
+  and NAME PLAQUE, and a late-booting mirror rebuilds the whole accreted
+  road. The 6s WILL DRAFT freeze stops BOTH screens; the draft is public
+  on the couch (one shared screen), so the mirror shows the same cards/
+  cursor/clock honestly — zero private sends. The probe night accreted
+  a FULL nine-curse slate; the dead remote player drafted three wills
+  and gusted the living 3x from the pew.
+
+JUDGMENT CALLS (flag if you disagree):
+1. Orbital defers report_finished by 0.45s (couch podium arrives half a
+   beat later) so END/champ/banner facts reach mirrors — the masked-ball
+   lesson, applied at the source. Prints stay inline; receipts identical.
+2. Last will pre-announces the champ 0.4s early via the RACE_END
+   sequencer (totals are final at _end_race), and mirrors build the win
+   banner locally — the host's own banner is minted the same tick as
+   report_finished and can never arrive.
+3. LW boulders/gusts REPLAY locally from spawn facts (deterministic over
+   static geometry) instead of streaming transforms; squish is fenced on
+   mirrors (deaths are host facts). Drift bound: one snapshot beat,
+   nudged.
+4. Probe nights ran with a STAGED party_setup.json (live save had seats
+   0+1 human, which parks a joiner on seat 2 while the rig watches seat
+   1). Original restored + md5-verified after.
+
+RECEIPTS: --orbbots and --willtally seeds 1/2/3 byte-identical to a
+pristine HEAD worktree (only known run-to-run engine exit-noise wobble,
+seen on both trees). Two probe nights, zero script errors in all four
+logs; NETHASH_MOD 82/82 + 82/82 digest pairs, walkers 200/200 + 200/200.
+Bandwidth: orbital ~33 kB/s/guest, last will ~51 kB/s/guest (the fattest
+mirror yet — it carries the whole road). Paired windowed shots read by
+eye: orbital top-heat + catch + FINAL ORBIT pairs near pixel-identical;
+last will draft pair pixel-identical, curse pair with the ▲ BLUE plaque
+legible on the client, crypt-finish pair one story from two cameras.
+Docs: docs/verify/online-orbital-VERIFY.md, online-lastwill-VERIFY.md.
+Estate smoke + auctiontest + strolltest clean; import clean.
+
+THE MILESTONE: with these two, ONLINE PHASE 2 GAME COVERAGE IS COMPLETE
+— 13 of 13 non-par games mirror across the wire. What remains online is
+ceremony polish (podium mirroring) and par itself.

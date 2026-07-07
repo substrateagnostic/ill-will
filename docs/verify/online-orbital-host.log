@@ -1,0 +1,475 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET transports: enet ready · steam offline
+NET host port=9761 err=0 code=80CNQ1 addr=192.168.0.101:9761
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 1875779442 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE seat 1 claimed by peer 1875779442
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+NETPROBE_TRACE tick=60 p1=(-3.343,0.001,-2.557)
+NETHASH side=host seq=15 h=9b519db2
+VERIFY_SNAP res://docs/verify/orb_netshots_host/snap_online_host_claim_0702.png
+NETPROBE_TRACE tick=90 p1=(-3.343,0.001,-4.257)
+NETPROBE_TRACE tick=120 p1=(-3.343,0.001,-5.957)
+NETHASH side=host seq=30 h=5ed432a9
+NETPROBE_TRACE tick=150 p1=(-1.643,0.001,-5.957)
+NETPROBE_TRACE tick=180 p1=(0.057,0.001,-5.957)
+NETHASH side=host seq=45 h=b2e5f6db
+NETPROBE_TRACE tick=210 p1=(0.113,0.001,-4.313)
+NETPROBE_TRACE tick=240 p1=(0.113,0.001,-2.613)
+NETHASH side=host seq=60 h=28d5ebd4
+NETPROBE_TRACE tick=270 p1=(0.113,0.001,-2.613)
+NETPROBE_TRACE tick=300 p1=(0.113,0.001,-2.613)
+NETPROBE toggle seat=1 ready=true pf=560
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/orb_netshots_host/snap_online_host_ready_1268.png
+NETHASH side=host seq=75 h=299253ba
+NETHASH side=host seq=90 h=60a5d217
+NETHASH side=host seq=105 h=4d2aee64
+VERIFY_SNAP res://docs/verify/orb_netshots_host/snap_online_host_auction_1605.png
+NETHASH side=host seq=120 h=843e6cc1
+NETHASH side=host seq=135 h=84fad4a7
+NETHASH side=host seq=150 h=bc0e5304
+NETHASH side=host seq=165 h=bccabaea
+NETHASH side=host seq=180 h=f3de3947
+NETHASH side=host seq=195 h=f49aa12d
+NETHASH side=host seq=210 h=2ce804e1
+NETHASH side=host seq=225 h=2da46cc7
+VERIFY_SNAP res://docs/verify/orb_netshots_host/snap_online_host_gate_2834.png
+NETHASH side=host seq=240 h=64b7eb24
+NETHASH side=host seq=255 h=6574530a
+NETHASH side=host seq=270 h=9c87d167
+WARNING: Sending 1432 bytes unreliably which is above the MTU (1392), this will result in higher packet loss
+   at: put_packet (modules/enet/enet_multiplayer_peer.cpp:363)
+   GDScript backtrace (most recent call first):
+       [0] send_module_state (res://core/net_session.gd:604)
+       [1] _net_host_broadcast (res://estate/estate.gd:2462)
+       [2] _process (res://estate/estate.gd:1293)
+NETHASH side=host seq=285 h=9d44394d
+THROW t=0.8 p=2 speed=10.0
+THROW t=1.1 p=3 speed=9.4
+VERIFY_SNAP res://docs/verify/orb_netshots_host/snap_online_host_game_3485.png
+NETHASH side=host seq=300 h=d5919d01
+HOP t=1.7 p=2 2->1
+THROW t=2.2 p=3 speed=7.8
+NETHASH_MOD side=host seq=40 h=f15a6b7b bytes=1472
+NETHASH side=host seq=315 h=d64e04e7
+THROW t=2.7 p=2 speed=7.8
+NETHASH side=host seq=330 h=0d618344
+NETHASH side=host seq=345 h=0e1deb2a
+NETHASH_MOD side=host seq=80 h=24419b60 bytes=1488
+NETHASH side=host seq=360 h=45316987
+NETHASH side=host seq=375 h=45edd16d
+NETHASH_MOD side=host seq=120 h=2497a951 bytes=1488
+HOP t=7.1 p=3 0->1
+NETHASH side=host seq=390 h=7d014fca
+NETHASH side=host seq=405 h=7ef79d07
+NETHASH_MOD side=host seq=160 h=ddf2269c bytes=1484
+NETHASH side=host seq=420 h=b60b1b64
+NETHASH side=host seq=435 h=b6c7834a
+NETHASH_MOD side=host seq=200 h=d1f1e180 bytes=1488
+NETHASH side=host seq=450 h=eddb01a7
+NETHASH side=host seq=465 h=ee97698d
+NETHASH_MOD side=host seq=240 h=9158906b bytes=1492
+NETHASH side=host seq=480 h=25aae7ea
+NETHASH side=host seq=495 h=26674fd0
+NETHASH_MOD side=host seq=280 h=f8cac1d6 bytes=1488
+NETHASH side=host seq=510 h=5eb4b384
+HOP t=16.6 p=2 1->0
+NETHASH side=host seq=525 h=5f711b6a
+BALL_REST t=17.5 owner=3 flight=15.3s
+NETHASH_MOD side=host seq=320 h=19665b74 bytes=1488
+NETHASH side=host seq=540 h=968499c7
+THROW t=18.2 p=3 speed=10.0
+VERIFY_SNAP res://docs/verify/orb_netshots_host/snap_orb_host_heat_5903.png
+BALL_REST t=19.1 owner=2 flight=16.4s
+NETHASH side=host seq=555 h=974101ad
+HOP t=20.1 p=3 1->0
+NETHASH_MOD side=host seq=360 h=1a480250 bytes=1476
+NETHASH side=host seq=570 h=ce54800a
+THROW t=20.4 p=2 speed=9.4
+NETHASH side=host seq=585 h=cf10e7f0
+NETHASH side=host seq=600 h=075e4ba4
+NETHASH_MOD side=host seq=400 h=11bed734 bytes=1488
+NETHASH side=host seq=615 h=081ab38a
+NETHASH side=host seq=630 h=3f2e31e7
+NETHASH_MOD side=host seq=440 h=6e0176f7 bytes=1500
+NETHASH side=host seq=645 h=3fea99cd
+NETHASH side=host seq=660 h=76fe182a
+NETHASH_MOD side=host seq=480 h=9ba77123 bytes=1496
+NETHASH side=host seq=675 h=77ba8010
+NETHASH side=host seq=690 h=aecdfe6d
+NETHASH_MOD side=host seq=520 h=9963fa18 bytes=1488
+NETHASH side=host seq=705 h=b0c44baa
+NETHASH side=host seq=720 h=e7d7ca07
+NETHASH_MOD side=host seq=560 h=dd4fc8dc bytes=1492
+NETHASH side=host seq=735 h=e89431ed
+HOP t=31.8 p=2 0->1
+NETHASH side=host seq=750 h=1fa7b04a
+NETHASH_MOD side=host seq=600 h=37bd3aa4 bytes=1492
+NETHASH side=host seq=765 h=20641830
+NETHASH side=host seq=780 h=5777968d
+NETHASH_MOD side=host seq=640 h=a529d31f bytes=1488
+NETHASH side=host seq=795 h=5833fe73
+CATCH t=36.2 p=3 ball_age=18.0 stolen=false
+VERIFY_SNAP res://docs/verify/orb_netshots_host/snap_orb_host_catch_8484.png
+NETHASH side=host seq=810 h=90816227
+NETHASH_MOD side=host seq=680 h=f1832a33 bytes=1480
+NETHASH side=host seq=825 h=913dca0d
+BALL_REST t=38.3 owner=2 flight=37.5s
+BALL_REST t=38.4 owner=3 flight=37.4s
+NETHASH side=host seq=840 h=c851486a
+HOP t=39.3 p=2 1->0
+NETHASH side=host seq=855 h=c90db050
+NETHASH_MOD side=host seq=720 h=01097596 bytes=1452
+THROW t=40.1 p=2 speed=8.9
+HOP t=40.7 p=3 0->1
+NETHASH side=host seq=870 h=00212ead
+THROW t=41.3 p=3 speed=11.1
+THROW t=41.9 p=2 speed=10.7
+NETHASH side=host seq=885 h=00dd9693
+NETHASH_MOD side=host seq=760 h=834b66d6 bytes=1496
+NETHASH side=host seq=900 h=392afa47
+NETHASH side=host seq=915 h=39e7622d
+BALL_REST t=44.3 owner=2 flight=23.9s
+NETHASH_MOD side=host seq=800 h=b83a687f bytes=1464
+THROW t=44.9 p=2 speed=8.5
+NETHASH side=host seq=930 h=70fae08a
+NETHASH side=host seq=945 h=71b74870
+THROW t=46.6 p=1 speed=6.3
+NETHASH_MOD side=host seq=840 h=39559d86 bytes=1580
+NETHASH side=host seq=960 h=a8cac6cd
+NETHASH side=host seq=975 h=a9872eb3
+NETHASH_MOD side=host seq=880 h=8cb36e3a bytes=1576
+NETHASH side=host seq=990 h=e09aad10
+NETHASH side=host seq=1005 h=47703b94
+NETHASH_MOD side=host seq=920 h=cdb6a480 bytes=1572
+NETHASH side=host seq=1020 h=7e83b9f1
+CATCH t=52.4 p=3 ball_age=12.2 stolen=true
+NETHASH side=host seq=1035 h=7f4021d7
+NETHASH_MOD side=host seq=960 h=db09c31b bytes=1576
+KILL t=53.6 killer=2 victim=2 ball_age=8.7
+NETHASH side=host seq=1050 h=b653a034
+NETHASH side=host seq=1065 h=b710081a
+NETHASH_MOD side=host seq=1000 h=dff16622 bytes=1584
+NETHASH side=host seq=1080 h=ee238677
+KILL t=56.1 killer=2 victim=0 ball_age=11.2
+NETHASH side=host seq=1095 h=eedfee5d
+NETHASH side=host seq=1110 h=272d5211
+NETHASH_MOD side=host seq=1040 h=e2dfb298 bytes=1632
+BALL_REST t=57.7 owner=2 flight=12.8s
+NETHASH side=host seq=1125 h=27e9b9f7
+NETHASH side=host seq=1140 h=5efd3854
+NETHASH_MOD side=host seq=1080 h=f63cb04c bytes=1612
+BALL_REST t=59.6 owner=1 flight=13.0s
+THROW t=59.6 p=2 speed=10.7
+NETHASH side=host seq=1155 h=5fb9a03a
+THROW t=60.8 p=2 speed=8.0
+NETHASH side=host seq=1170 h=96cd1e97
+NETHASH_MOD side=host seq=1120 h=690894b8 bytes=1628
+BALL_REST t=62.3 owner=3 flight=20.9s
+NETHASH side=host seq=1185 h=9789867d
+NETHASH side=host seq=1200 h=cfd6ea31
+THROW t=63.5 p=2 speed=10.0
+NETHASH_MOD side=host seq=1160 h=03e1ef82 bytes=1632
+NETHASH side=host seq=1215 h=d0935217
+NETHASH side=host seq=1230 h=07a6d074
+NETHASH_MOD side=host seq=1200 h=88c48d1b bytes=1636
+NETHASH side=host seq=1245 h=0863385a
+NETHASH side=host seq=1260 h=3f76b6b7
+BALL_REST t=67.6 owner=2 flight=25.7s
+NETHASH_MOD side=host seq=1240 h=faad9943 bytes=1612
+NETHASH side=host seq=1275 h=40331e9d
+THROW t=68.8 p=2 speed=13.0
+NETHASH side=host seq=1290 h=77469cfa
+NETHASH_MOD side=host seq=1280 h=0de1a4b7 bytes=1632
+NETHASH side=host seq=1305 h=793cea37
+BALL_REST t=71.7 owner=2 flight=10.9s
+NETHASH side=host seq=1320 h=b0506894
+NETHASH_MOD side=host seq=1320 h=a6c1725e bytes=1612
+THROW t=72.8 p=2 speed=10.3
+NETHASH side=host seq=1335 h=b10cd07a
+NETHASH side=host seq=1350 h=e8204ed7
+NETHASH side=host seq=1365 h=e8dcb6bd
+NETHASH_MOD side=host seq=1360 h=22def5f8 bytes=1632
+NETHASH side=host seq=1380 h=1ff0351a
+NETHASH side=host seq=1395 h=20ac9d00
+NETHASH_MOD side=host seq=1400 h=2bd3933d bytes=1628
+NETHASH side=host seq=1410 h=58fa00b4
+KILL t=78.2 killer=2 victim=1 ball_age=9.3
+KILL t=78.2 killer=2 victim=3 ball_age=9.3
+NETHASH side=host seq=1425 h=59b6689a
+NETHASH_MOD side=host seq=1440 h=66784015 bytes=1604
+NETHASH side=host seq=1440 h=90c9e6f7
+NETHASH side=host seq=1455 h=91864edd
+NETHASH_MOD side=host seq=1480 h=57253c2f bytes=1608
+NETHASH side=host seq=1470 h=c899cd3a
+NETHASH side=host seq=1485 h=c9563520
+BALL_REST t=83.1 owner=2 flight=4.9s
+BALL_REST t=83.2 owner=2 flight=23.6s
+NETHASH_MOD side=host seq=1520 h=b17f1e3c bytes=1576
+THROW t=83.8 p=2 speed=8.5
+KILL t=83.8 killer=2 victim=3 ball_age=0.0
+NETHASH side=host seq=1500 h=01a398d4
+BALL_REST t=84.5 owner=2 flight=11.7s
+HOP t=84.6 p=2 0->1
+NETHASH side=host seq=1515 h=026000ba
+THROW t=85.2 p=2 speed=8.3
+BALL_REST t=85.5 owner=2 flight=22.0s
+NETHASH_MOD side=host seq=1560 h=808d0446 bytes=1564
+NETHASH side=host seq=1530 h=39737f17
+NETHASH side=host seq=1545 h=3a2fe6fd
+NETHASH_MOD side=host seq=1600 h=454943db bytes=1572
+NETHASH side=host seq=1560 h=7143655a
+NETHASH side=host seq=1575 h=71ffcd40
+THROW t=89.0 p=3 speed=10.2
+NETHASH_MOD side=host seq=1640 h=61631e94 bytes=1584
+NETHASH side=host seq=1590 h=a9134b9d
+HOP t=90.3 p=3 0->2
+NETHASH side=host seq=1605 h=ab0998da
+THROW t=91.2 p=3 speed=8.9
+NETHASH side=host seq=1620 h=e21d1737
+NETHASH_MOD side=host seq=1680 h=30dbd029 bytes=1672
+NETHASH side=host seq=1635 h=e2d97f1d
+NETHASH side=host seq=1650 h=19ecfd7a
+NETHASH_MOD side=host seq=1720 h=3d3be790 bytes=1672
+BALL_REST t=94.5 owner=2 flight=25.6s
+HOP t=94.8 p=3 2->0
+NETHASH side=host seq=1665 h=1aa96560
+NETHASH side=host seq=1680 h=51bce3bd
+CATCH t=96.4 p=1 ball_age=11.2 stolen=true
+NETHASH_MOD side=host seq=1760 h=867f3832 bytes=1672
+BALL_REST t=96.8 owner=2 flight=13.0s
+NETHASH side=host seq=1695 h=52794ba3
+THROW t=97.7 p=3 speed=13.0
+THROW t=97.9 p=1 speed=6.3
+KILL t=97.9 killer=1 victim=2 ball_age=0.0
+NETHASH side=host seq=1710 h=8ac6af57
+NETHASH_MOD side=host seq=1800 h=b04834e9 bytes=1696
+KILL t=98.9 killer=2 victim=1 ball_age=1.0
+NETHASH side=host seq=1725 h=8b83173d
+HOP t=99.4 p=3 0->1
+NETHASH side=host seq=1740 h=c296959a
+THROW t=100.2 p=3 speed=11.1
+NETHASH_MOD side=host seq=1840 h=2de89879 bytes=1696
+NETHASH side=host seq=1755 h=c352fd80
+NETHASH side=host seq=1770 h=fa667bdd
+NETHASH_MOD side=host seq=1880 h=f6b1be54 bytes=1716
+NETHASH side=host seq=1785 h=fb22e3c3
+NETHASH side=host seq=1800 h=33704777
+NETHASH_MOD side=host seq=1920 h=071ef7a5 bytes=1708
+NETHASH side=host seq=1815 h=342caf5d
+BALL_REST t=105.7 owner=2 flight=7.8s
+NETHASH side=host seq=1830 h=6b402dba
+THROW t=106.2 p=2 speed=9.4
+CATCH t=106.2 p=1 ball_age=15.0 stolen=true
+NETHASH_MOD side=host seq=1960 h=42f90db9 bytes=1692
+NETHASH side=host seq=1845 h=6bfc95a0
+BALL_REST t=107.4 owner=1 flight=9.5s
+THROW t=107.8 p=1 speed=6.3
+NETHASH side=host seq=1860 h=a31013fd
+THROW t=108.7 p=2 speed=10.0
+NETHASH side=host seq=1875 h=a3cc7be3
+NETHASH_MOD side=host seq=2000 h=cb0ec720 bytes=1700
+NETHASH side=host seq=1890 h=dadffa40
+BALL_REST t=111.3 owner=3 flight=22.3s
+NETHASH side=host seq=1905 h=dcd6477d
+NETHASH_MOD side=host seq=2040 h=85cf376a bytes=1700
+KILL t=111.5 killer=3 victim=1 ball_age=13.8
+NETHASH side=host seq=1920 h=13e9c5da
+HOP t=112.9 p=3 1->0
+NETHASH side=host seq=1935 h=14a62dc0
+HOP t=113.3 p=2 0->1
+NETHASH_MOD side=host seq=2080 h=d9ae03d8 bytes=1732
+THROW t=113.9 p=3 speed=10.0
+NETHASH side=host seq=1950 h=4bb9ac1d
+NETHASH side=host seq=1965 h=4c761403
+BALL_REST t=115.3 owner=1 flight=7.5s
+NETHASH_MOD side=host seq=2120 h=087db709 bytes=1744
+HOP t=115.6 p=2 1->0
+THROW t=116.0 p=3 speed=7.8
+NETHASH side=host seq=1980 h=83899260
+NETHASH side=host seq=1995 h=8445fa46
+NETHASH_MOD side=host seq=2160 h=5882635d bytes=1744
+NETHASH side=host seq=2010 h=e509ee31
+NETHASH side=host seq=2025 h=e5c65617
+NETHASH_MOD side=host seq=2200 h=809f58dd bytes=1748
+NETHASH side=host seq=2040 h=1cd9d474
+NETHASH side=host seq=2055 h=1d963c5a
+BALL_REST t=121.5 owner=3 flight=5.5s
+NETHASH_MOD side=host seq=2240 h=5f782061 bytes=1732
+THROW t=122.3 p=2 speed=10.3
+BALL_REST t=122.4 owner=3 flight=24.7s
+NETHASH side=host seq=2070 h=54a9bab7
+THROW t=123.3 p=2 speed=8.6
+NETHASH side=host seq=2085 h=5566229d
+NETHASH_MOD side=host seq=2280 h=44165d5e bytes=1752
+NETHASH side=host seq=2100 h=8db38651
+NETHASH side=host seq=2115 h=8e6fee37
+BALL_REST t=126.6 owner=3 flight=26.4s
+NETHASH side=host seq=2130 h=c5836c94
+NETHASH_MOD side=host seq=2320 h=d0a98380 bytes=1732
+NETHASH side=host seq=2145 h=c63fd47a
+THROW t=127.7 p=3 speed=8.0
+NETHASH side=host seq=2160 h=fd5352d7
+NETHASH_MOD side=host seq=2360 h=5870faaa bytes=1752
+BALL_REST t=129.7 owner=2 flight=23.6s
+NETHASH side=host seq=2175 h=fe0fbabd
+HOP t=130.0 p=3 0->1
+HOP t=130.3 p=3 1->0
+NETHASH side=host seq=2190 h=3523391a
+HOP t=131.1 p=2 0->2
+NETHASH_MOD side=host seq=2400 h=6dfe611f bytes=1744
+THROW t=131.2 p=3 speed=10.0
+NETHASH side=host seq=2205 h=37198657
+NETHASH side=host seq=2220 h=6e2d04b4
+NETHASH_MOD side=host seq=2440 h=3148369f bytes=1748
+BALL_REST t=133.3 owner=3 flight=19.4s
+THROW t=133.7 p=2 speed=8.8
+NETHASH side=host seq=2235 h=6ee96c9a
+NETHASH side=host seq=2250 h=a5fceaf7
+NETHASH_MOD side=host seq=2480 h=ec8ee3e4 bytes=1820
+NETHASH side=host seq=2265 h=a6b952dd
+HOP t=136.1 p=2 2->1
+THROW t=136.6 p=2 speed=10.0
+NETHASH side=host seq=2280 h=ddccd13a
+CATCH t=137.4 p=2 ball_age=28.8 stolen=false
+HOP t=137.7 p=2 1->0
+NETHASH_MOD side=host seq=2520 h=99f55bf6 bytes=1832
+BALL_REST t=138.0 owner=2 flight=15.7s
+THROW t=138.0 p=2 speed=8.0
+NETHASH side=host seq=2295 h=de893920
+HOP t=138.1 p=3 0->1
+HOP t=138.9 p=3 1->0
+NETHASH side=host seq=2310 h=16d69cd4
+THROW t=139.1 p=2 speed=8.3
+NETHASH_MOD side=host seq=2560 h=a99d8a37 bytes=1864
+BALL_REST t=140.0 owner=2 flight=16.7s
+NETHASH side=host seq=2325 h=179304ba
+THROW t=141.0 p=2 speed=9.7
+NETHASH side=host seq=2340 h=4ea68317
+NETHASH_MOD side=host seq=2600 h=cb06d1b1 bytes=1852
+NETHASH side=host seq=2355 h=4f62eafd
+NETHASH side=host seq=2370 h=8676695a
+BALL_REST t=143.6 owner=3 flight=15.9s
+THROW t=144.1 p=2 speed=10.3
+NETHASH side=host seq=2385 h=8732d140
+NETHASH_MOD side=host seq=2640 h=9e897cf9 bytes=1864
+NETHASH side=host seq=2400 h=bf8034f4
+BALL_REST t=146.2 owner=3 flight=15.1s
+NETHASH side=host seq=2415 h=c03c9cda
+HOP t=146.6 p=3 0->2
+NETHASH_MOD side=host seq=2680 h=0b11f3aa bytes=1828
+BALL_REST t=146.7 owner=2 flight=8.6s
+BALL_REST t=146.7 owner=2 flight=7.6s
+THROW t=147.4 p=3 speed=9.3
+NETHASH side=host seq=2430 h=f7501b37
+THROW t=147.9 p=2 speed=9.7
+HOP t=148.0 p=3 2->1
+NETHASH side=host seq=2445 h=f80c831d
+HOP t=148.8 p=2 0->1
+NETHASH_MOD side=host seq=2720 h=8aaa1fb6 bytes=1848
+NETHASH side=host seq=2460 h=2f20017a
+THROW t=149.6 p=3 speed=8.3
+VERIFY_SNAP res://docs/verify/orb_netshots_host/snap_orb_host_finalorbit_25135.png
+NETHASH side=host seq=2475 h=2fdc6960
+NETHASH_MOD side=host seq=2760 h=b1b7e910 bytes=1808
+NETHASH side=host seq=2490 h=66efe7bd
+NETHASH side=host seq=2505 h=68e634fa
+NETHASH_MOD side=host seq=2800 h=a238108f bytes=1816
+NETHASH side=host seq=2520 h=9ff9b357
+CATCH t=154.1 p=3 ball_age=9.9 stolen=true
+NETHASH side=host seq=2535 h=a0b61b3d
+BALL_REST t=154.9 owner=2 flight=21.2s
+HOP t=155.5 p=2 1->0
+NETHASH_MOD side=host seq=2840 h=53885df7 bytes=1744
+NETHASH side=host seq=2550 h=d7c9999a
+THROW t=156.3 p=2 speed=7.8
+KILL t=156.3 killer=2 victim=3 ball_age=0.1
+NETHASH side=host seq=2565 h=d8860180
+NETHASH_MOD side=host seq=2880 h=720be49b bytes=1780
+NETHASH side=host seq=2580 h=0f997fdd
+NETHASH side=host seq=2595 h=1055e7c3
+BALL_REST t=158.8 owner=2 flight=2.4s
+BALL_REST t=159.1 owner=2 flight=22.5s
+BALL_REST t=159.3 owner=2 flight=11.5s
+NETHASH side=host seq=2610 h=48a34b77
+NETHASH_MOD side=host seq=2920 h=ef5d2e69 bytes=1748
+THROW t=160.1 p=3 speed=10.5
+THROW t=160.2 p=2 speed=11.8
+HOP t=160.6 p=2 0->1
+NETHASH side=host seq=2625 h=495fb35d
+THROW t=161.2 p=3 speed=8.0
+NETHASH side=host seq=2640 h=807331ba
+BALL_REST t=161.9 owner=3 flight=14.5s
+NETHASH_MOD side=host seq=2960 h=f3be43b9 bytes=1784
+BALL_REST t=162.3 owner=2 flight=21.3s
+HOP t=162.6 p=2 1->0
+HOP t=162.7 p=3 1->0
+NETHASH side=host seq=2655 h=812f99a0
+BALL_REST t=163.1 owner=2 flight=6.9s
+THROW t=163.2 p=2 speed=7.8
+THROW t=163.7 p=3 speed=8.6
+KILL t=163.7 killer=3 victim=2 ball_age=0.0
+NETHASH side=host seq=2670 h=b84317fd
+NETHASH_MOD side=host seq=3000 h=5c07aea3 bytes=1776
+NETHASH side=host seq=2685 h=b8ff7fe3
+THROW t=165.2 p=3 speed=9.3
+NETHASH side=host seq=2700 h=f14ce397
+NETHASH_MOD side=host seq=3040 h=ca36d5f7 bytes=1792
+NETHASH side=host seq=2715 h=f2094b7d
+NETHASH side=host seq=2730 h=291cc9da
+NETHASH_MOD side=host seq=3080 h=ee642dc8 bytes=1792
+NETHASH side=host seq=2745 h=29d931c0
+NETHASH side=host seq=2760 h=60ecb01d
+BALL_REST t=170.2 owner=3 flight=20.6s
+NETHASH_MOD side=host seq=3120 h=85ab4767 bytes=1768
+NETHASH side=host seq=2775 h=61a91803
+THROW t=171.0 p=2 speed=9.6
+NETHASH side=host seq=2790 h=98bc9660
+NETHASH_MOD side=host seq=3160 h=7fb707d7 bytes=1772
+BALL_REST t=172.8 owner=2 flight=9.6s
+NETHASH side=host seq=2805 h=9ab2e39d
+BALL_REST t=173.0 owner=3 flight=11.8s
+NETHASH side=host seq=2820 h=d1c661fa
+THROW t=174.1 p=3 speed=8.2
+NETHASH_MOD side=host seq=3200 h=144814b3 bytes=1756
+NETHASH side=host seq=2835 h=d282c9e0
+THROW t=175.6 p=3 speed=10.8
+NETHASH side=host seq=2850 h=0996483d
+BALL_REST t=176.3 owner=3 flight=12.7s
+NETHASH side=host seq=2865 h=0a52b023
+NETHASH_MOD side=host seq=3240 h=1e394e1e bytes=1780
+THROW t=177.7 p=3 speed=10.8
+NETHASH side=host seq=2880 h=41662e80
+HOP t=178.2 p=2 1->0
+KILL t=178.5 killer=3 victim=3 ball_age=13.3
+NETHASH side=host seq=2895 h=42229666
+NETHASH_MOD side=host seq=3280 h=dc3c1dd5 bytes=1792
+NETHASH side=host seq=2910 h=7a6ffa1a
+ORBITAL_RESULTS {"currency_events":[{"amount":1,"player":2,"reason":"orbital dodgeball to the face","type":"grudge"},{"amount":1,"player":0,"reason":"orbital dodgeball to the face","type":"grudge"},{"amount":1,"player":2,"reason":"ghost orbit kill (11s old)","type":"royalty"},{"amount":1,"player":1,"reason":"orbital dodgeball to the face","type":"grudge"},{"amount":1,"player":3,"reason":"orbital dodgeball to the face","type":"grudge"},{"amount":1,"player":3,"reason":"orbital dodgeball to the face","type":"grudge"},{"amount":1,"player":2,"reason":"orbital dodgeball to the face","type":"grudge"},{"amount":1,"player":1,"reason":"orbital dodgeball to the face","type":"grudge"},{"amount":1,"player":1,"reason":"orbital dodgeball to the face","type":"grudge"},{"amount":1,"player":3,"reason":"ghost orbit kill (13s old)","type":"royalty"},{"amount":1,"player":3,"reason":"orbital dodgeball to the face","type":"grudge"},{"amount":1,"player":2,"reason":"orbital dodgeball to the face","type":"grudge"},{"amount":1,"player":3,"reason":"orbital dodgeball to the face","type":"grudge"}],"highlights":["MINT's 13-second orbit found BLUE","GOLD plucked a 28-second orbit out of the sky","MINT ate 4 dodgeballs"],"kill_events":[{"cause":"orbit_hit","killer":2,"victim":2},{"cause":"orbit_hit","killer":2,"victim":0},{"cause":"orbit_hit","killer":2,"victim":1},{"cause":"orbit_hit","killer":2,"victim":3},{"cause":"orbit_hit","killer":2,"victim":3},{"cause":"orbit_hit","killer":1,"victim":2},{"cause":"orbit_hit","killer":2,"victim":1},{"cause":"orbit_hit","killer":3,"victim":1},{"cause":"orbit_hit","killer":2,"victim":3},{"cause":"orbit_hit","killer":3,"victim":2},{"cause":"orbit_hit","killer":3,"victim":3}],"monuments":[{"kind":"ghost_orbit","label":"GOLD, Keeper of the 11-Second Orbit","player":2},{"kind":"ghost_orbit","label":"MINT, Keeper of the 13-Second Orbit","player":3}],"placements":[2,3,1,0],"points":{"0":0,"1":4,"2":12,"3":6}}
+KILL_EVENTS n=11 [{"cause":"orbit_hit","killer":2,"victim":2},{"cause":"orbit_hit","killer":2,"victim":0},{"cause":"orbit_hit","killer":2,"victim":1},{"cause":"orbit_hit","killer":2,"victim":3},{"cause":"orbit_hit","killer":2,"victim":3},{"cause":"orbit_hit","killer":1,"victim":2},{"cause":"orbit_hit","killer":2,"victim":1},{"cause":"orbit_hit","killer":3,"victim":1},{"cause":"orbit_hit","killer":2,"victim":3},{"cause":"orbit_hit","killer":3,"victim":2},{"cause":"orbit_hit","killer":3,"victim":3}]
+ORBITAL_SIM throws=52 hops=29 kills={ 0: 0, 1: 1, 2: 6, 3: 2 } catches={ 0: 0, 1: 2, 2: 1, 3: 3 } deaths={ 0: 1, 1: 3, 2: 3, 3: 4 }
+ORBITAL_ASSERT max_flight_age=37.5s (<75s): PASS
+NETHASH side=host seq=2925 h=7b2c6200
+VERIFY_SNAP res://docs/verify/orb_netshots_host/snap_online_host_matchpodium_29837.png
+NETHASH side=host seq=2940 h=b23fe05d
+NETHASH side=host seq=2955 h=b2fc4843
+NETHASH side=host seq=2970 h=ea0fc6a0
+NETHASH side=host seq=2985 h=eacc2e86
+VERIFY_SNAP res://docs/verify/orb_netshots_host/snap_online_host_reckoning_30372.png
+NETPROBE_RESULTS RED:pts=1,grudge=4 BLUE:pts=2,grudge=6 GOLD:pts=5,grudge=5 MINT:pts=3,grudge=5
+NETPROBE saves restored
+NETPROBE_DONE
+NETHASH side=host seq=3000 h=4b902271
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)
