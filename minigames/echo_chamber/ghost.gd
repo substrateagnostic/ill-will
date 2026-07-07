@@ -36,6 +36,11 @@ var main: Node = null
 var opacity := 0.55
 var yaw := 0.0
 var done := false                     # reached endpoint, fragmenting/freed
+# ONLINE (phase 2): host-assigned wire id + the anim state currently applied.
+# The controller samples cur_state into the snapshot so a render mirror can
+# replay the SAME pose stream without ever re-simulating the take.
+var gid := 0
+var cur_state := -1
 
 var _pivot: Node3D
 var _anim: AnimationPlayer
@@ -188,7 +193,19 @@ func _finish(err: float) -> void:
 	queue_free()
 
 
+## ONLINE render mirror: direct pose application from the host's snapshot.
+## Same body, same _apply_state_anim — replay() is never called on a mirror,
+## so the take's arrays stay empty and drift is zero by construction.
+func net_pose(pos: Vector3, yaw_v: float, st: int) -> void:
+	global_position = pos
+	yaw = yaw_v
+	_pivot.rotation.y = yaw + MODEL_YAW_OFFSET
+	if st != cur_state:
+		_apply_state_anim(st)
+
+
 func _apply_state_anim(s: int) -> void:
+	cur_state = s
 	match s:
 		ST_RUN:
 			_pivot.scale = Vector3.ONE

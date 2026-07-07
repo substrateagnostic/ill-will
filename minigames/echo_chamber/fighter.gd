@@ -544,6 +544,49 @@ func consume_fire() -> int:
 	return f
 
 
+# ---------------------------------------------------------------------------
+# ONLINE render mirror (docs/design/10 §4.3). A mirror fighter is never
+# tick()ed — the controller glides it toward the host's authoritative pose and
+# applies the streamed anim-state byte here. Local juice (swing sfx, hit pop,
+# charge overlay) fires from STATE ENTRY deltas, so a dropped snapshot loses
+# nothing but in-between frames. Couch/host code never calls this.
+# ---------------------------------------------------------------------------
+func net_pose(pos: Vector3, yaw_v: float, st: int) -> void:
+	global_position = pos
+	yaw = yaw_v
+	_pivot.rotation.y = yaw + MODEL_YAW_OFFSET
+	if st != state:
+		state = st
+		_net_anim(st)
+
+
+func _net_anim(st: int) -> void:
+	_set_charge_visual(st == ST_CHARGE)
+	match st:
+		ST_RUN:
+			_play("Running_A")
+		ST_SWING:
+			_play("1H_Melee_Attack_Chop", false)
+			Sfx.play("putt", -5.0)
+		ST_HEAVY:
+			_play("2H_Melee_Attack_Slice", false)
+			Sfx.play("bumper", -2.0)
+		ST_CHARGE:
+			_play("Idle")
+		ST_PARRY:
+			_play("Blocking")
+		ST_DASH:
+			_play("Dodge_Forward", false)
+			Sfx.play("bounce", -6.0)
+		ST_HIT:
+			_play("Hit_A", false)
+			_flash_pop()
+		ST_DEAD:
+			_play("Death_A", false)
+		_:
+			_play("Idle")
+
+
 ## Verification hook (--aimprobe): fire a light swing straight through the real
 ## aim path (_start_light -> _aim_yaw), so the probe proves the cursor overrides
 ## the walk-facing without reaching into internals.

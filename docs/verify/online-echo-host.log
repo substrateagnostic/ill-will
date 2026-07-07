@@ -1,0 +1,307 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET transports: enet ready · steam offline
+NET host port=9617 err=0 code=80CNJH addr=192.168.0.101:9617
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 1478029925 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE seat 1 claimed by peer 1478029925
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+NETHASH side=host seq=15 h=214cabfe
+NETPROBE_TRACE tick=60 p1=(-3.343,0.001,-2.557)
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_online_host_claim_0769.png
+NETPROBE_TRACE tick=90 p1=(-3.343,0.001,-4.257)
+NETPROBE_TRACE tick=120 p1=(-3.343,0.001,-5.957)
+NETHASH side=host seq=30 h=2e9cba0a
+NETPROBE_TRACE tick=150 p1=(-1.643,0.001,-5.957)
+NETPROBE_TRACE tick=180 p1=(-0.000,0.001,-5.900)
+NETHASH side=host seq=45 h=97875c6e
+NETPROBE_TRACE tick=210 p1=(-0.000,0.001,-4.200)
+NETPROBE_TRACE tick=240 p1=(-0.000,0.001,-2.557)
+NETHASH side=host seq=60 h=605be0b6
+NETPROBE_TRACE tick=270 p1=(-0.000,0.001,-2.557)
+NETPROBE_TRACE tick=300 p1=(-0.000,0.001,-2.557)
+NETPROBE toggle seat=1 ready=true pf=588
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_online_host_ready_1333.png
+NETHASH side=host seq=75 h=66f1171c
+NETHASH side=host seq=90 h=a7675a39
+NETHASH side=host seq=105 h=736eff46
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_online_host_auction_1674.png
+NETHASH side=host seq=120 h=b3e54263
+NETHASH side=host seq=135 h=ba7a78c9
+NETHASH side=host seq=150 h=faf0bbe6
+NETHASH side=host seq=165 h=0185f24c
+NETHASH side=host seq=180 h=41fc3569
+NETHASH side=host seq=195 h=48916bcf
+NETHASH side=host seq=210 h=ff0a5283
+NETHASH side=host seq=225 h=059f88e9
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_online_host_gate_2903.png
+NETHASH side=host seq=240 h=4615cc06
+NETHASH side=host seq=255 h=4cab026c
+NETHASH side=host seq=270 h=8d214589
+ECHO_BEGIN players=4 seed=3300865038 bots=false round_len=30.0
+ECHO_ROUND_START round=1 ghosts=0 frame=3422
+NETHASH side=host seq=285 h=93b67bef
+ECHO_PERF degraded=true avg_ms=14.47 ghosts thinned
+NETHASH side=host seq=300 h=4a2f62a3
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_online_host_game_3595.png
+NETHASH side=host seq=315 h=50c49909
+NETHASH_MOD side=host seq=40 h=0314c6ac bytes=600
+ECHO_PARRY parrier=GOLD attacker=MINT ghost=false round=0 t=0.98
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_net_parry_3767.png
+NETHASH side=host seq=330 h=913adc26
+NETHASH side=host seq=345 h=97d0128c
+NETHASH_MOD side=host seq=80 h=69022b3f bytes=616
+NETHASH side=host seq=360 h=d84655a9
+NETHASH side=host seq=375 h=dedb8c0f
+NETHASH_MOD side=host seq=120 h=70892d1f bytes=616
+NETHASH side=host seq=390 h=1f51cf2c
+NETHASH side=host seq=405 h=9be9a929
+NETHASH_MOD side=host seq=160 h=8205c28f bytes=616
+NETHASH side=host seq=420 h=dc5fec46
+NETHASH side=host seq=435 h=e2f522ac
+ECHO_PARRY parrier=GOLD attacker=MINT ghost=false round=0 t=9.29
+NETHASH_MOD side=host seq=200 h=f2828e0d bytes=616
+NETHASH side=host seq=450 h=236b65c9
+NETHASH side=host seq=465 h=2a009c2f
+NETHASH_MOD side=host seq=240 h=62f7f086 bytes=616
+NETHASH side=host seq=480 h=6a76df4c
+NETHASH side=host seq=495 h=710c15b2
+NETHASH_MOD side=host seq=280 h=eb652cba bytes=612
+NETHASH side=host seq=510 h=2784fc66
+NETHASH side=host seq=525 h=2e1a32cc
+NETHASH_MOD side=host seq=320 h=3e74c929 bytes=616
+NETHASH side=host seq=540 h=6e9075e9
+NETHASH side=host seq=555 h=7525ac4f
+NETHASH side=host seq=570 h=b59bef6c
+NETHASH_MOD side=host seq=360 h=07248f9a bytes=616
+NETHASH side=host seq=585 h=bc3125d2
+NETHASH side=host seq=600 h=72aa0c86
+NETHASH_MOD side=host seq=400 h=045dc51c bytes=624
+NETHASH side=host seq=615 h=793f42ec
+NETHASH side=host seq=630 h=b9b58609
+NETHASH_MOD side=host seq=440 h=c9f70bcc bytes=624
+NETHASH side=host seq=645 h=c04abc6f
+NETHASH side=host seq=660 h=00c0ff8c
+NETHASH_MOD side=host seq=480 h=153802ce bytes=624
+NETHASH side=host seq=675 h=075635f2
+ECHO_PARRY parrier=MINT attacker=GOLD ghost=false round=0 t=26.49
+NETHASH side=host seq=690 h=47cc790f
+NETHASH_MOD side=host seq=520 h=e32e9371 bytes=616
+NETHASH side=host seq=705 h=c464530c
+NETHASH side=host seq=720 h=04da9629
+NETHASH_MOD side=host seq=560 h=999c226e bytes=612
+NETHASH side=host seq=735 h=0b6fcc8f
+ECHO_DETERMINISM round=1 ghosts=0 max_err=0.000000 OK
+ECHO_ROUND_END round=1 points={ 0: 0, 1: 3, 2: 12, 3: 8 }
+NETHASH side=host seq=750 h=4be60fac
+NETHASH_MOD side=host seq=600 h=b931c0a8 bytes=588
+NETHASH side=host seq=765 h=527b4612
+ECHO_ROUND_START round=2 ghosts=4 frame=8309
+NETHASH side=host seq=780 h=92f1892f
+NETHASH_MOD side=host seq=640 h=3e890af7 bytes=736
+NETHASH side=host seq=795 h=9986bf95
+NETHASH side=host seq=810 h=4fffa649
+ECHO_BOUNTY_KILL ROUND-1 BLUE KILLED PRESENT BLUE
+ECHO_SELF_HAUNT victim=BLUE round=2 (slain by their own recorded ghost)
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_net_irony_8753.png
+ECHO_PARRY parrier=GOLD attacker=GOLD ghost=true round=1 t=1.54
+NETHASH side=host seq=825 h=5694dcaf
+NETHASH_MOD side=host seq=680 h=ffc958d1 bytes=732
+NETHASH side=host seq=840 h=970b1fcc
+NETHASH side=host seq=855 h=9da05632
+NETHASH_MOD side=host seq=720 h=3c3c8986 bytes=740
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_net_ghosts_9297.png
+NETHASH side=host seq=870 h=de16994f
+ECHO_GHOST_HEAVY owner=MINT src_round=1 (past heavy replays with 2H arc)
+NETHASH side=host seq=885 h=e4abcfb5
+NETHASH_MOD side=host seq=760 h=19987582 bytes=708
+NETHASH side=host seq=900 h=9b24b669
+NETHASH side=host seq=915 h=a1b9eccf
+NETHASH_MOD side=host seq=800 h=51069bdc bytes=712
+NETHASH side=host seq=930 h=e2302fec
+ECHO_PARRY parrier=MINT attacker=GOLD ghost=false round=0 t=9.68
+ECHO_RIPOSTE by=MINT victim=GOLD +1 (parry payoff)
+NETHASH side=host seq=945 h=e8c56652
+NETHASH_MOD side=host seq=840 h=6e628817 bytes=696
+NETHASH side=host seq=960 h=293ba96f
+NETHASH side=host seq=975 h=2fd0dfd5
+NETHASH_MOD side=host seq=880 h=f1f545cf bytes=696
+NETHASH side=host seq=990 h=704722f2
+NETHASH side=host seq=1005 h=609f4076
+NETHASH_MOD side=host seq=920 h=3c330038 bytes=712
+NETHASH side=host seq=1020 h=a1158393
+NETHASH side=host seq=1035 h=a7aab9f9
+NETHASH_MOD side=host seq=960 h=4f84497e bytes=712
+NETHASH side=host seq=1050 h=e820fd16
+NETHASH side=host seq=1065 h=eeb6337c
+NETHASH side=host seq=1080 h=2f2c7699
+NETHASH_MOD side=host seq=1000 h=4fea8f5d bytes=676
+NETHASH side=host seq=1095 h=35c1acff
+NETHASH side=host seq=1110 h=ec3a93b3
+NETHASH_MOD side=host seq=1040 h=05c4d364 bytes=644
+NETHASH side=host seq=1125 h=f2cfca19
+ECHO_PARRY parrier=MINT attacker=GOLD ghost=false round=0 t=23.91
+NETHASH side=host seq=1140 h=33460d36
+NETHASH_MOD side=host seq=1080 h=e111997a bytes=636
+NETHASH side=host seq=1155 h=39db439c
+NETHASH side=host seq=1170 h=7a5186b9
+NETHASH_MOD side=host seq=1120 h=05be993a bytes=636
+NETHASH side=host seq=1185 h=80e6bd1f
+NETHASH side=host seq=1200 h=375fa3d3
+NETHASH_MOD side=host seq=1160 h=d2d97a0b bytes=632
+NETHASH side=host seq=1215 h=3df4da39
+ECHO_DETERMINISM round=2 ghosts=4 max_err=0.000000 OK
+ECHO_ROUND_END round=2 points={ 0: 0, 1: 4, 2: 18, 3: 26 }
+NETHASH side=host seq=1230 h=7e6b1d56
+NETHASH_MOD side=host seq=1200 h=2d13c116 bytes=588
+NETHASH side=host seq=1245 h=850053bc
+NETHASH side=host seq=1260 h=c57696d9
+ECHO_ROUND_START round=3 ghosts=8 frame=12925
+NETHASH_MOD side=host seq=1240 h=8c7f893a bytes=864
+NETHASH side=host seq=1275 h=cc0bcd3f
+NETHASH side=host seq=1290 h=0c82105c
+ECHO_BOUNTY_KILL ROUND-1 GOLD KILLED PRESENT GOLD
+ECHO_SELF_HAUNT victim=GOLD round=3 (slain by their own recorded ghost)
+NETHASH_MOD side=host seq=1280 h=ac690582 bytes=868
+NETHASH side=host seq=1305 h=8919ea59
+ECHO_GHOST_HEAVY owner=MINT src_round=2 (past heavy replays with 2H arc)
+NETHASH side=host seq=1320 h=c9902d76
+NETHASH_MOD side=host seq=1320 h=a817beff bytes=836
+NETHASH side=host seq=1335 h=d02563dc
+NETHASH side=host seq=1350 h=109ba6f9
+NETHASH_MOD side=host seq=1360 h=74492bf7 bytes=836
+NETHASH side=host seq=1365 h=1730dd5f
+NETHASH side=host seq=1380 h=57a7207c
+NETHASH_MOD side=host seq=1400 h=599095b1 bytes=804
+NETHASH side=host seq=1395 h=5e3c56e2
+NETHASH side=host seq=1410 h=14b53d96
+NETHASH_MOD side=host seq=1440 h=5d86da0a bytes=800
+NETHASH side=host seq=1425 h=1b4a73fc
+NETHASH side=host seq=1440 h=5bc0b719
+NETHASH_MOD side=host seq=1480 h=107673ab bytes=744
+NETHASH side=host seq=1455 h=6255ed7f
+NETHASH side=host seq=1470 h=a2cc309c
+NETHASH_MOD side=host seq=1520 h=26986f1d bytes=740
+NETHASH side=host seq=1485 h=a9616702
+NETHASH side=host seq=1500 h=5fda4db6
+NETHASH_MOD side=host seq=1560 h=58d24670 bytes=744
+NETHASH side=host seq=1515 h=666f841c
+NETHASH side=host seq=1530 h=a6e5c739
+ECHO_PARRY parrier=GOLD attacker=MINT ghost=false round=0 t=17.81
+NETHASH_MOD side=host seq=1600 h=ae621ad1 bytes=728
+ECHO_BOUNTY_KILL ROUND-1 MINT KILLED PRESENT MINT
+ECHO_SELF_HAUNT victim=MINT round=3 (slain by their own recorded ghost)
+NETHASH side=host seq=1545 h=ad7afd9f
+NETHASH side=host seq=1560 h=edf140bc
+NETHASH_MOD side=host seq=1640 h=2553b814 bytes=708
+NETHASH side=host seq=1575 h=f4867722
+NETHASH side=host seq=1590 h=34fcba3f
+NETHASH_MOD side=host seq=1680 h=f1195b3a bytes=676
+NETHASH side=host seq=1605 h=b194943c
+ECHO_BOUNTY_KILL ROUND-2 MINT KILLED PRESENT MINT
+ECHO_SELF_HAUNT victim=MINT round=3 (slain by their own recorded ghost)
+NETHASH side=host seq=1620 h=f20ad759
+NETHASH_MOD side=host seq=1720 h=e794fc95 bytes=676
+NETHASH side=host seq=1635 h=f8a00dbf
+NETHASH side=host seq=1650 h=391650dc
+ECHO_BOUNTY_KILL ROUND-2 MINT KILLED PRESENT GOLD
+NETHASH_MOD side=host seq=1760 h=a949bed0 bytes=672
+NETHASH side=host seq=1665 h=3fab8742
+NETHASH side=host seq=1680 h=8021ca5f
+NETHASH_MOD side=host seq=1800 h=fae4a6c4 bytes=676
+NETHASH side=host seq=1695 h=86b700c5
+NETHASH side=host seq=1710 h=3d2fe779
+ECHO_DETERMINISM round=3 ghosts=8 max_err=0.000000 OK
+ECHO_ROUND_END round=3 points={ 0: 0, 1: 5, 2: 31, 3: 36 }
+NETHASH_MOD side=host seq=1840 h=0e1a8cb8 bytes=596
+NETHASH side=host seq=1725 h=43c51ddf
+NETHASH side=host seq=1740 h=843b60fc
+ECHO_ROUND_START round=4 ghosts=12 frame=15043
+NETHASH_MOD side=host seq=1880 h=9b801e8b bytes=1012
+NETHASH side=host seq=1755 h=8ad09762
+NETHASH side=host seq=1770 h=cb46da7f
+NETHASH_MOD side=host seq=1920 h=9bd11712 bytes=1012
+ECHO_PARRY parrier=MINT attacker=GOLD ghost=false round=0 t=0.62
+ECHO_RIPOSTE by=MINT victim=GOLD +1 (parry payoff)
+NETHASH side=host seq=1785 h=d1dc10e5
+ECHO_BOUNTY_KILL ROUND-1 MINT KILLED PRESENT GOLD
+ECHO_GHOST_HEAVY owner=MINT src_round=3 (past heavy replays with 2H arc)
+NETHASH side=host seq=1800 h=8854f799
+NETHASH_MOD side=host seq=1960 h=751c1684 bytes=944
+NETHASH side=host seq=1815 h=8eea2dff
+NETHASH side=host seq=1830 h=cf60711c
+NETHASH_MOD side=host seq=2000 h=2435dc59 bytes=912
+NETHASH side=host seq=1845 h=d5f5a782
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_net_r5_15446.png
+ECHO_BOUNTY_KILL ROUND-1 MINT KILLED PRESENT MINT
+ECHO_SELF_HAUNT victim=MINT round=4 (slain by their own recorded ghost)
+NETHASH side=host seq=1860 h=166bea9f
+NETHASH_MOD side=host seq=2040 h=e6e0781d bytes=836
+NETHASH side=host seq=1875 h=1d012105
+ECHO_BOUNTY_KILL ROUND-2 MINT KILLED PRESENT GOLD
+NETHASH side=host seq=1890 h=5d776422
+NETHASH_MOD side=host seq=2080 h=2b2d4e8b bytes=836
+NETHASH side=host seq=1905 h=da0f3e1f
+ECHO_BOUNTY_KILL ROUND-2 GOLD KILLED PRESENT BLUE
+NETHASH side=host seq=1920 h=1a85813c
+NETHASH_MOD side=host seq=2120 h=d21075fc bytes=736
+NETHASH side=host seq=1935 h=211ab7a2
+NETHASH side=host seq=1950 h=6190fabf
+NETHASH_MOD side=host seq=2160 h=916f08cb bytes=740
+NETHASH side=host seq=1965 h=68263125
+ECHO_SHRINK round=4 t=13.51
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_net_shrink_15979.png
+NETHASH side=host seq=1980 h=a89c7442
+NETHASH_MOD side=host seq=2200 h=2699281b bytes=740
+NETHASH side=host seq=1995 h=af31aaa8
+NETHASH side=host seq=2010 h=9c01a7d3
+ECHO_PARRY parrier=MINT attacker=GOLD ghost=false round=0 t=16.95
+NETHASH_MOD side=host seq=2240 h=6ffc1d5c bytes=732
+NETHASH side=host seq=2025 h=a296de39
+NETHASH side=host seq=2040 h=e30d2156
+NETHASH_MOD side=host seq=2280 h=f30cb899 bytes=700
+NETHASH side=host seq=2055 h=e9a257bc
+NETHASH side=host seq=2070 h=2a189ad9
+NETHASH_MOD side=host seq=2320 h=859943da bytes=664
+NETHASH side=host seq=2085 h=30add13f
+NETHASH side=host seq=2100 h=e726b7f3
+NETHASH_MOD side=host seq=2360 h=09897205 bytes=668
+NETHASH side=host seq=2115 h=edbbee59
+NETHASH side=host seq=2130 h=2e323176
+NETHASH_MOD side=host seq=2400 h=373b966e bytes=668
+NETHASH side=host seq=2145 h=34c767dc
+NETHASH side=host seq=2160 h=753daaf9
+NETHASH_MOD side=host seq=2440 h=aacde07a bytes=684
+NETHASH side=host seq=2175 h=7bd2e15f
+ECHO_BOUNTY_KILL ROUND-2 MINT KILLED PRESENT GOLD
+NETHASH side=host seq=2190 h=bc49247c
+ECHO_DETERMINISM round=4 ghosts=12 max_err=0.000000 OK
+ECHO_ROUND_END round=4 points={ 0: 0, 1: 5, 2: 38, 3: 56 }
+ECHO_MATCH_OVER champ=MINT placements=[3, 2, 1, 0]
+KILL_EVENTS n=29 [{ "killer": 3, "victim": 2, "cause": "crush" }, { "killer": -1, "victim": 0, "cause": "ring_out" }, { "killer": 2, "victim": 3, "cause": "shatter" }, { "killer": 2, "victim": 3, "cause": "shatter" }, { "killer": 1, "victim": 1, "cause": "self_echo" }, { "killer": -1, "victim": 1, "cause": "ring_out" }, { "killer": -1, "victim": 0, "cause": "ring_out" }, { "killer": 3, "victim": 2, "cause": "shatter" }, { "killer": -1, "victim": 1, "cause": "ring_out" }, { "killer": 3, "victim": 2, "cause": "crush" }, { "killer": 2, "victim": 2, "cause": "self_echo" }, { "killer": -1, "victim": 1, "cause": "ring_out" }, { "killer": 2, "victim": 3, "cause": "crush" }, { "killer": -1, "victim": 0, "cause": "ring_out" }, { "killer": -1, "victim": 1, "cause": "ring_out" }, { "killer": -1, "victim": 0, "cause": "ring_out" }, { "killer": 3, "victim": 3, "cause": "self_echo" }, { "killer": 3, "victim": 3, "cause": "self_echo" }, { "killer": 3, "victim": 2, "cause": "shatter" }, { "killer": 3, "victim": 2, "cause": "shatter" }, { "killer": -1, "victim": 1, "cause": "ring_out" }, { "killer": 3, "victim": 3, "cause": "self_echo" }, { "killer": 3, "victim": 2, "cause": "shatter" }, { "killer": 3, "victim": 0, "cause": "shatter" }, { "killer": 2, "victim": 1, "cause": "shatter" }, { "killer": -1, "victim": 0, "cause": "ring_out" }, { "killer": -1, "victim": 1, "cause": "ring_out" }, { "killer": 2, "victim": 3, "cause": "crush" }, { "killer": 3, "victim": 2, "cause": "crush" }]
+NETHASH_MOD side=host seq=2480 h=6d108623 bytes=604
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_net_champ_17079.png
+NETHASH side=host seq=2205 h=38e0fe79
+NETHASH side=host seq=2220 h=79574196
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_online_host_matchpodium_17201.png
+NETHASH side=host seq=2235 h=7fec77fc
+NETHASH side=host seq=2250 h=c062bb19
+NETHASH side=host seq=2265 h=c6f7f17f
+NETHASH side=host seq=2280 h=076e349c
+VERIFY_SNAP res://docs/verify/echo_netshots_host/snap_online_host_reckoning_17433.png
+NETPROBE_RESULTS RED:pts=1,grudge=5 BLUE:pts=2,grudge=6 GOLD:pts=3,grudge=5 MINT:pts=5,grudge=4
+NETPROBE saves restored
+NETPROBE_DONE
+NETHASH side=host seq=2295 h=0e036b02
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)
