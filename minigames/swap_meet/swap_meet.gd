@@ -138,6 +138,38 @@ var _flash_rect: ColorRect = null              # flashbulb overlay (paparazzi fr
 var _photofin := false                         # verify demo: forced close finish
 var _photo_shots := false                      # capture the photo-finish frames (demo)
 
+# --- ONLINE PHASE 2 (docs/design/10 §4.3): the render mirror -----------------
+# House pattern (online-seance-VERIFY.md PATTERN NOTES): host runs this ENTIRE
+# sim exactly as couch; the estate pumps _net_state() at 20 Hz. The client
+# boots this same scene with config.net_mirror = true — karts, orbs, crown,
+# gold pickup and booms are rendered from facts, interpolated at 60 Hz
+# (racing NEEDS smooth). Every ritual (SWAP beams, PHOTO FINISH freeze-flash,
+# overtake sting, knocks) fires from counter deltas; banners/event lines ride
+# as [gen, text] and replay the couch's own flashers. No hidden info anywhere.
+var _mirror := false
+var _netdemo := false                # --swapnetdemo: probe rig, stages a 1-lap
+                                     # photo dash between the two bots at GO
+var _netdemo_fire_t := -1.0          # sim-clock time of the rig's one scripted
+                                     # orb drop (0 -> 1), the guaranteed SWAP beat
+var _mir := {}                       # last applied snapshot (delta source)
+var _net_oid := 0                    # host: orb wire ids
+var _net_ban := [0, "", 0.0]         # host: [banner gen, bbcode, duration]
+var _net_ev_gen := 0                 # host: event-line gen
+var _net_ev := [0, "", "ffffff"]     # host: [gen, text, color]
+var _net_swap := [0, 0, 0, 0, Vector3.ZERO, Vector3.ZERO]  # [n, a, b, golden, posA, posB]
+var _net_pf := [0, -1, -1, 0.0]      # [n, winner, chaser, est_delta]
+var _net_knock := [0, -1]            # [n, victim] windmill boom hits
+var _net_bounce := [0, -1]           # [n, kart] wall thuds (latest per snap)
+var _net_gp := [0, 0, "ffffff"]      # [n, gate idx, color] scoring-gate pulses
+var _net_gc := [0, -1]               # [n, claimant] golden-orb claims
+var _net_ov := 0                     # overtake stings
+var _net_champ := -1                 # pre-announced at END, 1.8 s before finished()
+var _net_snapped: Dictionary = {}    # host-side probe evidence latches
+# client mirror scratch
+var _mir_karts: Array = []           # per kart [pos target, yaw target]
+var _mir_orbs: Dictionary = {}       # oid -> {"node", "pos"}
+var _mir_snapped: Dictionary = {}    # mirror-side probe evidence latches
+
 func _ready() -> void:
 	_parse_args()
 	_build_static()
@@ -172,6 +204,12 @@ func _parse_args() -> void:
 		elif arg.begins_with("--shotsec="):
 			for s in arg.trim_prefix("--shotsec=").split(","):
 				_shotsec.append(float(s))
+		elif arg == "--swapnetdemo":
+			# ONLINE probe rig: at GO, restage as a 1-lap dash whose two BOT
+			# karts start a hair apart on the final approach — the real
+			# _finish_kart path then fires a genuine PHOTO FINISH across the
+			# wire. Probe-only; receipts never pass it.
+			_netdemo = true
 		elif arg == "--swapstuck":
 			# dev: jam kart 0 on the ramp (near-zero speed, input held) to prove
 			# the anti-trap unstick fires. Films swap_unstick.png and quits.
@@ -204,6 +242,7 @@ func begin(cfg: Dictionary) -> void:
 		return
 	_begun = true
 	config = cfg
+	_mirror = bool(cfg.get("net_mirror", false))
 	rng.seed = int(cfg.rng_seed)
 	if cfg.get("practice", false):
 		laps_total = mini(laps_total, 2)
@@ -238,7 +277,7 @@ func begin(cfg: Dictionary) -> void:
 	bots.resize(roster.size())
 	for i in roster.size():
 		bot_enabled[i] = bots_enabled or bool(roster[i].get("bot", false))
-		if bot_enabled[i] and _test_mode == "":
+		if bot_enabled[i] and _test_mode == "" and not _mirror:
 			var bot := SwapBot.new()
 			bot.setup(self, i, int(cfg.rng_seed) * 977 + i * 131)
 			bots[i] = bot
@@ -249,6 +288,16 @@ func begin(cfg: Dictionary) -> void:
 	_build_crown()
 	if _test_mode == "":
 		_stretch = FinalStretch.attach(self, null)
+	if _mirror:
+		# RENDER MIRROR: karts/crown/track stand ready; no bots, no countdown,
+		# no sim — the first _net_apply drives every fact.
+		phase = Phase.WAIT
+		for k in karts:
+			(k as SwapKart).locked = true
+			_mir_karts.append([(k as SwapKart).global_position, 0.0])
+		_update_score_rows()
+		print("SWAP_MIRROR boot players=%d my_seat=%d" % [karts.size(), NetSession.my_seat()])
+		return
 	if _test_mode != "":
 		_setup_test()
 		return
@@ -443,6 +492,10 @@ func _build_crown() -> void:
 ## --- simulation loop -----------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
+	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
+	if _mirror:
+		_mirror_tick(delta)
+		return
 	if phase == Phase.WAIT:
 		return
 	var sdt := delta
@@ -505,6 +558,12 @@ func _physics_process(delta: float) -> void:
 				_end_race()
 	if _test_mode != "" and sdt > 0.0:
 		_test_tick()
+	# --swapnetdemo: the rig's one scripted orb drop (kart 0 -> kart 1, both
+	# still racing) so the SWAPPED! ritual is guaranteed on the wire.
+	if _netdemo and _netdemo_fire_t > 0.0 and now >= _netdemo_fire_t and sdt > 0.0 and phase == Phase.PLAY:
+		_netdemo_fire_t = -1.0
+		_drop_orb_on(0, 1)
+		print("SWAP_NETDEMO scripted orb drop 0 -> 1 t=%.1f" % race_t)
 
 func _intro_tick(sdt: float) -> void:
 	_intro_t += sdt
@@ -543,6 +602,8 @@ func _intro_tick(sdt: float) -> void:
 			for k in karts:
 				(k as SwapKart).locked = false
 				(k as SwapKart).orb_cd = 1.5  # first seconds are pure racing
+			if _netdemo:
+				_netdemo_stage()
 
 func _input_for(p: int) -> Dictionary:
 	if phase != Phase.PLAY and phase != Phase.END:
@@ -676,6 +737,7 @@ func _apply_walls(kart: SwapKart, q: Dictionary, floor_y: float, dt: float) -> v
 		var impact := kart.bounce(-right * side)
 		if impact > 1.5:
 			_bounces += 1
+			_net_bounce = [int(_net_bounce[0]) + 1, kart.index]
 			Sfx.play("bounce", clampf(-12.0 + impact * 1.1, -12.0, -2.0))
 			if impact > 5.0:
 				_shake = maxf(_shake, 0.12)
@@ -703,6 +765,7 @@ func _check_gates(kart: SwapKart) -> void:
 			var gi := (g - 1) % track.gate_s.size()
 			track.pulse_gate(gi, kart.color)
 			Sfx.play("card", -5.0)
+			_net_gp = [int(_net_gp[0]) + 1, gi, kart.color.to_html(false)]
 			_update_score_rows()
 
 func _gates_below(prog: float) -> int:
@@ -750,6 +813,7 @@ func _check_laps(kart: SwapKart) -> void:
 			_stretch.escalate()   # FINAL STRETCH: MK's final lap is HEARD (§7.3)
 		_flash_banner("[color=#ffd84d]FINAL LAP![/color]", 1.4)
 		Sfx.play("round_over", -4.0)
+		_net_snap("net_finallap")
 
 func _finish_kart(kart: SwapKart) -> void:
 	kart.finished = true
@@ -813,7 +877,12 @@ func _photo_finish(winner: SwapKart, chaser: SwapKart, margin_units: float, est_
 		Sfx.play("match_win", -3.0)
 		_confetti(winner.center(), winner.color)
 		_confetti(winner.center() + Vector3(-1.4, 0.6, 0.0), Color(1, 0.9, 0.4))
-		_flash_banner("[color=#ffd84d]PHOTO FINISH[/color]\n[font_size=30][color=#%s]%s[/color] BY %.1fs![/font_size]" % [wcol, wname, est_delta], 3.0))
+		_flash_banner("[color=#ffd84d]PHOTO FINISH[/color]\n[font_size=30][color=#%s]%s[/color] BY %.1fs![/font_size]" % [wcol, wname, est_delta], 3.0)
+		_net_snap("net_photofinish_reveal"))
+	# ONLINE: the freeze-tick ceremony's facts land here, mid-race — many
+	# snapshot beats before finished(), so lesson 1 (pump death) can't bite.
+	_net_pf = [int(_net_pf[0]) + 1, winner.index, chaser.index, snappedf(est_delta, 0.01)]
+	_net_snap("net_photofinish")
 	print("PHOTO_FINISH t=%.1f winner=%d chaser=%d margin=%.2fu delta=%.2fs" %
 		[race_t, winner.index, chaser.index, margin_units, est_delta])
 	if _photo_shots:
@@ -912,6 +981,7 @@ func _step_booms(dt: float) -> void:
 				Sfx.play("crush")
 				_shake = maxf(_shake, 0.22)
 				_burst(kart.center(), Color(1.0, 0.9, 0.6), 14)
+				_net_knock = [int(_net_knock[0]) + 1, kart.index]
 				print("KNOCK t=%.1f p=%d boom" % [race_t, kart.index])
 
 ## --- orbs & swapping -----------------------------------------------------------------
@@ -937,6 +1007,8 @@ func _throw_orb(kart: SwapKart) -> void:
 			golden = false  # leader threw the golden: it flies as a normal orb
 	var orb := SwapOrb.new()
 	orb.setup(self, kart.index, kart.color, was_golden)
+	_net_oid += 1
+	orb.oid = _net_oid
 	_fx_root.add_child(orb)
 	orb.golden = golden
 	orb.target_idx = target
@@ -1034,6 +1106,10 @@ func _do_swap(a: SwapKart, b: SwapKart, golden: bool) -> void:
 				"reason": "swapped out of 1st"})
 			_flash_event("%s LOSES THE LEAD!" % who.pname, who.color)
 	_update_score_rows()
+	_net_swap = [int(_net_swap[0]) + 1, a.index, b.index, 1 if golden else 0,
+		Vector3(snappedf(pos_a.x, 0.01), snappedf(pos_a.y, 0.01), snappedf(pos_a.z, 0.01)),
+		Vector3(snappedf(pos_b.x, 0.01), snappedf(pos_b.y, 0.01), snappedf(pos_b.z, 0.01))]
+	_net_snap("net_swap")
 	print("SWAP t=%.1f thrower=%d victim=%d golden=%s gain=%d" % [race_t, a.index, b.index, str(golden), gain_a])
 
 func on_orb_fizzle(orb: SwapOrb) -> void:
@@ -1105,7 +1181,16 @@ func _spawn_golden() -> void:
 	if candidates.size() > 0:
 		frac = float(candidates[rng.randi_range(0, candidates.size() - 1)])
 	var sm: Dictionary = track.sample_at(frac * track.total_len)
-	_gold_spot = Vector3(sm.pos)
+	_build_gold_pickup(Vector3(sm.pos))
+	Sfx.play("confirm", -2.0)
+	_flash_event("GOLDEN ORB ON THE TRACK - SWAPS YOU WITH THE LEADER (leaders can't grab it)", Color(1.0, 0.85, 0.25))
+	print("GOLD_SPAWN t=%.1f s=%.1f" % [race_t, frac * track.total_len])
+
+
+## Node half of the golden spawn, shared with the mirror (which calls it off
+## the gold wire fact; the host's sfx/event line ride their own channels).
+func _build_gold_pickup(spot: Vector3) -> void:
+	_gold_spot = spot
 	_gold_pickup = Node3D.new()
 	_gold_pickup.position = _gold_spot
 	var bob := Node3D.new()
@@ -1141,14 +1226,12 @@ func _spawn_golden() -> void:
 	pillar.position.y = 4.5
 	_gold_pickup.add_child(pillar)
 	add_child(_gold_pickup)
-	Sfx.play("confirm", -2.0)
-	_flash_event("GOLDEN ORB ON THE TRACK - SWAPS YOU WITH THE LEADER (leaders can't grab it)", Color(1.0, 0.85, 0.25))
-	print("GOLD_SPAWN t=%.1f s=%.1f" % [race_t, frac * track.total_len])
 
 func _claim_golden(kart: SwapKart) -> void:
 	_gold_pickup.queue_free()
 	_gold_pickup = null
 	kart.has_golden = true
+	_net_gc = [int(_net_gc[0]) + 1, kart.index]
 	Sfx.play("sink", -3.0)
 	_burst(kart.center(), Color(1.0, 0.85, 0.25), 20)
 	_flash_banner("[color=#%s]%s[/color] [color=#ffd84d]HAS THE GOLDEN ORB[/color]" % [kart.color.to_html(false), kart.pname], 1.5)
@@ -1161,6 +1244,8 @@ func _progress_all() -> void:
 	if Engine.get_physics_frames() % 15 == 0:
 		_update_score_rows()
 		_update_timer_label()
+		if phase == Phase.PLAY and race_t >= 8.0:
+			_net_snap("net_midrace")   # latched probe evidence; inert offline
 
 func _positions_list() -> Array:
 	var order: Array = []
@@ -1215,6 +1300,8 @@ func _overtake_sting() -> void:
 	if now < _overtake_next:
 		return
 	_overtake_next = now + OVERTAKE_STING_CD
+	if not _mirror:
+		_net_ov += 1
 	if _sting_player != null:
 		_sting_player.pitch_scale = 1.3
 		_sting_player.play()
@@ -1246,6 +1333,10 @@ func _end_race() -> void:
 	_confetti(karts[winner].center(), _colors[winner])
 	_confetti(karts[winner].center() + Vector3(1.5, 1, 0), Color(1, 0.9, 0.4))
 	_flash_banner("[color=#%s]%s WINS THE SWAP MEET![/color]" % [_colors[winner].to_html(false), _names[winner]], 9999.0)
+	# ONLINE: champ minted HERE, 1.8 s of pump before report_finished fires
+	# below (lesson 1: facts minted the same tick as the report never land).
+	_net_champ = winner
+	_net_snap("net_end")
 	for k in karts:
 		(k as SwapKart).locked = false  # keep cruising behind the banner
 	var highlights: Array = []
@@ -1348,9 +1439,15 @@ func _setup_test() -> void:
 func _drop_orb_on(owner_i: int, target_i: int) -> void:
 	var orb := SwapOrb.new()
 	orb.setup(self, owner_i, _colors[owner_i], false)
+	_net_oid += 1
+	orb.oid = _net_oid
 	_fx_root.add_child(orb)
 	orb.global_position = karts[target_i].center() + Vector3(0, 3.0, 0)
-	orb.vel = Vector3(0, -6.0, 0)
+	# Drop in the victim's frame so a MOVING target (--swapnetdemo) is still
+	# under the orb when it lands; the parked --swaptest karts have speed 0,
+	# so their scripted receipts are byte-unchanged.
+	var victim: SwapKart = karts[target_i]
+	orb.vel = Vector3(0, -6.0, 0) + victim.vel_dir * maxf(victim.speed, 0.0)
 	orbs.append(orb)
 
 func _test_tick() -> void:
@@ -1698,6 +1795,8 @@ func _update_timer_label() -> void:
 
 func _flash_banner(bb: String, duration: float) -> void:
 	_banner_gen += 1
+	if not _mirror:
+		_net_ban = [_banner_gen, bb, duration]   # mirror replays this flasher
 	var gen := _banner_gen
 	_banner.text = "[center]%s[/center]" % bb
 	_banner.visible = true
@@ -1713,10 +1812,381 @@ func _flash_banner(bb: String, duration: float) -> void:
 				_banner.visible = false)
 
 func _flash_event(text: String, color: Color) -> void:
+	if not _mirror:
+		_net_ev_gen += 1
+		_net_ev = [_net_ev_gen, text, color.to_html(false)]
 	_event_label.text = text
 	_event_label.add_theme_color_override("font_color", color)
 	_event_label.visible = true
 	_event_until = now + 2.4
+
+## --- ONLINE (phase 2): the render mirror ----------------------------------------------------------
+# Physics stays HOST-SIDE; the client renders. Karts ride a PackedInt32Array
+# (stride 12: pos cm / yaw mrad / speed / steer / progress / flags / drift /
+# place / one-shot anim id+counter); orbs are keyed by wire id; the crown,
+# golden pickup and windmill booms are driven from facts and animated locally.
+# Progress + finished flags make _positions_list(), the ladder HUD and the
+# FINAL STRETCH distance ticks work on the client through the SAME functions
+# the host runs.
+
+## HOST, pumped by the estate at 20 Hz. Compact PUBLIC facts only.
+func _net_state() -> Dictionary:
+	var kd := PackedInt32Array()
+	for k in karts:
+		var kart: SwapKart = k
+		var fl := 0
+		if kart.drifting:
+			fl |= 1
+		if kart.boost_t > 0.0:
+			fl |= 4 if kart.boost_amt >= SwapKart.BOOST_TURBO - 0.1 else 2
+		if kart.finished:
+			fl |= 8
+		if kart.has_golden:
+			fl |= 16
+		if kart.swap_immune > 0.0:
+			fl |= 32
+		if kart.locked:
+			fl |= 64
+		if kart.airborne:
+			fl |= 128
+		if kart.on_shortcut:
+			fl |= 256
+		if kart.orb_cd <= 0.0:
+			fl |= 512
+		kd.append_array(PackedInt32Array([
+			int(roundf(kart.global_position.x * 100.0)),
+			int(roundf(kart.y * 100.0)),
+			int(roundf(kart.global_position.z * 100.0)),
+			int(roundf(atan2(kart.heading.x, kart.heading.z) * 1000.0)),
+			int(roundf(kart.speed * 100.0)),
+			int(roundf(kart.steer * 100.0)),
+			int(roundf(kart.progress * 100.0)),
+			fl,
+			int(roundf(kart.drift_t * 100.0)),
+			kart.finish_place,
+			kart.net_anim_id, kart.net_anim_n]))
+	var ob: Array = []
+	for o in orbs:
+		var orb: SwapOrb = o
+		if orb.dead or not is_instance_valid(orb):
+			continue
+		ob.append([orb.oid,
+			int(roundf(orb.global_position.x * 100.0)),
+			int(roundf(orb.global_position.y * 100.0)),
+			int(roundf(orb.global_position.z * 100.0)),
+			1 if orb.golden else 0, orb.owner_idx])
+	var pts := PackedInt32Array()
+	for k in karts:
+		pts.append(int(_points[(k as SwapKart).index]))
+	var st := {
+		"ph": phase, "rt": snappedf(race_t, 0.05), "lmax": laps_total,
+		"fl": _final_lap_called,
+		"kd": kd, "ob": ob, "pts": pts,
+		"ban": _net_ban, "ev": _net_ev,
+		"sw": _net_swap, "pf": _net_pf,
+		"kn": _net_knock, "bo": _net_bounce, "gp": _net_gp, "gc": _net_gc,
+		"ov": _net_ov, "cr": _crown_on, "champ": _net_champ,
+		"bm": [int(roundf(float(_booms[0].angle) * 1000.0)),
+			int(roundf(float(_booms[1].angle) * 1000.0))],
+	}
+	if _gold_pickup != null:
+		st["gold"] = [int(roundf(_gold_spot.x * 100.0)), int(roundf(_gold_spot.z * 100.0))]
+	return st
+
+
+## CLIENT. Latest-state-wins; all juice fires from DELTAS. Continuous motion
+## only sets targets; _mirror_tick interpolates at the render rate.
+func _net_apply(st: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = st
+	phase = int(st.get("ph", Phase.WAIT))
+	race_t = float(st.get("rt", race_t))
+	laps_total = int(st.get("lmax", laps_total))
+	if prev.is_empty() and _stretch != null:
+		_stretch.play_started()   # FINAL STRETCH: light bed on first snapshot
+	# FINAL LAP flip (the stretch's escalation fact; its banner rides ban)
+	if _stretch != null and bool(st.get("fl", false)) and not bool(prev.get("fl", false)):
+		_stretch.escalate()
+		_mir_latch("mirror_finallap")
+	# --- karts: interp targets + instant facts; edges vs the PREVIOUS snapshot
+	var kd: PackedInt32Array = st.get("kd", PackedInt32Array())
+	var pkd: PackedInt32Array = prev.get("kd", PackedInt32Array())
+	var fin_n := 0
+	for i in karts.size():
+		var o := i * 12
+		if o + 12 > kd.size():
+			break
+		var kart: SwapKart = karts[i]
+		_mir_karts[i][0] = Vector3(kd[o] / 100.0, kd[o + 1] / 100.0, kd[o + 2] / 100.0)
+		_mir_karts[i][1] = kd[o + 3] / 1000.0
+		kart.y = kd[o + 1] / 100.0
+		kart.speed = kd[o + 4] / 100.0
+		kart.steer = kd[o + 5] / 100.0
+		kart.progress = kd[o + 6] / 100.0
+		kart.laps_hw = int(floorf(kart.progress / track.total_len))   # lap HUD
+		kart.drift_t = kd[o + 8] / 100.0
+		kart.finish_place = kd[o + 9]
+		var fl := kd[o + 7]
+		var pfl := pkd[o + 7] if o + 12 <= pkd.size() else 0
+		kart.drifting = (fl & 1) != 0
+		kart.boost_t = 1.0 if (fl & 6) != 0 else 0.0
+		if (fl & 6) != 0 and (pfl & 6) == 0:
+			var tier := 2 if (fl & 4) != 0 else 1
+			Sfx.play("bumper", -6.0 if tier == 1 else -1.0)
+			if tier == 2:
+				_burst(kart.global_position + Vector3(0, 0.3, 0), Color(0.8, 0.5, 1.0), 10)
+		kart.has_golden = (fl & 16) != 0
+		kart.swap_immune = 1.0 if (fl & 32) != 0 else 0.0
+		kart.locked = (fl & 64) != 0
+		var air := (fl & 128) != 0
+		if air and (pfl & 128) == 0:
+			Sfx.play("putt", -4.0)             # ramp launch
+		elif not air and (pfl & 128) != 0:
+			_burst(kart.global_position, Color(0.8, 0.72, 0.6), 8)
+			Sfx.play("place", -6.0)            # landing
+		kart.airborne = air
+		kart.on_shortcut = (fl & 256) != 0
+		kart.orb_cd = 0.0 if (fl & 512) != 0 else 1.0
+		var fin := (fl & 8) != 0
+		if fin and (pfl & 8) == 0:
+			Sfx.play("round_over", -6.0)
+			kart.cheer_forever()
+		kart.finished = fin
+		if fin:
+			fin_n += 1
+		# one-shot anims off the counter delta (Throw includes its whoosh)
+		var an := kd[o + 11]
+		var pan := pkd[o + 11] if o + 12 <= pkd.size() else an
+		if an != pan:
+			var throw := kd[o + 10] == 1
+			kart.play_anim("Throw" if throw else "Hit_A", 0.7 if throw else 0.5)
+			if throw:
+				Sfx.play("putt")
+	_finish_count = fin_n
+	# --- orbs: keyed by wire id; vanish = fizzle/hit burst at last known spot
+	var seen := {}
+	for e in st.get("ob", []):
+		var oid := int(e[0])
+		var opos := Vector3(int(e[1]) / 100.0, int(e[2]) / 100.0, int(e[3]) / 100.0)
+		seen[oid] = true
+		if not _mir_orbs.has(oid):
+			var orb := SwapOrb.new()
+			orb.setup(self, int(e[5]), _colors[int(e[5])], int(e[4]) == 1)
+			_fx_root.add_child(orb)
+			orb.global_position = opos
+			_mir_orbs[oid] = {"node": orb, "pos": opos}
+		else:
+			_mir_orbs[oid]["pos"] = opos
+	for oid in _mir_orbs.keys():
+		if not seen.has(oid):
+			var node: SwapOrb = _mir_orbs[oid]["node"]
+			if is_instance_valid(node):
+				_burst(node.global_position, Color(0.7, 0.8, 0.95, 0.7), 6)
+				node.queue_free()
+			_mir_orbs.erase(oid)
+	# --- golden pickup lifecycle (claim burst rides the gc counter)
+	if st.has("gold"):
+		if _gold_pickup == null:
+			var g: Array = st["gold"]
+			_build_gold_pickup(Vector3(int(g[0]) / 100.0, 0.0, int(g[1]) / 100.0))
+			Sfx.play("confirm", -2.0)
+	elif _gold_pickup != null:
+		_gold_pickup.queue_free()
+		_gold_pickup = null
+	# --- windmill booms: resync the sweep (advanced locally in _mirror_tick)
+	var bm: Array = st.get("bm", [])
+	for i2 in mini(bm.size(), _booms.size()):
+		_booms[i2].angle = fposmod(float(int(bm[i2])) / 1000.0, TAU)
+	# --- crown owner (position glued in _mirror_tick; sting rides ov)
+	_crown_on = int(st.get("cr", -1))
+	# --- juice counters
+	if int(st.get("ov", 0)) > int(prev.get("ov", 0)):
+		_overtake_next = now - 1.0   # wire already gated the cooldown
+		_overtake_sting()
+	var sw: Array = st.get("sw", [0])
+	var psw: Array = prev.get("sw", [0])
+	if sw.size() >= 6 and int(sw[0]) > int(psw[0]):
+		var ai := int(sw[1])
+		var bi := int(sw[2])
+		var gold := int(sw[3]) == 1
+		_swap_fx(sw[4], _colors[ai], _colors[bi])
+		_swap_fx(sw[5], _colors[bi], _colors[ai])
+		_shake = maxf(_shake, 0.55 if gold else 0.4)
+		Sfx.play("sink")
+		Sfx.play("bumper", -4.0)
+		karts[ai].flash_tag()
+		karts[bi].flash_tag()
+		print("SWAP_MIRROR swap a=%d b=%d golden=%s" % [ai, bi, str(gold)])
+		_mir_latch("mirror_swap")
+	var pf: Array = st.get("pf", [0])
+	var ppf: Array = prev.get("pf", [0])
+	if pf.size() >= 4 and int(pf[0]) > int(ppf[0]):
+		_mir_photo_finish(int(pf[1]), int(pf[2]))
+	var kn: Array = st.get("kn", [0])
+	if kn.size() >= 2 and int(kn[0]) > int(prev.get("kn", [0])[0]):
+		var vic := int(kn[1])
+		Sfx.play("crush")
+		_shake = maxf(_shake, 0.22)
+		if vic >= 0 and vic < karts.size():
+			_burst((karts[vic] as SwapKart).center(), Color(1.0, 0.9, 0.6), 14)
+	var bo: Array = st.get("bo", [0])
+	if bo.size() >= 2 and int(bo[0]) > int(prev.get("bo", [0])[0]):
+		Sfx.play("bounce", -8.0)
+	var gp: Array = st.get("gp", [0])
+	if gp.size() >= 3 and int(gp[0]) > int(prev.get("gp", [0])[0]):
+		track.pulse_gate(int(gp[1]), Color(str(gp[2])))
+		Sfx.play("card", -5.0)
+	var gc: Array = st.get("gc", [0])
+	if gc.size() >= 2 and int(gc[0]) > int(prev.get("gc", [0])[0]):
+		var who := int(gc[1])
+		Sfx.play("sink", -3.0)
+		if who >= 0 and who < karts.size():
+			_burst((karts[who] as SwapKart).center(), Color(1.0, 0.85, 0.25), 20)
+	# --- champion (minted at END, 1.8 s before finished(); banner rides ban)
+	var champ := int(st.get("champ", -1))
+	if champ >= 0 and int(prev.get("champ", -1)) < 0:
+		Sfx.play("match_win")
+		_confetti((karts[champ] as SwapKart).center(), _colors[champ])
+		_confetti((karts[champ] as SwapKart).center() + Vector3(1.5, 1, 0), Color(1, 0.9, 0.4))
+		print("SWAP_MIRROR champ=%d" % champ)
+		_mir_latch("mirror_end")
+	# --- banner + event line: replay the couch's own flashers off the gens
+	var ban: Array = st.get("ban", [0])
+	if ban.size() >= 3 and int(ban[0]) != int(prev.get("ban", [0])[0]):
+		_flash_banner(str(ban[1]), float(ban[2]))
+	var ev: Array = st.get("ev", [0])
+	if ev.size() >= 3 and int(ev[0]) != int(prev.get("ev", [0])[0]):
+		_flash_event(str(ev[1]), Color(str(ev[2])))
+	# --- HUD + the stretch's distance ladder (same functions the host runs)
+	var pts: PackedInt32Array = st.get("pts", PackedInt32Array())
+	for i3 in mini(pts.size(), karts.size()):
+		_points[(karts[i3] as SwapKart).index] = pts[i3]
+	_update_score_rows()
+	_update_timer_label()
+	if phase == Phase.PLAY:
+		_stretch_tick()
+		if race_t >= 8.0:
+			_mir_latch("mirror_midrace")
+
+
+## The photo-finish ceremony, mirror side: flash + punch + double confetti now,
+## the reveal pop at +0.55 s — banners ride the ban stream. Same real-time
+## timers the host uses, so both screens beat together.
+func _mir_photo_finish(wi: int, ci: int) -> void:
+	_shake = maxf(_shake, 0.5)
+	_fov_punch(38.0, 0.85)
+	_flashbulb()
+	Sfx.play("bumper", -2.0)
+	if wi >= 0 and wi < karts.size():
+		var line_pos: Vector3 = (karts[wi] as SwapKart).center()
+		_confetti(line_pos, _colors[wi])
+		if ci >= 0 and ci < karts.size():
+			_confetti(line_pos + Vector3(1.4, 0.6, 0.0), _colors[ci])
+	print("SWAP_MIRROR photo_finish winner=%d chaser=%d" % [wi, ci])
+	_mir_latch("mirror_photofinish")
+	get_tree().create_timer(0.55, true, false, true).timeout.connect(func() -> void:
+		_flashbulb()
+		Sfx.play("match_win", -3.0)
+		if wi >= 0 and wi < karts.size():
+			_confetti((karts[wi] as SwapKart).center(), _colors[wi])
+			_confetti((karts[wi] as SwapKart).center() + Vector3(-1.4, 0.6, 0.0), Color(1, 0.9, 0.4))
+		_mir_latch("mirror_photofinish_reveal"))
+
+
+## CLIENT, per physics tick: interpolate kart/orb transforms toward the latest
+## authoritative snapshot (racing NEEDS smooth); glue the crown, bob the gold,
+## sweep the booms, advance the local clocks.
+func _mirror_tick(delta: float) -> void:
+	now += delta
+	if _mir.is_empty():
+		return
+	if phase == Phase.PLAY:
+		race_t += delta   # smooth timer between snaps; resynced every apply
+	var k := 1.0 - exp(-18.0 * delta)
+	for i in mini(_mir_karts.size(), karts.size()):
+		var kart: SwapKart = karts[i]
+		var tgt: Vector3 = _mir_karts[i][0]
+		if kart.global_position.distance_to(tgt) > 4.0:
+			kart.global_position = tgt   # SWAP teleports snap, never glide
+		else:
+			kart.global_position = kart.global_position.lerp(tgt, k)
+		var ny := lerp_angle(atan2(kart.heading.x, kart.heading.z), float(_mir_karts[i][1]), k)
+		kart.heading = Vector3(sin(ny), 0.0, cos(ny))
+		kart.vel_dir = kart.heading
+		kart._orient(delta)
+	for oid in _mir_orbs:
+		var rec: Dictionary = _mir_orbs[oid]
+		var node: SwapOrb = rec["node"]
+		if not is_instance_valid(node):
+			continue
+		var tp: Vector3 = rec["pos"]
+		if node.global_position.distance_to(tp) > 6.0:
+			node.global_position = tp
+		else:
+			node.global_position = node.global_position.lerp(tp, 1.0 - exp(-30.0 * delta))
+	# crown glued to the mirrored leader
+	if _crown_on >= 0 and _crown_on < karts.size():
+		var lead: SwapKart = karts[_crown_on]
+		_crown.visible = phase != Phase.WAIT
+		_crown.global_position = lead.global_position + Vector3(0, 1.42 + 0.08 * sin(now * 4.0), 0)
+		_crown.rotation.y += delta * 1.5
+	else:
+		_crown.visible = false
+	# gold pickup bob
+	if _gold_pickup != null:
+		_gold_pickup.rotate_y(delta * 2.0)
+		(_gold_pickup.get_node("Bob") as Node3D).position.y = 1.0 + 0.18 * sin(now * 3.0)
+	# windmill sweep: constant local advance, resynced by every snapshot
+	for boom in _booms:
+		boom.angle = fposmod(float(boom.angle) + float(boom.speed) * delta, TAU)
+		(boom.pivot as Node3D).rotation.y = -float(boom.angle)
+		if boom.blades != null:
+			(boom.blades as Node3D).rotate_object_local(Vector3(0, 0, 1), delta * 1.4)
+
+
+## Mirror-side latched evidence snaps (inert unless the probe harness is up).
+func _mir_latch(tag: String) -> void:
+	if _mir_snapped.has(tag):
+		return
+	_mir_snapped[tag] = true
+	VerifyCapture.snap(tag)
+
+
+## Host-side latched evidence snaps at the same beats (probe only; offline and
+## headless receipts never activate VerifyCapture).
+func _net_snap(tag: String) -> void:
+	if _mirror or _net_snapped.has(tag) or not NetSession.is_online() or not NetSession.is_host():
+		return
+	_net_snapped[tag] = true
+	VerifyCapture.snap(tag)
+
+
+## Probe rig (--swapnetdemo), HOST, at GO: restage as a 1-lap dash. The two
+## BOT karts start 2.2 / 3.0 units before the line — the chaser crosses ~0.8 u
+## behind, inside the 1.2 u photo margin, so the REAL _finish_kart path fires
+## the PHOTO FINISH. Human/remote karts start further back and finish the same
+## short lap, so the whole night still reaches finished().
+func _netdemo_stage() -> void:
+	laps_total = 1
+	var line := track.total_len
+	var setups := {2: [12.0, -0.5], 3: [12.4, 0.5], 0: [26.0, 1.2], 1: [30.0, -1.2]}
+	for i in karts.size():
+		if not setups.has(i):
+			continue
+		var kart: SwapKart = karts[i]
+		var s0: float = line - float(setups[i][0])
+		kart.place_at(s0, float(setups[i][1]))
+		kart.progress = s0
+		kart.last_s_eff = s0
+		kart.laps_hw = 0
+		kart.gates_credited = _gates_below(kart.progress)
+		kart.orb_cd = 999.0
+		kart.locked = false
+	_netdemo_fire_t = now + 4.2   # after the bots' photo dash, before 0/1 finish
+	print("SWAP_NETDEMO staged 1-lap photo dash line=%.1f" % line)
+
 
 ## --- debug/verify surface -------------------------------------------------------------------------
 

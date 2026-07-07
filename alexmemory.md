@@ -1543,3 +1543,87 @@ deciding freeze in tilt/dw/echo (fov punch visibly IN on all three).
 WITH THE REAL TRACKS IN assets/music/, THIS IS THE WAVE WHERE THE WHOLE
 ANTHOLOGY LIGHTS UP AT ONCE — the kit was a no-op until your soundtrack
 landed; now every game's last seconds are heard.
+
+================================================================
+ONLINE MIRRORS: ECHO CHAMBER + SWAP MEET (the last arena pair)
+online-mirror agent, overnight — for Alex's review
+================================================================
+
+WHAT SHIPPED (house pattern, spec 10 §4.3; net_session/estate untouched):
+
+- ECHO CHAMBER mirror (echo_chamber.gd +~330, fighter.gd +45, ghost.gd
+  +18). The call that defines the port: GHOSTS ARE STREAMED, NOT
+  RE-SIMULATED — fighters and ghosts share one body-indexed
+  PackedInt32Array (stride 8, cm/mrad), so the mirror renders exactly the
+  poses the host's replayer computed. Zero drift risk, measured cost 32 B
+  per ghost per snapshot (12-ghost cap ≈ 7.7 kB/s of the ~14 kB/s total —
+  half the seance's footprint). Parry/bounty/self-haunt/deciding-moment
+  ride counters; banners ride text facts; ring warning blinks at 4 Hz
+  from a LOCAL clock (only the steady flag rides the wire, so the alarm
+  can't alias against 20 Hz); shrink rides a flag edge into the shared
+  _shrink_fx().
+- SWAP MEET mirror (swap_meet.gd +~400, swap_kart +8, swap_orb +1). Karts
+  stride-12 in one int block INCLUDING progress/finished/place — so
+  _positions_list, the ladder HUD, the lap label and the FINAL STRETCH
+  distance ladder run client-side through the same functions the host
+  runs. Orbs id-keyed; SWAP ritual (both beam positions) + PHOTO FINISH
+  (winner/chaser/delta) + knocks/thuds/gates/claims/stings ride counters;
+  banner+event line replay the couch's own flashers off [gen,text] facts.
+  ~20 kB/s per guest.
+- Lesson 1 applied (facts minted the tick of report_finished never reach
+  mirrors): echo pre-announces the champ and defers ONLY the report emit
+  by 0.5 s (prints stay same-tick; couch gains 0.5 s of winner tableau the
+  estate used to cut off at frame one). Swap needed nothing — its END
+  already reports 1.8 s late; verified the champ fact landed pre-fold both
+  nights. Photo-finish facts are minted mid-race, structurally safe.
+- Lesson 2 applied: FinalStretch fires client-side from facts the HUD
+  already carries (echo rn/rmax/rem; swap fl flip + progress). Zero extra
+  bytes.
+
+RECEIPTS:
+- Echo probe nights (port 9617, private binary g_es93): night 2 canonical.
+  61/61 received digests identical (1 of 62 sampled snapshots dropped in
+  flight — the unreliable channel doing its job; night 1: 62/62). The
+  REMOTE seat was KILLED BY ITS OWN ECHO in round 2 — the irony banner
+  pair is in echo_netshots_* read at the same timer tick. r5 pair: both
+  screens at 25.0, GHOSTS: 9, echo-for-echo identical. Ghost-drift assert
+  0.000000 through the online night itself.
+- Swap probe nights: 78/78 + 5/5 digests. Organic 3-lap night (remote kart
+  steered + THREW ORBS over the wire, overtakes/golden/final-lap all
+  mirrored) + a --swapnetdemo night for the money shot: genuine
+  PHOTO FINISH through the real _finish_kart path — both screens frozen at
+  0:02 with GOLD & MINT pinned at the line, mirror caught mid-flashbulb —
+  plus one scripted orb drop for the SWAPPED! beam pair.
+- Couch: swap event logs byte-identical to pristine HEAD (seeds 1/2/11;
+  seed-1 "diff" is Godot's flaky exit-time ObjectDB warning, present on
+  pristine reruns too). --swaptest=immunity re-run PASS after the one
+  shared-hook touch (_drop_orb_on now leads a moving target in the
+  victim's frame; parked test karts have speed 0 — byte-unchanged).
+
+JUDGMENT CALLS (flag if you disagree):
+1. ECHO'S COUCH BASELINE IS NOT CROSS-RUN REPRODUCIBLE — ON PRISTINE HEAD.
+   Two sequential pristine runs of the same seed diverge from ~round 3
+   (real CharacterBody3D physics; chaotic amplification). I did NOT chase
+   it: it predates this lane, echo's own receipts only ever claimed
+   within-run ghost determinism, and swap (hand-integrated) diffs clean.
+   Receipt shape for echo: control diffs (pristine-vs-pristine noise
+   floor) + structural invariants (ghost ramp 0/4/8/12, all
+   ECHO_DETERMINISM 0.000000, ECHO_SHRINK tick-exact t=2.26 both trees) +
+   the armed assert. Documented prominently in online-echo-VERIFY.md.
+   Worth a future lane if you want echo bot-replays byte-stable.
+2. Echo's 0.5 s report deferral is a real (tiny) couch timing change —
+   the only sim-adjacent edit in either lane. Alternative was a champ the
+   client never sees. masked_ball precedent, but echo's couch gains the
+   pause too since its report was same-tick with the tableau.
+3. --swapnetdemo (photo-dash restage + one scripted drop) is a probe rig
+   behind its flag, mb-netdemo precedent. The organic night produced 50
+   throws / 0 connects (sparse 2-bot traffic) — real tables bring their
+   own traffic; I did not inflate bot aggression to force it.
+4. Mirror does not reproduce tick-counted freezes (swap hit-stop/photo
+   freeze) or echo's slow-mo dips — frozen host karts read as frozen
+   through the stream; a mirror stalling its own clock would fight the
+   snapshots. Throne precedent.
+
+Docs: online-echo-VERIFY.md + online-swap-VERIFY.md (+ committed probe
+logs and windowed snap pairs). user:// backed up/restored, md5s
+re-verified, no .npbak leftovers, only my own PIDs touched.

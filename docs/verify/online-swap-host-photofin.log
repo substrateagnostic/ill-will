@@ -1,0 +1,103 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET transports: enet ready · steam offline
+NET host port=9617 err=0 code=80CNJH addr=192.168.0.101:9617
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 1382104878 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE seat 1 claimed by peer 1382104878
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+NETPROBE_TRACE tick=60 p1=(-3.400,0.001,-2.500)
+NETHASH side=host seq=15 h=639046da
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_online_host_claim_0539.png
+NETPROBE_TRACE tick=90 p1=(-3.457,0.001,-4.143)
+NETPROBE_TRACE tick=120 p1=(-3.457,0.001,-5.843)
+NETHASH side=host seq=30 h=40c70c8f
+NETPROBE_TRACE tick=150 p1=(-1.757,0.001,-5.843)
+NETPROBE_TRACE tick=180 p1=(-0.057,0.001,-5.843)
+NETHASH side=host seq=45 h=af58069a
+NETPROBE_TRACE tick=210 p1=(-0.057,0.001,-4.143)
+NETPROBE_TRACE tick=240 p1=(-0.057,0.001,-2.443)
+NETHASH side=host seq=60 h=49c10a09
+NETPROBE_TRACE tick=270 p1=(-0.057,0.001,-2.443)
+NETPROBE_TRACE tick=300 p1=(-0.057,0.001,-2.443)
+NETPROBE toggle seat=1 ready=true pf=491
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_online_host_ready_1106.png
+NETHASH side=host seq=75 h=620a6eaf
+NETHASH side=host seq=90 h=7b8db8ac
+NETHASH side=host seq=105 h=f8b65e99
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_online_host_auction_1444.png
+NETHASH side=host seq=120 h=1239a896
+NETHASH side=host seq=135 h=2a830d3c
+NETHASH side=host seq=150 h=44065739
+NETHASH side=host seq=165 h=5c4fbbdf
+NETHASH side=host seq=180 h=75d305dc
+NETHASH side=host seq=195 h=8e1c6a82
+NETHASH side=host seq=210 h=d01644b6
+NETHASH side=host seq=225 h=e85fa95c
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_online_host_gate_2676.png
+NETHASH side=host seq=240 h=01e2f359
+NETHASH side=host seq=255 h=1a2c57ff
+NETHASH side=host seq=270 h=33afa1fc
+NETHASH side=host seq=285 h=4bf906a2
+NETHASH side=host seq=300 h=8df2e0d6
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_online_host_game_3365.png
+NETHASH_MOD side=host seq=40 h=e456cd90 bytes=896
+NETHASH side=host seq=315 h=a63c457c
+SWAP_NETDEMO staged 1-lap photo dash line=95.1
+NETHASH side=host seq=330 h=bfbf8f79
+NETHASH side=host seq=345 h=d808f41f
+NETHASH_MOD side=host seq=80 h=b9f91568 bytes=936
+NETHASH side=host seq=360 h=f18c3e1c
+LAP t=2.8 p=2 lap=1 time=2.8s
+PHOTO_FINISH t=2.8 winner=2 chaser=3 margin=1.04u delta=0.21s
+FINISH t=2.8 p=2 place=1 laps=[2.78333333333333]
+OVERTAKE t=2.8 leader=3
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_net_photofinish_3966.png
+LAP t=3.0 p=3 lap=1 time=3.0s
+FINISH t=3.0 p=3 place=2 laps=[2.98333333333333]
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_net_photofinish_reveal_4029.png
+NETHASH side=host seq=375 h=09d5a2c2
+NETHASH_MOD side=host seq=120 h=b1e2413b bytes=1004
+SWAP_NETDEMO scripted orb drop 0 -> 1 t=4.2
+SWAP t=4.5 thrower=0 victim=1 golden=false gain=-1
+OVERTAKE t=4.5 leader=1
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_net_swap_4207.png
+NETHASH side=host seq=390 h=2358ecbf
+NETHASH side=host seq=405 h=6418e19c
+LAP t=6.0 p=1 lap=1 time=6.0s
+FINISH t=6.0 p=1 place=3 laps=[6.03333333333332]
+OVERTAKE t=6.0 leader=0
+NETHASH_MOD side=host seq=160 h=052df805 bytes=948
+NETHASH side=host seq=420 h=7d9c2b99
+LAP t=6.9 p=0 lap=1 time=6.9s
+FINISH t=6.9 p=0 place=4 laps=[6.89999999999998]
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_net_end_4541.png
+NETHASH side=host seq=435 h=95e5903f
+NETHASH_MOD side=host seq=200 h=3aa9cf3c bytes=952
+SWAPMEET_RESULTS {"currency_events":[{"amount":1,"player":1,"reason":"swap heist (+1 places)","type":"royalty"}],"highlights":["BLUE pickpocketed 1 place from RED","Fastest lap: GOLD (2.8s)"],"kill_events":[],"monuments":[],"placements":[2,3,1,0],"points":{"0":2,"1":3,"2":5,"3":3}}
+KILL_EVENTS n=0 []
+SWAPMEET_SIM race_t=6.9s swaps=1 blocked=0 golden=0 bounces=9 gaining={ 0: 0, 1: 0, 2: 0, 3: 0 }
+SWAPMEET_LAPS p0=[6.9] p1=[6.0] p2=[2.8] p3=[3.0]
+NETHASH side=host seq=450 h=af68da3c
+NETHASH side=host seq=465 h=c7b23ee2
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_online_host_matchpodium_5008.png
+NETHASH side=host seq=480 h=e13588df
+NETHASH side=host seq=495 h=f97eed85
+NETHASH side=host seq=510 h=3b78c7b9
+VERIFY_SNAP res://docs/verify/swap_netshots_host_pf/snap_online_host_reckoning_5540.png
+NETPROBE_RESULTS RED:pts=1,grudge=3 BLUE:pts=2,grudge=3 GOLD:pts=5,grudge=2 MINT:pts=3,grudge=1
+NETPROBE saves restored
+NETPROBE_DONE
+NETHASH side=host seq=525 h=53c22c5f
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)

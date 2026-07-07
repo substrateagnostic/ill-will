@@ -17,6 +17,7 @@ const GOLD_LIFE := 4.0
 
 var world = null
 var owner_idx := -1
+var oid := 0             # ONLINE: host-assigned wire id (render mirror keying)
 var golden := false
 var target_idx := -1     # golden only: locked at throw time
 var vel := Vector3.ZERO
