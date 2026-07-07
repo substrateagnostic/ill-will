@@ -1,0 +1,144 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET host port=9412 err=0 code=80CNC4 addr=192.168.0.101:9412
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 1849957837 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE seat 1 claimed by peer 1849957837
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+NETHASH side=host seq=15 h=1503d1f4
+NETPROBE_TRACE tick=60 p1=(-3.343,0.001,-2.557)
+VERIFY_SNAP res://docs/verify/mower_netshots_host/snap_online_host_claim_0791.png
+NETPROBE_TRACE tick=90 p1=(-3.343,0.001,-4.257)
+NETPROBE_TRACE tick=120 p1=(-3.230,0.001,-5.843)
+NETHASH side=host seq=30 h=5f5d5633
+NETPROBE_TRACE tick=150 p1=(-1.530,0.001,-5.843)
+NETPROBE_TRACE tick=180 p1=(0.170,0.001,-5.843)
+NETHASH side=host seq=45 h=1e4f9c9b
+NETPROBE_TRACE tick=210 p1=(0.227,0.001,-4.200)
+NETPROBE_TRACE tick=240 p1=(0.227,0.001,-2.500)
+NETHASH side=host seq=60 h=e6b0c1e2
+NETPROBE_TRACE tick=270 p1=(0.227,0.001,-2.387)
+NETPROBE_TRACE tick=300 p1=(0.227,0.001,-2.387)
+NETPROBE toggle seat=1 ready=true pf=597
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/mower_netshots_host/snap_online_host_ready_1353.png
+NETHASH side=host seq=75 h=e76d29c8
+NETHASH side=host seq=90 h=1e80a825
+NETHASH side=host seq=105 h=0b05c472
+NETHASH side=host seq=120 h=421942cf
+NETHASH side=host seq=135 h=42d5aab5
+NETHASH side=host seq=150 h=79e92912
+NETHASH side=host seq=165 h=7aa590f8
+NETHASH side=host seq=180 h=b1b90f55
+NETHASH side=host seq=195 h=b275773b
+NETHASH side=host seq=210 h=eac2daef
+NETHASH side=host seq=225 h=eb7f42d5
+VERIFY_SNAP res://docs/verify/mower_netshots_host/snap_online_host_gate_2935.png
+NETHASH side=host seq=240 h=2292c132
+NETHASH side=host seq=255 h=234f2918
+NETHASH side=host seq=270 h=5a62a775
+MOWER_EVT t=0.00 frame=3432 | begin players=4 seed=3300865038 roundtime=30 bots=[false, false, true, true] covtest=false
+MOWGRID side=host seq=1 h=bc171f8c raw=3072 zbytes=53
+NETHASH side=host seq=285 h=5b1f0f5b
+NETHASH side=host seq=300 h=936c730f
+VERIFY_SNAP res://docs/verify/mower_netshots_host/snap_online_host_game_3601.png
+NETHASH_MOD side=host seq=40 h=08e27220 bytes=512
+NETHASH side=host seq=315 h=9428daf5
+MOWGRID side=host seq=41 h=4acb2a07 raw=3072 zbytes=192
+NETHASH side=host seq=330 h=cb3c5952
+NETHASH side=host seq=345 h=cbf8c138
+NETHASH_MOD side=host seq=80 h=e03ce24b bytes=536
+MOWGRID side=host seq=81 h=fd5b42cb raw=3072 zbytes=282
+NETHASH side=host seq=360 h=030c3f95
+MOWER_EVT t=5.00 frame=4301 | status t=5 cov[RED=8.6%, BLUE=9.5%, GOLD=13.3%, MINT=17.7%] uncut=50.9% rams=1 paint_worst=0.305ms commit_worst=0.135ms
+NETHASH side=host seq=375 h=03c8a77b
+NETHASH_MOD side=host seq=120 h=ba3c3b40 bytes=536
+MOWGRID side=host seq=121 h=784641d9 raw=3072 zbytes=377
+NETHASH side=host seq=390 h=3adc25d8
+NETHASH side=host seq=405 h=3cd27315
+NETHASH_MOD side=host seq=160 h=10970bd9 bytes=532
+MOWGRID side=host seq=161 h=79acab8f raw=3072 zbytes=397
+NETHASH side=host seq=420 h=73e5f172
+NETHASH side=host seq=435 h=74a25958
+NETHASH_MOD side=host seq=200 h=e2416559 bytes=536
+MOWER_EVT t=10.02 frame=5096 | status t=10 cov[RED=14.2%, BLUE=5.0%, GOLD=15.2%, MINT=30.3%] uncut=35.4% rams=5 paint_worst=1.198ms commit_worst=0.217ms
+MOWGRID side=host seq=201 h=c35ab0aa raw=3072 zbytes=403
+NETHASH side=host seq=450 h=abb5d7b5
+NETHASH side=host seq=465 h=ac723f9b
+NETHASH_MOD side=host seq=240 h=6160448c bytes=524
+MOWGRID side=host seq=241 h=3338192a raw=3072 zbytes=406
+NETHASH side=host seq=480 h=e385bdf8
+NETHASH side=host seq=495 h=e44225de
+NETHASH_MOD side=host seq=280 h=beb1ed74 bytes=532
+MOWGRID side=host seq=281 h=f7c9b58f raw=3072 zbytes=421
+NETHASH side=host seq=510 h=1c8f8992
+MOWER_EVT t=15.03 frame=5890 | status t=15 cov[RED=17.0%, BLUE=4.3%, GOLD=9.5%, MINT=40.2%] uncut=29.0% rams=9 paint_worst=1.198ms commit_worst=0.217ms
+NETHASH side=host seq=525 h=1d4bf178
+NETHASH_MOD side=host seq=320 h=644ced25 bytes=540
+MOWGRID side=host seq=321 h=c50c2d58 raw=3072 zbytes=431
+NETHASH side=host seq=540 h=545f6fd5
+NETHASH side=host seq=555 h=551bd7bb
+MOWER_EVT t=18.00 frame=6336 | overtime t=18.0
+NETHASH_MOD side=host seq=360 h=8ba9568f bytes=540
+MOWGRID side=host seq=361 h=81cc0369 raw=3072 zbytes=435
+NETHASH side=host seq=570 h=8c2f5618
+NETHASH side=host seq=585 h=8cebbdfe
+VERIFY_SNAP res://docs/verify/mower_netshots_host/snap_net_lawn_6644.png
+MOWER_EVT t=20.04 frame=6644 | status t=20 cov[RED=20.5%, BLUE=9.4%, GOLD=11.0%, MINT=40.8%] uncut=18.2% rams=11 paint_worst=1.198ms commit_worst=0.217ms
+NETHASH_MOD side=host seq=400 h=6f9aed1a bytes=528
+NETHASH side=host seq=600 h=c53921b2
+MOWGRID side=host seq=401 h=e95664bb raw=3072 zbytes=412
+NETHASH side=host seq=615 h=c5f58998
+NETHASH side=host seq=630 h=fd0907f5
+NETHASH_MOD side=host seq=440 h=b7c9e0ff bytes=536
+MOWGRID side=host seq=441 h=01c41260 raw=3072 zbytes=377
+NETHASH side=host seq=645 h=fdc56fdb
+MOWER_EVT t=25.05 frame=7392 | status t=25 cov[RED=15.9%, BLUE=11.2%, GOLD=21.4%, MINT=43.0%] uncut=8.5% rams=13 paint_worst=1.198ms commit_worst=0.229ms
+NETHASH side=host seq=660 h=34d8ee38
+NETHASH_MOD side=host seq=480 h=dc0e84be bytes=536
+MOWGRID side=host seq=481 h=c4f2784d raw=3072 zbytes=397
+NETHASH side=host seq=675 h=3595561e
+NETHASH side=host seq=690 h=6ca8d47b
+NETHASH_MOD side=host seq=520 h=5508f626 bytes=532
+MOWGRID side=host seq=521 h=01555b8e raw=3072 zbytes=358
+NETHASH side=host seq=705 h=6e9f21b8
+NETHASH side=host seq=720 h=a5b2a015
+NETHASH_MOD side=host seq=560 h=00b4d9d9 bytes=532
+MOWGRID side=host seq=561 h=77a50708 raw=3072 zbytes=345
+MOWER_COVERAGE_ASSERT sum=100.0000% (players+uncut) -> PASS
+  RED: 14.36%  stolen=983 bestStripe=2.0m rams=0
+  BLUE: 10.64%  stolen=1114 bestStripe=5.1m rams=2
+  GOLD: 26.42%  stolen=1841 bestStripe=3.0m rams=10
+  MINT: 43.02%  stolen=2085 bestStripe=5.6m rams=4
+MOWER_PERF grid_path: paint_worst=1.198ms commit_worst=0.466ms (the batched texture path) | sim_step worst=3.48ms over12=0 | full_frame worst=114.06ms over12=173 of 4576 frames | total_rams=16
+KILL_EVENTS n=16 [{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":3,"victim":0},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":3,"victim":0},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":1,"victim":2},{"cause":"mowed","killer":2,"victim":0},{"cause":"mowed","killer":3,"victim":1},{"cause":"mowed","killer":2,"victim":0},{"cause":"mowed","killer":3,"victim":1},{"cause":"mowed","killer":2,"victim":0},{"cause":"mowed","killer":1,"victim":3}]
+MOWER_EVT t=30.00 frame=8154 | results {"currency_events":[{"amount":1,"player":2,"reason":"rammed BLUE and stole their turf","type":"royalty"},{"amount":1,"player":3,"reason":"rammed RED and stole their turf","type":"royalty"},{"amount":1,"player":2,"reason":"rammed BLUE and stole their turf","type":"royalty"},{"amount":1,"player":2,"reason":"rammed BLUE and stole their turf","type":"royalty"},{"amount":1,"player":2,"reason":"rammed BLUE and stole their turf","type":"royalty"},{"amount":1,"player":2,"reason":"rammed BLUE and stole their turf","type":"royalty"},{"amount":1,"player":3,"reason":"rammed RED and stole their turf","type":"royalty"},{"amount":1,"player":2,"reason":"rammed BLUE and stole their turf","type":"royalty"},{"amount":1,"player":2,"reason":"rammed BLUE and stole their turf","type":"royalty"},{"amount":1,"player":1,"reason":"rammed GOLD and stole their turf","type":"royalty"},{"amount":1,"player":2,"reason":"rammed RED and stole their turf","type":"royalty"},{"amount":1,"player":3,"reason":"rammed BLUE and stole their turf","type":"royalty"},{"amount":1,"player":2,"reason":"rammed RED and stole their turf","type":"royalty"},{"amount":1,"player":3,"reason":"rammed BLUE and stole their turf","type":"royalty"},{"amount":1,"player":2,"reason":"rammed RED and stole their turf","type":"royalty"},{"amount":1,"player":1,"reason":"rammed MINT and stole their turf","type":"royalty"},{"amount":1,"player":1,"reason":"mowed the least of anyone","type":"grudge"}],"highlights":["GOLD hijacked rivals' turf 10 times","MINT laid a 5.6m unbroken stripe","MINT covered 43% of the lawn"],"kill_events":[{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":3,"victim":0},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":3,"victim":0},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":2,"victim":1},{"cause":"mowed","killer":1,"victim":2},{"cause":"mowed","killer":2,"victim":0},{"cause":"mowed","killer":3,"victim":1},{"cause":"mowed","killer":2,"victim":0},{"cause":"mowed","killer":3,"victim":1},{"cause":"mowed","killer":2,"victim":0},{"cause":"mowed","killer":1,"victim":3}],"monuments":[{"kind":"groundskeeper","label":"MINT, Groundskeeper of the Estate","player":3}],"placements":[3,2,0,1],"points":{"0":3,"1":2,"2":5,"3":9}}
+NETHASH side=host seq=735 h=a66f07fb
+NETHASH side=host seq=750 h=dd828658
+VERIFY_SNAP res://docs/verify/mower_netshots_host/snap_tally_mid_8428.png
+NETHASH_MOD side=host seq=600 h=e46cc509 bytes=948
+MOWGRID side=host seq=601 h=245c04e7 raw=3072 zbytes=348
+NETHASH side=host seq=765 h=de3eee3e
+VERIFY_SNAP res://docs/verify/mower_netshots_host/snap_winner_stamp_8594.png
+NETHASH side=host seq=780 h=15526c9b
+NETHASH side=host seq=795 h=160ed481
+NETHASH side=host seq=810 h=4e5c3835
+NETHASH side=host seq=825 h=4f18a01b
+NETHASH side=host seq=840 h=862c1e78
+NETHASH side=host seq=855 h=86e8865e
+VERIFY_SNAP res://docs/verify/mower_netshots_host/snap_online_host_reckoning_9505.png
+NETPROBE_RESULTS RED:pts=2,grudge=3 BLUE:pts=1,grudge=4 GOLD:pts=3,grudge=2 MINT:pts=5,grudge=1
+NETPROBE saves restored
+NETPROBE_DONE
+NETHASH side=host seq=870 h=bdfc04bb
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)

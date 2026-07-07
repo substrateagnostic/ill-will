@@ -1,0 +1,147 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NETPROBE mode=join
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET join target=127.0.0.1:9412 err=0 (retries left 20)
+NET connected to host as peer 1673378149
+NETPROBE tape start (net) seat=1
+NETPROBE granted seat 1
+NETHASH side=client seq=15 h=37408d7b
+NETHASH side=client seq=30 h=404e9a5c
+VERIFY_SNAP res://docs/verify/tilt_netshots_join/snap_online_client_lobby_0383.png
+NETHASH side=client seq=45 h=1f898045
+NETHASH side=client seq=60 h=902cd8d5
+NETPROBE client sees own ready=true
+NETHASH side=client seq=75 h=90e940bb
+VERIFY_SNAP res://docs/verify/tilt_netshots_join/snap_online_client_ready_0790.png
+NETHASH side=client seq=90 h=c7fcbf18
+NETHASH side=client seq=105 h=b481db65
+NETHASH side=client seq=120 h=eb9559c2
+NETHASH side=client seq=135 h=ec51c1a8
+NETHASH side=client seq=150 h=23654005
+NETHASH side=client seq=165 h=2421a7eb
+NETHASH side=client seq=180 h=5b352648
+NETHASH side=client seq=195 h=5bf18e2e
+NETHASH side=client seq=210 h=943ef1e2
+NETHASH side=client seq=225 h=94fb59c8
+VERIFY_SNAP res://docs/verify/tilt_netshots_join/snap_online_client_gate_2341.png
+NETHASH side=client seq=240 h=cc0ed825
+NETHASH side=client seq=255 h=cccb400b
+NETHASH side=client seq=270 h=03debe68
+NET mirror boot: tilt
+TILT_MIRROR boot players=4 my_seat=1
+TILT_MIRROR phase -> INTRO rn=1 t=0.1
+NETHASH side=client seq=285 h=049b264e
+TILT_MIRROR phase -> PLAY rn=1 t=1.5
+VERIFY_SNAP res://docs/verify/tilt_netshots_join/snap_online_client_game_3033.png
+NETHASH side=client seq=300 h=3ce88a02
+NETHASH_MOD side=client seq=40 h=5b625117
+NETHASH side=client seq=315 h=3da4f1e8
+NETHASH side=client seq=330 h=74b87045
+VERIFY_SNAP res://docs/verify/tilt_netshots_join/snap_mirror_tilting_3383.png
+NETHASH_MOD side=client seq=80 h=37e7e21c
+NETHASH side=client seq=345 h=7574d82b
+NETHASH side=client seq=360 h=ac885688
+NETHASH_MOD side=client seq=120 h=d130a500
+NETHASH side=client seq=375 h=ad44be6e
+NETHASH side=client seq=390 h=e4583ccb
+NETHASH_MOD side=client seq=160 h=824fa42e
+NETHASH side=client seq=405 h=e64e8a08
+NETHASH side=client seq=420 h=1d620865
+NETHASH_MOD side=client seq=200 h=58f24f1c
+NETHASH side=client seq=435 h=1e1e704b
+NETHASH side=client seq=450 h=5531eea8
+NETHASH_MOD side=client seq=240 h=b4210727
+NETHASH side=client seq=465 h=55ee568e
+NETHASH side=client seq=480 h=8d01d4eb
+NETHASH_MOD side=client seq=280 h=40ba505c
+NETHASH side=client seq=495 h=8dbe3cd1
+NETHASH side=client seq=510 h=c60ba085
+NETHASH_MOD side=client seq=320 h=f1ccdb76
+NETHASH side=client seq=525 h=c6c8086b
+NETHASH side=client seq=540 h=fddb86c8
+NETHASH_MOD side=client seq=360 h=da8d2957
+NETHASH side=client seq=555 h=fe97eeae
+NETHASH side=client seq=570 h=35ab6d0b
+NETHASH_MOD side=client seq=400 h=d7c1b830
+NETHASH side=client seq=585 h=3667d4f1
+NETHASH side=client seq=600 h=6eb538a5
+NETHASH_MOD side=client seq=440 h=8825fab7
+NETHASH side=client seq=615 h=6f71a08b
+NETHASH side=client seq=630 h=a6851ee8
+NETHASH_MOD side=client seq=480 h=e13dac93
+TILT_MIRROR phase -> ROUND_END rn=1 t=24.6
+NETHASH side=client seq=645 h=a74186ce
+NETHASH side=client seq=660 h=de55052b
+NETHASH_MOD side=client seq=520 h=028329d3
+TILT_MIRROR phase -> INTRO rn=2 t=27.8
+NETHASH side=client seq=690 h=1624eb6e
+NETHASH_MOD side=client seq=560 h=61709462
+NETHASH side=client seq=705 h=181b38ab
+TILT_MIRROR phase -> PLAY rn=2 t=29.2
+NETHASH side=client seq=720 h=4f2eb708
+NETHASH_MOD side=client seq=600 h=1ad7c216
+NETHASH side=client seq=735 h=4feb1eee
+NETHASH side=client seq=750 h=86fe9d4b
+NETHASH_MOD side=client seq=640 h=cbd562cb
+NETHASH side=client seq=765 h=87bb0531
+NETHASH side=client seq=780 h=bece838e
+NETHASH_MOD side=client seq=680 h=15f3a8cf
+NETHASH side=client seq=795 h=bf8aeb74
+NETHASH side=client seq=810 h=f7d84f28
+NETHASH_MOD side=client seq=720 h=3b336f8c
+NETHASH side=client seq=825 h=f894b70e
+NETHASH side=client seq=840 h=2fa8356b
+NETHASH_MOD side=client seq=760 h=a2e26a5b
+NETHASH side=client seq=855 h=30649d51
+NETHASH side=client seq=870 h=67781bae
+NETHASH_MOD side=client seq=800 h=b115c60e
+NETHASH side=client seq=885 h=68348394
+NETHASH side=client seq=900 h=a081e748
+NETHASH_MOD side=client seq=840 h=2a6fa50e
+NETHASH side=client seq=915 h=a13e4f2e
+NETHASH side=client seq=930 h=d851cd8b
+NETHASH_MOD side=client seq=880 h=b9b8c548
+NETHASH side=client seq=945 h=d90e3571
+NETHASH side=client seq=960 h=1021b3ce
+NETHASH_MOD side=client seq=920 h=2a6815c4
+NETHASH side=client seq=975 h=10de1bb4
+NETHASH side=client seq=990 h=47f19a11
+NETHASH side=client seq=1005 h=aec72895
+NETHASH side=client seq=1020 h=e5daa6f2
+NETHASH_MOD side=client seq=1000 h=62175761
+NETHASH side=client seq=1035 h=e6970ed8
+NETHASH side=client seq=1050 h=1daa8d35
+NETHASH_MOD side=client seq=1040 h=160fe4ec
+NETHASH side=client seq=1065 h=1e66f51b
+NETHASH side=client seq=1080 h=557a7378
+NETHASH_MOD side=client seq=1080 h=691e301d
+NETHASH side=client seq=1095 h=5636db5e
+NETHASH side=client seq=1110 h=8e843f12
+NETHASH_MOD side=client seq=1120 h=ce04a6be
+NETHASH side=client seq=1125 h=8f40a6f8
+TILT_MIRROR phase -> ROUND_END rn=2 t=57.1
+NETHASH side=client seq=1140 h=c6542555
+NETHASH_MOD side=client seq=1160 h=0d0736c9
+NETHASH side=client seq=1155 h=c7108d3b
+NETHASH side=client seq=1170 h=fe240b98
+TILT_MIRROR match winner=3
+TILT_MIRROR phase -> MATCH_END rn=3 t=60.3
+VERIFY_SNAP res://docs/verify/tilt_netshots_join/snap_mirror_matchend_11661.png
+NETHASH_MOD side=client seq=1200 h=60ecb0af
+NETHASH side=client seq=1185 h=fee0737e
+NETHASH side=client seq=1200 h=372dd732
+NET mirror fold
+NETHASH side=client seq=1215 h=37ea3f18
+NETHASH side=client seq=1230 h=6efdbd75
+NETHASH side=client seq=1245 h=6fba255b
+NETHASH side=client seq=1260 h=a6cda3b8
+VERIFY_SNAP res://docs/verify/tilt_netshots_join/snap_online_client_reckoning_12792.png
+NETPROBE_CLIENT_DONE
+NETHASH side=client seq=1275 h=a78a0b9e

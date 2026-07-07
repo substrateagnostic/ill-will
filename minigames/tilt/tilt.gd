@@ -131,6 +131,32 @@ var _cam_base: Transform3D
 var _slowmo := false
 var _vc: Node = null
 
+# --- ONLINE PHASE 2: the render mirror (docs/design/10 §4.3; house pattern
+# copied from minigames/seance/seance.gd). Host runs the WHOLE sim exactly as
+# couch; the estate pumps _net_state() (compact public facts) to guests at
+# 20 Hz. A client boots THIS scene with config.net_mirror = true: sim, bots
+# and input sampling never run — _net_apply() stores facts + fires all juice
+# from state DELTAS, _mirror_tick() interpolates at 60 fps. The platter tilt
+# is the one transform that moves everything; it gets the smoothest chase.
+var _mirror := false
+var _mir := {}                    # last applied snapshot (delta source)
+var _mir_tilt := Vector2.ZERO     # authoritative tilt target (radians)
+var _mir_pawn := []               # per-seat interp targets [st, Vector3/Vector2 data]
+var _mir_gull := {}               # seat -> Vector2 XZ target
+var _mir_guanos: Array = []       # cosmetic falling bombs: {node, vel}
+var _snap_net_tilt := false       # evidence snap latch (host + mirror pair)
+var _snap_mir_tilt := false
+# host-side wire bookkeeping (counters the mirror turns back into juice):
+var _banner_col := "ffffff"
+var _shove_n: Array = []          # per seat: windups started
+var _knock_n: Array = []          # per seat: hits taken
+var _guano_n := {}                # per seat: bombs dropped (as a gull)
+var _clash_n := 0
+var _clash_pos := Vector3.ZERO
+var _win_n := 0                   # round wins banked (confetti trigger)
+var _last_win := -1
+var _match_winner := -1
+
 @onready var cam: Camera3D = $Camera3D
 @onready var sun: DirectionalLight3D = $Sun
 @onready var round_label: Label = $UI/RoundLabel
@@ -157,6 +183,7 @@ func begin(config: Dictionary) -> void:
 		return
 	_begun = true
 	roster = config.roster
+	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.rng_seed)
 	fx_rng.seed = int(config.rng_seed) + 7777
 	practice = bool(config.get("practice", false))
@@ -167,8 +194,10 @@ func begin(config: Dictionary) -> void:
 		rounds_total = clampi(_cli_rounds, 1, 5)
 	if _cli_roundtime > 0.0:
 		round_time = clampf(_cli_roundtime, 8.0, 120.0)
-	bots = TiltBots.new()
-	bots.setup(int(config.rng_seed) ^ 0x5EA9, roster.size())
+	if not _mirror:
+		# fenced from the mirror: bot construction (spec §4.3 begin() split)
+		bots = TiltBots.new()
+		bots.setup(int(config.rng_seed) ^ 0x5EA9, roster.size())
 	# Per-player: a seat is bot-driven if the roster says so (shell sets this
 	# from estate._is_bot; standalone fills it from PlayerInput) OR the legacy
 	# --tiltbots flag forces ALL bots. Test modes force all seats to bots (their
@@ -176,7 +205,7 @@ func begin(config: Dictionary) -> void:
 	# data only - never from runtime Input reads - so the sim stays reproducible.
 	bot_enabled.clear()
 	for i in roster.size():
-		bot_enabled.append(_bots_all or _test_mode != "" or bool(roster[i].get("bot", false)))
+		bot_enabled.append(not _mirror and (_bots_all or _test_mode != "" or bool(roster[i].get("bot", false))))
 	for i in roster.size():
 		var pl: Dictionary = roster[i]
 		var pawn := TiltPawn.new()
@@ -191,6 +220,22 @@ func begin(config: Dictionary) -> void:
 		shove_falls[i] = 0
 		gull_hits[i] = 0
 		round_wins[i] = 0
+		_shove_n.append(0)
+		_knock_n.append(0)
+	if _mirror:
+		# RENDER MIRROR: world + pawns stand ready; the first _net_apply drives
+		# everything. No bots, no round kick, no self-tests. Hint bar is built
+		# from THIS machine's bindings (my seat samples locally) — better than
+		# mirroring the host's keys.
+		phase = Phase.WAITING
+		hint_label.text = _controls_bar()
+		hint_label.visible = true
+		var htw := create_tween()
+		htw.tween_interval(7.0)
+		htw.tween_callback(func() -> void: _refresh_hint())
+		_rebuild_scoreboard()
+		print("TILT_MIRROR boot players=%d my_seat=%d" % [roster.size(), NetSession.my_seat()])
+		return
 	_log("begin players=%d seed=%d rounds=%d bots=%s test=%s" % [
 		roster.size(), int(config.rng_seed), rounds_total, str(bot_enabled), _test_mode])
 	if _test_mode != "":
@@ -201,6 +246,10 @@ func begin(config: Dictionary) -> void:
 # -- per-tick orchestration --------------------------------------------------
 
 func _physics_process(delta: float) -> void:
+	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
+	if _mirror:
+		_mirror_tick(delta)
+		return
 	if phase == Phase.WAITING:
 		return
 	game_t += delta
@@ -304,6 +353,11 @@ func _tick_play(delta: float) -> void:
 				_end_round("timeout")
 		elif round_t >= round_time + OVERTIME_TIME:
 			_end_round("overtime_split")
+	# evidence snap (online nights only): the platter mid-tilt, paired with the
+	# mirror's own "mirror_tilting" snap fired from the same mirrored condition.
+	if not _snap_net_tilt and NetSession.has_guests() and platter.tilt_deg() >= 8.0:
+		_snap_net_tilt = true
+		VerifyCapture.snap("net_tilting")
 	# periodic status for verification logs
 	if round_t - _last_status >= 5.0:
 		_last_status = round_t
@@ -451,6 +505,7 @@ func _try_shove(p: int) -> void:
 	var pawn: TiltPawn = pawns[p]
 	if not pawn.try_shove(game_t):
 		return
+	_shove_n[p] = int(_shove_n[p]) + 1   # wire counter; the mirror plays the tell
 	Sfx.play("card", -10.0)  # quiet tell
 	_log("shove_windup p%d" % p)
 
@@ -516,6 +571,7 @@ func _resolve_shove(p: int) -> void:
 		if to_other.length() < SHOVE_RANGE \
 				and absf(rad_to_deg(pawn.facing.angle_to(to_other))) < SHOVE_HALF_ANGLE:
 			other.apply_knock(pawn.facing, SHOVE_POWER, p, game_t)
+			_knock_n[q] = int(_knock_n[q]) + 1
 			hit = true
 			_log("shove p%d -> p%d r=%.1f out=%.2f" % [p, q, other.lpos.length(),
 				pawn.facing.dot(other.lpos.normalized()) if other.lpos.length() > 0.1 else 0.0])
@@ -533,6 +589,8 @@ func _do_clash(p: int, q: int) -> void:
 	var mid := (pa.lpos + pb.lpos) * 0.5
 	var world: Vector3 = platter.disc.global_transform \
 			* Vector3(mid.x, TiltPlatter.PAWN_Y + 1.0, mid.y)
+	_clash_n += 1
+	_clash_pos = world
 	_clash_fx(world)
 	_floaty(world + Vector3(0, 1.1, 0), "CLASH!", Color(1.0, 0.9, 0.25))
 	Sfx.play("bumper", -2.0)
@@ -645,7 +703,11 @@ func _refresh_hint() -> void:
 	var human_gull := -1
 	var n := 0
 	for p in roster.size():
-		if p < bot_enabled.size() and not bot_enabled[p] and gulls.has(p):
+		# mirror: only MY seat's controls belong on MY hint bar (other seats'
+		# humans live on other machines; host-side bots aren't humans at all)
+		var eligible: bool = (p == NetSession.my_seat()) if _mirror \
+				else (p < bot_enabled.size() and not bot_enabled[p])
+		if eligible and gulls.has(p):
 			n += 1
 			if human_gull < 0:
 				human_gull = p
@@ -669,6 +731,10 @@ func _gull_hint_line(p: int) -> String:
 func _human_seats() -> Array:
 	var out := []
 	for i in roster.size():
+		# mirror: only MY seat is a human on THIS machine (the client estate
+		# maps local devices to every seat, but those hands live elsewhere)
+		if _mirror and i != NetSession.my_seat():
+			continue
 		if i < bot_enabled.size() and not bot_enabled[i] and PlayerInput.device_of(i) != -99:
 			out.append(i)
 	return out
@@ -703,6 +769,14 @@ func _controls_bar() -> String:
 		_btn_hint("a", "SHOVE"), _btn_hint("b", "BRACE")]
 
 func _spawn_guano(from: Vector3, owner_p: int) -> void:
+	guanos.append({"node": _guano_visual(from), "vel": Vector3(0, -1.0, 0), "owner": owner_p})
+	_guano_n[owner_p] = int(_guano_n.get(owner_p, 0)) + 1
+	Sfx.play("card", -4.0)
+	_log("guano p%d" % owner_p)
+
+## Guano VISUAL only — shared by the host spawn and the mirror's bomb-counter
+## deltas (the mirror integrates its copy cosmetically; splats ride the wire).
+func _guano_visual(from: Vector3) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
 	var m := SphereMesh.new()
 	m.radius = 0.13
@@ -713,11 +787,11 @@ func _spawn_guano(from: Vector3, owner_p: int) -> void:
 	node.material_override = mat
 	add_child(node)
 	node.global_position = from + Vector3(0, -0.25, 0)
-	guanos.append({"node": node, "vel": Vector3(0, -1.0, 0), "owner": owner_p})
-	Sfx.play("card", -4.0)
-	_log("guano p%d" % owner_p)
+	return node
 
-func _make_splat(l: Vector2, owner_p: int) -> void:
+## Splat VISUAL only (node + list entry + sfx) — shared verbatim by the host
+## sim (_make_splat) and the mirror (splat-list deltas). Render, no sim.
+func _splat_visual(l: Vector2, owner_p: int, until_t: float) -> void:
 	var node := MeshInstance3D.new()
 	var m := CylinderMesh.new()
 	m.top_radius = SLIP_RADIUS
@@ -730,8 +804,11 @@ func _make_splat(l: Vector2, owner_p: int) -> void:
 	node.material_override = mat
 	platter.disc.add_child(node)
 	node.position = Vector3(l.x, TiltPlatter.TOP_Y + 0.085, l.y)
-	splats.append({"node": node, "mat": mat, "l": l, "until": game_t + SLIP_TIME, "owner": owner_p})
+	splats.append({"node": node, "mat": mat, "l": l, "until": until_t, "owner": owner_p})
 	Sfx.play("splat", -6.0)
+
+func _make_splat(l: Vector2, owner_p: int) -> void:
+	_splat_visual(l, owner_p, game_t + SLIP_TIME)
 	# direct hit: staggers anyone underneath (and counts as a fresh slip for the
 	# gull-KO window — the bomb IS the slip)
 	for q in roster.size():
@@ -746,7 +823,11 @@ func _make_splat(l: Vector2, owner_p: int) -> void:
 func _spawn_coin() -> void:
 	var r := clampf(absf(rng.randfn(0.0, 2.2)), 0.0, 5.7)
 	var ang := rng.randf_range(0.0, TAU)
-	var l := Vector2(cos(ang), sin(ang)) * r
+	_coin_visual(Vector2(cos(ang), sin(ang)) * r)
+
+## Coin VISUAL only — shared by the host spawn (seeded position) and the
+## mirror (coin-list reconcile).
+func _coin_visual(l: Vector2) -> void:
 	var node := MeshInstance3D.new()
 	var m := CylinderMesh.new()
 	m.top_radius = 0.34
@@ -844,6 +925,8 @@ func _end_round(kind: String) -> void:
 			survivors.append(i)
 	if survivors.size() == 1:
 		var w: int = survivors[0]
+		_win_n += 1
+		_last_win = w
 		points[w] = int(points[w]) + ROUND_POINTS[0]
 		round_wins[w] = int(round_wins[w]) + 1
 		var pl: Dictionary = roster[w]
@@ -891,8 +974,11 @@ func _finish_match() -> void:
 		return a < b)
 	var champ: int = order[0]
 	var champ_pl: Dictionary = roster[champ]
+	_match_winner = champ
 	_flash_banner("%s WINS TILT!" % champ_pl.name, champ_pl.color, 9999.0)
 	Sfx.play("match_win")
+	if NetSession.has_guests():
+		VerifyCapture.snap("net_matchend")
 	var champ_pawn: TiltPawn = pawns[champ]
 	if champ_pawn.state == TiltPawn.PState.STANDING:
 		champ_pawn.cheer()
@@ -1268,6 +1354,7 @@ func _confetti(pos: Vector3, color: Color) -> void:
 		get_tree().create_timer(2.0).timeout.connect(p.queue_free)
 
 func _flash_banner(text: String, color: Color, duration: float) -> void:
+	_banner_col = color.to_html(false)
 	banner.text = text
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
@@ -1315,3 +1402,349 @@ func _log(msg: String) -> void:
 	if _vc != null:
 		f = int(_vc.frame)
 	print("TILT_EVT t=%.2f frame=%d | %s" % [game_t, f, msg])
+
+# ================================================================ ONLINE (phase 2)
+# House pattern from minigames/seance/seance.gd (docs/design/10 §4.3): the
+# _mirror guard in _physics_process, the begin() mirror branch, and
+# _net_state()/_net_apply() with juice-from-deltas. TILT-specific content:
+# the platter tilt vector (the ONE transform that moves everything, chased at
+# 60 fps), pawn poses/anim flags, gull + bomb + splat + coin mirrors, and the
+# v1.2 overtime/gull-assist banners riding the ban fact. No hidden info —
+# everything on this wire is on every couch player's screen already.
+
+## HOST, pumped by the estate at 20 Hz (unreliable_ordered ch 4, latest wins).
+func _net_state() -> Dictionary:
+	var pw: Array = []
+	for i in roster.size():
+		var p: TiltPawn = pawns[i]
+		var flags := 0
+		if (p.move_vel + p.slide).length() > 0.8:
+			flags |= 1                     # moving (Running_A vs Idle)
+		if p.braced:
+			flags |= 2
+		if p.cheering:
+			flags |= 4
+		if p.state == TiltPawn.PState.STANDING:
+			pw.append([0, snappedf(p.lpos.x, 0.01), snappedf(p.lpos.y, 0.01), 0.0,
+				snappedf(atan2(p.facing.x, p.facing.y), 0.01), p.coins, flags,
+				int(_shove_n[i]), int(_knock_n[i])])
+		else:
+			var gp := p.global_position
+			pw.append([int(p.state), snappedf(gp.x, 0.01), snappedf(gp.z, 0.01),
+				snappedf(gp.y, 0.01), 0.0, p.coins, flags,
+				int(_shove_n[i]), int(_knock_n[i])])
+	var gl := {}
+	for p in gulls:
+		var g: TiltSeagull = gulls[p]
+		gl[int(p)] = [snappedf(g.position.x, 0.01), snappedf(g.position.z, 0.01),
+			int(_guano_n.get(p, 0))]
+	var cn: Array = []
+	for c in loose_coins:
+		cn.append([snappedf((c.l as Vector2).x, 0.01), snappedf((c.l as Vector2).y, 0.01)])
+	var sp: Array = []
+	for s in splats:
+		sp.append([snappedf((s.l as Vector2).x, 0.01), snappedf((s.l as Vector2).y, 0.01),
+			int(s.owner), snappedf(maxf(float(s.until) - game_t, 0.0), 0.1)])
+	var pts: Array = []
+	for i in roster.size():
+		pts.append(int(points[i]))
+	return {
+		"ph": phase, "rn": round_num, "rts": rounds_total,
+		"gt": snappedf(game_t, 0.01), "rt": snappedf(round_t, 0.01),
+		"rtl": round_time, "sd": sudden_death, "ot": overtime,
+		"tilt": [snappedf(platter.tilt.x, 0.0001), snappedf(platter.tilt.y, 0.0001)],
+		"pw": pw, "gl": gl, "cn": cn, "sp": sp,
+		"cl": _clash_n,
+		"clp": [snappedf(_clash_pos.x, 0.01), snappedf(_clash_pos.y, 0.01), snappedf(_clash_pos.z, 0.01)],
+		"pts": pts,
+		"ban": [banner.text, _banner_col, banner.visible],
+		"rw": _win_n, "rww": _last_win, "mw": _match_winner,
+	}
+
+## CLIENT. Latest-state-wins; every sfx/anim/confetti below fires from a DELTA
+## against the previous snapshot (counters, not events — a dropped packet loses
+## nothing but intermediate frames). Continuous motion only sets targets; the
+## 60 fps chase lives in _mirror_tick.
+func _net_apply(state: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = state
+	var first := prev.is_empty()
+	# --- clocks + round facts: feed the UNTOUCHED couch _process (timer text,
+	# splat fade, coin twirl, camera roll) exactly what it reads on the host
+	rounds_total = int(state.get("rts", rounds_total))
+	round_time = float(state.get("rtl", round_time))
+	var ph := int(state.get("ph", Phase.WAITING))
+	var prev_ph: int = int(prev.get("ph", -1))
+	var rn := int(state.get("rn", round_num))
+	# a fresh ROUND resets the board; the rn bump INTO match end does not (the
+	# host bumps round_num past rounds_total right before _finish_match, and
+	# the final tableau — gulls, splats, survivors — must stay on stage)
+	if first or (rn != round_num and ph != Phase.MATCH_END):
+		_mirror_round_reset(rn, first)
+	round_num = rn
+	game_t = float(state.get("gt", game_t))
+	round_t = float(state.get("rt", round_t))
+	phase = ph
+	# --- sudden death / overtime platter dressing (banners ride the ban fact)
+	var sd: bool = bool(state.get("sd", false))
+	if sd and not sudden_death:
+		platter.set_sudden_death(true)
+		Sfx.play("grudge")
+		_shake = maxf(_shake, 0.2)
+	sudden_death = sd
+	var ot: bool = bool(state.get("ot", false))
+	if ot and not overtime:
+		platter.set_overtime(true)
+		Sfx.play("round_over", -6.0)
+		_shake = maxf(_shake, 0.25)
+	overtime = ot
+	# --- the one transform that moves everything
+	var tl: Array = state.get("tilt", [])
+	if tl.size() >= 2:
+		_mir_tilt = Vector2(float(tl[0]), float(tl[1]))
+	if first:
+		platter.mirror_set_tilt(_mir_tilt, 0.0)   # appear, don't swoop
+	_apply_mir_banner(state.get("ban", []), prev.get("ban", []))
+	# --- pawns: poses are targets; counters/flags are juice
+	var board_dirty := first
+	var pw: Array = state.get("pw", [])
+	var ppw: Array = prev.get("pw", [])
+	_mir_pawn = pw
+	for i in mini(pw.size(), pawns.size()):
+		var d: Array = pw[i]
+		var pd: Array = ppw[i] if i < ppw.size() else []
+		var pawn: TiltPawn = pawns[i]
+		var st := int(d[0])
+		# state edges compare against the PAWN's actual state (not the previous
+		# snapshot) so the mirror self-heals if a reset and a snapshot ever race
+		var pst: int = int(pawn.state)
+		var flags := int(d[6])
+		var pflags: int = int(pd[6]) if pd.size() > 6 else 0
+		if int(d[7]) > (int(pd[7]) if pd.size() > 7 else 0):
+			pawn.mirror_windup()
+			Sfx.play("card", -10.0)   # the quiet tell
+		if int(d[8]) > (int(pd[8]) if pd.size() > 8 else 0):
+			pawn.mirror_knock()
+			Sfx.play("splat", -3.0)
+			_shake = maxf(_shake, 0.12)
+		if (flags & 2) != 0 and (pflags & 2) == 0:
+			Sfx.play("confirm", -4.0)  # brace planted
+		if (flags & 4) != 0 and (pflags & 4) == 0:
+			pawn.cheer()
+		var coins_now := int(d[5])
+		var pcoins: int = int(pd[5]) if pd.size() > 5 else 0
+		if coins_now > pcoins:
+			for _k in coins_now - pcoins:
+				pawn.add_coin()
+			Sfx.play("bumper", -8.0)
+			board_dirty = true
+		if st != pst:
+			board_dirty = true
+			if st == TiltPawn.PState.FALLING and pst == TiltPawn.PState.STANDING:
+				pawn.mirror_begin_fall()
+				Sfx.play("death")
+				_shake = maxf(_shake, 0.3)
+			elif st == TiltPawn.PState.GONE and pst != TiltPawn.PState.GONE:
+				_splash_fx(pawn.global_position, 1.0)
+				Sfx.play("splat", -2.0)
+				pawn.vanish()
+		if first and st == TiltPawn.PState.STANDING:
+			pawn.mirror_pose_standing(Vector2(float(d[1]), float(d[2])), float(d[4]),
+				false, (flags & 2) != 0, 0.0)
+	# --- scores
+	var pts: Array = state.get("pts", [])
+	for i in mini(pts.size(), roster.size()):
+		if int(points.get(i, 0)) != int(pts[i]):
+			points[i] = int(pts[i])
+			board_dirty = true
+	# --- gulls: spawn on arrival, bombs from counters
+	var gl: Dictionary = state.get("gl", {})
+	var pgl: Dictionary = prev.get("gl", {})
+	for k in gl:
+		var seat := int(k)
+		var arr: Array = gl[k]
+		var at := Vector2(float(arr[0]), float(arr[1]))
+		if not gulls.has(seat):
+			_mirror_spawn_gull(seat, at)
+			board_dirty = true
+		_mir_gull[seat] = at
+		var pb: int = int((pgl[k] as Array)[2]) if pgl.has(k) else 0
+		if int(arr[2]) > pb and gulls.has(seat):
+			_mir_guanos.append({"node": _guano_visual((gulls[seat] as TiltSeagull).global_position),
+				"vel": Vector3(0, -1.0, 0)})
+			Sfx.play("card", -4.0)
+	# --- coins + splats: reconcile lists (positions are immutable once spawned)
+	_mirror_reconcile_coins(state.get("cn", []))
+	_mirror_reconcile_splats(state.get("sp", []))
+	# --- clash + round/match flourishes
+	if int(state.get("cl", 0)) > int(prev.get("cl", 0)):
+		var cp: Array = state.get("clp", [])
+		if cp.size() >= 3:
+			var world := Vector3(float(cp[0]), float(cp[1]), float(cp[2]))
+			_clash_fx(world)
+			_floaty(world + Vector3(0, 1.1, 0), "CLASH!", Color(1.0, 0.9, 0.25))
+		Sfx.play("bumper", -2.0)
+		_shake = maxf(_shake, 0.16)
+	if int(state.get("rw", 0)) > int(prev.get("rw", 0)):
+		var w := int(state.get("rww", -1))
+		if w >= 0 and w < pawns.size():
+			_confetti((pawns[w] as TiltPawn).global_position + Vector3(0, 1.6, 0),
+				(roster[w] as Dictionary).color)
+	var mwv := int(state.get("mw", -1))
+	if mwv >= 0 and int(prev.get("mw", -1)) < 0:
+		Sfx.play("match_win")
+		var champ_pawn: TiltPawn = pawns[mwv]
+		var cpos: Vector3 = champ_pawn.global_position + Vector3(0, 1.6, 0) \
+				if champ_pawn.state == TiltPawn.PState.STANDING else Vector3(0, 3, 0)
+		_confetti(cpos, (roster[mwv] as Dictionary).color)
+		print("TILT_MIRROR match winner=%d" % mwv)
+		VerifyCapture.snap("mirror_matchend")
+	# --- phase-entry juice
+	if ph != prev_ph:
+		print("TILT_MIRROR phase -> %s rn=%d t=%.1f" % [Phase.keys()[ph], rn, game_t])
+		match ph:
+			Phase.PLAY:
+				if prev_ph == Phase.INTRO:
+					Sfx.play("confirm")
+			Phase.ROUND_END:
+				Sfx.play("round_over")
+	if board_dirty:
+		_rebuild_scoreboard()
+
+## CLIENT, per physics tick: everything that must be smoother than 20 Hz —
+## the platter chase (the game IS this transform), pawn/gull glides, cosmetic
+## bomb ballistics, and the low-side klaxon off the mirrored tilt.
+func _mirror_tick(delta: float) -> void:
+	if _mir.is_empty():
+		return
+	game_t += delta   # local clock between snapshots (fades/twirls); resynced per apply
+	platter.mirror_set_tilt(platter.tilt.lerp(_mir_tilt, 1.0 - exp(-12.0 * delta)), delta)
+	if phase == Phase.PLAY and platter.tilt_deg() > TiltPlatter.WARN_DEG:
+		klaxon_t -= delta
+		if klaxon_t <= 0.0:
+			Sfx.play("invalid", -6.0)
+			klaxon_t = 0.9
+	else:
+		klaxon_t = 0.0
+	for i in mini(_mir_pawn.size(), pawns.size()):
+		var d: Array = _mir_pawn[i]
+		var pawn: TiltPawn = pawns[i]
+		var st := int(d[0])
+		if st == TiltPawn.PState.STANDING and pawn.state == TiltPawn.PState.STANDING:
+			var lp := pawn.lpos.lerp(Vector2(float(d[1]), float(d[2])), 1.0 - exp(-14.0 * delta))
+			var fa := lerp_angle(atan2(pawn.facing.x, pawn.facing.y), float(d[4]),
+				1.0 - exp(-14.0 * delta))
+			pawn.mirror_pose_standing(lp, fa, (int(d[6]) & 1) != 0, (int(d[6]) & 2) != 0, delta)
+		elif st == TiltPawn.PState.FALLING and pawn.state == TiltPawn.PState.FALLING:
+			pawn.mirror_fall_pose(Vector3(float(d[1]), float(d[3]), float(d[2])), delta)
+	for seat in _mir_gull:
+		if gulls.has(seat):
+			var g: TiltSeagull = gulls[seat]
+			var before := Vector2(g.position.x, g.position.z)
+			var after := before.lerp(_mir_gull[seat], 1.0 - exp(-10.0 * delta))
+			g.position.x = after.x
+			g.position.z = after.y
+			g.mirror_tick(delta, (after - before) / maxf(delta, 0.0001))
+	for i in range(_mir_guanos.size() - 1, -1, -1):
+		var gg: Dictionary = _mir_guanos[i]
+		var vel: Vector3 = gg.vel
+		vel.y -= GUANO_GRAV * delta
+		gg.vel = vel
+		var node: Node3D = gg.node
+		node.global_position += vel * delta
+		var lp3: Vector3 = platter.disc.global_transform.affine_inverse() * node.global_position
+		var landed: bool = lp3.y <= TiltPlatter.PAWN_Y + 0.05 \
+				and Vector2(lp3.x, lp3.z).length() <= TiltPlatter.RADIUS
+		if landed or node.global_position.y < OCEAN_Y + 0.3:
+			if not landed:
+				_splash_fx(node.global_position, 0.4)
+			node.queue_free()
+			_mir_guanos.remove_at(i)
+	# paired evidence snap: the RENDERED platter crossing 8 deg on this screen
+	# (the host fires its "net_tilting" twin from the same condition)
+	if not _snap_mir_tilt and phase == Phase.PLAY and platter.tilt_deg() >= 8.0:
+		_snap_mir_tilt = true
+		VerifyCapture.snap("mirror_tilting")
+
+## Mirror round boundary: same board scrub _start_round does, no sim kick.
+func _mirror_round_reset(rn: int, first: bool) -> void:
+	round_num = rn
+	sudden_death = false
+	overtime = false
+	klaxon_t = 0.0
+	platter.reset()
+	_mir_tilt = Vector2.ZERO
+	for arr in [loose_coins, splats]:
+		for e in arr:
+			(e.node as Node3D).queue_free()
+		arr.clear()
+	for g in _mir_guanos:
+		(g.node as Node3D).queue_free()
+	_mir_guanos.clear()
+	for p in gulls:
+		(gulls[p] as TiltSeagull).queue_free()
+	gulls.clear()
+	_mir_gull.clear()
+	for i in roster.size():
+		(pawns[i] as TiltPawn).reset_for_round(_spawn_pos(i))
+	round_label.text = "ROUND %d / %d" % [rn, rounds_total]
+	if not first:
+		_refresh_hint()
+	_rebuild_scoreboard()
+
+func _mirror_spawn_gull(p: int, at: Vector2) -> void:
+	var gull := TiltSeagull.new()
+	gull.name = "Gull%d" % p
+	add_child(gull)
+	gull.setup(p, (roster[p] as Dictionary).color)
+	gull.position = Vector3(at.x, 1.0, at.y)
+	gulls[p] = gull
+	_refresh_hint()
+
+func _mirror_reconcile_coins(cn: Array) -> void:
+	var want := {}
+	for c in cn:
+		want["%.2f|%.2f" % [float(c[0]), float(c[1])]] = c
+	for i in range(loose_coins.size() - 1, -1, -1):
+		var lc: Dictionary = loose_coins[i]
+		var key := "%.2f|%.2f" % [(lc.l as Vector2).x, (lc.l as Vector2).y]
+		if want.has(key):
+			want.erase(key)
+		else:
+			(lc.node as Node3D).queue_free()
+			loose_coins.remove_at(i)
+	for key in want:
+		var c: Array = want[key]
+		_coin_visual(Vector2(float(c[0]), float(c[1])))
+
+func _mirror_reconcile_splats(sp: Array) -> void:
+	var want := {}
+	for s in sp:
+		want["%.2f|%.2f|%d" % [float(s[0]), float(s[1]), int(s[2])]] = s
+	for i in range(splats.size() - 1, -1, -1):
+		var e: Dictionary = splats[i]
+		var key := "%.2f|%.2f|%d" % [(e.l as Vector2).x, (e.l as Vector2).y, int(e.owner)]
+		if want.has(key):
+			want.erase(key)
+		else:
+			(e.node as Node3D).queue_free()
+			splats.remove_at(i)
+	for key in want:
+		var s: Array = want[key]
+		_splat_visual(Vector2(float(s[0]), float(s[1])), int(s[2]), game_t + float(s[3]))
+
+func _apply_mir_banner(arr: Array, parr: Array) -> void:
+	if arr.size() < 3:
+		return
+	banner.text = str(arr[0])
+	banner.add_theme_color_override("font_color", Color(str(arr[1])))
+	var was: bool = parr.size() >= 3 and bool(parr[2]) and str(parr[0]) == str(arr[0])
+	banner.visible = bool(arr[2])
+	if banner.visible and not was:
+		banner.pivot_offset = banner.size / 2.0
+		banner.scale = Vector2(0.55, 0.55)
+		var pop := create_tween()
+		pop.tween_property(banner, "scale", Vector2.ONE, 0.28) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

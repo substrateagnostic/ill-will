@@ -261,6 +261,59 @@ func cheer() -> void:
 	cheering = true
 	_play("Cheer")
 
+## ---- ONLINE mirror poses (doc 10 §4.3) --------------------------------------
+## Render-only: a mirror pawn is POSED from host snapshots, never simulated.
+## All of these reuse the exact anim/visual paths the couch uses.
+
+## Standing pawn, per mirror tick: lpos/facing already interpolated by tilt.gd.
+func mirror_pose_standing(lp: Vector2, face_ang: float, moving: bool, braced_now: bool, delta: float) -> void:
+	lpos = lp
+	facing = Vector2(sin(face_ang), cos(face_ang))
+	braced = braced_now
+	_brace_ring.visible = braced_now
+	_anim_hold = maxf(0.0, _anim_hold - delta)
+	if not cheering and _anim_hold <= 0.0:
+		if braced_now:
+			_play("Blocking")
+		else:
+			_play("Running_A" if moving else "Idle")
+	_apply_platter_transform()
+
+## Falling pawn: chase the authoritative world position, tumble locally.
+func mirror_fall_pose(target: Vector3, delta: float) -> void:
+	global_position = global_position.lerp(target, 1.0 - exp(-10.0 * delta))
+	rotation.x += 2.4 * delta
+	if _anim_hold <= 0.0:
+		_play("Jump_Idle")
+
+## Shove-counter delta: the windup tell (scale pulse + early punch anim). The
+## snap-back the host does at release time runs on a local timer here.
+func mirror_windup() -> void:
+	if _avatar:
+		_avatar.scale = Vector3.ONE * 1.06
+	_one_shot("Unarmed_Melee_Attack_Punch_A", SHOVE_WINDUP + 0.5)
+	var tw := create_tween()
+	tw.tween_interval(SHOVE_WINDUP)
+	tw.tween_callback(func() -> void:
+		if _avatar:
+			_avatar.scale = Vector3.ONE)
+
+## Knock-counter delta: the hit reaction.
+func mirror_knock() -> void:
+	if _avatar:
+		_avatar.scale = Vector3.ONE
+	_one_shot("Hit_A", 0.4)
+
+## State delta STANDING -> FALLING: flip the visuals; position rides the wire.
+func mirror_begin_fall() -> void:
+	state = PState.FALLING
+	braced = false
+	_brace_ring.visible = false
+	_anim_hold = 0.0
+	cheering = false
+	if _avatar:
+		_avatar.scale = Vector3.ONE
+
 func reset_for_round(spawn: Vector2) -> void:
 	state = PState.STANDING
 	lpos = spawn

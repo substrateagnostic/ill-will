@@ -43,6 +43,18 @@ func tick(delta: float, move: Vector2) -> void:
 	_wing_l.rotation.z = flap
 	_wing_r.rotation.z = -flap
 
+## ONLINE mirror: XZ position is lerped by the game from snapshots; this keeps
+## the local life alive — altitude bob, yaw toward travel, wing pivots.
+func mirror_tick(delta: float, vel: Vector2) -> void:
+	_clock += delta
+	position.y = lerpf(position.y, ALT + sin(_clock * 2.0) * 0.25, minf(1.0, 2.5 * delta))
+	if vel.length() > 0.1:
+		_yaw = lerp_angle(_yaw, atan2(-vel.x, -vel.y), minf(1.0, 6.0 * delta))
+	rotation.y = _yaw
+	var flap := sin(_clock * 9.0) * 0.62
+	_wing_l.rotation.z = flap
+	_wing_r.rotation.z = -flap
+
 func can_bomb() -> bool:
 	return bomb_cd <= 0.0
 

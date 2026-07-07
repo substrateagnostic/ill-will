@@ -1143,3 +1143,64 @@ NEEDS-OWNER (5-minute smoke once Steam is installed + logged in)
   machine/account. Estate HOST NIGHT UI wiring (preferred_transport(),
   overlay invite button, persona names) = phase-3 estate pass, deliberately
   not touched tonight.
+
+## ONLINE PHASE 2, MIRRORS #2 + #3 — TILT & MOWER MAYHEM (2026-07-07, overnight)
+
+Two more games play online end to end via the séance house pattern
+(mirror guard / begin() fence / _net_state()/_net_apply(); estate and
+net_session untouched — the generic pump does everything). Receipts in
+docs/verify/online-tilt-VERIFY.md + online-mower-VERIFY.md. Handoff note:
+this lane's builder hit its usage limit mid-verification; a second agent
+picked up the uncommitted worktree, read every diff and netshot cold, ran
+the missing mower probe + re-ran ALL couch receipts, and finished the docs.
+The work product survived the handoff intact — nothing had to be rebuilt.
+
+TILT (probe night was already run; verified + documented):
+- Full 2-round match with a remote seat 1: sudden death both rounds, a real
+  OVERTIME, 9 gull bombs from the fallen remote player over the wire, and
+  "MINT WINS TILT!" mirrored to the letter. Match-end screenshot pair is
+  functionally identical down to the two gulls hovering off the east rim.
+- The platter tilt vector is the whole game and it mirrors beautifully: a
+  60 fps exponential chase of a 20 Hz snapshot lands on the host's frame
+  (tilting pair read by eye — same disc attitude, same pawns, same timer).
+- NETHASH_MOD 29/29 delivered digests matched (one datagram dropped — seq
+  960 — and the counters-not-events pattern absorbed it invisibly, which is
+  the whole argument for the pattern). ~1 kB snapshots → ≈21 kB/s per guest.
+
+MOWER (probe run + verified this session):
+- THE GRID DECISION, for review: the 64x48 lawn rides the wire as ONE
+  deflate-compressed full grid at 10 Hz (latest-wins) instead of diffs or
+  paint events. Reason: full-state is self-healing by construction (a drop
+  costs 100 ms of freshness, never a permanently lost cell — diffs/events
+  on an unreliable channel need ack/repair layers). Measured: 3072 raw
+  cells deflate to 53 B (fresh) – 435 B (peak mix). Grid adds ~3.9 kB/s;
+  whole game ≈14.5 kB/s per guest — CHEAPER than tilt, lawn included.
+- The lawn pair read by eye: cell-for-cell identical stripes on both
+  screens mid-match, and the mirror's scoreboard percentages (41/21/11/9)
+  are RE-DERIVED from its own applied grid through couch coverage_pct —
+  same numbers because same cells. MOWGRID digests 15/15 matched.
+- The Splatoon tally ceremony is NOT streamed: the mirror gets placements +
+  the final grid and stages the whole reveal locally (camera pull, count-up,
+  stamp). Screenshot pairs: both screens frozen at "RED 14%" mid-count-up,
+  both closing on "MINT TAKES THE LAWN! 43%".
+
+COUCH DETERMINISM, RE-RUN COLD AT FINAL CODE STATE (pristine d0a1f18
+worktree vs this tree, fresh runs): tilt idle/edge/gull PASS byte-identical,
+tilt 3-round soak 236 TILT_EVT + KILL_EVENTS byte-identical, mower covtest
+sum=100.0000% PASS + soak sim-identical (KILL_EVENTS n=16 both; only
+wall-clock perf telemetry differs). Transport provably touched nothing.
+One doc claim corrected during verification: the draft said "17 kill_events"
+— every log (including the original builder's own) says 16.
+
+WORTH KNOWING (shared dev machine, overnight fleet):
+- The probe pair shares one user:// and BOTH instances run the .npbak
+  dance; the later quitter can re-land the staged party (party_setup came
+  back with seat 1 human). The outer md5 backup/restore caught it —
+  that outer backup is house law for a reason.
+- Four neighbour lanes were live during this session (greed probe, throne
+  balance, par, understudy). Nothing was killed blindly; the mower probe
+  waited for the greed pair to drain and used private port 9412 + the
+  g_aa41 private binary name, per the anti-fratricide notes in the tilt doc.
+
+STILL OPEN (unchanged phase-2/3 chores): podium not mirrored (spectate
+card), local echo v1 none, killcam-skip gating for games that have one.
