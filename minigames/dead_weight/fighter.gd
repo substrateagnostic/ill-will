@@ -38,6 +38,13 @@ var _grounded := false
 var safe_spawn := Vector3.ZERO
 var grace_until := 0.0
 
+# ONLINE mirror facts (docs/design/10 §4.3): pure counters/tags read by the
+# host's _net_state() so the client fires the same juice from deltas. Additive
+# only — never consulted by the sim, so --dwbalance receipts are untouched.
+var net_shoves := 0            # shoves actually fired (whiffs included)
+var net_hits := 0              # times this body took a hit()
+var net_hit_dir := Vector3.FORWARD   # knockback dir of the last hit (for sparks)
+
 var model_pivot: Node3D
 var anim: AnimationPlayer
 var ring: MeshInstance3D
@@ -234,6 +241,7 @@ func _do_shove() -> void:
 	if _shove_cd > 0.0 or owner_game == null:
 		return
 	_shove_cd = SHOVE_CD
+	net_shoves += 1
 	# KBM humans shove toward the cursor: point _face at the aim (so the cone AND
 	# the body face it) for this shove. Bots / non-KBM leave aim_face ZERO and
 	# keep their walk-derived _face exactly as before.
@@ -296,6 +304,8 @@ func hit(dir: Vector3, impulse: float, atk_type: String, atk_index: int, src_nam
 	var d := dir.normalized()
 	apply_central_impulse(d * impulse + Vector3.UP * impulse * 0.14)
 	_stun = STUN_TIME
+	net_hits += 1
+	net_hit_dir = d
 	var t := 0.0
 	if owner_game != null:
 		t = owner_game.game_time
