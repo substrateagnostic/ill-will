@@ -1,0 +1,304 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET transports: enet ready · steam offline
+NET host port=9473 err=0 code=80CNE1 addr=192.168.0.101:9473
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 1026899887 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE seat 1 claimed by peer 1026899887
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE_TRACE tick=30 p1=(0.000,0.001,-2.500)
+NETHASH side=host seq=15 h=1ec9668a
+VERIFY_SNAP res://docs/verify/mb_netshots_host/snap_online_host_claim_1657.png
+NETPROBE_TRACE tick=60 p1=(0.000,0.001,-2.500)
+NETPROBE_TRACE tick=90 p1=(0.000,0.001,-2.500)
+NETPROBE_TRACE tick=120 p1=(0.000,0.001,-2.500)
+NETHASH side=host seq=30 h=a3aa3e67
+NETPROBE_TRACE tick=150 p1=(0.000,0.001,-2.500)
+NETPROBE_TRACE tick=180 p1=(0.000,0.001,-2.500)
+NETHASH side=host seq=45 h=4e92a34d
+NETPROBE_TRACE tick=210 p1=(0.000,0.001,-2.500)
+NETPROBE_TRACE tick=240 p1=(0.000,0.001,-2.500)
+NETHASH side=host seq=60 h=d3737b2a
+NETPROBE_TRACE tick=270 p1=(0.000,0.001,-2.500)
+NETPROBE_TRACE tick=300 p1=(0.000,0.001,-2.500)
+NETHASH side=host seq=75 h=7e5be010
+NETHASH side=host seq=90 h=033cb7ed
+NETHASH side=host seq=105 h=970db5ba
+NETHASH side=host seq=120 h=1bee8d97
+NETHASH side=host seq=135 h=c6d6f27d
+NETHASH side=host seq=150 h=4bb7ca5a
+NETHASH side=host seq=165 h=f6a02f40
+NETHASH side=host seq=180 h=7b81071d
+NETHASH side=host seq=195 h=26696c03
+NETHASH side=host seq=210 h=c45115b7
+NETHASH side=host seq=225 h=6f397a9d
+NETHASH side=host seq=240 h=f41a527a
+NETHASH side=host seq=255 h=9f02b760
+NETHASH side=host seq=270 h=23e38f3d
+NETHASH side=host seq=285 h=cecbf423
+NETHASH side=host seq=300 h=6cb39dd7
+NETHASH side=host seq=315 h=179c02bd
+NETHASH side=host seq=330 h=9c7cda9a
+NETHASH side=host seq=345 h=47653f80
+NETHASH side=host seq=360 h=cc46175d
+NETHASH side=host seq=375 h=772e7c43
+NETHASH side=host seq=390 h=fc0f5420
+NETHASH side=host seq=405 h=bffe8add
+NETHASH side=host seq=420 h=44df62ba
+NETHASH side=host seq=435 h=efc7c7a0
+NETPROBE seat1 lobby ready=false
+VERIFY_SNAP res://docs/verify/mb_netshots_host/snap_online_host_ready_5992.png
+NETHASH side=host seq=450 h=74a89f7d
+NETHASH side=host seq=465 h=1f910463
+NETHASH side=host seq=480 h=a471dc40
+NETHASH side=host seq=495 h=4f5a4126
+NETHASH side=host seq=510 h=ed41eada
+NETHASH side=host seq=525 h=982a4fc0
+NETHASH side=host seq=540 h=1d0b279d
+NETHASH side=host seq=555 h=c7f38c83
+NETHASH side=host seq=570 h=4cd46460
+NETHASH side=host seq=585 h=f7bcc946
+NETHASH side=host seq=600 h=95a472fa
+VERIFY_SNAP res://docs/verify/mb_netshots_host/snap_online_host_gate_7579.png
+NETHASH side=host seq=615 h=408cd7e0
+NETHASH side=host seq=630 h=c56dafbd
+NETHASH side=host seq=645 h=705614a3
+NETHASH side=host seq=660 h=f536ec80
+NETHASH side=host seq=675 h=a01f5166
+NETHASH side=host seq=690 h=25002943
+NETHASH side=host seq=705 h=e8ef6000
+NETHASH side=host seq=720 h=6dd037dd
+NETHASH side=host seq=735 h=18b89cc3
+NETHASH side=host seq=750 h=9d9974a0
+NETHASH side=host seq=765 h=4881d986
+NETHASH side=host seq=780 h=cd62b163
+NETHASH side=host seq=795 h=784b1649
+NETHASH side=host seq=810 h=1632bffd
+MB_BEGIN players=4 seed=3300865038 practice=false bots=[false, false, true, true] waltz=90
+MB_SELF seat=0 RED body=15
+MB_SELF seat=1 BLUE body=13
+MB_SELF seat=2 GOLD body=2
+MB_SELF seat=3 MINT body=4
+NETHASH side=host seq=825 h=c11b24e3
+VERIFY_SNAP res://docs/verify/mb_netshots_host/snap_online_host_game_9797.png
+NETHASH side=host seq=840 h=45fbfcc0
+NETHASH_MOD side=host seq=40 h=da9c3712 bytes=1280
+NETHASH side=host seq=855 h=f0e461a6
+MB_WALTZ_START bodies=[15, 13, 2, 4]
+NETHASH side=host seq=870 h=75c53983
+NETHASH_MOD side=host seq=80 h=7258b7db bytes=1284
+NETHASH side=host seq=885 h=20ad9e69
+NETHASH side=host seq=900 h=be95481d
+NETHASH_MOD side=host seq=120 h=8e62f61f bytes=1280
+NETHASH side=host seq=915 h=697dad03
+NETHASH side=host seq=930 h=ee5e84e0
+NETHASH_MOD side=host seq=160 h=cb32dd11 bytes=1284
+NETHASH side=host seq=945 h=9946e9c6
+NETHASH side=host seq=960 h=1e27c1a3
+NETHASH_MOD side=host seq=200 h=ce6bc8b0 bytes=1284
+NETHASH side=host seq=975 h=c9102689
+NETHASH side=host seq=990 h=4df0fe66
+NETHASH_MOD side=host seq=240 h=414cb062 bytes=1284
+NETHASH side=host seq=1005 h=17dbeaea
+NETHASH side=host seq=1020 h=9cbcc2c7
+NETHASH side=host seq=1035 h=47a527ad
+NETHASH_MOD side=host seq=280 h=9aa56141 bytes=1284
+MB_GLINT seat=1 body=13 t=13.0
+NETHASH side=host seq=1050 h=cc85ff8a
+NETHASH side=host seq=1065 h=776e6470
+MB_GLINT seat=1 body=13 t=14.4
+NETHASH_MOD side=host seq=320 h=d6e8a627 bytes=1280
+NETHASH side=host seq=1080 h=fc4f3c4d
+MB_GLINT seat=1 body=13 t=15.8
+NETHASH side=host seq=1095 h=a737a133
+NETHASH_MOD side=host seq=360 h=2956d533 bytes=1284
+MB_GLINT seat=1 body=13 t=17.2
+NETHASH side=host seq=1110 h=451f4ae7
+NETHASH side=host seq=1125 h=f007afcd
+MB_GLINT seat=1 body=13 t=18.6
+NETHASH_MOD side=host seq=400 h=06554659 bytes=1284
+NETHASH side=host seq=1140 h=74e887aa
+VERIFY_SNAP res://docs/verify/mb_netshots_host/snap_mb_net_waltz_12915.png
+MB_GLINT seat=1 body=13 t=20.0
+NETHASH side=host seq=1155 h=1fd0ec90
+NETHASH_MOD side=host seq=440 h=b7c38f1d bytes=1284
+NETHASH side=host seq=1170 h=a4b1c46d
+MB_CURTSY seat=3 MINT pip=1/3 t=22.6 set=[4]
+MBBOTS_PIP_EVIDENCE set=[4] share=2.30
+NETHASH side=host seq=1185 h=4f9a2953
+MB_MARK killer=1 BLUE victim=3 MINT body=4 t=23.1
+MB_SEAT_TICK p=3 MINT pitch=1.26
+VERIFY_SNAP res://docs/verify/mb_netshots_host/snap_mb_net_unmask_13340.png
+NETHASH_MOD side=host seq=480 h=6a46897b bytes=1356
+NETHASH side=host seq=1200 h=ed81d307
+NETHASH side=host seq=1215 h=986a37ed
+NETHASH_MOD side=host seq=520 h=5fcc7977 bytes=1356
+NETHASH side=host seq=1230 h=1d4b0fca
+NETHASH side=host seq=1245 h=c83374b0
+NETHASH_MOD side=host seq=560 h=084f307d bytes=1356
+NETHASH side=host seq=1260 h=4d144c8d
+MB_GUST seat=3 t=28.5
+NETHASH side=host seq=1275 h=f7fcb173
+NETHASH_MOD side=host seq=600 h=bf8e152c bytes=1352
+NETHASH side=host seq=1290 h=7cdd8950
+NETHASH side=host seq=1305 h=40ccc00d
+MB_CURTSY seat=2 GOLD pip=1/3 t=31.9 set=[2, 10, 17]
+MBBOTS_PIP_EVIDENCE set=[2, 10, 17] share=0.77
+NETHASH side=host seq=1320 h=c5ad97ea
+NETHASH_MOD side=host seq=640 h=336c3628 bytes=1344
+NETHASH side=host seq=1335 h=7095fcd0
+NETHASH side=host seq=1350 h=f576d4ad
+NETHASH_MOD side=host seq=680 h=a78ae36d bytes=1344
+NETHASH side=host seq=1365 h=a05f3993
+NETHASH side=host seq=1380 h=25401170
+NETHASH_MOD side=host seq=720 h=cd8dca5f bytes=1344
+MB_GUST seat=3 t=36.6
+NETHASH side=host seq=1395 h=d0287656
+NETHASH side=host seq=1410 h=6e10200a
+NETHASH_MOD side=host seq=760 h=9a822c2a bytes=1344
+NETHASH side=host seq=1425 h=18f884f0
+MB_FLASH seat=2 GOLD body=2 npc=18 t=40.5
+MB_SEAT_TICK p=2 GOLD pitch=1.12
+VERIFY_SNAP res://docs/verify/mb_netshots_host/snap_mb_net_waste_15858.png
+NETHASH side=host seq=1440 h=9dd95ccd
+NETHASH_MOD side=host seq=800 h=4fdd5eca bytes=1384
+NETHASH side=host seq=1455 h=48c1c1b3
+NETHASH side=host seq=1470 h=cda29990
+NETHASH_MOD side=host seq=840 h=e5f75a0c bytes=1388
+MB_GUST seat=3 t=43.7
+NETHASH side=host seq=1485 h=788afe76
+NETHASH side=host seq=1500 h=1672a82a
+NETHASH_MOD side=host seq=880 h=90028eca bytes=1388
+NETHASH side=host seq=1515 h=c15b0d10
+NETHASH side=host seq=1530 h=463be4ed
+NETHASH_MOD side=host seq=920 h=86417bd8 bytes=1388
+NETHASH side=host seq=1545 h=f12449d3
+NETHASH side=host seq=1560 h=760521b0
+NETHASH_MOD side=host seq=960 h=863bcd1e bytes=1388
+NETHASH side=host seq=1575 h=20ed8696
+NETHASH side=host seq=1590 h=a5ce5e73
+MB_CURTSY seat=1 BLUE pip=1/3 t=51.2 set=[13]
+MBBOTS_PIP_EVIDENCE set=[13] share=2.30
+MB_GUST seat=3 t=51.9
+NETHASH_MOD side=host seq=1000 h=a881463f bytes=1376
+NETHASH side=host seq=1605 h=69bd9530
+NETHASH side=host seq=1620 h=ee9e6d0d
+NETHASH side=host seq=1635 h=9986d1f3
+NETHASH_MOD side=host seq=1040 h=e8f1e996 bytes=1376
+NETHASH side=host seq=1650 h=1e67a9d0
+MB_CURTSY seat=2 GOLD pip=2/3 t=56.1 set=[2, 6, 7, 9]
+MBBOTS_PIP_EVIDENCE set=[2, 6, 7, 9] share=0.57
+NETHASH side=host seq=1665 h=c9500eb6
+NETHASH_MOD side=host seq=1080 h=d193b454 bytes=1376
+MB_GUST seat=3 t=57.0
+NETHASH side=host seq=1680 h=4e30e693
+NETHASH side=host seq=1695 h=f9194b79
+NETHASH_MOD side=host seq=1120 h=6f8d98b5 bytes=1380
+NETHASH side=host seq=1710 h=9700f52d
+NETHASH side=host seq=1725 h=41e95a13
+NETHASH_MOD side=host seq=1160 h=5fdeeb60 bytes=1380
+MB_GUST seat=3 t=61.2
+NETHASH side=host seq=1740 h=c6ca31f0
+NETHASH side=host seq=1755 h=71b296d6
+NETHASH_MOD side=host seq=1200 h=638160ce bytes=1380
+MB_CURTSY seat=2 GOLD pip=3/3 t=63.2 set=[2, 3]
+MBBOTS_PIP_EVIDENCE set=[2, 3] share=1.15
+NETHASH side=host seq=1770 h=f6936eb3
+NETHASH side=host seq=1785 h=a17bd399
+NETHASH_MOD side=host seq=1240 h=c29159b0 bytes=1380
+NETHASH side=host seq=1800 h=3f637d4d
+NETHASH side=host seq=1815 h=ea4be233
+NETHASH_MOD side=host seq=1280 h=8eb6cf5c bytes=1380
+NETHASH side=host seq=1830 h=6f2cba10
+NETHASH side=host seq=1845 h=1a151ef6
+MB_CURTSY seat=1 BLUE pip=2/3 t=69.2 set=[13, 19]
+MBBOTS_PIP_EVIDENCE set=[13, 19] share=1.15
+NETHASH_MOD side=host seq=1320 h=e2fdb7eb bytes=1376
+NETHASH side=host seq=1860 h=9ef5f6d3
+MB_GUST seat=3 t=70.0
+NETHASH side=host seq=1875 h=49de5bb9
+NETHASH side=host seq=1890 h=cebf3396
+NETHASH_MOD side=host seq=1360 h=8b7dcfc8 bytes=1372
+NETHASH side=host seq=1905 h=92ae6a53
+NETHASH side=host seq=1920 h=178f4230
+NETHASH_MOD side=host seq=1400 h=e40ab2ef bytes=1376
+MB_GUST seat=3 t=74.9
+NETHASH side=host seq=1935 h=c277a716
+NETHASH side=host seq=1950 h=47587ef3
+NETHASH_MOD side=host seq=1440 h=2350a317 bytes=1376
+NETHASH side=host seq=1965 h=f240e3d9
+NETHASH side=host seq=1980 h=7721bbb6
+NETHASH_MOD side=host seq=1480 h=0e16cdfc bytes=1376
+NETHASH side=host seq=1995 h=220a209c
+NETHASH side=host seq=2010 h=f9d2d707
+NETHASH_MOD side=host seq=1520 h=e965e4bc bytes=1376
+NETHASH side=host seq=2025 h=a4bb3bed
+NETHASH side=host seq=2040 h=299c13ca
+MB_GUST seat=3 t=82.6
+NETHASH_MOD side=host seq=1560 h=f2972f65 bytes=1376
+NETHASH side=host seq=2055 h=d48478b0
+NETHASH side=host seq=2070 h=5965508d
+NETHASH_MOD side=host seq=1600 h=cb373dbf bytes=1376
+NETHASH side=host seq=2085 h=044db573
+NETHASH side=host seq=2100 h=a2355f27
+MB_GUST seat=3 t=86.7
+MB_CURTSY seat=1 BLUE pip=3/3 t=87.2 set=[13]
+MBBOTS_PIP_EVIDENCE set=[13] share=2.30
+NETHASH_MOD side=host seq=1640 h=8b146ba5 bytes=1372
+NETHASH side=host seq=2115 h=4d1dc40d
+NETHASH side=host seq=2130 h=d1fe9bea
+NETHASH side=host seq=2145 h=7ce700d0
+NETHASH_MOD side=host seq=1680 h=ba7f634b bytes=1376
+MB_WALTZ_END cause=buzzer t=90.0 unmasks=1 wastes=1
+MB_REVEAL survivors=[0, 1, 2]
+NETHASH side=host seq=2160 h=01c7d8ad
+NETHASH side=host seq=2175 h=acb03d93
+NETHASH_MOD side=host seq=1720 h=b9a986b9 bytes=1348
+NETHASH side=host seq=2190 h=31911570
+MB_SEAT_TICK p=0 RED pitch=0.90
+NETHASH side=host seq=2205 h=f5804c2d
+NETHASH_MOD side=host seq=1760 h=830e7108 bytes=1364
+MB_SEAT_TICK p=1 BLUE pitch=1.00
+WARNING: Sending 1408 bytes unreliably which is above the MTU (1392), this will result in higher packet loss
+   at: put_packet (modules/enet/enet_multiplayer_peer.cpp:363)
+   GDScript backtrace (most recent call first):
+       [0] send_module_state (res://core/net_session.gd:604)
+       [1] _net_host_broadcast (res://estate/estate.gd:2410)
+       [2] _process (res://estate/estate.gd:1276)
+NETHASH side=host seq=2220 h=7a61240a
+NETHASH side=host seq=2235 h=254988f0
+NETHASH_MOD side=host seq=1800 h=76b3c53e bytes=1404
+MB_SEAT_TICK p=2 GOLD pitch=1.12
+NETHASH side=host seq=2250 h=aa2a60cd
+NETHASH side=host seq=2265 h=5512c5b3
+NETHASH_MOD side=host seq=1840 h=372a289d bytes=1444
+VERIFY_SNAP res://docs/verify/mb_netshots_host/snap_reveal_24198.png
+NETHASH side=host seq=2280 h=d9f39d90
+NETHASH side=host seq=2295 h=84dc0276
+NETHASH_MOD side=host seq=1880 h=0346cfe9 bytes=1796
+NETHASH side=host seq=2310 h=22c3ac2a
+NETHASH side=host seq=2325 h=cdac1110
+VERIFY_SNAP res://docs/verify/mb_netshots_host/snap_settle_24746.png
+NETHASH_MOD side=host seq=1920 h=68fbd404 bytes=1796
+NETHASH side=host seq=2340 h=528ce8ed
+KILL_EVENTS n=1 [{"cause":"unmasked","killer":1,"victim":3}]
+MB_RESULTS {"currency_events":[{"amount":2,"player":1,"reason":"tore the mask off MINT for the room's amusement","type":"royalty"},{"amount":1,"player":3,"reason":"unmasked mid-waltz","type":"grudge"},{"amount":1,"player":2,"reason":"accused the furniture","type":"grudge"}],"highlights":["BLUE tore the mask off MINT mid-waltz","GOLD accused the furniture","BLUE curtsied thrice and was never suspected"],"kill_events":[{"cause":"unmasked","killer":1,"victim":3}],"monuments":[{"kind":"belle","label":"BLUE, Belle of the Ball","player":1}],"placements":[1,2,0,3],"points":{"0":4,"1":16,"2":7,"3":2}}
+NETHASH side=host seq=2355 h=fd754dd3
+NETHASH side=host seq=2370 h=825625b0
+NETHASH side=host seq=2385 h=2d3e8a96
+NETHASH side=host seq=2400 h=cb26344a
+NETHASH side=host seq=2415 h=760e9930
+VERIFY_SNAP res://docs/verify/mb_netshots_host/snap_online_host_reckoning_25633.png
+NETPROBE_RESULTS RED:pts=2,grudge=3 BLUE:pts=5,grudge=3 GOLD:pts=3,grudge=5 MINT:pts=1,grudge=3
+NETPROBE saves restored
+NETPROBE_DONE
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)

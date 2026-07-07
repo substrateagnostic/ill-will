@@ -1,0 +1,292 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET transports: enet ready · steam offline
+NETPROBE mode=join
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET join target=127.0.0.1:9473 err=0 (retries left 20)
+NET connected to host as peer 1026899887
+NETPROBE granted seat 1
+NETHASH side=client seq=15 h=1ec9668a
+NETHASH side=client seq=30 h=a3aa3e67
+VERIFY_SNAP res://docs/verify/mb_netshots_join/snap_online_client_lobby_0169.png
+NETHASH side=client seq=45 h=4e92a34d
+NETHASH side=client seq=60 h=d3737b2a
+NETHASH side=client seq=75 h=7e5be010
+NETHASH side=client seq=90 h=033cb7ed
+NETHASH side=client seq=105 h=970db5ba
+NETHASH side=client seq=120 h=1bee8d97
+NETHASH side=client seq=135 h=c6d6f27d
+NETHASH side=client seq=150 h=4bb7ca5a
+NETHASH side=client seq=165 h=f6a02f40
+NETHASH side=client seq=180 h=7b81071d
+NETHASH side=client seq=195 h=26696c03
+NETHASH side=client seq=210 h=c45115b7
+NETHASH side=client seq=225 h=6f397a9d
+NETHASH side=client seq=240 h=f41a527a
+NETHASH side=client seq=255 h=9f02b760
+NETHASH side=client seq=270 h=23e38f3d
+NETHASH side=client seq=285 h=cecbf423
+NETHASH side=client seq=300 h=6cb39dd7
+NETHASH side=client seq=315 h=179c02bd
+NETHASH side=client seq=330 h=9c7cda9a
+NETHASH side=client seq=345 h=47653f80
+NETHASH side=client seq=360 h=cc46175d
+NETHASH side=client seq=375 h=772e7c43
+NETHASH side=client seq=390 h=fc0f5420
+NETHASH side=client seq=405 h=bffe8add
+NETHASH side=client seq=420 h=44df62ba
+NETHASH side=client seq=435 h=efc7c7a0
+NETHASH side=client seq=450 h=74a89f7d
+NETHASH side=client seq=465 h=1f910463
+NETPROBE client sees own ready=false
+NETHASH side=client seq=480 h=a471dc40
+VERIFY_SNAP res://docs/verify/mb_netshots_join/snap_online_client_ready_1994.png
+NETHASH side=client seq=495 h=4f5a4126
+NETHASH side=client seq=510 h=ed41eada
+NETHASH side=client seq=525 h=982a4fc0
+NETHASH side=client seq=540 h=1d0b279d
+NETHASH side=client seq=555 h=c7f38c83
+NETHASH side=client seq=570 h=4cd46460
+NETHASH side=client seq=585 h=f7bcc946
+NETHASH side=client seq=600 h=95a472fa
+VERIFY_SNAP res://docs/verify/mb_netshots_join/snap_online_client_gate_2540.png
+NETHASH side=client seq=615 h=408cd7e0
+NETHASH side=client seq=630 h=c56dafbd
+NETHASH side=client seq=645 h=705614a3
+NETHASH side=client seq=660 h=f536ec80
+NETHASH side=client seq=675 h=a01f5166
+NETHASH side=client seq=690 h=25002943
+NETHASH side=client seq=705 h=e8ef6000
+NETHASH side=client seq=720 h=6dd037dd
+NETHASH side=client seq=735 h=18b89cc3
+NETHASH side=client seq=750 h=9d9974a0
+NETHASH side=client seq=765 h=4881d986
+NETHASH side=client seq=780 h=cd62b163
+NETHASH side=client seq=795 h=784b1649
+NETHASH side=client seq=810 h=1632bffd
+NET mirror boot: maskedball
+MB_MIRROR boot players=4 my_seat=1
+NETHASH side=client seq=825 h=c11b24e3
+VERIFY_SNAP res://docs/verify/mb_netshots_join/snap_online_client_game_3471.png
+NETHASH side=client seq=840 h=45fbfcc0
+NETHASH_MOD side=client seq=40 h=da9c3712
+NETHASH side=client seq=855 h=f0e461a6
+MB_MIRROR phase -> WALTZ
+NETHASH side=client seq=870 h=75c53983
+NETHASH_MOD side=client seq=80 h=7258b7db
+NETHASH side=client seq=885 h=20ad9e69
+NETHASH side=client seq=900 h=be95481d
+NETHASH_MOD side=client seq=120 h=8e62f61f
+NETHASH side=client seq=915 h=697dad03
+NETHASH side=client seq=930 h=ee5e84e0
+NETHASH_MOD side=client seq=160 h=cb32dd11
+NETHASH side=client seq=945 h=9946e9c6
+NETHASH side=client seq=960 h=1e27c1a3
+NETHASH_MOD side=client seq=200 h=ce6bc8b0
+NETHASH side=client seq=975 h=c9102689
+NETHASH side=client seq=990 h=4df0fe66
+NETHASH_MOD side=client seq=240 h=414cb062
+NETHASH side=client seq=1005 h=17dbeaea
+NETHASH side=client seq=1020 h=9cbcc2c7
+NETHASH side=client seq=1035 h=47a527ad
+NETHASH_MOD side=client seq=280 h=9aa56141
+MB_MIRROR_GLINT body=13 wt=13.0
+MB_MIRROR_GLINT body=11 wt=13.3
+NETHASH side=client seq=1050 h=cc85ff8a
+MB_MIRROR_GLINT body=5 wt=13.5
+MB_MIRROR_GLINT body=9 wt=13.6
+MB_MIRROR_GLINT body=17 wt=14.0
+MB_MIRROR_GLINT body=3 wt=14.2
+MB_MIRROR_GLINT body=14 wt=14.2
+MB_MIRROR_GLINT body=19 wt=14.3
+NETHASH side=client seq=1065 h=776e6470
+MB_MIRROR_GLINT body=13 wt=14.4
+NETHASH_MOD side=client seq=320 h=d6e8a627
+MB_MIRROR_GLINT body=6 wt=14.8
+MB_MIRROR_GLINT body=0 wt=14.9
+MB_MIRROR_GLINT body=18 wt=15.0
+MB_MIRROR_GLINT body=12 wt=15.3
+MB_MIRROR_GLINT body=16 wt=15.4
+NETHASH side=client seq=1080 h=fc4f3c4d
+MB_MIRROR_GLINT body=7 wt=15.5
+MB_MIRROR_GLINT body=11 wt=15.6
+MB_MIRROR_GLINT body=13 wt=15.8
+VERIFY_SNAP res://docs/verify/mb_netshots_join/snap_mb_client_glint_4507.png
+MB_MIRROR_GLINT body=10 wt=16.1
+MB_MIRROR_GLINT body=8 wt=16.2
+NETHASH side=client seq=1095 h=a737a133
+NETHASH_MOD side=client seq=360 h=2956d533
+MB_MIRROR_GLINT body=6 wt=16.8
+MB_MIRROR_GLINT body=14 wt=16.8
+MB_MIRROR_GLINT body=9 wt=17.1
+MB_MIRROR_GLINT body=13 wt=17.2
+MB_MIRROR_GLINT body=18 wt=17.3
+MB_MIRROR_GLINT body=1 wt=17.5
+NETHASH side=client seq=1110 h=451f4ae7
+MB_MIRROR_GLINT body=3 wt=17.6
+MB_MIRROR_GLINT body=16 wt=18.0
+MB_MIRROR_GLINT body=5 wt=18.2
+MB_MIRROR_GLINT body=10 wt=18.5
+MB_MIRROR_GLINT body=17 wt=18.5
+MB_MIRROR_GLINT body=19 wt=18.5
+NETHASH side=client seq=1125 h=f007afcd
+MB_MIRROR_GLINT body=13 wt=18.6
+MB_MIRROR_GLINT body=12 wt=18.9
+NETHASH_MOD side=client seq=400 h=06554659
+MB_MIRROR_GLINT body=14 wt=19.2
+NETHASH side=client seq=1140 h=74e887aa
+MB_MIRROR_GLINT body=9 wt=19.6
+MB_MIRROR_GLINT body=3 wt=19.7
+VERIFY_SNAP res://docs/verify/mb_netshots_join/snap_mb_client_waltz_4749.png
+MB_MIRROR_GLINT body=13 wt=20.1
+MB_MIRROR_GLINT body=7 wt=20.1
+MB_MIRROR_GLINT body=0 wt=20.3
+MB_MIRROR_GLINT body=18 wt=20.4
+NETHASH side=client seq=1155 h=1fd0ec90
+MB_MIRROR_GLINT body=19 wt=20.7
+MB_MIRROR_GLINT body=1 wt=21.0
+MB_MIRROR_GLINT body=11 wt=21.0
+NETHASH_MOD side=client seq=440 h=b7c38f1d
+NETHASH side=client seq=1170 h=a4b1c46d
+NETHASH side=client seq=1185 h=4f9a2953
+MB_MIRROR unmask victim=3 body=4 killer=1
+MB_SEAT_TICK p=3 MINT pitch=1.26
+NETHASH_MOD side=client seq=480 h=6a46897b
+NETHASH side=client seq=1200 h=ed81d307
+VERIFY_SNAP res://docs/verify/mb_netshots_join/snap_mb_client_unmask_5002.png
+NETHASH side=client seq=1215 h=986a37ed
+NETHASH_MOD side=client seq=520 h=5fcc7977
+NETHASH side=client seq=1230 h=1d4b0fca
+NETHASH side=client seq=1245 h=c83374b0
+NETHASH_MOD side=client seq=560 h=084f307d
+NETHASH side=client seq=1260 h=4d144c8d
+NETHASH side=client seq=1275 h=f7fcb173
+NETHASH_MOD side=client seq=600 h=bf8e152c
+NETHASH side=client seq=1290 h=7cdd8950
+NETHASH side=client seq=1305 h=40ccc00d
+NETHASH side=client seq=1320 h=c5ad97ea
+NETHASH_MOD side=client seq=640 h=336c3628
+NETHASH side=client seq=1335 h=7095fcd0
+NETHASH side=client seq=1350 h=f576d4ad
+NETHASH_MOD side=client seq=680 h=a78ae36d
+NETHASH side=client seq=1365 h=a05f3993
+NETHASH side=client seq=1380 h=25401170
+NETHASH_MOD side=client seq=720 h=cd8dca5f
+NETHASH side=client seq=1395 h=d0287656
+NETHASH side=client seq=1410 h=6e10200a
+NETHASH_MOD side=client seq=760 h=9a822c2a
+NETHASH side=client seq=1425 h=18f884f0
+MB_MIRROR waste seat=2 body=2
+MB_SEAT_TICK p=2 GOLD pitch=1.12
+NETHASH side=client seq=1440 h=9dd95ccd
+NETHASH_MOD side=client seq=800 h=4fdd5eca
+VERIFY_SNAP res://docs/verify/mb_netshots_join/snap_mb_client_waste_6024.png
+NETHASH side=client seq=1455 h=48c1c1b3
+NETHASH side=client seq=1470 h=cda29990
+NETHASH_MOD side=client seq=840 h=e5f75a0c
+NETHASH side=client seq=1485 h=788afe76
+NETHASH side=client seq=1500 h=1672a82a
+NETHASH_MOD side=client seq=880 h=90028eca
+NETHASH side=client seq=1515 h=c15b0d10
+NETHASH side=client seq=1530 h=463be4ed
+NETHASH_MOD side=client seq=920 h=86417bd8
+NETHASH side=client seq=1545 h=f12449d3
+NETHASH side=client seq=1560 h=760521b0
+NETHASH_MOD side=client seq=960 h=863bcd1e
+NETHASH side=client seq=1575 h=20ed8696
+NETHASH side=client seq=1590 h=a5ce5e73
+NETHASH_MOD side=client seq=1000 h=a881463f
+NETHASH side=client seq=1605 h=69bd9530
+NETHASH side=client seq=1620 h=ee9e6d0d
+NETHASH side=client seq=1635 h=9986d1f3
+NETHASH_MOD side=client seq=1040 h=e8f1e996
+NETHASH side=client seq=1650 h=1e67a9d0
+NETHASH side=client seq=1665 h=c9500eb6
+NETHASH_MOD side=client seq=1080 h=d193b454
+NETHASH side=client seq=1680 h=4e30e693
+NETHASH side=client seq=1695 h=f9194b79
+NETHASH_MOD side=client seq=1120 h=6f8d98b5
+NETHASH side=client seq=1710 h=9700f52d
+NETHASH side=client seq=1725 h=41e95a13
+NETHASH_MOD side=client seq=1160 h=5fdeeb60
+NETHASH side=client seq=1740 h=c6ca31f0
+NETHASH side=client seq=1755 h=71b296d6
+NETHASH_MOD side=client seq=1200 h=638160ce
+NETHASH side=client seq=1770 h=f6936eb3
+NETHASH side=client seq=1785 h=a17bd399
+NETHASH_MOD side=client seq=1240 h=c29159b0
+NETHASH side=client seq=1800 h=3f637d4d
+NETHASH side=client seq=1815 h=ea4be233
+NETHASH_MOD side=client seq=1280 h=8eb6cf5c
+NETHASH side=client seq=1845 h=1a151ef6
+NETHASH_MOD side=client seq=1320 h=e2fdb7eb
+NETHASH side=client seq=1860 h=9ef5f6d3
+NETHASH side=client seq=1875 h=49de5bb9
+NETHASH side=client seq=1890 h=cebf3396
+NETHASH_MOD side=client seq=1360 h=8b7dcfc8
+NETHASH side=client seq=1905 h=92ae6a53
+NETHASH side=client seq=1920 h=178f4230
+NETHASH_MOD side=client seq=1400 h=e40ab2ef
+NETHASH side=client seq=1935 h=c277a716
+NETHASH side=client seq=1950 h=47587ef3
+NETHASH_MOD side=client seq=1440 h=2350a317
+NETHASH side=client seq=1965 h=f240e3d9
+NETHASH side=client seq=1980 h=7721bbb6
+NETHASH_MOD side=client seq=1480 h=0e16cdfc
+NETHASH side=client seq=1995 h=220a209c
+NETHASH side=client seq=2010 h=f9d2d707
+NETHASH_MOD side=client seq=1520 h=e965e4bc
+NETHASH side=client seq=2025 h=a4bb3bed
+NETHASH side=client seq=2040 h=299c13ca
+NETHASH_MOD side=client seq=1560 h=f2972f65
+NETHASH side=client seq=2055 h=d48478b0
+NETHASH side=client seq=2070 h=5965508d
+NETHASH_MOD side=client seq=1600 h=cb373dbf
+NETHASH side=client seq=2085 h=044db573
+NETHASH side=client seq=2100 h=a2355f27
+NETHASH_MOD side=client seq=1640 h=8b146ba5
+NETHASH side=client seq=2115 h=4d1dc40d
+NETHASH side=client seq=2130 h=d1fe9bea
+NETHASH side=client seq=2145 h=7ce700d0
+NETHASH_MOD side=client seq=1680 h=ba7f634b
+MB_MIRROR phase -> REVEAL
+NETHASH side=client seq=2160 h=01c7d8ad
+NETHASH side=client seq=2175 h=acb03d93
+NETHASH_MOD side=client seq=1720 h=b9a986b9
+NETHASH side=client seq=2190 h=31911570
+MB_MIRROR survivor seat=0 body=15
+MB_SEAT_TICK p=0 RED pitch=0.90
+NETHASH side=client seq=2205 h=f5804c2d
+VERIFY_SNAP res://docs/verify/mb_netshots_join/snap_mb_client_lastdance_9171.png
+NETHASH_MOD side=client seq=1760 h=830e7108
+MB_MIRROR survivor seat=1 body=13
+MB_SEAT_TICK p=1 BLUE pitch=1.00
+NETHASH side=client seq=2220 h=7a61240a
+NETHASH side=client seq=2235 h=254988f0
+NETHASH_MOD side=client seq=1800 h=76b3c53e
+MB_MIRROR survivor seat=2 body=2
+MB_SEAT_TICK p=2 GOLD pitch=1.12
+NETHASH side=client seq=2250 h=aa2a60cd
+NETHASH side=client seq=2265 h=5512c5b3
+NETHASH_MOD side=client seq=1840 h=372a289d
+NETHASH side=client seq=2280 h=d9f39d90
+NETHASH side=client seq=2295 h=84dc0276
+NETHASH_MOD side=client seq=1880 h=0346cfe9
+NETHASH side=client seq=2310 h=22c3ac2a
+NETHASH side=client seq=2325 h=cdac1110
+NETHASH_MOD side=client seq=1920 h=68fbd404
+NETHASH side=client seq=2340 h=528ce8ed
+NET mirror fold
+NETHASH side=client seq=2355 h=fd754dd3
+NETHASH side=client seq=2370 h=825625b0
+NETHASH side=client seq=2385 h=2d3e8a96
+NETHASH side=client seq=2400 h=cb26344a
+NETHASH side=client seq=2415 h=760e9930
+VERIFY_SNAP res://docs/verify/mb_netshots_join/snap_online_client_reckoning_10065.png
+NETPROBE_CLIENT_DONE

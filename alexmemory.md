@@ -1326,3 +1326,74 @@ WORTH KNOWING (shared dev machine, overnight fleet):
 
 STILL OPEN (unchanged phase-2/3 chores): podium not mirrored (spectate
 card), local echo v1 none, killcam-skip gating for games that have one.
+
+## ONLINE PHASE 2, MIRROR — MASKED BALL, the privacy case (2026-07-07, overnight)
+
+The identity-hiding game plays online end to end via the house pattern
+(mirror guard / begin() fence / _net_state()/_net_apply()/_mirror_tick();
+estate + net_session untouched). Receipts: docs/verify/online-maskedball-
+VERIFY.md, two probe nights, logs + windowed shot pairs read by eye.
+
+THE PRIVACY VERDICT (the reason this lane existed): the snapshot leaks NO
+seat->dancer mapping. Field-by-field audit in the doc; the shape of it:
+- The 20-dancer block is BODY-indexed (one PackedInt32Array, 7 quantized
+  ints per body); player and NPC bodies stream identical fields at identical
+  precision. Glints ride ONE untagged per-body counter — feather pulses,
+  NPC decoys and kill lunges are indistinguishable on the wire.
+- seat<->body pairs exist ONLY in cumulative reveal/waste rows, each minted
+  at the frame the couch prints the same badge. The client's rng_seed is 0
+  (estate mirror contract), so the seeded deal can't be recomputed; the
+  mirror's _body_of stays EMPTY — pre-reveal, the mapping does not exist in
+  client memory at all.
+- send_module_private: NOT USED, and that's the finding. The couch has no
+  private beat — the glint is public; only its CORRELATION with your own
+  hidden stick means anything, and a correlation with your own hands is a
+  secret no packet can carry. The seance proved hidden info gets BETTER
+  online; masked ball proves the dual: when the secret is a correlation,
+  honest mirroring preserves it with zero machinery. The privacy core of
+  this port is a list of things NOT sent.
+- Honest delta, on the record: PERFECT RECALL. A packet logger remembers
+  public facts better than couch eyes (e.g. decoy glints are never <2.0s
+  apart while the feather cd is 1.4s — sustained feathering is provably
+  human to a tool, and merely noticeable to a couch). No new facts, better
+  memory of published ones. Friends-lobby trust posture per spec.
+
+THE FEATHER-GLINT CROSSED THE WIRE, MEASURED: probe client feathered 0.30
+for 8s -> host MB_GLINT seat=1 body=13 at 13.0/14.4/15.8/17.2/18.6/20.0
+(exact 1.4s GLINT_CD cadence off relayed analog input) -> client rendered
+glints on body 13 at 13.1/14.4/15.8/17.2/18.6/20.1 — 6/6 pairs, worst skew
+one snapshot beat — buried among 37 decoy glints in the same window.
+
+PROBE RIG NOTE (new trick, reusable): the NETPROBE tape can't feather (unit
+moves only), so the join ran WITHOUT --nettape and the mirror drove its own
+seat via PlayerInput.set_remote_state — the _dbg_aim seam, networked — so
+NetSession's real 30 Hz sampler streamed genuine packets (stroll, feather,
+B mark, curtsies). Lobby READY handled by the probe's 30s timeout, the GET
+READY gate by its own 15s countdown: estate-standard paths, zero edits.
+The remote's B unmasked MINT at t=23 across the wire, it scored 3 real
+curtsies via injected strolls, WON the ball (16 pts) and took the "BLUE,
+Belle of the Ball" monument — a remote player winning the social game is
+the best liveness receipt this lane could have produced.
+
+FIX FOUND BY THE PROBE: report_finished() kills the 20 Hz pump the same
+tick, so a champ fact set in _finish_match never reaches mirrors — night 1's
+client missed the confetti. Pattern note for later lanes: any fact minted in
+the same tick as finished() must be PRE-ANNOUNCED a beat earlier (masked
+ball now sets champ at reveal t_end+0.4s; couch byte-identity re-verified).
+
+NUMBERS: NETHASH_MOD 48/48 + 47/47 digest pairs identical across the two
+nights; walker channel 162/162; snapshots median 1372 B (max 1796 at the
+ledger beat) ~= 27 kB/s per guest at 20 Hz — the dancer block ships as a
+pre-quantized PackedInt32Array (cm/mrad), the brief's "quantized positions"
+taken up front. Couch --mbtally seeds 1/2/3: FULL logs byte-identical to
+pristine HEAD (d36154f), re-diffed after the last edit. Regressions:
+import clean, AUCTIONTEST PASS (against a fresh slot — the saved run sits
+at a night-5 boundary and parks --auctiontest on the resume card; slot set
+aside and restored by hash), estatebots + strolltest zero script errors.
+user:// 5-file md5 backup/restore verified; private port 9473 + private
+binary name per the anti-fratricide house notes; no foreign PIDs touched.
+
+STILL OPEN (unchanged): podium not mirrored (champ beat on the mirror is
+~0.5s of confetti before the fold), mirror hint bar shows the generic
+legend, keyboard couch players can't feather (binary move — pre-existing
+couch reality, pads only; unchanged online).

@@ -38,6 +38,12 @@ var last_curtsy_end := -99.0  # waltz time this body last finished a bow
 var npc_t := 0.5              # pause countdown / drift retry
 var waypoint := Vector3.ZERO
 var glint_next := 3.0
+## ONLINE mirror counter: every glint (NPC decoy, feather pulse, kill lunge)
+## bumps it, UNTAGGED — the wire carries "this mask glinted", never "whose
+## hand did it". A remote player's own correlation with their hidden stick is
+## the only thing that gives one of these numbers meaning, exactly as on the
+## couch. Pure int, never read by logic.
+var glints := 0
 # waltz sway phase (visual only, derived from body id — no rng)
 var _sway := 0.0
 
@@ -151,7 +157,25 @@ func face_toward(dir: Vector3) -> void:
 
 ## Mask glint — the private pulse / ambient NPC noise. Pure visual.
 func glint() -> void:
+	glints += 1
 	_glint_t = 0.55
+
+# ================================================================ mirror API
+## Render-only accessors + pose setter for the ONLINE mirror (phase 2). The
+## mirror never runs the sim; it pipes the host's public facts into the same
+## fields _process already reads. Never called on the couch.
+func walking() -> bool:
+	return _walking
+
+func dimmed() -> bool:
+	return _dimmed
+
+## Set the acted pose from a snapshot. Durations are the couch constants
+## (CURTSY 1.15 / TWIRL 1.1) — only the tilt/spin shape reads act_dur.
+func mirror_act(p_act: int, p_act_t: float) -> void:
+	act = p_act
+	act_t = p_act_t
+	act_dur = 1.15 if p_act == Act.CURTSY else 1.1
 
 # ================================================================ reveal fx
 ## Waste-flash: the accuser's own body lights up — the position leak. This IS
