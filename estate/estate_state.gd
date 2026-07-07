@@ -37,6 +37,9 @@ var current_slot := 1
 var run_active := false
 var run_night := 0        # nights completed within this run
 var at_boundary := false  # true while the estate rests between nights
+# First-night onboarding: the HOUSE RULES card is shown ONCE per estate, on the
+# opening auction of a brand-new slot. Persisted so it never lectures a veteran.
+var house_rules_shown := false
 var last_deltas := {}
 var night_stats := {}
 # Directed kill counts for the night: "killer>victim" -> count. Fed by
@@ -100,6 +103,7 @@ func load_slot(n: int) -> void:
 	run_active = false
 	run_night = 0
 	at_boundary = false
+	house_rules_shown = false
 	trail_pos = {}
 	tollgates = {}
 	load_estate()
@@ -382,6 +386,12 @@ func finish_run(champ: int) -> Dictionary:
 	print("RUN_OVER heir=%s nights=%d" % [pl.name, run_night])
 	return pl
 
+## The first-night HOUSE RULES card was shown for this estate — persist so it
+## never lectures the same slot twice (a WIPE & START FRESH resets it).
+func mark_house_rules_shown() -> void:
+	house_rules_shown = true
+	save_estate()
+
 func legacy_of(p: int) -> int:
 	return int(legacy.get(p, 0))
 
@@ -428,6 +438,7 @@ func save_estate() -> void:
 			"ledger": ledger, "nights_played": nights_played,
 			"gate_statues": gate_statues,
 			"legacy": leg, "wardrobe": ward,
+			"house_rules_shown": house_rules_shown,
 			"run": {"active": run_active, "run_night": run_night,
 				"at_boundary": at_boundary, "trail_pos": tp, "tollgates": tg},
 		}, "  "))
@@ -452,6 +463,7 @@ func load_estate() -> void:
 		if not data.has("legacy") and nights_played > 0:
 			for i in 4:
 				legacy[i] = nights_played * 15
+		house_rules_shown = bool(data.get("house_rules_shown", false))
 		var run: Dictionary = data.get("run", {})
 		run_active = bool(run.get("active", false))
 		run_night = int(run.get("run_night", 0))

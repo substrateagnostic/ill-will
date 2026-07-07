@@ -33,6 +33,10 @@ const BID_TIME := 8.0
 ## Pre-game GET READY card: launch when all humans ready or this many seconds
 ## elapse, whichever first. A soak (all bots) never sees it.
 const READY_GATE_TIME := 15.0
+## First-night HOUSE RULES card: the opening auction of a brand-new estate pauses
+## for a one-time economy primer. Humans press A to continue; the card auto-
+## advances after this many seconds so bots / unattended tables never stall.
+const HOUSE_RULES_TIME := 5.0
 
 var phase := Phase.GROUNDS
 var bots := false
@@ -83,6 +87,12 @@ var _ready_gate_practice := false
 var _ready_gate_countdown := 0.0
 var _ready_gate_ready := {}       # seat -> bool: readied on the pre-game card
 var _ready_gate_needed: Array = []  # human seats that must press A to launch
+
+# ----- FIRST-NIGHT HOUSE RULES card (economy primer, once per fresh estate) --
+var _house_rules_active := false   # the one-time HOUSE RULES card is up
+var _house_rules_countdown := 0.0
+var _house_rules_ready := {}       # seat -> bool: pressed A to continue
+var _house_rules_needed: Array = []  # local human seats that must press A
 
 @onready var cam: Camera3D = $Camera3D
 @onready var top_bar: HBoxContainer = $UI/TopBar/Row
@@ -214,6 +224,40 @@ func _ready() -> void:
 						DirAccess.copy_absolute(ps + ".rrbak", ps)
 						DirAccess.remove_absolute(ps + ".rrbak")
 					print("READYTEST saves restored")
+					get_tree().quit()))
+		elif arg == "--houserulestest":
+			# Windowed HOUSE RULES card proof. Self-contained: backs up/restores
+			# the slot save (_show_house_rules persists the "shown" flag). Forces a
+			# brand-new estate in memory, then drives the real _enter_auction gate.
+			get_tree().create_timer(1.2).timeout.connect(func():
+				var slot := ProjectSettings.globalize_path(EstateState.slot_path(EstateState.current_slot))
+				var had_slot := FileAccess.file_exists(slot)
+				if had_slot:
+					DirAccess.copy_absolute(slot, slot + ".hrbak")
+				EstateState.house_rules_shown = false
+				EstateState.nights_played = 0
+				EstateState.run_night = 0
+				EstateState.games_played = 0
+				EstateState.ledger.clear()
+				_hide_title()
+				$UI/TopBar.visible = true
+				_rebuild_top_bar()
+				PlayerInput.assign(0, -1)
+				PlayerInput.set_bot(0, false)
+				PlayerInput.assign(1, -2)
+				PlayerInput.set_bot(1, false)
+				PlayerInput.set_bot(2, true)
+				PlayerInput.set_bot(3, true)
+				_enter_auction()
+				print("HOUSERULESTEST card_up=%s needed=%s" % [str(_house_rules_active), str(_house_rules_needed)])
+				VerifyCapture.snap("house_rules")
+				get_tree().create_timer(1.0).timeout.connect(func():
+					if had_slot:
+						DirAccess.copy_absolute(slot + ".hrbak", slot)
+						DirAccess.remove_absolute(slot + ".hrbak")
+					elif FileAccess.file_exists(slot):
+						DirAccess.remove_absolute(slot)
+					print("HOUSERULESTEST saves restored")
 					get_tree().quit()))
 		elif arg == "--readylobbytest":
 			# Windowed lobby proof: an EMPTY chair (dim) + a READY chip + a
@@ -1096,7 +1140,7 @@ func _spawn_toys() -> void:
 		b.global_position = Vector3(-2.0 + i * 2.0, 0.4, -1.5)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if phase == Phase.GAME or _module != null or _ready_gate_active or NetSession.is_client():
+	if phase == Phase.GAME or _module != null or _ready_gate_active or _house_rules_active or NetSession.is_client():
 		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var origin := cam.project_ray_origin(event.position)
@@ -1232,7 +1276,11 @@ func _process(delta: float) -> void:
 		_net_host_broadcast(delta)
 	if _ready_gate_active:
 		_poll_ready_gate(delta)
-	if phase == Phase.LOBBY or phase == Phase.GROUNDS:
+	if _house_rules_active:
+		_poll_house_rules(delta)
+	# The HOUSE RULES card can be up while phase is still GROUNDS (the --estate
+	# boot default) — suppress lobby join/ready polling so its A means "continue".
+	if (phase == Phase.LOBBY or phase == Phase.GROUNDS) and not _house_rules_active:
 		if _strolling:
 			_poll_stroll()
 		else:
@@ -1428,8 +1476,149 @@ func _on_tile_tripped(victim: int, owner_idx: int) -> void:
 	_redraw_graffiti()
 	_rebuild_top_bar()
 
+## ----- FIRST-NIGHT HOUSE RULES (economy primer, once per fresh estate) -----
+
+## Only a brand-new estate with human hands on it earns the lecture: opening
+## auction (games_played 0), first night of the run, nothing in the ledger, the
+## slot never taught before. Soaks (all bots) and guests (clients) skip it — so
+## --auctiontest / --estatebots reach the auction untouched.
+func _should_show_house_rules() -> bool:
+	if NetSession.is_client() or _all_bots():
+		return false
+	if EstateState.house_rules_shown:
+		return false
+	return EstateState.games_played == 0 and EstateState.run_night == 0 \
+		and EstateState.nights_played == 0
+
+func _maybe_show_house_rules() -> bool:
+	if not _should_show_house_rules():
+		return false
+	_show_house_rules()
+	return true
+
+## The card itself: the Executor's five-line primer on the economy a first-timer
+## needs, then a per-seat A-to-continue gate (the GET READY chip pattern).
+func _show_house_rules() -> void:
+	_house_rules_active = true
+	_house_rules_countdown = HOUSE_RULES_TIME
+	_house_rules_ready.clear()
+	_house_rules_needed.clear()
+	# Persist immediately: even if the night is abandoned on this card, the estate
+	# has now "explained itself once" and will not lecture this slot again.
+	EstateState.mark_house_rules_shown()
+	print("HOUSE_RULES shown (first-night primer, slot %d)" % EstateState.current_slot)
+	Sfx.play("card")
+	_hide_title()
+	banner.visible = false
+	_clear_panel("THE HOUSE RULES", Color(1, 0.85, 0.2))
+	var intro := Label.new()
+	intro.text = "You are new to the estate, so it will explain itself. Once. It keeps no patience for a slow study and less for a repeat question."
+	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	intro.custom_minimum_size = Vector2(720, 0)
+	intro.add_theme_font_size_override("font_size", 16)
+	intro.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
+	phase_box.add_child(intro)
+	var rules := [
+		"POINTS are the ladder. Place well in each game and the estate counts you among the worthy; place last and it counts you anyway.",
+		"♠ GRUDGE is spite made spendable — it buys your bids at THE AUCTION and the trap tiles you seed into the lawn.",
+		"ROYALTIES are the house's kindest cruelty: the traps and curses you author pay YOU, every time they take somebody else.",
+		"THE TRAIL climbs to the manor. First to the summit inherits it; the rest inherit the memory of the climb.",
+		"Every night closes at THE READING, where the ledger is totted up aloud and no one, on principle, is flattered.",
+	]
+	for line in rules:
+		var l := Label.new()
+		l.text = "·  " + line
+		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		l.custom_minimum_size = Vector2(720, 0)
+		l.add_theme_font_size_override("font_size", 18)
+		phase_box.add_child(l)
+	var sig := Label.new()
+	sig.text = "— The Executor"
+	sig.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sig.add_theme_font_size_override("font_size", 15)
+	sig.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
+	sig.modulate.a = 0.8
+	phase_box.add_child(sig)
+	# Per-seat A-to-continue (GET READY chip pattern). Bots, remote guests and the
+	# shared/mouse seat (-3, no discrete A) count as ready on arrival.
+	for i in EstateState.players.size():
+		if PlayerInput.is_bot(i) or NetSession.is_seat_remote(i):
+			continue
+		if PlayerInput.device_of(i) == -3:
+			_house_rules_ready[i] = true
+			continue
+		_house_rules_ready[i] = false
+		_house_rules_needed.append(i)
+		var row := HBoxContainer.new()
+		row.name = "RulesRow%d" % i
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 8)
+		row.add_child(PlayerBadge.make(i, 16))
+		var nm := Label.new()
+		nm.text = GameState.PLAYER_NAMES[i]
+		nm.add_theme_font_size_override("font_size", 17)
+		nm.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
+		row.add_child(nm)
+		var chip := _make_ready_chip()
+		chip.name = "RulesChip"
+		chip.text = "PRESS A"
+		chip.add_theme_color_override("font_color", Color(0.9, 0.8, 0.4))
+		chip.modulate.a = 0.85
+		row.add_child(chip)
+		phase_box.add_child(row)
+	var count := Label.new()
+	count.name = "RulesCountdown"
+	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	count.add_theme_font_size_override("font_size", 18)
+	count.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
+	phase_box.add_child(count)
+	_refresh_house_rules_countdown()
+
+func _all_house_rules_ready() -> bool:
+	for i in _house_rules_needed:
+		if not _house_rules_ready.get(i, false):
+			return false
+	return true
+
+func _refresh_house_rules_countdown() -> void:
+	var count := phase_box.get_node_or_null("RulesCountdown")
+	if count == null or not count is Label:
+		return
+	var waiting: Array = []
+	for i in _house_rules_needed:
+		if not _house_rules_ready.get(i, false):
+			waiting.append(GameState.PLAYER_NAMES[i])
+	if waiting.is_empty():
+		count.text = "the estate is satisfied — to the auction"
+	else:
+		count.text = "press A to continue  ·  waiting on %s  ·  the auction opens in %ds" % [
+			", ".join(waiting), ceili(maxf(_house_rules_countdown, 0.0))]
+
+func _poll_house_rules(delta: float) -> void:
+	_house_rules_countdown -= delta
+	for i in _house_rules_needed:
+		if not _house_rules_ready.get(i, false) and PlayerInput.just_pressed(i, "a"):
+			_house_rules_ready[i] = true
+			Sfx.play("confirm")
+			var row := phase_box.get_node_or_null("RulesRow%d" % i)
+			if row:
+				var chip := row.get_node_or_null("RulesChip")
+				if chip and chip is Label:
+					chip.text = "READY"
+					chip.add_theme_color_override("font_color", Color(0.35, 0.9, 0.5))
+					chip.modulate.a = 1.0
+	_refresh_house_rules_countdown()
+	if _all_house_rules_ready() or _house_rules_countdown <= 0.0:
+		_house_rules_active = false
+		_enter_auction()
+
 func _enter_auction() -> void:
 	if phase == Phase.AUCTION:
+		return
+	# A brand-new estate meets THE HOUSE RULES before its first auction. The card
+	# marks itself shown and re-enters here when dismissed (flag now blocks it).
+	if _maybe_show_house_rules():
 		return
 	phase = Phase.AUCTION
 	Music.play_slot("auction")
