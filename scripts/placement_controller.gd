@@ -10,6 +10,12 @@ var active := false
 var ghost: Trap = null
 var trap_container: Node3D = null
 var course: Course = null
+## Seat gate (outside tester round 2: "click fast enough and you can steal the
+## bot's traps"). Mouse/wheel/key input drives the ghost ONLY when the current
+## builder is a human seat (shared-mouse hotseat: the mouse belongs to whoever
+## is building). A bot's build turn sets this false in begin(), so its ghost is
+## untouchable — bots place exclusively through debug_place_scan.
+var human_input := true
 
 var _rot := 0.0
 var _valid := false
@@ -17,8 +23,9 @@ var _valid := false
 @onready var disc: MeshInstance3D = $ValidityDisc
 @onready var disc_mat: StandardMaterial3D = disc.get_surface_override_material(0)
 
-func begin(scene: PackedScene, author_idx: int, author_color: Color, params := {}) -> void:
+func begin(scene: PackedScene, author_idx: int, author_color: Color, params := {}, allow_mouse := true) -> void:
 	cancel()
+	human_input = allow_mouse
 	ghost = scene.instantiate()
 	for k in params:
 		ghost.set(k, params[k])
@@ -40,7 +47,7 @@ func cancel() -> void:
 	disc.visible = false
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not active or ghost == null:
+	if not active or ghost == null or not human_input:
 		return
 	if event is InputEventMouseMotion:
 		var p := _mouse_on_ground(event.position)

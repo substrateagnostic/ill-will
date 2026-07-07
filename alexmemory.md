@@ -893,3 +893,40 @@ survived its kill on Windows and re-ran harnesses over my baseline logs —
 baselines re-captured via HEAD-swapped scripts, restoration byte-verified.
 Lesson learned: killing the shell does not kill its godot children; give
 every phase its own output dir.
+
+## 2026-07-06 — PAR ROUND 2: tester's three bugs, three root causes (agent worktree)
+
+Outside tester (round 2) + your crusher report. Full story + receipts in
+docs/verify/par-round2-VERIFY.md. Physics untouched.
+
+1. TEE-OFF GLARE. Not a lighting regression — the new SMITE shot cam fills the
+frame wall-to-wall with sunlit green + white wall caps. Fix scoped where the
+problem is: SHOT mode tweens camera exposure to 0.58 over the existing blend,
+DIORAMA stays at 1.0 (verified byte-identical build-view pixels). Reads
+overcast-bright now; cyan pads / pink rings still pop. If you want it brighter
+or dimmer it is ONE constant: SHOT_EXPOSURE in scripts/camera_rig.gd.
+
+2. TRAP THEFT. Confirmed and nastier than reported: during a BOT's build turn
+the shared mouse could move AND CONFIRM the bot's ghost (new --stealtest
+receipt: synthetic click planted the bot's spikes 55 frames before its think
+fired). Placement input is now seat-gated (human turns only — hotseat mouse
+semantics unchanged), and draft cards grey out on bot turns. Bots place through
+their own scan path, untouched, proven live after the fix.
+
+3. YOUR CRUSHER. The ghost was never broken — placetest receipts show pad,
+hammer and Meshy head lock-stepped with the root through a full drag, windowed
+screenshots confirm. What you actually saw was bug 2: the bot CONFIRMED the
+crusher out from under your cursor mid-drag (I reproduced the exact hijack),
+and the disc still following your mouse belonged to the NEXT bot's ghost. The
+"crusher on the tee" half was real though: tee no-build was ONE disc at the
+tee CENTROID, so outer tees were exposed. Now every tee gets its own disc
+(tee-probe receipt: crusher ON tee 0 = INVALID). Side effect worth knowing:
+bot trap layouts per seed shift (legality changed), determinism itself intact.
+
+Also learned the hard way, for future agents: core/migrate.gd resurrects
+party_setup.json from the old "Par for the Curse" user dir — deleting the ILL
+WILL copy does not give you a bot-free boot. Documented in the verify doc.
+
+Regressions: autobuild/autoplay/tracepos clean, full 4-bot fairway match to
+MATCH_OVER champ=MINT with chaos overlap peak 3, estate smoke clean, import
+pass clean.

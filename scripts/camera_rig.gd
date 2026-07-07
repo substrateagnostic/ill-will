@@ -17,6 +17,12 @@ const CAM_TO_DIORAMA := 0.5
 const CAM_SHOT_BACK := 2.0    # m behind the avatar, along -facing
 const CAM_SHOT_UP := 11.5     # m above the green (steep skill-shot pitch ~53deg)
 const CAM_SHOT_AHEAD := 6.0   # look target this far down the aim line
+## Tee-off glare fix (outside tester round 2: "lighting on tee off is too
+## bright"). The SHOT pose stares straight down the sunlit lane, so bright
+## green + white wall caps fill ~the whole frame. Scoped exposure drop while in
+## SHOT mode reads overcast-bright; DIORAMA keeps the stock 1.0 exposure so the
+## build/roll overview is untouched. Presentation only — zero physics impact.
+const SHOT_EXPOSURE := 0.58
 
 @export var course_center := Vector3(0, 0, -6.5)
 @export var course_extent := Vector3(3.0, 0.0, 8.5)
@@ -35,6 +41,7 @@ var _focus_timer := 0.0
 var _blend_from := Transform3D.IDENTITY
 var _blend_t := -1.0
 var _blend_dur := 0.5
+var _expo_tween: Tween = null
 
 @onready var cam: Camera3D = $Camera3D
 
@@ -50,6 +57,12 @@ func set_mode(m: int, avatar: Node3D = null) -> void:
 	# plane (5m) would smear the whole aim read. Presentation only.
 	if cam.attributes != null:
 		cam.attributes.dof_blur_near_enabled = m == Mode.DIORAMA
+		# Glare fix: ease exposure down over the same blend so there's no pop.
+		if _expo_tween != null and _expo_tween.is_valid():
+			_expo_tween.kill()
+		_expo_tween = create_tween()
+		_expo_tween.tween_property(cam.attributes, "exposure_multiplier",
+			SHOT_EXPOSURE if m == Mode.SHOT else 1.0, _blend_dur)
 
 func shake(amount: float) -> void:
 	_shake = maxf(_shake, amount)

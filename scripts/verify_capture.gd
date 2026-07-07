@@ -14,6 +14,14 @@ var _at_state := 0
 var placetest := false
 var _pt_frame := -1
 var _pt_done := false
+## --stealtest: during the first BUILD turn (expected to belong to a BOT), inject
+## a synthetic mouse move + left click and log whether they drive the ghost /
+## confirm the placement. Receipt for the "click fast enough and you can steal
+## the bot's trap" bug: pre-fix the click places the trap at the mouse point;
+## post-fix both events are inert and the bot's own scan placement stands.
+var stealtest := false
+var _st_state := 0
+var _st_wait := 0
 var out_dir := "verify_out"
 var frame := 0
 var active := false
@@ -61,6 +69,9 @@ func _ready() -> void:
 			active = true
 		elif arg == "--auctiontest":
 			auctiontest = true
+			active = true
+		elif arg == "--stealtest":
+			stealtest = true
 			active = true
 		elif arg.begins_with("--quitafter="):
 			quit_after = int(arg.trim_prefix("--quitafter="))
@@ -113,11 +124,22 @@ func _run_placetest() -> void:
 	if pc == null or not pc.active or pc.ghost == null:
 		return
 	_pt_frame += 1
+	if _pt_frame == 1:
+		# Tee-exclusion receipt: parking the ghost ON tee 0 must read INVALID
+		# (per-tee no-build zones). The drag overwrites the position right after.
+		var tee: Vector3 = pc.course.tee_positions()[0]
+		pc.ghost.move_placement(tee)
+		pc._refresh()
+		print("PLACETEST tee-probe at %s valid=%s" % [_v(tee), str(pc._valid)])
 	var t: float = clampf(_pt_frame / 180.0, 0.0, 1.0)
 	pc.ghost.global_position = Vector3(lerpf(0.0, 1.5, t), 0.0, lerpf(-2.0, -9.0, t))
 	pc._refresh()
 	if _pt_frame % 45 == 0 or t >= 1.0:
 		_pt_report(pc.ghost, "drag t=%.2f" % t)
+		# Windowed runs also snap the ghost mid-drag, so the rendered trap can be
+		# eyeballed against the printed node positions (crusher pad/hammer report).
+		if DisplayServer.get_name() != "headless":
+			snap("placetest_%03d" % _pt_frame)
 	if t >= 1.0:
 		var placed: Node3D = pc.ghost
 		if pc._valid:
@@ -127,6 +149,67 @@ func _run_placetest() -> void:
 			print("PLACETEST INVALID at final spot")
 		get_tree().create_timer(1.0).timeout.connect(func(): _pt_report(placed, "1s after confirm"))
 		_pt_done = true
+
+func _run_stealtest(m: Node) -> void:
+	if _st_state >= 4 or not m.has_method("get_phase_name"):
+		return
+	_st_wait -= 1
+	if _st_wait > 0:
+		return
+	var pc: Node = m.find_child("PlacementController", false, false)
+	if pc == null:
+		return
+	match _st_state:
+		0:
+			if m.get_phase_name() != "BUILD" or not pc.active or pc.ghost == null:
+				return
+			print("STEALTEST build turn open | ghost_at=%s placed_traps=%d screen_pt=%s cam=%s" % [_v(pc.ghost.global_position), _st_placed(pc), str(_st_screen_point(pc)), str(get_viewport().get_camera_3d().global_position)])
+			var mm := InputEventMouseMotion.new()
+			mm.position = _st_screen_point(pc)
+			Input.parse_input_event(mm)
+			_st_state = 1
+			_st_wait = 5
+		1:
+			var alive: bool = pc.active and pc.ghost != null
+			print("STEALTEST after synthetic MOUSE MOTION | ghost_at=%s ghost_alive=%s" % [_v(pc.ghost.global_position) if alive else "(gone)", str(alive)])
+			var mb := InputEventMouseButton.new()
+			mb.button_index = MOUSE_BUTTON_LEFT
+			mb.pressed = true
+			mb.position = _st_screen_point(pc)
+			Input.parse_input_event(mb)
+			_st_state = 2
+			_st_wait = 5
+		2:
+			var alive2: bool = pc.active and pc.ghost != null
+			print("STEALTEST after synthetic CLICK | placed_traps=%d ghost_alive=%s" % [_st_placed(pc), str(alive2)])
+			for t in pc.trap_container.get_children():
+				if t is Trap and not t.is_ghost:
+					print("STEALTEST placed trap %s author=%d at %s" % [t.trap_id, t.author_index, _v(t.global_position)])
+			# Liveness tail: the current builder (a bot) must still complete its
+			# OWN placement through debug_place_scan once its think delay fires.
+			_st_state = 3
+			_st_wait = 240
+		3:
+			print("STEALTEST bot-liveness | placed_traps=%d" % _st_placed(pc))
+			for t in pc.trap_container.get_children():
+				if t is Trap and not t.is_ghost:
+					print("STEALTEST placed trap %s author=%d at %s" % [t.trap_id, t.author_index, _v(t.global_position)])
+			_st_state = 4
+
+## Screen point over a legal build spot: a point 2m short of the course center
+## on the active camera. Unprojected so the receipt is camera-pose-agnostic.
+func _st_screen_point(pc: Node) -> Vector2:
+	var cam := get_viewport().get_camera_3d()
+	var c: Vector3 = pc.course.course_center
+	return cam.unproject_position(Vector3(c.x, 0.0, c.z + 2.0))
+
+## Solid (non-ghost) traps on the course right now.
+func _st_placed(pc: Node) -> int:
+	var n := 0
+	for t in pc.trap_container.get_children():
+		if t is Trap and not t.is_ghost:
+			n += 1
+	return n
 
 func _pt_report(trap: Node3D, tag: String) -> void:
 	var parts := "PLACETEST %s | root=%s" % [tag, _v(trap.global_position)]
@@ -202,6 +285,8 @@ func _process(_delta: float) -> void:
 			print(parts)
 	if placetest and not _pt_done:
 		_run_placetest()
+	if stealtest:
+		_run_stealtest(scene)
 	if auctiontest and scene.has_method("get_phase_name"):
 		_ap_cooldown -= 1
 		if _at_state == 0 and scene.get_phase_name() == "AUCTION" and _ap_cooldown <= 0:
