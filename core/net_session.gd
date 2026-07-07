@@ -6,14 +6,21 @@ extends Node
 ## PlayerInput `_remote` seam (the `_dbg_aim` pattern, networked).
 ##
 ## Transport phase 1: raw ENetMultiplayerPeer — localhost / LAN / port-forward.
-## The API below is transport-agnostic on purpose: phase 3 swaps in GodotSteam's
-## SteamMultiplayerPeer behind host_night()/join_night() and nothing above this
-## file changes (every @rpc rides the high-level MultiplayerAPI either way).
+## Transport phase 3 (THIS SEAM, docs/design/12-steam-transport.md): GodotSteam
+## GDExtension 4.20 vendored in addons/godotsteam — SteamMultiplayerPeer rides
+## the SAME high-level MultiplayerAPI, so every @rpc, the seat map, the roster
+## and the 30 Hz relay below are transport-agnostic: nothing above the two
+## host/join entry points changes. Steam is duck-typed via Engine.get_singleton
+## / ClassDB (never a hard identifier), so this file parses and runs bit-for-bit
+## on machines with no Steam client and on platforms with no vendored libs.
 ##
 ## CLI:  --net=host [--port=N]           host on N (default 8910)
 ##       --net=join=IP:PORT              join a direct address
 ##       --net=join --addr=IP:PORT       spec §7 form, same thing
 ##       --net=join=CODE                 join a 6-char invite code
+##       --net=join=steam:LOBBYID        join a Steam lobby (or bare 15+ digits)
+##       --transport=enet|steam          explicit transport pick (default enet;
+##                                       steam falls back to enet when absent)
 ##       --nettape                       NETPROBE: drive the claimed seat from
 ##                                       the built-in deterministic input tape
 ##
@@ -50,6 +57,9 @@ const PING_INTERVAL := 2.0
 const CODE_ALPHABET := "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 var role: int = Role.OFFLINE
+## "enet" | "steam" — which MultiplayerPeer carries the CURRENT session.
+## Meaningless while OFFLINE (reads "enet", the default).
+var transport := "enet"
 var _listen_port := DEFAULT_PORT
 var _seat_by_peer := {}   # peer_id -> seat  (peer 0 = the local couch-probe tape)
 var _peer_by_seat := {}   # seat -> peer_id
@@ -68,8 +78,18 @@ var _aim_provider := Callable()   # phase-2 game mirrors install {aim, aim_scree
 # --- CLI
 var _cli_mode := ""
 var _cli_target := ""
+var _cli_transport := ""          # "" = default (enet) | "enet" | "steam"
 var _join_retries := 0
 var _probe := false
+
+# --- STEAM transport seam (phase 3, docs/design/12-steam-transport.md)
+## SpaceWar dev appid. PUBLISH DAY: replace with the real appid (one constant).
+const STEAM_APP_ID := 480
+const STEAM_LOBBY_FRIENDS_ONLY := 1   # Steam.LobbyType FRIENDS_ONLY
+var _steam: Object = null             # the Steam singleton, when the extension is present
+var _steam_inited := false            # steamInitEx succeeded this process
+var _steam_lobby_id := 0              # the lobby the current session rides (0 = none)
+var _steam_pending := ""              # "" | "host" | "join:<lobby>" (lobby callback in flight)
 
 # --- NETPROBE deterministic input tape (see docs/verify/online-phase1-VERIFY.md)
 # Steps hold until the next entry; from PULSE_FROM the tape pulses A every 90
@@ -124,13 +144,24 @@ func _ready() -> void:
 			_cli_target = arg.trim_prefix("--addr=")
 		elif arg.begins_with("--port="):
 			_listen_port = int(arg.trim_prefix("--port="))
+		elif arg.begins_with("--transport="):
+			_cli_transport = arg.trim_prefix("--transport=")
 		elif arg == "--nettape":
 			_tape_requested = true
 		elif arg.begins_with("--netprobe="):
 			_probe = true
+	if _cli_mode != "" or _cli_transport != "":
+		print("NET transports: enet ready · steam %s" % steam_status())
 	if _cli_mode == "host":
-		var err := host_night(_listen_port)
-		print("NET host port=%d err=%d code=%s addr=%s" % [_listen_port, err, invite_code(), listen_addr()])
+		if _cli_transport == "steam":
+			var serr := host_night_steam()
+			if serr == OK:
+				print("NET steam host: lobby create in flight (appid %d)" % STEAM_APP_ID)
+			else:
+				print("NET steam host unavailable (err=%d) — hosting on enet instead" % serr)
+		if role == Role.OFFLINE and _steam_pending == "":
+			var err := host_night(_listen_port)
+			print("NET host port=%d err=%d code=%s addr=%s" % [_listen_port, err, invite_code(), listen_addr()])
 	elif _cli_mode == "join":
 		_join_retries = 20
 		call_deferred("_try_cli_join")
@@ -146,11 +177,14 @@ func host_night(port := DEFAULT_PORT) -> int:
 		return err
 	multiplayer.multiplayer_peer = peer
 	_listen_port = port
+	transport = "enet"
 	role = Role.HOST
 	session_opened.emit(role)
 	return OK
 
-## Accepts a 6-char invite code, "IP:PORT", or a bare IP (default port).
+## Accepts a 6-char invite code, "IP:PORT", a bare IP (default port),
+## "steam:LOBBYID", or a bare Steam lobby id (15+ digits — no collision with
+## ports or 6-char codes by length alone).
 func join_night(target: String) -> int:
 	if role != Role.OFFLINE:
 		return ERR_ALREADY_IN_USE
@@ -159,6 +193,10 @@ func join_night(target: String) -> int:
 	var t := target.strip_edges()
 	if t == "":
 		return ERR_INVALID_PARAMETER
+	if t.begins_with("steam:"):
+		return join_night_steam(int(t.trim_prefix("steam:")))
+	if t.is_valid_int() and t.length() >= 15:
+		return join_night_steam(int(t))
 	if t.contains(":"):
 		var pr := t.rsplit(":", false, 1)
 		ip = pr[0]
@@ -176,11 +214,12 @@ func join_night(target: String) -> int:
 	if err != OK:
 		return err
 	multiplayer.multiplayer_peer = peer
+	transport = "enet"
 	role = Role.CLIENT
 	return OK
 
 func leave(reason := "left the night") -> void:
-	if role == Role.OFFLINE:
+	if role == Role.OFFLINE and _steam_pending == "":
 		return
 	for seat in _peer_by_seat.keys():
 		PlayerInput.clear_remote(int(seat))
@@ -192,6 +231,8 @@ func leave(reason := "left the night") -> void:
 	_tape_active = false
 	_trace_tick = -1
 	role = Role.OFFLINE
+	_steam_pending = ""
+	_steam_drop_lobby()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	session_closed.emit(reason)
 
@@ -246,6 +287,8 @@ func set_aim_provider(cb: Callable) -> void:
 	_aim_provider = cb
 
 func listen_addr() -> String:
+	if transport == "steam" and _steam_lobby_id != 0:
+		return "steam lobby %d" % _steam_lobby_id
 	return "%s:%d" % [_best_lan_ip(), _listen_port]
 
 ## Host grants (seat >= 0) or declines (seat == -1) a requested chair.
@@ -261,6 +304,154 @@ func grant_seat(peer_id: int, seat: int, reason := "") -> void:
 		seat_claimed.emit(seat, peer_id)
 	_rpc_seat_granted.rpc_id(peer_id, seat, reason)
 
+## ----- STEAM transport (phase 3 seam — docs/design/12-steam-transport.md) -----
+## Everything here is duck-typed (Engine.get_singleton / ClassDB.instantiate /
+## Object.call) so the file parses on machines without the extension and runs
+## bit-for-bit on machines without a Steam client. The SteamMultiplayerPeer is
+## a drop-in MultiplayerPeer: once multiplayer.multiplayer_peer is set, every
+## @rpc above (input relay, lobby facts, module state, private cards) and the
+## whole seat/roster machinery run UNCHANGED — that is the point of the seam.
+
+## The GDExtension is vendored and registered (classes exist on win64/linux64).
+func steam_available() -> bool:
+	return Engine.has_singleton("Steam") and ClassDB.class_exists("SteamMultiplayerPeer")
+
+## The Steam client is installed and running on this machine (cheap SDK check,
+## valid before init). Says nothing about being logged in — init decides that.
+func steam_running() -> bool:
+	if not steam_available():
+		return false
+	return bool(Engine.get_singleton("Steam").call("isSteamRunning"))
+
+## One-word answer for logs and the estate UI:
+##   "absent"  — extension classes not present (non-vendored platform)
+##   "offline" — vendored, but no Steam client running on this machine
+##   "ready"   — Steam client detected; steam transport can be offered
+##   "up"      — steamInitEx succeeded this process
+func steam_status() -> String:
+	if _steam_inited:
+		return "up"
+	if not steam_available():
+		return "absent"
+	return "ready" if steam_running() else "offline"
+
+## What the estate's HOST NIGHT flow should offer (spec 12 §auto-detect):
+## explicit --transport= wins; otherwise steam only when genuinely present.
+func preferred_transport() -> String:
+	if _cli_transport != "":
+		return _cli_transport
+	return "steam" if steam_status() == "ready" else "enet"
+
+func steam_lobby_id() -> int:
+	return _steam_lobby_id
+
+## Lazy init — called only when a steam host/join is actually requested, so
+## couch and enet runs never touch the Steam API at all (graceful absence).
+func _steam_init() -> bool:
+	if _steam_inited:
+		return true
+	if not steam_available():
+		return false
+	_steam = Engine.get_singleton("Steam")
+	if not bool(_steam.call("isSteamRunning")):
+		return false
+	var res: Dictionary = _steam.call("steamInitEx", STEAM_APP_ID, false)
+	if int(res.get("status", 1)) != 0:
+		print("NET steam init failed: %s" % str(res.get("verbal", res)))
+		return false
+	_steam_inited = true
+	# Warm the Steam Datagram Relay path early so NAT fallback is ready by the
+	# time a guest connects (Valve's recommended pattern).
+	_steam.call("initRelayNetworkAccess")
+	if not _steam.is_connected("lobby_created", _on_steam_lobby_created):
+		_steam.connect("lobby_created", _on_steam_lobby_created)
+		_steam.connect("lobby_joined", _on_steam_lobby_joined)
+		_steam.connect("join_requested", _on_steam_join_requested)
+	print("NET steam up as '%s' (appid %d)" % [str(_steam.call("getPersonaName")), STEAM_APP_ID])
+	return true
+
+## HOST via Steam: create a friends-only lobby; the peer opens on lobby_created
+## (async — session_opened fires then, exactly like the enet path's sync emit).
+func host_night_steam() -> int:
+	if role != Role.OFFLINE or _steam_pending != "":
+		return ERR_ALREADY_IN_USE
+	if not _steam_init():
+		return ERR_UNAVAILABLE
+	_steam_pending = "host"
+	_steam.call("createLobby", STEAM_LOBBY_FRIENDS_ONLY, MAX_GUESTS + 1)
+	return OK
+
+## JOIN via Steam lobby id (from an overlay invite, the friends list, or a
+## pasted "steam:LOBBYID" target). Async: the peer connects on lobby_joined.
+func join_night_steam(lobby_id: int) -> int:
+	if role != Role.OFFLINE or _steam_pending != "":
+		return ERR_ALREADY_IN_USE
+	if lobby_id <= 0:
+		return ERR_INVALID_PARAMETER
+	if not _steam_init():
+		return ERR_UNAVAILABLE
+	_steam_pending = "join:%d" % lobby_id
+	_steam.call("joinLobby", lobby_id)
+	return OK
+
+## Pop the Steam overlay's invite dialog for the current lobby (host only).
+func open_steam_invite_overlay() -> void:
+	if _steam_inited and _steam_lobby_id != 0:
+		_steam.call("activateGameOverlayInviteDialog", _steam_lobby_id)
+
+func _on_steam_lobby_created(connect_res: int, lobby_id: int) -> void:
+	if _steam_pending != "host":
+		return
+	_steam_pending = ""
+	if connect_res != 1:  # 1 = k_EResultOK
+		session_closed.emit("steam lobby creation failed (%d)" % connect_res)
+		return
+	_steam.call("setLobbyData", lobby_id, "game", "illwill")
+	_steam.call("setLobbyJoinable", lobby_id, true)
+	var peer: MultiplayerPeer = ClassDB.instantiate("SteamMultiplayerPeer")
+	var err := int(peer.call("host_with_lobby", lobby_id))
+	if err != OK:
+		_steam.call("leaveLobby", lobby_id)
+		session_closed.emit("steam host socket failed (%d)" % err)
+		return
+	_steam_lobby_id = lobby_id
+	multiplayer.multiplayer_peer = peer
+	transport = "steam"
+	role = Role.HOST
+	session_opened.emit(role)
+	print("NET steam lobby %d open — invite via overlay or share steam:%d" % [lobby_id, lobby_id])
+
+func _on_steam_lobby_joined(lobby: int, _perms: int, _locked: bool, response: int) -> void:
+	# createLobby also fires lobby_joined for the host — only act on OUR join.
+	if not _steam_pending.begins_with("join:"):
+		return
+	_steam_pending = ""
+	if response != 1:  # 1 = k_EChatRoomEnterResponseSuccess
+		session_closed.emit("steam lobby join refused (%d)" % response)
+		return
+	var peer: MultiplayerPeer = ClassDB.instantiate("SteamMultiplayerPeer")
+	var err := int(peer.call("connect_to_lobby", lobby))
+	if err != OK:
+		_steam.call("leaveLobby", lobby)
+		session_closed.emit("steam connect failed (%d)" % err)
+		return
+	_steam_lobby_id = lobby
+	multiplayer.multiplayer_peer = peer
+	transport = "steam"
+	role = Role.CLIENT
+	print("NET steam joined lobby %d — requesting a seat" % lobby)
+	# connected_to_server fires through MultiplayerAPI exactly as with ENet;
+	# _on_connected_to_server then requests the seat. Nothing else changes.
+
+## A friend accepted our overlay invite (or clicked JOIN GAME in the friends
+## list). Steam hands us the lobby — walk straight into the join flow.
+func _on_steam_join_requested(lobby_id: int, _friend_id: int) -> void:
+	if role != Role.OFFLINE or _steam_pending != "":
+		print("NET steam invite ignored — already in a session")
+		return
+	print("NET steam invite accepted -> lobby %d" % lobby_id)
+	join_night_steam(lobby_id)
+
 ## ----- connection plumbing -----
 
 func _try_cli_join() -> void:
@@ -275,6 +466,7 @@ func _on_connected_to_server() -> void:
 
 func _on_connection_failed() -> void:
 	role = Role.OFFLINE
+	_steam_drop_lobby()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	if _join_retries > 0:
 		_join_retries -= 1
@@ -287,8 +479,18 @@ func _on_server_disconnected() -> void:
 	_my_seat = -1
 	_tape_active = false
 	role = Role.OFFLINE
+	_steam_drop_lobby()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	session_closed.emit("the host closed the night" if was_seated else "connection lost")
+
+## Leave the Steam lobby (if any) and fall back to the enet default posture.
+## Safe no-op in every enet/couch flow — _steam_lobby_id is only ever nonzero
+## after a successful steam host/join.
+func _steam_drop_lobby() -> void:
+	if _steam_lobby_id != 0 and _steam_inited:
+		_steam.call("leaveLobby", _steam_lobby_id)
+	_steam_lobby_id = 0
+	transport = "enet"
 
 func _on_peer_connected(peer_id: int) -> void:
 	if role == Role.HOST:
@@ -534,6 +736,8 @@ func _step_tape() -> void:
 		_rpc_input.rpc_id(1, pkt)
 
 func _process(delta: float) -> void:
+	if _steam_inited:
+		_steam.call("run_callbacks")   # lobby/overlay callbacks + socket pump
 	if role != Role.HOST:
 		return
 	_ping_accum += delta
@@ -549,6 +753,8 @@ func _process(delta: float) -> void:
 func invite_code() -> String:
 	if role != Role.HOST:
 		return ""
+	if transport == "steam":
+		return "steam:%d" % _steam_lobby_id   # overlay invites are the real flow
 	return encode_code(_best_lan_ip(), _listen_port)
 
 static func _best_lan_ip() -> String:

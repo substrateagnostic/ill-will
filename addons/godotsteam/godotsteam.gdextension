@@ -1,0 +1,21 @@
+; GodotSteam GDExtension 4.20 (Steamworks SDK 1.64) — vendored 2026-07-07.
+; Source: https://codeberg.org/godotsteam/godotsteam release v4.20-gde,
+;         godotsteam-4.20-gdextension-plugin-4.4.zip (MIT, license.md).
+; Trimmed to the platforms this project vendors: win64 (dev + ship) and
+; linux64 (the golem). Other platforms: re-extract from the upstream zip.
+; The editor-updater plugin (plugin.cfg / godotsteam_plugin.gd / editor/) is
+; deliberately NOT vendored — we pin versions by hand, nothing phones home.
+
+[configuration]
+entry_symbol = "godotsteam_init"
+compatibility_minimum = "4.4"
+
+[libraries]
+linux.debug.x86_64 = "res://addons/godotsteam/linux64/libgodotsteam.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://addons/godotsteam/linux64/libgodotsteam.linux.template_release.x86_64.so"
+windows.debug.x86_64 = "res://addons/godotsteam/win64/libgodotsteam.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://addons/godotsteam/win64/libgodotsteam.windows.template_release.x86_64.dll"
+
+[dependencies]
+linux.x86_64 = { "res://addons/godotsteam/linux64/libsteam_api.so": "" }
+windows.x86_64 = { "res://addons/godotsteam/win64/steam_api64.dll": "" }

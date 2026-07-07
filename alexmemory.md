@@ -1075,3 +1075,71 @@ DECISIONS / THINGS TO REVIEW:
    name ("illWill" FPS 2023, "Ill Will" RPG Maker 2012); the name is far more
    crowded outside games (film shorts, Nas's label, Dan Chaon novel, Ill Will
    Press). Your call on what that means.
+
+## 2026-07-07 — GODOTSTEAM PREP (phase-3 transport seam) — netcode transport agent
+
+WHAT LANDED
+- Vendored GodotSteam GDExtension 4.20 (Steamworks SDK 1.64, MIT) into
+  addons/godotsteam — win64 + linux64 only (18 MB; other platforms re-extract
+  from the upstream zip, SHA-256 in the doc). Editor-updater plugin
+  deliberately stripped: nothing phones home, version pinned by hand.
+- core/net_session.gd grew the transport seam (additive, +213/-7):
+  transport="enet"|"steam", steam_available/steam_running/steam_status/
+  preferred_transport, host_night_steam() (createLobby -> host_with_lobby),
+  join_night_steam() (joinLobby -> connect_to_lobby), overlay-invite
+  auto-join (join_requested), open_steam_invite_overlay(),
+  --transport=enet|steam CLI, join targets "steam:LOBBYID" / bare 15+
+  digits. All Steam access duck-typed (Engine.get_singleton/ClassDB) — the
+  file parses and runs identically where Steam does not exist.
+- steam_appid.txt = 480 (SpaceWar) at project root, DEV ONLY — never ship it
+  next to an exe. NOT exported into the PCK (plain .txt).
+- project.godot needed ZERO lines: Godot 4.6 auto-registers .gdextension at
+  import (.godot/extension_list.cfg verified).
+- docs/design/12-steam-transport.md: research receipts (versions/URLs/API
+  signatures verified against upstream repo), seam API, publish-day
+  checklist ($100 Steam Direct, appid swap = ONE constant, steamcmd depot,
+  RTM), what cannot be tested without Steam + a second account.
+
+RECEIPTS (all green tonight, Steam NOT installed on this machine)
+- Import pass clean; extension listed; soak (--estate --estatebots) exit 0,
+  zero script errors, ZERO steam output (silent absence proven).
+- Invite-code selftest 5/5 PASS (unchanged).
+- NETPROBE couch A/B byte-identical AND byte-identical to master baseline —
+  the sim is untouched by the seam.
+- Two-instance ENet handshake (host+join, both roles rerun): full night,
+  NETPROBE_RESULTS identical to couch AND to master's relay run, NETHASH
+  27/27 pairs identical.
+- --transport=steam --net=host with no Steam: one quiet line, err=2
+  fallback to enet host, exit 0, zero errors.
+
+DECISIONS ALEX MAY WANT TO REVIEW
+1. CLI --net=host WITHOUT --transport= stays ENet forever (auto-detect
+   OFFERS steam via preferred_transport() for the estate UI; it never
+   silently switches the CLI) — protects every existing receipt.
+2. Vendored only win64+linux64 binaries (18 MB vs 93 MB full).
+3. Two-instance-one-machine testing is impossible over Steam transport (one
+   client = one SteamID) — ENet keeps that rig forever.
+
+HAZARDS FOUND (pre-existing, estate lane, NOT fixed — out of my lanes)
+- Shared user:// two-instance leak, now characterized: if the JOIN instance
+  outlives the host's save-restore (kill mid-flight, lingering window), it
+  rewrites party_setup.json with remote-seat residue (seat1 device=-99,
+  bot=false). The NEXT netprobe run then claims seat 2 and FAILs "no remote
+  claim on seat 1". Tonight's first divergent NETPROBE_RESULTS traced to
+  exactly this dirty start state — NOT the seam. Antidote: external backup
+  of user:// before any netprobe session; ensure seat 1 is a bot in
+  party_setup.json. Root-fix candidate for the estate pass: netprobe join
+  flow should never PartySetup.save().
+- OWNER NOTE: tonight's rig churn rewrote user://party_setup.json a few
+  times; final state is self-consistent (seat0 human KBM, seats1-3 bots) but
+  your exact pre-tonight seat/device cache was not recoverable. 10-second
+  reseat via ESC SEATS. estate_save/cosmetics/slot saves untouched (mtimes
+  pre-run).
+
+NEEDS-OWNER (5-minute smoke once Steam is installed + logged in)
+  godot --path . -- --transport=steam --net=host
+  expect: NET steam up as '<persona>' (appid 480) -> NET steam lobby <id>
+  open; shift+tab overlay renders. Full two-account night needs a second
+  machine/account. Estate HOST NIGHT UI wiring (preferred_transport(),
+  overlay invite button, persona names) = phase-3 estate pass, deliberately
+  not touched tonight.
