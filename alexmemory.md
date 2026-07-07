@@ -377,6 +377,39 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-07 — ONLINE PHASE 2, GAME MIRROR #2 — THE UNDERSTUDY (agent worktree)
+The second theater game plays ONLINE end to end. It rode the séance house
+pattern nearly free (same hidden-info shape). The win worth seeing:
+
+THE MONEY-SHOT PAIR (two PNGs, one casting window, remote seat 1 = a CAST
+member so its private card is THE PLAY):
+- HOST screen: `SUMMONED ACROSS THE WIRE · THE SCRIPT IS DELIVERED TO THEIR
+  SCREEN ALONE`. The machine running the whole sim shows a REDACTED card.
+- CAST CLIENT screen: `TONIGHT'S PLAY · THE SHIPWRECK · You have read the
+  script.` The play flash exists on exactly one screen — and it's the right
+  one. The understudy's peer would instead get the "you never got the
+  script" card. Nobody learns another's role. Online is structurally better
+  than couch here (no eyes-closed honor system on the wire).
+  `docs/verify/us_netshots_{host,join}/`.
+
+- Mirrored, both screens: the casting theater, the rehearsal cue grid + the
+  actors' delivered-cue status labels, the live vote board (carets forming,
+  accusation chips), and the verdict — `THEY WALK — RED WAS THE UNDERSTUDY`
+  with RED spotlit and the scoreboard's `(u/s)` tag revealed at RESOLVE
+  exactly as on the host.
+- Per-peer voice summons: each remote seat hears ONLY its own colour called
+  (roll-call + cast ticks ride the private channel). Blind-table trust →
+  structural privacy across the wire.
+- Real-keys hint bar retrofit (realkeys-VERIFY template): the persistent bar
+  now prints the player's LIVE key (`STICK = CHOOSE · Space = COMMIT`), not a
+  generic "A". Self-contained helpers, presentation-only.
+- Receipts: US_TALLY byte-identical to a pristine-HEAD worktree (seeds
+  1/2/3) — transport provably didn't touch the sim; NETHASH_MOD 43/43 +
+  46/46 snapshot digests matched; bandwidth mean ~907 B/snap (≈18 kB/s @
+  20 Hz); user:// saves restored, md5-verified.
+- Lanes touched: `minigames/understudy/**` + `docs/verify/` only. Estate
+  shell + net_session UNTOUCHED (the generic 20 Hz pump just works).
+
 ### 2026-07-06 — ONLINE PHASE 1 IS REAL: two copies of ILL WILL played one night together
 The spine from doc 10 is built and proven on this machine: **HOST NIGHT /
 JOIN NIGHT on the title**, a 6-char invite code (`80CMWE` = your LAN

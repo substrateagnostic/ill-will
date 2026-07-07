@@ -169,3 +169,32 @@ func tick(delta: float) -> void:
 		_anim_lock -= delta
 		if _anim_lock <= 0.0:
 			_play("Idle")
+
+# --- ONLINE mirror (docs/design/10 §4.3) ------------------------------------
+## Compact visual state for the wire: [spotlight energy, status text (or ""),
+## status colour html, current anim tag]. All PUBLIC — the actor never carries
+## hidden role info (the understudy's status label only appears at RESOLVE).
+func net_pack() -> Array:
+	return [
+		snappedf(_spot.light_energy, 0.05),
+		_status_label.text if _status_label.visible else "",
+		_status_label.modulate.to_html(false),
+		_cur_anim,
+	]
+
+## Apply a wire pack on the mirror: snap the spotlight, mirror the status label,
+## and re-fire cheer/flinch when the anim tag changes (juice from the delta).
+func net_apply(lit: float, status_text: String, status_col: String, anim: String) -> void:
+	_spot.light_energy = lit
+	_mark_mat.emission_energy_multiplier = 1.3 if lit >= SPOT_FOCUS - 0.5 else (0.2 if lit <= 0.5 else 0.55)
+	if status_text == "":
+		_status_label.visible = false
+	else:
+		_status_label.text = status_text
+		_status_label.modulate = Color(status_col)
+		_status_label.visible = true
+	if anim != _cur_anim:
+		match anim:
+			"Cheer": play_cheer()
+			"Hit_A": play_flinch()
+			_: play_idle()
