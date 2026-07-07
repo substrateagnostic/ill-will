@@ -1,0 +1,78 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET transports: enet ready · steam offline
+NETPROBE mode=join
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET join target=127.0.0.1:9617 err=0 (retries left 20)
+NET connected to host as peer 1382104878
+NETPROBE tape start (net) seat=1
+NETPROBE granted seat 1
+NETHASH side=client seq=15 h=639046da
+NETHASH side=client seq=30 h=40c70c8f
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_online_client_lobby_0377.png
+NETHASH side=client seq=45 h=af58069a
+NETHASH side=client seq=60 h=49c10a09
+NETPROBE client sees own ready=true
+NETHASH side=client seq=75 h=620a6eaf
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_online_client_ready_0787.png
+NETHASH side=client seq=90 h=7b8db8ac
+NETHASH side=client seq=105 h=f8b65e99
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_online_client_auction_1061.png
+NETHASH side=client seq=120 h=1239a896
+NETHASH side=client seq=135 h=2a830d3c
+NETHASH side=client seq=150 h=44065739
+NETHASH side=client seq=165 h=5c4fbbdf
+NETHASH side=client seq=180 h=75d305dc
+NETHASH side=client seq=195 h=8e1c6a82
+NETHASH side=client seq=210 h=d01644b6
+NETHASH side=client seq=225 h=e85fa95c
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_online_client_gate_2325.png
+NETHASH side=client seq=240 h=01e2f359
+NETHASH side=client seq=255 h=1a2c57ff
+NETHASH side=client seq=270 h=33afa1fc
+NET mirror boot: swap
+SWAP_MIRROR boot players=4 my_seat=1
+NETHASH side=client seq=285 h=4bf906a2
+NETHASH side=client seq=300 h=8df2e0d6
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_online_client_game_2982.png
+NETHASH_MOD side=client seq=40 h=e456cd90
+NETHASH side=client seq=315 h=a63c457c
+NETHASH side=client seq=330 h=bfbf8f79
+NETHASH side=client seq=345 h=d808f41f
+NETHASH_MOD side=client seq=80 h=b9f91568
+NETHASH side=client seq=360 h=f18c3e1c
+OVERTAKE t=2.8 leader=3
+SWAP_MIRROR photo_finish winner=2 chaser=3
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_mirror_photofinish_3620.png
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_mirror_photofinish_reveal_3680.png
+NETHASH side=client seq=375 h=09d5a2c2
+NETHASH_MOD side=client seq=120 h=b1e2413b
+OVERTAKE t=4.5 leader=1
+SWAP_MIRROR swap a=0 b=1 golden=false
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_mirror_swap_3862.png
+NETHASH side=client seq=390 h=2358ecbf
+NETHASH side=client seq=405 h=6418e19c
+OVERTAKE t=6.1 leader=0
+NETHASH_MOD side=client seq=160 h=052df805
+NETHASH side=client seq=420 h=7d9c2b99
+SWAP_MIRROR champ=2
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_mirror_end_4171.png
+NETHASH side=client seq=435 h=95e5903f
+NETHASH_MOD side=client seq=200 h=3aa9cf3c
+NET ceremony stage: match_podium
+NET mirror fold
+NETHASH side=client seq=450 h=af68da3c
+NETHASH side=client seq=465 h=c7b23ee2
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_online_client_matchpodium_4642.png
+NETHASH side=client seq=480 h=e13588df
+NETHASH side=client seq=495 h=f97eed85
+NETHASH side=client seq=510 h=3b78c7b9
+VERIFY_SNAP res://docs/verify/swap_netshots_join_pf/snap_online_client_reckoning_5150.png
+NETHASH side=client seq=525 h=53c22c5f
+NETPROBE_CLIENT_DONE

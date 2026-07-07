@@ -1,0 +1,410 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET transports: enet ready · steam offline
+NET host port=9617 err=0 code=80CNJH addr=192.168.0.101:9617
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 376998329 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE seat 1 claimed by peer 376998329
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+NETHASH side=host seq=15 h=871a470e
+NETPROBE_TRACE tick=60 p1=(-3.400,0.001,-2.500)
+VERIFY_SNAP res://docs/verify/swap_netshots_host/snap_online_host_claim_0713.png
+NETPROBE_TRACE tick=90 p1=(-3.570,0.001,-4.030)
+NETPROBE_TRACE tick=120 p1=(-3.570,0.001,-5.730)
+NETHASH side=host seq=30 h=90df33de
+NETPROBE_TRACE tick=150 p1=(-1.870,0.001,-5.730)
+NETPROBE_TRACE tick=180 p1=(-0.170,0.001,-5.730)
+NETHASH side=host seq=45 h=56928ce2
+NETPROBE_TRACE tick=210 p1=(-0.113,0.001,-4.087)
+NETPROBE_TRACE tick=240 p1=(-0.113,0.001,-2.387)
+NETHASH side=host seq=60 h=8edb3b83
+NETPROBE_TRACE tick=270 p1=(-0.113,0.001,-2.273)
+NETPROBE_TRACE tick=300 p1=(-0.113,0.001,-2.273)
+NETPROBE toggle seat=1 ready=true pf=560
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/swap_netshots_host/snap_online_host_ready_1278.png
+NETHASH side=host seq=75 h=a724a029
+NETHASH side=host seq=90 h=c0a7ea26
+NETHASH side=host seq=105 h=3dd09013
+VERIFY_SNAP res://docs/verify/swap_netshots_host/snap_online_host_auction_1616.png
+NETHASH side=host seq=120 h=5753da10
+NETHASH side=host seq=135 h=6f9d3eb6
+NETHASH side=host seq=150 h=892088b3
+NETHASH side=host seq=165 h=a169ed59
+NETHASH side=host seq=180 h=baed3756
+NETHASH side=host seq=195 h=d3369bfc
+NETHASH side=host seq=210 h=15307630
+NETHASH side=host seq=225 h=2d79dad6
+VERIFY_SNAP res://docs/verify/swap_netshots_host/snap_online_host_gate_2845.png
+NETHASH side=host seq=240 h=46fd24d3
+NETHASH side=host seq=255 h=5f468979
+NETHASH side=host seq=270 h=78c9d376
+NETHASH side=host seq=285 h=9113381c
+NETHASH side=host seq=300 h=d30d1250
+VERIFY_SNAP res://docs/verify/swap_netshots_host/snap_online_host_game_3530.png
+NETHASH_MOD side=host seq=40 h=e456cd90 bytes=896
+NETHASH side=host seq=315 h=eb5676f6
+NETHASH side=host seq=330 h=04d9c0f3
+THROW t=1.6 p=1 golden=false
+NETHASH side=host seq=345 h=1d232599
+THROW t=1.6 p=3 golden=false
+NETHASH_MOD side=host seq=80 h=5c73b49b bytes=1044
+OVERTAKE t=2.4 leader=2
+NETHASH side=host seq=360 h=36a66f96
+NETHASH side=host seq=375 h=4eefd43c
+NETHASH_MOD side=host seq=120 h=fcede8cb bytes=936
+NETHASH side=host seq=390 h=68731e39
+THROW t=5.3 p=3 golden=false
+NETHASH side=host seq=405 h=a9331316
+THROW t=6.1 p=1 golden=false
+NETHASH_MOD side=host seq=160 h=ef7df7a5 bytes=1048
+NETHASH side=host seq=420 h=c2b65d13
+SC_ENTER t=7.0 p=2
+SC_ENTER t=7.8 p=0
+NETHASH side=host seq=435 h=daffc1b9
+JUMP t=8.0 p=2 v=5.0
+VERIFY_SNAP res://docs/verify/swap_netshots_host/snap_net_midrace_4889.png
+SC_ENTER t=8.2 p=3
+NETHASH_MOD side=host seq=200 h=a9df9c33 bytes=932
+NETHASH side=host seq=450 h=f4830bb6
+JUMP t=9.1 p=3 v=5.0
+THROW t=9.2 p=3 golden=false
+NETHASH side=host seq=465 h=0ccc705c
+SC_EXIT t=10.2 p=2
+THROW t=10.6 p=1 golden=false
+NETHASH_MOD side=host seq=240 h=ceb167ad bytes=988
+NETHASH side=host seq=480 h=264fba59
+SC_EXIT t=11.3 p=3
+NETHASH side=host seq=495 h=3e991eff
+THROW t=12.7 p=3 golden=false
+NETHASH_MOD side=host seq=280 h=a9aef083 bytes=992
+NETHASH side=host seq=510 h=8092f933
+NETHASH side=host seq=525 h=98dc5dd9
+LAP t=14.5 p=2 lap=1 time=14.5s
+THROW t=15.1 p=1 golden=false
+NETHASH_MOD side=host seq=320 h=aaca06a4 bytes=992
+NETHASH side=host seq=540 h=b25fa7d6
+LAP t=15.6 p=3 lap=1 time=15.6s
+THROW t=16.3 p=3 golden=false
+NETHASH side=host seq=555 h=caa90c7c
+NETHASH side=host seq=570 h=e42c5679
+NETHASH_MOD side=host seq=360 h=ea139337 bytes=936
+NETHASH side=host seq=585 h=fc75bb1f
+NETHASH side=host seq=600 h=3e6f9553
+THROW t=19.6 p=1 golden=false
+NETHASH_MOD side=host seq=400 h=673b63af bytes=992
+THROW t=20.3 p=3 golden=false
+KNOCK t=20.3 p=2 boom
+NETHASH side=host seq=615 h=56b8f9f9
+KNOCK t=21.0 p=3 boom
+NETHASH side=host seq=630 h=703c43f6
+NETHASH_MOD side=host seq=440 h=a36927f6 bytes=936
+LAP t=22.3 p=1 lap=1 time=22.2s
+NETHASH side=host seq=645 h=8885a89c
+NETHASH side=host seq=660 h=a208f299
+NETHASH_MOD side=host seq=480 h=4f99fe7c bytes=936
+THROW t=24.1 p=1 golden=false
+NETHASH side=host seq=675 h=ba52573f
+NETHASH side=host seq=690 h=d3d5a13c
+NETHASH_MOD side=host seq=520 h=0e8c31ab bytes=936
+THROW t=26.7 p=3 golden=false
+NETHASH side=host seq=705 h=14959619
+NETHASH side=host seq=720 h=2e18e016
+NETHASH_MOD side=host seq=560 h=b07ca071 bytes=932
+THROW t=28.6 p=1 golden=false
+NETHASH side=host seq=735 h=466244bc
+NETHASH side=host seq=750 h=5fe58eb9
+NETHASH_MOD side=host seq=600 h=bcfdda50 bytes=936
+NETHASH side=host seq=765 h=782ef35f
+LAP t=31.3 p=2 lap=2 time=16.8s
+VERIFY_SNAP res://docs/verify/swap_netshots_host/snap_net_finallap_8215.png
+THROW t=31.7 p=1 golden=false
+NETHASH side=host seq=780 h=91b23d5c
+THROW t=32.1 p=3 golden=false
+LAP t=32.4 p=3 lap=2 time=16.8s
+NETHASH_MOD side=host seq=640 h=0607789d bytes=1000
+NETHASH side=host seq=795 h=a9fba202
+NETHASH side=host seq=810 h=ebf57c36
+NETHASH side=host seq=825 h=043ee0dc
+NETHASH_MOD side=host seq=680 h=5fbca2a5 bytes=940
+THROW t=36.1 p=1 golden=false
+NETHASH side=host seq=840 h=1dc22ad9
+KNOCK t=37.0 p=2 boom
+NETHASH side=host seq=855 h=360b8f7f
+NETHASH_MOD side=host seq=720 h=92583afd bytes=940
+KNOCK t=37.7 p=3 boom
+THROW t=38.1 p=3 golden=false
+NETHASH side=host seq=870 h=4f8ed97c
+NETHASH side=host seq=885 h=67d83e22
+SC_ENTER t=39.6 p=3
+NETHASH_MOD side=host seq=760 h=d68976a6 bytes=944
+GOLD_SPAWN t=40.0 s=79.9
+NETHASH side=host seq=900 h=a9d21856
+THROW t=40.6 p=1 golden=false
+JUMP t=40.6 p=3 v=5.0
+OVERTAKE t=41.2 leader=3
+NETHASH side=host seq=915 h=c21b7cfc
+NETHASH_MOD side=host seq=800 h=55d8cd19 bytes=980
+NETHASH side=host seq=930 h=db9ec6f9
+SC_EXIT t=42.8 p=3
+NETHASH side=host seq=945 h=f3e82b9f
+THROW t=43.6 p=2 golden=false
+NETHASH_MOD side=host seq=840 h=d372388c bytes=1036
+NETHASH side=host seq=960 h=0d6b759c
+GOLD_CLAIM t=44.8 p=2
+LAP t=44.8 p=1 lap=2 time=22.6s
+THROW t=45.1 p=1 golden=false
+NETHASH side=host seq=975 h=25b4da42
+NETHASH_MOD side=host seq=880 h=a49c1022 bytes=976
+NETHASH side=host seq=990 h=3f38243f
+THROW t=46.7 p=2 golden=true
+LAP t=47.1 p=3 lap=3 time=14.7s
+FINISH t=47.1 p=3 place=1 laps=[15.616666666667, 16.7833333333324, 14.6833333333325]
+OVERTAKE t=47.1 leader=2
+NETHASH side=host seq=1005 h=80bf8343
+LAP t=48.1 p=2 lap=3 time=16.8s
+FINISH t=48.1 p=2 place=2 laps=[14.516666666667, 16.7666666666659, 16.7666666666657]
+NETHASH_MOD side=host seq=920 h=6cae92e2 bytes=948
+NETHASH side=host seq=1020 h=9a42cd40
+THROW t=49.6 p=1 golden=false
+NETHASH side=host seq=1035 h=b28c31e6
+NETHASH side=host seq=1050 h=cc0f7be3
+NETHASH_MOD side=host seq=960 h=8f066dba bytes=948
+NETHASH side=host seq=1065 h=e458e089
+NETHASH side=host seq=1080 h=fddc2a86
+NETHASH_MOD side=host seq=1000 h=dbb53b2f bytes=948
+KNOCK t=53.4 p=1 boom
+NETHASH side=host seq=1095 h=16258f2c
+THROW t=54.1 p=1 golden=false
+SC_ENTER t=54.7 p=1
+NETHASH side=host seq=1110 h=581f6960
+NETHASH_MOD side=host seq=1040 h=6e78c97a bytes=944
+NETHASH side=host seq=1125 h=7068ce06
+NETHASH side=host seq=1140 h=89ec1803
+NETHASH_MOD side=host seq=1080 h=9a7e41b8 bytes=944
+NETHASH side=host seq=1155 h=a2357ca9
+THROW t=58.6 p=1 golden=false
+NETHASH side=host seq=1170 h=bbb8c6a6
+NETHASH_MOD side=host seq=1120 h=96e92d56 bytes=948
+NETHASH side=host seq=1185 h=d4022b4c
+NETHASH side=host seq=1200 h=15fc0580
+NETHASH_MOD side=host seq=1160 h=9afa1ee2 bytes=948
+NETHASH side=host seq=1215 h=2e456a26
+THROW t=63.1 p=1 golden=false
+NETHASH side=host seq=1230 h=47c8b423
+NETHASH_MOD side=host seq=1200 h=b4b5c727 bytes=948
+NETHASH side=host seq=1245 h=601218c9
+NETHASH side=host seq=1260 h=799562c6
+LAP t=65.4 p=3 lap=4 time=18.3s
+LAP t=66.1 p=2 lap=4 time=18.0s
+NETHASH_MOD side=host seq=1240 h=bd7d4805 bytes=948
+NETHASH side=host seq=1275 h=91dec76c
+NETHASH side=host seq=1290 h=ab621169
+THROW t=67.6 p=1 golden=false
+NETHASH side=host seq=1305 h=ec220646
+NETHASH_MOD side=host seq=1280 h=1726d558 bytes=948
+NETHASH side=host seq=1320 h=05a55043
+NETHASH side=host seq=1335 h=1deeb4e9
+NETHASH_MOD side=host seq=1320 h=28a314c0 bytes=948
+NETHASH side=host seq=1350 h=3771fee6
+THROW t=72.1 p=1 golden=false
+NETHASH side=host seq=1365 h=4fbb638c
+NETHASH_MOD side=host seq=1360 h=9250d68a bytes=948
+NETHASH side=host seq=1380 h=693ead89
+NETHASH side=host seq=1395 h=8188122f
+NETHASH_MOD side=host seq=1400 h=c0f93245 bytes=944
+NETHASH side=host seq=1410 h=c381ec63
+THROW t=76.6 p=1 golden=false
+NETHASH side=host seq=1425 h=dbcb5109
+NETHASH_MOD side=host seq=1440 h=946ff5aa bytes=1000
+NETHASH side=host seq=1440 h=f54e9b06
+NETHASH side=host seq=1455 h=0d97ffac
+NETHASH_MOD side=host seq=1480 h=a75b8110 bytes=948
+NETHASH side=host seq=1470 h=271b49a9
+NETHASH side=host seq=1485 h=3f64ae4f
+THROW t=81.1 p=1 golden=false
+NETHASH_MOD side=host seq=1520 h=20775dba bytes=1004
+NETHASH side=host seq=1500 h=815e8883
+NETHASH side=host seq=1515 h=99a7ed29
+LAP t=83.6 p=3 lap=5 time=18.2s
+NETHASH side=host seq=1530 h=b32b3726
+NETHASH_MOD side=host seq=1560 h=e58eb97c bytes=948
+LAP t=84.3 p=2 lap=5 time=18.2s
+NETHASH side=host seq=1545 h=cb749bcc
+THROW t=85.6 p=1 golden=false
+NETHASH side=host seq=1560 h=e4f7e5c9
+NETHASH_MOD side=host seq=1600 h=19a3d5a4 bytes=1004
+NETHASH side=host seq=1575 h=fd414a6f
+GOLD_SPAWN t=87.4 s=79.9
+NETHASH side=host seq=1590 h=16c4946c
+THROW t=88.6 p=1 golden=false
+NETHASH_MOD side=host seq=1640 h=396b445b bytes=1084
+NETHASH side=host seq=1605 h=57848949
+NETHASH side=host seq=1620 h=7107d346
+NETHASH_MOD side=host seq=1680 h=caec278d bytes=1028
+NETHASH side=host seq=1635 h=895137ec
+NETHASH side=host seq=1650 h=a2d481e9
+NETHASH_MOD side=host seq=1720 h=cca1f40d bytes=1028
+THROW t=93.1 p=1 golden=false
+NETHASH side=host seq=1665 h=bb1de68f
+NETHASH side=host seq=1680 h=d4a1308c
+NETHASH_MOD side=host seq=1760 h=483268ed bytes=1024
+NETHASH side=host seq=1695 h=ecea9532
+NETHASH side=host seq=1710 h=2ee46f66
+NETHASH_MOD side=host seq=1800 h=a785c21f bytes=1024
+THROW t=97.6 p=1 golden=false
+NETHASH side=host seq=1725 h=472dd40c
+NETHASH side=host seq=1740 h=60b11e09
+NETHASH_MOD side=host seq=1840 h=030e244a bytes=1028
+NETHASH side=host seq=1755 h=78fa82af
+NETHASH side=host seq=1770 h=927dccac
+LAP t=101.8 p=3 lap=6 time=18.2s
+NETHASH side=host seq=1785 h=aac73152
+NETHASH_MOD side=host seq=1880 h=b04efdf4 bytes=1028
+THROW t=102.1 p=1 golden=false
+LAP t=102.5 p=2 lap=6 time=18.2s
+NETHASH side=host seq=1800 h=ecc10b86
+NETHASH side=host seq=1815 h=050a702c
+NETHASH_MOD side=host seq=1920 h=55cfc273 bytes=1028
+NETHASH side=host seq=1830 h=1e8dba29
+NETHASH side=host seq=1845 h=36d71ecf
+NETHASH_MOD side=host seq=1960 h=3a888df9 bytes=1028
+THROW t=106.6 p=1 golden=false
+NETHASH side=host seq=1860 h=505a68cc
+NETHASH side=host seq=1875 h=68a3cd72
+NETHASH_MOD side=host seq=2000 h=f7b548a7 bytes=1028
+NETHASH side=host seq=1890 h=8227176f
+THROW t=109.6 p=1 golden=false
+NETHASH side=host seq=1905 h=c2e70c4c
+NETHASH_MOD side=host seq=2040 h=759570f6 bytes=1028
+NETHASH side=host seq=1920 h=dc6a5649
+NETHASH side=host seq=1935 h=f4b3baef
+NETHASH_MOD side=host seq=2080 h=651198ed bytes=1024
+NETHASH side=host seq=1950 h=0e3704ec
+THROW t=114.1 p=1 golden=false
+NETHASH side=host seq=1965 h=26806992
+NETHASH_MOD side=host seq=2120 h=2f232f92 bytes=1024
+NETHASH side=host seq=1980 h=4003b38f
+NETHASH side=host seq=1995 h=584d1835
+NETHASH_MOD side=host seq=2160 h=c4d5e569 bytes=1028
+NETHASH side=host seq=2010 h=d18f8980
+NETHASH side=host seq=2025 h=e9d8ee26
+THROW t=118.6 p=1 golden=false
+NETHASH side=host seq=2040 h=035c3823
+NETHASH_MOD side=host seq=2200 h=0ac40aad bytes=1028
+LAP t=119.9 p=3 lap=7 time=18.2s
+NETHASH side=host seq=2055 h=1ba59cc9
+LAP t=120.6 p=2 lap=7 time=18.2s
+NETHASH side=host seq=2070 h=3528e6c6
+NETHASH_MOD side=host seq=2240 h=78607255 bytes=1028
+NETHASH side=host seq=2085 h=4d724b6c
+THROW t=123.1 p=1 golden=false
+NETHASH side=host seq=2100 h=8f6c25a0
+NETHASH_MOD side=host seq=2280 h=884ee300 bytes=1028
+NETHASH side=host seq=2115 h=a7b58a46
+NETHASH side=host seq=2130 h=c138d443
+NETHASH_MOD side=host seq=2320 h=ca6ff82b bytes=1028
+NETHASH side=host seq=2145 h=d98238e9
+THROW t=127.6 p=1 golden=false
+NETHASH side=host seq=2160 h=f30582e6
+NETHASH_MOD side=host seq=2360 h=d5e9b10f bytes=1028
+NETHASH side=host seq=2175 h=0b4ee78c
+NETHASH side=host seq=2190 h=24d23189
+NETHASH_MOD side=host seq=2400 h=1354a9cc bytes=1024
+NETHASH side=host seq=2205 h=65922666
+NETHASH side=host seq=2220 h=7f157063
+THROW t=132.1 p=1 golden=false
+NETHASH_MOD side=host seq=2440 h=a10be3bd bytes=1080
+NETHASH side=host seq=2235 h=975ed509
+NETHASH side=host seq=2250 h=b0e21f06
+NETHASH_MOD side=host seq=2480 h=0ab2a605 bytes=1028
+NETHASH side=host seq=2265 h=c92b83ac
+NETHASH side=host seq=2280 h=e2aecda9
+THROW t=136.6 p=1 golden=false
+NETHASH side=host seq=2295 h=faf8324f
+NETHASH_MOD side=host seq=2520 h=a825290f bytes=1084
+LAP t=138.1 p=3 lap=8 time=18.2s
+NETHASH side=host seq=2310 h=3cf20c83
+LAP t=138.8 p=2 lap=8 time=18.2s
+NETHASH side=host seq=2325 h=553b7129
+NETHASH_MOD side=host seq=2560 h=1def3be9 bytes=1028
+NETHASH side=host seq=2340 h=6ebebb26
+THROW t=141.1 p=1 golden=false
+NETHASH side=host seq=2355 h=87081fcc
+NETHASH_MOD side=host seq=2600 h=0fda890d bytes=1084
+NETHASH side=host seq=2370 h=a08b69c9
+NETHASH side=host seq=2385 h=b8d4ce6f
+NETHASH_MOD side=host seq=2640 h=c9f02880 bytes=1028
+NETHASH side=host seq=2400 h=facea8a3
+THROW t=145.6 p=1 golden=false
+NETHASH side=host seq=2415 h=13180d49
+NETHASH_MOD side=host seq=2680 h=7bdd5d6f bytes=1084
+NETHASH side=host seq=2430 h=2c9b5746
+NETHASH side=host seq=2445 h=44e4bbec
+NETHASH_MOD side=host seq=2720 h=f0a1961c bytes=1024
+NETHASH side=host seq=2460 h=5e6805e9
+NETHASH side=host seq=2475 h=76b16a8f
+THROW t=150.1 p=1 golden=false
+NETHASH_MOD side=host seq=2760 h=573e7a0e bytes=1080
+NETHASH side=host seq=2490 h=9034b48c
+NETHASH side=host seq=2505 h=d0f4a969
+NETHASH side=host seq=2520 h=ea77f366
+NETHASH_MOD side=host seq=2800 h=f52d7724 bytes=1028
+NETHASH side=host seq=2535 h=02c1580c
+THROW t=154.6 p=1 golden=false
+NETHASH side=host seq=2550 h=1c44a209
+NETHASH_MOD side=host seq=2840 h=ede551ba bytes=1084
+NETHASH side=host seq=2565 h=348e06af
+LAP t=156.3 p=3 lap=9 time=18.2s
+LAP t=157.0 p=2 lap=9 time=18.2s
+NETHASH side=host seq=2580 h=4e1150ac
+NETHASH_MOD side=host seq=2880 h=bbe5a1d6 bytes=1028
+NETHASH side=host seq=2595 h=665ab552
+THROW t=159.1 p=1 golden=false
+NETHASH side=host seq=2610 h=a8548f86
+NETHASH_MOD side=host seq=2920 h=b7c5f53f bytes=1084
+NETHASH side=host seq=2625 h=c09df42c
+NETHASH side=host seq=2640 h=da213e29
+NETHASH_MOD side=host seq=2960 h=2beccead bytes=1028
+THROW t=162.1 p=1 golden=false
+NETHASH side=host seq=2655 h=f26aa2cf
+NETHASH side=host seq=2670 h=0bedeccc
+NETHASH_MOD side=host seq=3000 h=c8238cdd bytes=1028
+NETHASH side=host seq=2685 h=24375172
+NETHASH side=host seq=2700 h=66312ba6
+NETHASH_MOD side=host seq=3040 h=1fe11de0 bytes=1024
+NETHASH side=host seq=2715 h=7e7a904c
+THROW t=166.6 p=1 golden=false
+NETHASH side=host seq=2730 h=97fdda49
+NETHASH_MOD side=host seq=3080 h=1d02ed7d bytes=1024
+NETHASH side=host seq=2745 h=b0473eef
+NETHASH side=host seq=2760 h=c9ca88ec
+VERIFY_SNAP res://docs/verify/swap_netshots_host/snap_net_end_28162.png
+NETHASH side=host seq=2775 h=e213ed92
+NETHASH_MOD side=host seq=3120 h=3a4d39a9 bytes=1028
+SWAPMEET_RESULTS {"currency_events":[],"highlights":["Fastest lap: GOLD (14.5s)"],"kill_events":[],"monuments":[],"placements":[3,2,1,0],"points":{"0":4,"1":13,"2":15,"3":17}}
+KILL_EVENTS n=0 []
+SWAPMEET_SIM race_t=170.0s swaps=0 blocked=0 golden=0 bounces=25 gaining={ 0: 0, 1: 0, 2: 0, 3: 0 }
+SWAPMEET_LAPS p0=[] p1=[22.2,22.6] p2=[14.5,16.8,16.8,18.0,18.2,18.2,18.2,18.2,18.2] p3=[15.6,16.8,14.7,18.3,18.2,18.2,18.2,18.2,18.2]
+NETHASH side=host seq=2790 h=fb97378f
+NETHASH side=host seq=2805 h=3c572c6c
+VERIFY_SNAP res://docs/verify/swap_netshots_host/snap_online_host_matchpodium_28630.png
+NETHASH side=host seq=2820 h=55da7669
+NETHASH side=host seq=2835 h=6e23db0f
+NETHASH side=host seq=2850 h=87a7250c
+NETHASH side=host seq=2865 h=9ff089b2
+VERIFY_SNAP res://docs/verify/swap_netshots_host/snap_online_host_reckoning_29166.png
+NETPROBE_RESULTS RED:pts=1,grudge=3 BLUE:pts=2,grudge=3 GOLD:pts=3,grudge=1 MINT:pts=5,grudge=2
+NETPROBE saves restored
+NETPROBE_DONE
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)

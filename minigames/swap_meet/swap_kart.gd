@@ -82,6 +82,12 @@ var locked := true               # countdown / end freeze
 var stuck_t := 0.0               # seconds jammed near-zero-speed while steering (ramp unstick)
 var last_input_mag := 0.0        # magnitude of the raw player intent this tick
 
+# ONLINE (phase 2): one-shot anim facts for the render mirror. play_anim()
+# stamps them; the mirror replays the same one-shot off the counter delta.
+# Pure bookkeeping on the couch (no reads, no prints).
+var net_anim_id := 0             # 1 = Throw, 2 = Hit_A
+var net_anim_n := 0
+
 var _spin_t := 0.0               # windmill knock 360 visual
 var _visual: Node3D
 var _body_mat: StandardMaterial3D
@@ -314,6 +320,8 @@ func flash_tag() -> void:
 	tw.tween_property(_tag, "scale", Vector3.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 func play_anim(anim_name: String, hold: float) -> void:
+	net_anim_n += 1
+	net_anim_id = 1 if anim_name == "Throw" else 2
 	if _anim == null:
 		return
 	if _anim.has_animation(anim_name):

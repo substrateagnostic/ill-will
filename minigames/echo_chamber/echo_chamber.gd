@@ -109,6 +109,35 @@ var _det_max_err := 0.0
 var _det_ghost_total := 0
 var _logged_ghost_heavy := false   # log the first replayed heavy each round
 
+# ---- ONLINE PHASE 2 (docs/design/10 §4.3): the render mirror ----
+# House pattern (online-seance-VERIFY.md PATTERN NOTES): the host runs this
+# ENTIRE sim exactly as couch; the estate pumps _net_state() (compact PUBLIC
+# facts) to guests at 20 Hz. The client boots this same scene with
+# config.net_mirror = true — no sim, no bots, no rng; fighters AND GHOSTS ride
+# one body-indexed block of quantized ints (ghost transforms are STREAMED, not
+# re-simulated: drift risk zero by construction). All juice fires from state
+# deltas; _mirror_tick interpolates at the render rate. Arena has no hidden
+# info, so nothing rides the private channel.
+var _mirror := false
+var _mir := {}                     # last applied snapshot (delta source)
+var _ban_col := "ffd933"           # host: banner color as a wire fact
+var _cb_col := "ffffff"            # host: credit-banner color as a wire fact
+var _net_ghost_gid := 0            # host: next ghost wire id
+var _net_parry_n := 0              # host: parry clash count (mirror juice)
+var _net_parry_seat := 0           # host: last parrier (mirror fx anchor)
+var _net_bounty_n := 0             # host: ghost-bounty hits (mirror sting)
+var _net_haunt_n := 0              # host: KILLED BY THEIR OWN ECHO count
+var _net_decide_n := 0             # host: deciding-moment beats (mirror punch)
+var _net_champ := -1               # pre-announced one beat before finished()
+var _net_snapped: Dictionary = {}  # host-side probe evidence latches
+# client mirror scratch
+var _mir_f: Array = []             # per-fighter interp targets [pos, yaw, st]
+var _mir_ghosts: Dictionary = {}   # gid -> {"node", "pos", "yaw", "st", "col"}
+var _mir_warn: Dictionary = {}     # fighter idx -> outside-ring (local blink)
+var _mir_clock := 0.0              # local clock for the warn blink
+var _mir_rem0 := 0.0               # rem at round entry (evidence-latch timing)
+var _mir_snapped: Dictionary = {}  # mirror-side probe evidence latches
+
 # ---- event-driven verify captures (heavy windup / parry / fragment) ----
 var _ev_captured: Dictionary = {}
 
@@ -182,6 +211,7 @@ func begin(config: Dictionary) -> void:
 	if _begun:
 		return
 	_begun = true
+	_mirror = bool(config.get("net_mirror", false))
 	roster = config.get("roster", [])
 	if roster.is_empty():
 		roster = _default_config()["roster"]
@@ -202,6 +232,23 @@ func begin(config: Dictionary) -> void:
 	_build_world()
 	_build_ui()
 	_spawn_fighters()
+	if _mirror:
+		# RENDER MIRROR: world, UI and fighters exist; no rng draws beyond the
+		# harmless seed above, no bots, no recorders, no intro kick — the first
+		# _net_apply drives every fact. Park fighters on their start rings so
+		# the opening interpolation has an honest origin.
+		state = St.INTRO
+		for i in fighters.size():
+			fighters[i].global_position = _start_pos(i)
+			_mir_f.append([_start_pos(i), 0.0, 0])
+		_stretch = FinalStretch.attach(self, timer_label)
+		if controls_label != null:
+			controls_label.text = _controls_bar()
+			get_tree().create_timer(8.5, true, false, true).timeout.connect(func() -> void:
+				if is_instance_valid(controls_label):
+					controls_label.visible = false)
+		print("ECHO_MIRROR boot players=%d my_seat=%d" % [roster.size(), NetSession.my_seat()])
+		return
 	# Personalize the persistent hint bar with each human seat's REAL keys, once
 	# per match now that the roster/bot map is known (docs/verify/realkeys-VERIFY.md).
 	if controls_label != null:
@@ -652,6 +699,8 @@ func _spawn_ghosts_for_round() -> void:
 		distinct[rr] = true
 	for tk in chosen:
 		var g := EchoGhost.new()
+		_net_ghost_gid += 1
+		g.gid = _net_ghost_gid
 		g.take = tk
 		g.owner_index = tk["owner"]
 		g.owner_color = tk["color"]
@@ -677,13 +726,20 @@ func _reset_arena(_is_round5: bool) -> void:
 func _do_shrink() -> void:
 	_shrunk = true
 	(arena_shape.shape as CylinderShape3D).radius = ARENA_R * SHRINK
+	_shrink_fx()
+	_flash_banner("THE FLOOR FALLS AWAY!", Color(1.0, 0.4, 0.3), 2.0)
+	print("ECHO_SHRINK round=%d t=%.2f" % [round_no, _round_time])
+	_net_snap("net_shrink")
+
+
+## The collapse's render half (tween + crush + shake), shared with the mirror
+## (which fires it off the shrunk-flag edge; its banner rides the ban fact).
+func _shrink_fx() -> void:
 	var tw := create_tween()
 	tw.tween_property(_outer_disc, "position:y", -9.0, 1.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.parallel().tween_property(_outer_disc, "transparency", 1.0, 1.1)
 	Sfx.play("crush")
 	_shake = maxf(_shake, 0.9)
-	_flash_banner("THE FLOOR FALLS AWAY!", Color(1.0, 0.4, 0.3), 2.0)
-	print("ECHO_SHRINK round=%d t=%.2f" % [round_no, _round_time])
 
 
 func _end_round() -> void:
@@ -761,7 +817,16 @@ func _finish_match() -> void:
 	}
 	print("ECHO_MATCH_OVER champ=%s placements=%s" % [_names[champ], str(order)])
 	print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
-	report_finished(results)
+	# ONLINE (hard-won lesson, see masked_ball.gd): report_finished() stops the
+	# estate's 20 Hz pump the same tick it runs, so any fact minted here would
+	# never reach a mirror. Pre-announce the champ NOW (points are final) and
+	# let the tableau breathe half a second before the report. Prints above stay
+	# on this tick, so couch/bot receipts are byte-identical; the real-time
+	# timer ignores the deciding-moment slow-mo.
+	_net_champ = champ
+	_net_snap("net_champ")
+	get_tree().create_timer(0.5, true, false, true).timeout.connect(func() -> void:
+		report_finished(results))
 
 
 func _placements() -> Array:
@@ -802,6 +867,10 @@ func _best_highlights() -> Array:
 # ===========================================================================
 func _physics_process(delta: float) -> void:
 	if not _begun:
+		return
+	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
+	if _mirror:
+		_mirror_tick(delta)
 		return
 	match state:
 		St.INTRO:
@@ -882,6 +951,12 @@ func _tick_play(delta: float) -> void:
 		_stretch.tick(remain)   # FINAL STRETCH last-10s ladder + timer pulse
 	ghost_label.text = "GHOSTS: %d" % ghosts.size()
 	_rebuild_scoreboard()
+
+	# host-side probe evidence (latched; inert offline/headless)
+	if _round_time >= 5.0 and round_no >= 2:
+		_net_snap("net_ghosts")
+		if round_no >= _rounds and _rounds > 1:
+			_net_snap("net_r5")
 
 	if _cap_on:
 		_try_capture()
@@ -1030,6 +1105,9 @@ func _on_parry(parrier, attacker_owner: int, is_ghost: bool, attacker_fighter, s
 	if not is_ghost and attacker_fighter != null:
 		attacker_fighter.stagger(PARRY_STAGGER_T)
 	_flash_credit("%s PARRIES!" % _names[parrier.player_index], _colors[parrier.player_index])
+	_net_parry_n += 1
+	_net_parry_seat = parrier.player_index
+	_net_snap("net_parry")
 	print("ECHO_PARRY parrier=%s attacker=%s ghost=%s round=%d t=%.2f" % [_names[parrier.player_index], _names[attacker_owner], str(is_ghost), src_round, _round_time])
 	_event_capture("parry_moment")
 
@@ -1046,6 +1124,7 @@ func _award_ghost_hit(owner: int, victim: int, res: String, src_round: int) -> v
 	_currency.append({"type": "royalty", "player": owner, "amount": 1,
 		"reason": "past self struck %s" % _names[victim]})
 	Sfx.play("grudge", -2.0)
+	_net_bounty_n += 1
 	_flash_credit("PAST %s STRIKES AGAIN" % _names[owner], _colors[owner])
 	if res == "kill":
 		var note := "ROUND-%d %s KILLED PRESENT %s" % [src_round, _names[owner], _names[victim]]
@@ -1120,8 +1199,10 @@ func _on_death(victim: int, is_fall: bool, killer: int = -1, cause: String = "sh
 	var self_echo := cause == "self_echo"
 	if self_echo:
 		_self_haunts[victim] = int(_self_haunts.get(victim, 0)) + 1
+		_net_haunt_n += 1
 		_flash_banner("KILLED BY THEIR OWN ECHO", _colors[victim], 2.2)
 		Sfx.play("grudge", 0.0)
+		_net_snap("net_irony")
 		print("ECHO_SELF_HAUNT victim=%s round=%d (slain by their own recorded ghost)" % [_names[victim], round_no])
 	var mode := "edge"
 	var hp_amt := HP_MAX
@@ -1138,6 +1219,7 @@ func _on_death(victim: int, is_fall: bool, killer: int = -1, cause: String = "sh
 	var deciding: bool = round_no >= _rounds and _rounds > 1 and state == St.PLAY \
 			and _round_time >= round_len - 10.0
 	if deciding and FinalStretch.motion_ok():
+		_net_decide_n += 1
 		_slowmo(0.25, 0.85)
 		FinalStretch.fov_punch(camera, 52.0, 6.0, 0.85)
 		if not self_echo:
@@ -1234,6 +1316,7 @@ func _rebuild_scoreboard() -> void:
 
 
 func _flash_banner(text: String, color: Color, auto_hide: float) -> void:
+	_ban_col = color.to_html(false)
 	banner.text = text
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
@@ -1248,6 +1331,7 @@ func _flash_banner(text: String, color: Color, auto_hide: float) -> void:
 
 
 func _flash_credit(text: String, color: Color) -> void:
+	_cb_col = color.to_html(false)
 	credit_banner.text = text
 	credit_banner.add_theme_color_override("font_color", color)
 	credit_banner.visible = true
@@ -1359,6 +1443,292 @@ func _spawn_confetti(pos: Vector3, color: Color) -> void:
 		p.material_override = mat
 		p.emitting = true
 		get_tree().create_timer(2.5).timeout.connect(p.queue_free)
+
+
+# ===========================================================================
+# ONLINE (phase 2) — the render mirror (docs/design/10 §4.3, house pattern)
+# ===========================================================================
+# Physics stays HOST-SIDE; the client renders. Fighters AND ghosts ride one
+# body-indexed PackedInt32Array (stride 8, cm/mrad quantized): ghosts are
+# deterministic replays on the host, but the mirror receives their POSES on
+# the wire instead of re-simulating the takes — zero drift risk for the cost
+# of ~32 bytes per ghost per snapshot. All juice fires from deltas (hp drops,
+# alive edges, counters, banner changes); _mirror_tick interpolates at 60 Hz.
+# No hidden info in the arena — nothing rides the private channel.
+
+## HOST, pumped by the estate at 20 Hz. Compact PUBLIC facts only.
+func _net_state() -> Dictionary:
+	var nf := fighters.size()
+	var bd := PackedInt32Array()
+	for f in fighters:
+		var fl := 0
+		if f.alive:
+			fl |= 1
+		if _ring_warn.has(f.player_index):
+			fl |= 2
+		bd.append_array(PackedInt32Array([
+			int(roundf(f.global_position.x * 100.0)),
+			int(roundf(f.global_position.y * 100.0)),
+			int(roundf(f.global_position.z * 100.0)),
+			int(roundf(f.yaw * 1000.0)),
+			f.state, f.hp, fl, 0]))
+	for g in ghosts:
+		if g.done or not is_instance_valid(g):
+			continue
+		bd.append_array(PackedInt32Array([
+			int(roundf(g.global_position.x * 100.0)),
+			int(roundf(g.global_position.y * 100.0)),
+			int(roundf(g.global_position.z * 100.0)),
+			int(roundf(g.yaw * 1000.0)),
+			maxi(g.cur_state, 0), g.owner_index, g.gid,
+			int(roundf(g.opacity * 100.0))]))
+	var pts := PackedInt32Array()
+	for f in fighters:
+		pts.append(int(points[f.player_index]))
+	return {
+		"ph": state, "rn": round_no, "rmax": _rounds,
+		"rem": snappedf(maxf(0.0, round_len - _round_time), 0.05),
+		"shr": _shrunk, "nf": nf, "bd": bd, "pts": pts,
+		"ban": [banner.text, _ban_col, banner.visible],
+		"cb": [credit_banner.text, _cb_col, credit_banner.visible],
+		"pn": _net_parry_n, "pw": _net_parry_seat,
+		"bn": _net_bounty_n, "hn": _net_haunt_n, "dn": _net_decide_n,
+		"champ": _net_champ,
+	}
+
+
+## CLIENT. Latest-state-wins; all juice fires from DELTAS. Continuous motion
+## only sets targets; _mirror_tick interpolates at the render rate.
+func _net_apply(st: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = st
+	if prev.is_empty() and _stretch != null:
+		_stretch.play_started()   # FINAL STRETCH: light bed on first snapshot
+	var ph := int(st.get("ph", St.INTRO))
+	var rn := int(st.get("rn", 0))
+	var rmax := int(st.get("rmax", ROUNDS))
+	state = ph
+	# --- round flips: label, arena reset, FINAL STRETCH re-arm/escalate.
+	# rmax comes off the WIRE (the client estate boots mirrors with a stock
+	# rounds count) — the final-round flip must never read local _rounds.
+	if rn != int(prev.get("rn", -1)):
+		round_no = rn
+		round_label.text = "ROUND %d / %d" % [rn, rmax]
+		_mir_rem0 = float(st.get("rem", 0.0))
+		_reset_arena(false)
+		if not prev.is_empty():
+			Sfx.play("round_over")
+		if _stretch != null:
+			if rn >= rmax and rmax > 1:
+				_stretch.escalate()
+			else:
+				_stretch.round_reset()
+		print("ECHO_MIRROR round=%d/%d" % [rn, rmax])
+	# --- timer + FINAL STRETCH ladder off the authoritative clock
+	var rem := float(st.get("rem", 0.0))
+	if ph == St.PLAY:
+		timer_label.text = "%0.1f" % rem
+		timer_label.add_theme_color_override("font_color",
+			Color(1, 0.35, 0.3) if rem < 6.0 else Color(1, 1, 1))
+	if _stretch != null:
+		if ph == St.PLAY:
+			_stretch.tick(rem)
+		elif ph == St.DONE:
+			_stretch.match_ended()
+	if ph == St.DONE and int(prev.get("ph", -1)) != St.DONE:
+		round_label.text = "FINAL"
+		timer_label.text = ""
+	# --- the round-final collapse (its banner rides the ban fact)
+	if bool(st.get("shr", false)) and not bool(prev.get("shr", false)):
+		_shrink_fx()
+		if not _mir_snapped.has("mirror_shrink"):
+			_mir_snapped["mirror_shrink"] = true
+			VerifyCapture.snap("mirror_shrink")
+	# --- fighters: interp targets + instant facts (hp/alive edges ARE the juice)
+	var nf := int(st.get("nf", fighters.size()))
+	var bd: PackedInt32Array = st.get("bd", PackedInt32Array())
+	for i in mini(nf, fighters.size()):
+		var o := i * 8
+		if o + 8 > bd.size():
+			break
+		var f: EchoFighter = fighters[i]
+		_mir_f[i][0] = Vector3(bd[o] / 100.0, bd[o + 1] / 100.0, bd[o + 2] / 100.0)
+		_mir_f[i][1] = bd[o + 3] / 1000.0
+		_mir_f[i][2] = bd[o + 4]
+		var hp := bd[o + 5]
+		var fl := bd[o + 6]
+		var now_alive := (fl & 1) != 0
+		if now_alive and not f.alive:
+			Sfx.play("confirm", -4.0)          # respawn chime (couch parity)
+			f.global_position = _mir_f[i][0]   # spawn teleports snap, not glide
+		elif not now_alive and f.alive:
+			Sfx.play("death")
+			_shake = maxf(_shake, 0.55)
+			_spawn_death_fx(f.global_position, _colors[f.player_index])
+		elif now_alive and hp < f.hp:
+			_hit_feedback(f.global_position, f.color, f.hp - hp >= 2)
+		f.hp = hp
+		f.alive = now_alive
+		_mir_warn[i] = (fl & 2) != 0
+		if not bool(_mir_warn[i]):
+			f.set_ring_warning(false)
+	# --- ghosts: streamed poses in the same block (never re-simulated)
+	var seen := {}
+	var gi := nf * 8
+	while gi + 8 <= bd.size():
+		var gpos := Vector3(bd[gi] / 100.0, bd[gi + 1] / 100.0, bd[gi + 2] / 100.0)
+		var ggid := bd[gi + 6]
+		var gopa := bd[gi + 7] / 100.0
+		seen[ggid] = true
+		if not _mir_ghosts.has(ggid):
+			_mir_ghosts[ggid] = {"node": _mir_spawn_ghost(bd[gi + 5], gopa, gpos),
+				"pos": gpos, "yaw": bd[gi + 3] / 1000.0, "st": bd[gi + 4], "opa": gopa}
+		else:
+			var rec: Dictionary = _mir_ghosts[ggid]
+			rec["pos"] = gpos
+			rec["yaw"] = bd[gi + 3] / 1000.0
+			rec["st"] = bd[gi + 4]
+			if absf(float(rec["opa"]) - gopa) > 0.01:
+				rec["opa"] = gopa
+				(rec["node"] as EchoGhost).set_opacity(gopa)
+		gi += 8
+	for ggid in _mir_ghosts.keys():
+		if not seen.has(ggid):
+			var gone: EchoGhost = _mir_ghosts[ggid]["node"]
+			if is_instance_valid(gone):
+				# a PLAY despawn is the fragment beat; round swaps clear silently
+				if ph == St.PLAY:
+					_spawn_fragments(gone.global_position + Vector3(0, 0.9, 0), gone.owner_color)
+				gone.queue_free()
+			_mir_ghosts.erase(ggid)
+	ghost_label.text = "GHOSTS: %d" % _mir_ghosts.size()
+	# --- HUD banners (pop once per text change, same tween as the couch)
+	_apply_mir_banner(banner, st.get("ban", []), prev.get("ban", []))
+	_apply_mir_banner(credit_banner, st.get("cb", []), prev.get("cb", []))
+	# --- juice counters (counters, not events: drops lose nothing but frames)
+	if int(st.get("pn", 0)) > int(prev.get("pn", 0)):
+		var pw := int(st.get("pw", 0))
+		Sfx.play("confirm", 0.5)
+		if pw >= 0 and pw < fighters.size():
+			_spawn_death_fx(fighters[pw].global_position + Vector3(0, 1.1, 0), Color(1, 1, 0.75), 14, 0.4)
+		_shake = maxf(_shake, 0.22)
+		if not _mir_snapped.has("mirror_parry"):
+			_mir_snapped["mirror_parry"] = true
+			VerifyCapture.snap("mirror_parry")
+	if int(st.get("bn", 0)) > int(prev.get("bn", 0)):
+		Sfx.play("grudge", -2.0)   # PAST X STRIKES AGAIN (text rides cb)
+	if int(st.get("hn", 0)) > int(prev.get("hn", 0)):
+		Sfx.play("grudge", 0.0)    # KILLED BY THEIR OWN ECHO (banner rides ban)
+		_shake = maxf(_shake, 0.7)
+		if not _mir_snapped.has("mirror_irony"):
+			_mir_snapped["mirror_irony"] = true
+			VerifyCapture.snap("mirror_irony")
+	if int(st.get("dn", 0)) > int(prev.get("dn", 0)) and FinalStretch.motion_ok():
+		FinalStretch.fov_punch(camera, 52.0, 6.0, 0.85)   # THE DECIDING MOMENT
+		_shake = maxf(_shake, 0.5)
+	# --- champion (pre-announced one beat before finished(); banner rides ban)
+	var champ := int(st.get("champ", -1))
+	if champ >= 0 and int(prev.get("champ", -1)) < 0:
+		Sfx.play("match_win")
+		_spawn_confetti(Vector3(0, 2.5, 0), _colors[champ] if _colors.has(champ) else Color.WHITE)
+		_shake = maxf(_shake, 0.6)
+		print("ECHO_MIRROR champ=%d" % champ)
+		if not _mir_snapped.has("mirror_champ"):
+			_mir_snapped["mirror_champ"] = true
+			VerifyCapture.snap("mirror_champ")
+	# --- scoreboard from pts + the hp facts applied above
+	var pts: PackedInt32Array = st.get("pts", PackedInt32Array())
+	for i in mini(pts.size(), fighters.size()):
+		points[fighters[i].player_index] = pts[i]
+	_rebuild_scoreboard()
+	# --- evidence latch: the haunted-arena read (live + ghost bodies together;
+	# ~5 s into the round so echoes have fanned out from the spawn rings)
+	var round_ran := _mir_rem0 - rem >= 5.0
+	if ph == St.PLAY and rn >= 2 and round_ran and _mir_ghosts.size() >= 3 and not _mir_snapped.has("mirror_ghosts"):
+		_mir_snapped["mirror_ghosts"] = true
+		VerifyCapture.snap("mirror_ghosts")
+	if ph == St.PLAY and rn >= rmax and rmax > 1 and round_ran and _mir_ghosts.size() >= 6 and not _mir_snapped.has("mirror_r5"):
+		_mir_snapped["mirror_r5"] = true
+		VerifyCapture.snap("mirror_r5")
+
+
+## CLIENT, per physics tick: glide every body toward its authoritative pose.
+## Teleports (respawns, recorded respawn snaps) never glide — distance > 4
+## snaps, mirroring the ghost replayer's own rule.
+func _mirror_tick(delta: float) -> void:
+	_mir_clock += delta
+	if _mir.is_empty():
+		return
+	var k := 1.0 - exp(-14.0 * delta)
+	for i in mini(_mir_f.size(), fighters.size()):
+		var f: EchoFighter = fighters[i]
+		var tgt: Vector3 = _mir_f[i][0]
+		var np := tgt if f.global_position.distance_to(tgt) > 4.0 else f.global_position.lerp(tgt, k)
+		f.net_pose(np, lerp_angle(f.yaw, float(_mir_f[i][1]), k), int(_mir_f[i][2]))
+		if bool(_mir_warn.get(i, false)) and f.alive:
+			f.set_ring_warning(true, fmod(_mir_clock, 0.26) < 0.13)
+	for ggid in _mir_ghosts:
+		var rec: Dictionary = _mir_ghosts[ggid]
+		var g: EchoGhost = rec["node"]
+		if not is_instance_valid(g):
+			continue
+		var tp: Vector3 = rec["pos"]
+		var np2 := tp if g.global_position.distance_to(tp) > 4.0 else g.global_position.lerp(tp, k)
+		g.net_pose(np2, lerp_angle(g.yaw, float(rec["yaw"]), k), int(rec["st"]))
+
+
+## Mirror banner applier (throne pattern): text + color as facts, pop locally
+## once per text change.
+func _apply_mir_banner(l: Label, arr: Array, parr: Array) -> void:
+	if arr.size() < 3:
+		return
+	l.text = str(arr[0])
+	l.add_theme_color_override("font_color", Color(str(arr[1])))
+	var was: bool = parr.size() >= 3 and bool(parr[2]) and str(parr[0]) == str(arr[0])
+	l.visible = bool(arr[2])
+	if l.visible and not was:
+		l.pivot_offset = l.size / 2.0
+		l.scale = Vector2(0.6, 0.6)
+		var tw := create_tween()
+		tw.tween_property(l, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	elif not l.visible:
+		l.scale = Vector2.ONE
+
+
+## A mirror ghost: same EchoGhost body/tint, EMPTY take — replay() never runs;
+## net_pose() streams its life instead.
+func _mir_spawn_ghost(owner: int, opa: float, pos: Vector3) -> EchoGhost:
+	var g := EchoGhost.new()
+	g.take = {"char": _char_of(owner), "count": 0,
+		"pos": PackedVector3Array(), "yaw": PackedFloat32Array(),
+		"state": PackedByteArray(), "fire": PackedByteArray()}
+	g.owner_index = owner
+	g.owner_color = _colors[owner] if _colors.has(owner) else Color.WHITE
+	g.opacity = opa
+	g.main = null   # a mirror ghost never replays, reports or fragments itself
+	add_child(g)
+	g.setup()
+	g.global_position = pos
+	return g
+
+
+func _char_of(owner: int) -> String:
+	for pl in roster:
+		if int(pl["index"]) == owner:
+			return str(pl.get("char_scene", DEFAULT_CHARS[owner % DEFAULT_CHARS.size()]))
+	return DEFAULT_CHARS[owner % DEFAULT_CHARS.size()]
+
+
+## Host-side probe evidence: latched windowed snaps at the beats the mirror
+## also latches. Inert offline and in every headless receipt (VerifyCapture
+## is only active under probe flags).
+func _net_snap(tag: String) -> void:
+	if _mirror or _net_snapped.has(tag) or not NetSession.is_online() or not NetSession.is_host():
+		return
+	_net_snapped[tag] = true
+	VerifyCapture.snap(tag)
 
 
 # ===========================================================================
