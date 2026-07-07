@@ -1,0 +1,119 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NETPROBE mode=join
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET join target=127.0.0.1:9412 err=0 (retries left 20)
+NET connected to host as peer 1849957837
+NETPROBE tape start (net) seat=1
+NETPROBE granted seat 1
+NETHASH side=client seq=15 h=1503d1f4
+NETHASH side=client seq=30 h=5f5d5633
+VERIFY_SNAP res://docs/verify/mower_netshots_join/snap_online_client_lobby_0381.png
+NETHASH side=client seq=45 h=1e4f9c9b
+NETHASH side=client seq=60 h=e6b0c1e2
+NETPROBE client sees own ready=true
+NETHASH side=client seq=75 h=e76d29c8
+VERIFY_SNAP res://docs/verify/mower_netshots_join/snap_online_client_ready_0815.png
+NETHASH side=client seq=90 h=1e80a825
+NETHASH side=client seq=105 h=0b05c472
+NETHASH side=client seq=120 h=421942cf
+NETHASH side=client seq=135 h=42d5aab5
+NETHASH side=client seq=150 h=79e92912
+NETHASH side=client seq=165 h=7aa590f8
+NETHASH side=client seq=180 h=b1b90f55
+NETHASH side=client seq=195 h=b275773b
+NETHASH side=client seq=210 h=eac2daef
+NETHASH side=client seq=225 h=eb7f42d5
+VERIFY_SNAP res://docs/verify/mower_netshots_join/snap_online_client_gate_2335.png
+NETHASH side=client seq=240 h=2292c132
+NETHASH side=client seq=255 h=234f2918
+NETHASH side=client seq=270 h=5a62a775
+NET mirror boot: mower
+MOWER_MIRROR boot players=4 my_seat=1
+MOWER_MIRROR phase -> INTRO rt=0.0
+NETHASH side=client seq=285 h=5b1f0f5b
+MOWER_MIRROR phase -> PLAY rt=0.0
+NETHASH side=client seq=300 h=936c730f
+VERIFY_SNAP res://docs/verify/mower_netshots_join/snap_online_client_game_3054.png
+NETHASH_MOD side=client seq=40 h=08e27220
+NETHASH side=client seq=315 h=9428daf5
+MOWGRID side=client seq=41 h=4acb2a07
+NETHASH side=client seq=330 h=cb3c5952
+NETHASH side=client seq=345 h=cbf8c138
+NETHASH_MOD side=client seq=80 h=e03ce24b
+MOWGRID side=client seq=81 h=fd5b42cb
+NETHASH side=client seq=360 h=030c3f95
+NETHASH side=client seq=375 h=03c8a77b
+NETHASH_MOD side=client seq=120 h=ba3c3b40
+MOWGRID side=client seq=121 h=784641d9
+NETHASH side=client seq=390 h=3adc25d8
+NETHASH side=client seq=405 h=3cd27315
+NETHASH_MOD side=client seq=160 h=10970bd9
+MOWGRID side=client seq=161 h=79acab8f
+NETHASH side=client seq=420 h=73e5f172
+NETHASH side=client seq=435 h=74a25958
+NETHASH_MOD side=client seq=200 h=e2416559
+MOWGRID side=client seq=201 h=c35ab0aa
+NETHASH side=client seq=450 h=abb5d7b5
+NETHASH side=client seq=465 h=ac723f9b
+NETHASH_MOD side=client seq=240 h=6160448c
+MOWGRID side=client seq=241 h=3338192a
+NETHASH side=client seq=480 h=e385bdf8
+NETHASH side=client seq=495 h=e44225de
+NETHASH_MOD side=client seq=280 h=beb1ed74
+MOWGRID side=client seq=281 h=f7c9b58f
+NETHASH side=client seq=510 h=1c8f8992
+NETHASH side=client seq=525 h=1d4bf178
+NETHASH_MOD side=client seq=320 h=644ced25
+MOWGRID side=client seq=321 h=c50c2d58
+NETHASH side=client seq=540 h=545f6fd5
+NETHASH side=client seq=555 h=551bd7bb
+NETHASH_MOD side=client seq=360 h=8ba9568f
+MOWGRID side=client seq=361 h=81cc0369
+NETHASH side=client seq=570 h=8c2f5618
+NETHASH side=client seq=585 h=8cebbdfe
+VERIFY_SNAP res://docs/verify/mower_netshots_join/snap_mirror_lawn_6056.png
+NETHASH_MOD side=client seq=400 h=6f9aed1a
+NETHASH side=client seq=600 h=c53921b2
+MOWGRID side=client seq=401 h=e95664bb
+NETHASH side=client seq=615 h=c5f58998
+NETHASH side=client seq=630 h=fd0907f5
+NETHASH_MOD side=client seq=440 h=b7c9e0ff
+MOWGRID side=client seq=441 h=01c41260
+NETHASH side=client seq=645 h=fdc56fdb
+NETHASH side=client seq=660 h=34d8ee38
+NETHASH_MOD side=client seq=480 h=dc0e84be
+MOWGRID side=client seq=481 h=c4f2784d
+NETHASH side=client seq=675 h=3595561e
+NETHASH side=client seq=690 h=6ca8d47b
+NETHASH_MOD side=client seq=520 h=5508f626
+MOWGRID side=client seq=521 h=01555b8e
+NETHASH side=client seq=705 h=6e9f21b8
+NETHASH side=client seq=720 h=a5b2a015
+NETHASH_MOD side=client seq=560 h=00b4d9d9
+MOWGRID side=client seq=561 h=77a50708
+MOWER_MIRROR phase -> RESULTS rt=30.0
+MOWER_MIRROR tally begins placements=[3, 2, 0, 1]
+NETHASH side=client seq=735 h=a66f07fb
+NETHASH side=client seq=750 h=dd828658
+VERIFY_SNAP res://docs/verify/mower_netshots_join/snap_tally_mid_7828.png
+NETHASH_MOD side=client seq=600 h=e46cc509
+MOWGRID side=client seq=601 h=245c04e7
+NETHASH side=client seq=765 h=de3eee3e
+VERIFY_SNAP res://docs/verify/mower_netshots_join/snap_winner_stamp_7995.png
+NETHASH side=client seq=780 h=15526c9b
+NET mirror fold
+NETHASH side=client seq=795 h=160ed481
+NETHASH side=client seq=810 h=4e5c3835
+NETHASH side=client seq=825 h=4f18a01b
+NETHASH side=client seq=840 h=862c1e78
+NETHASH side=client seq=855 h=86e8865e
+VERIFY_SNAP res://docs/verify/mower_netshots_join/snap_online_client_reckoning_8910.png
+NETPROBE_CLIENT_DONE
+NETHASH side=client seq=870 h=bdfc04bb

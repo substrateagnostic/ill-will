@@ -244,6 +244,29 @@ func drive(delta: float, inp: Dictionary) -> void:
 func is_ramming() -> bool:
 	return ram_t > 0.0
 
+## ---- ONLINE mirror poses (doc 10 §4.3) --------------------------------------
+## Render-only: pos/facing are already interpolated by mower.gd; this applies
+## them plus the visual state bits (clippings, lean, ram bounce, scoreboard
+## tags) through the exact couch paths. Never advances the sim.
+func mirror_pose(p: Vector2, face_ang: float, moving: bool, spinning: bool,
+		ramming: bool, boost: bool, spin_dir: float, f: float) -> void:
+	pos = p
+	facing = Vector2(sin(face_ang), cos(face_ang))
+	boosting = boost
+	fuel = f
+	spin_t = 0.2 if spinning else 0.0          # held pseudo-value: drives lean,
+	spin_spd = 9.0 * spin_dir if spinning else 0.0  # engine mute + "SPUN!" tag
+	ram_t = RAM_TIME if ramming else 0.0
+	_set_clippings(moving and not spinning)
+	_update_anim()
+	_apply_transform()
+
+## Spin-flag delta: the hit reaction (spin itself rides the facing snapshots).
+func mirror_spun() -> void:
+	if _anim and _anim.has_animation("Hit_A"):
+		_cur_anim = "Hit_A"
+		_anim.play("Hit_A", 0.1)
+
 func spin_out(dir: float) -> void:
 	spin_t = SPINOUT_TIME
 	spin_spd = 9.0 * dir

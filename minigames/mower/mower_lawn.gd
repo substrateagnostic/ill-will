@@ -224,6 +224,41 @@ func commit() -> void:
 		_tex.update(_img)
 		_dirty = false
 
+# -- ONLINE (phase 2): the grid on the wire ------------------------------------
+# The host ships the WHOLE 64x48 byte grid, deflate-compressed, on every 2nd
+# module snapshot (10 Hz). Full-grid latest-wins is self-healing by
+# construction: a dropped packet costs 100 ms of lawn freshness, never a cell.
+# Beds/blocked cells are carved identically by both builds (deterministic), so
+# mowable_total needs no wire.
+
+## HOST: one compressed authoritative lawn. 3072 raw bytes -> typically a few
+## hundred compressed (large single-owner runs); measured in the VERIFY doc.
+func grid_packet() -> PackedByteArray:
+	return cells.compress(FileAccess.COMPRESSION_DEFLATE)
+
+## CLIENT: adopt the authoritative grid wholesale — cells, live tallies (the
+## meter/scoreboard/tally ceremony all read these), and the data texture.
+func mirror_apply_grid(packet: PackedByteArray) -> void:
+	var raw := packet.decompress(GW * GH, FileAccess.COMPRESSION_DEFLATE)
+	if raw.size() != GW * GH:
+		return
+	cells = raw
+	owner_cells = [0, 0, 0, 0]
+	uncut_cells = 0
+	for i in cells.size():
+		var c := cells[i]
+		if c == 0:
+			uncut_cells += 1
+		elif c >= 1 and c <= 4:
+			owner_cells[c - 1] += 1
+	# the R8 image's data layout IS the cell array (row-major, 1 byte/texel)
+	_img.set_data(GW, GH, false, Image.FORMAT_R8, raw)
+	_dirty = true
+
+## Both ends print MOWGRID lines keyed by snapshot seq — the lawn's own NETHASH.
+func grid_hash() -> String:
+	return "%08x" % (hash(cells) & 0xFFFFFFFF)
+
 # -- scoring ------------------------------------------------------------------
 
 func coverage_pct(owner_index: int) -> float:

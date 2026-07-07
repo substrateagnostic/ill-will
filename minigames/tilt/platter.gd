@@ -113,6 +113,15 @@ func debug_force_tilt(dir: Vector2, degrees: float) -> void:
 	_forced = true
 	_force_target = dir.normalized() * deg_to_rad(degrees)
 
+## ONLINE mirror (doc 10 §4.3): the HOST owns the spring — a render mirror is
+## HANDED the authoritative tilt (already interpolated by the game) and only
+## applies it: disc rotation + rim glow + warning lamp. Never integrates mass.
+func mirror_set_tilt(t: Vector2, delta: float) -> void:
+	tilt = t
+	disc.rotation = Vector3(tilt.y, 0.0, -tilt.x)
+	_clock += delta
+	_update_glow()
+
 # -- construction -----------------------------------------------------------
 
 func _build() -> void:

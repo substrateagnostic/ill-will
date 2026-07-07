@@ -79,6 +79,27 @@ var _frames_over_12 := 0
 var _frame_count := 0
 var _vc: Node = null
 
+# --- ONLINE PHASE 2: the render mirror (docs/design/10 §4.3; house pattern
+# from minigames/seance/seance.gd). Host runs the WHOLE sim as couch; the
+# estate pumps _net_state() to guests at 20 Hz. The 64x48 coverage grid — the
+# game's engineering heart — rides the snapshot as ONE deflate-compressed
+# PackedByteArray on every 2nd pump (10 Hz): full-grid latest-wins is
+# self-healing (a drop costs 100 ms of lawn, never a cell) and every grid
+# arrives internally consistent with the mower transforms beside it. The
+# mirror re-derives coverage tallies from the applied grid, so the meter,
+# scoreboard and the Splatoon tally ceremony all run their couch code paths.
+var _mirror := false
+var _mir := {}                    # last applied snapshot (delta source)
+var _mir_mow := []                # per-mower interp targets
+var _mir_tally_up := false        # local tally ceremony started (RESULTS)
+var _snap_net_lawn := false       # paired lawn evidence snaps (host + mirror)
+var _snap_mir_lawn := false
+# host-side wire bookkeeping:
+var _banner_col := "ffffff"
+var _ram_last_a := -1             # last ram: attacker + impact (fx on rc delta)
+var _ram_last_p := Vector2.ZERO
+var _net_pump_n := 0
+
 # UI built in code
 var _meter_bar: HBoxContainer
 var _meter_segs: Array = []       # {rect: ColorRect, label: Label} per player
@@ -117,6 +138,7 @@ func begin(config: Dictionary) -> void:
 		return
 	_begun = true
 	roster = config.roster
+	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.rng_seed)
 	practice = bool(config.get("practice", false))
 	if _cli_roundtime > 0.0:
@@ -139,16 +161,17 @@ func begin(config: Dictionary) -> void:
 		colors.append(Color.WHITE)
 	lawn.build(colors)
 	_build_obstacles()
-	# bots
-	bots = MowerBots.new()
-	bots.setup(int(config.rng_seed) ^ 0x30FA, roster.size())
+	if not _mirror:
+		# fenced from the mirror: bot construction (spec §4.3 begin() split)
+		bots = MowerBots.new()
+		bots.setup(int(config.rng_seed) ^ 0x30FA, roster.size())
 	# Per-player: a seat is bot-driven if the roster says so (shell sets this
 	# from estate._is_bot; standalone fills it from PlayerInput) OR the legacy
 	# --mowbots / --covtest flags force ALL bots. Decided here at begin() from
 	# roster data only - never runtime Input - so the tick sim stays reproducible.
 	bot_enabled.clear()
 	for i in roster.size():
-		bot_enabled.append(_bots_all or _covtest or bool(roster[i].get("bot", false)))
+		bot_enabled.append(not _mirror and (_bots_all or _covtest or bool(roster[i].get("bot", false))))
 	# mowers
 	for i in roster.size():
 		var pl: Dictionary = roster[i]
@@ -162,6 +185,17 @@ func begin(config: Dictionary) -> void:
 	_build_meter()
 	_build_tally_ui()
 	_rebuild_scoreboard()
+	if _mirror:
+		# RENDER MIRROR: lawn, obstacles, mowers, meter and tally UI all stand
+		# ready (identical deterministic build); the first _net_apply drives
+		# everything. Hint bar is built from THIS machine's bindings.
+		phase = Phase.WAITING
+		var bar := _controls_bar()
+		if bar != "":
+			hint_label.text = bar
+		hint_label.visible = true
+		print("MOWER_MIRROR boot players=%d my_seat=%d" % [roster.size(), NetSession.my_seat()])
+		return
 	_log("begin players=%d seed=%d roundtime=%.0f bots=%s covtest=%s" % [
 		roster.size(), int(config.rng_seed), round_time, str(bot_enabled), _covtest])
 	_start_round()
@@ -313,6 +347,10 @@ func _stone() -> StandardMaterial3D:
 func _human_seats() -> Array:
 	var out := []
 	for i in roster.size():
+		# mirror: only MY seat is a human on THIS machine (the client estate
+		# maps local devices to every seat, but those hands live elsewhere)
+		if _mirror and i != NetSession.my_seat():
+			continue
 		if i < bot_enabled.size() and not bot_enabled[i] and PlayerInput.device_of(i) != -99:
 			out.append(i)
 	return out
@@ -364,6 +402,10 @@ func _start_round() -> void:
 	Sfx.play("confirm")
 
 func _physics_process(delta: float) -> void:
+	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
+	if _mirror:
+		_mirror_tick(delta)
+		return
 	if phase == Phase.WAITING:
 		return
 	phase_t += delta
@@ -415,6 +457,11 @@ func _tick_play(delta: float) -> void:
 	var pms := float(Time.get_ticks_usec() - pt0) / 1000.0
 	if pms > _paint_worst_ms:
 		_paint_worst_ms = pms
+	# evidence snap (online nights only): the half-mowed lawn, paired with the
+	# mirror's "mirror_lawn" snap fired from the same authoritative round clock.
+	if not _snap_net_lawn and NetSession.has_guests() and round_t >= 20.0:
+		_snap_net_lawn = true
+		VerifyCapture.snap("net_lawn")
 	# timeout
 	if round_t >= round_time:
 		_end_round()
@@ -459,6 +506,8 @@ func _do_ram(attacker: int, victim: int, impact: Vector2, n: Vector2) -> void:
 	ma.cells_stolen += stolen
 	ma.ram_cells += stolen
 	ma.ram_spinouts += 1
+	_ram_last_a = attacker      # wire facts: the mirror's burst fx + shake
+	_ram_last_p = impact
 	_currency.append({"type": "royalty", "player": attacker, "amount": 1,
 		"reason": "rammed %s and stole their turf" % mv.pname})
 	# structured kill attribution (module contract): the ram spins the victim out
@@ -720,6 +769,7 @@ func _confetti(pos: Vector3, color: Color) -> void:
 		get_tree().create_timer(2.4).timeout.connect(pt.queue_free)
 
 func _flash_banner(text: String, color: Color, duration: float) -> void:
+	_banner_col = color.to_html(false)
 	banner.text = text
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
@@ -1002,3 +1052,151 @@ func _log(msg: String) -> void:
 	if _vc != null:
 		f = int(_vc.frame)
 	print("MOWER_EVT t=%.2f frame=%d | %s" % [round_t, f, msg])
+
+# ================================================================ ONLINE (phase 2)
+# House pattern from minigames/seance/seance.gd (docs/design/10 §4.3): the
+# _mirror guard, the begin() mirror branch, _net_state()/_net_apply() with
+# juice-from-deltas. MOWER-specific: the coverage GRID rides the snapshot as
+# one deflate-compressed byte array at 10 Hz (see mower_lawn.gd notes — the
+# bandwidth math + rejected diff/event schemes live in the VERIFY doc), and
+# the RESULTS phase hands the mirror its own LOCAL Splatoon tally ceremony,
+# fed by the mirrored grid + the host's placements.
+
+## HOST, pumped by the estate at 20 Hz (unreliable_ordered ch 4, latest wins).
+func _net_state() -> Dictionary:
+	_net_pump_n += 1
+	var mws: Array = []
+	for i in roster.size():
+		var m: MowerUnit = mowers[i]
+		var flags := 0
+		if m.boosting:
+			flags |= 1
+		if m.spin_t > 0.0:
+			flags |= 2
+		if m.is_ramming():
+			flags |= 4
+		if m.spin_spd >= 0.0:
+			flags |= 8
+		mws.append([snappedf(m.pos.x, 0.01), snappedf(m.pos.y, 0.01),
+			snappedf(atan2(m.facing.x, m.facing.y), 0.01), flags,
+			snappedf(m.fuel, 0.02)])
+	var st := {
+		"ph": phase, "rt": snappedf(round_t, 0.01), "rtime": round_time,
+		"ot": overtime, "mw": mws,
+		"rc": _ram_count, "ra": _ram_last_a,
+		"rp": [snappedf(_ram_last_p.x, 0.01), snappedf(_ram_last_p.y, 0.01)],
+		"ban": [banner.text, _banner_col, banner.visible],
+	}
+	# the lawn itself: every 2nd pump (10 Hz), and EVERY pump once the round is
+	# over so the tally ceremony is guaranteed the final grid.
+	if _net_pump_n % 2 == 1 or phase == Phase.RESULTS:
+		var packet := lawn.grid_packet()
+		st["grid"] = packet
+		if _net_pump_n % 40 == 1:
+			print("MOWGRID side=host seq=%d h=%s raw=%d zbytes=%d" % [
+				_net_pump_n, lawn.grid_hash(), MowerLawn.GW * MowerLawn.GH, packet.size()])
+	if phase == Phase.RESULTS:
+		st["plc"] = _results.get("placements", [])
+	return st
+
+## CLIENT. Latest-state-wins; juice fires from DELTAS. The grid is adopted
+## wholesale (self-healing), then the couch _process — meter, scoreboard,
+## timer, engine put-put, lawn.commit — renders it through untouched paths.
+func _net_apply(state: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = state
+	var first := prev.is_empty()
+	round_time = float(state.get("rtime", round_time))
+	round_t = float(state.get("rt", round_t))
+	var ot: bool = bool(state.get("ot", false))
+	if ot and not overtime:
+		lawn.set_overtime(1.0)
+		Sfx.play("grudge")
+		Sfx.play("round_over", -4.0)
+		_shake = maxf(_shake, 0.25)
+	overtime = ot
+	# --- the authoritative lawn
+	if state.has("grid"):
+		lawn.mirror_apply_grid(state["grid"])
+		if int(state.get("seq", 0)) % 40 == 1:
+			print("MOWGRID side=client seq=%d h=%s" % [int(state.get("seq", 0)), lawn.grid_hash()])
+	var ph := int(state.get("ph", Phase.WAITING))
+	var prev_ph: int = int(prev.get("ph", -1))
+	# banner mirrors until RESULTS — from there the LOCAL tally ceremony owns it
+	if ph != Phase.RESULTS:
+		_apply_mir_banner(state.get("ban", []), prev.get("ban", []))
+	# --- mowers: poses are targets; the spin flag's rising edge is the hit
+	var mws: Array = state.get("mw", [])
+	var pmw: Array = prev.get("mw", [])
+	_mir_mow = mws
+	for i in mini(mws.size(), mowers.size()):
+		var d: Array = mws[i]
+		var flags := int(d[3])
+		var pflags: int = int((pmw[i] as Array)[3]) if i < pmw.size() else 0
+		if (flags & 2) != 0 and (pflags & 2) == 0:
+			(mowers[i] as MowerUnit).mirror_spun()
+		if first:
+			(mowers[i] as MowerUnit).mirror_pose(Vector2(float(d[0]), float(d[1])),
+				float(d[2]), false, (flags & 2) != 0, false, (flags & 1) != 0,
+				1.0 if (flags & 8) != 0 else -1.0, float(d[4]))
+	# --- ram flourish from the counter (banner rides ban; the host's slow-mo
+	# already slows the snapshot stream, so the mirror never touches time_scale)
+	if int(state.get("rc", 0)) > int(prev.get("rc", 0)):
+		var ra := int(state.get("ra", -1))
+		var rp: Array = state.get("rp", [])
+		Sfx.play("bumper", -2.0)
+		Sfx.play("splat", -4.0)
+		_shake = maxf(_shake, 0.35)
+		if ra >= 0 and ra < roster.size() and rp.size() >= 2:
+			_burst_fx(Vector3(float(rp[0]), 0.4, float(rp[1])), (roster[ra] as Dictionary).color)
+	# --- phase handoffs
+	phase = ph
+	if ph != prev_ph:
+		print("MOWER_MIRROR phase -> %s rt=%.1f" % [Phase.keys()[ph], round_t])
+		if ph == Phase.INTRO or (first and ph == Phase.PLAY):
+			Sfx.play("confirm")
+	if ph == Phase.RESULTS and not _mir_tally_up:
+		_mir_tally_up = true
+		# the host's verdict + the mirrored final grid = the same ceremony,
+		# staged locally: camera pull, per-player turf reveal, count-up, stamp.
+		_results = {"placements": state.get("plc", range(roster.size()))}
+		timer_label.text = ""
+		hint_label.visible = false
+		print("MOWER_MIRROR tally begins placements=%s" % [str(_results.placements)])
+		_run_tally()
+	# --- paired lawn evidence snap on the authoritative round clock
+	if not _snap_mir_lawn and ph == Phase.PLAY and round_t >= 20.0:
+		_snap_mir_lawn = true
+		VerifyCapture.snap("mirror_lawn")
+
+## CLIENT, per physics tick: 60 fps glide between 20 Hz snapshots.
+func _mirror_tick(delta: float) -> void:
+	if _mir.is_empty():
+		return
+	for i in mini(_mir_mow.size(), mowers.size()):
+		var d: Array = _mir_mow[i]
+		var mu: MowerUnit = mowers[i]
+		var target := Vector2(float(d[0]), float(d[1]))
+		var moving := (target - mu.pos).length() > 0.05
+		var np := mu.pos.lerp(target, 1.0 - exp(-14.0 * delta))
+		var fa := lerp_angle(atan2(mu.facing.x, mu.facing.y), float(d[2]),
+			1.0 - exp(-14.0 * delta))
+		var flags := int(d[3])
+		mu.mirror_pose(np, fa, moving, (flags & 2) != 0, (flags & 4) != 0,
+			(flags & 1) != 0, 1.0 if (flags & 8) != 0 else -1.0, float(d[4]))
+
+func _apply_mir_banner(arr: Array, parr: Array) -> void:
+	if arr.size() < 3:
+		return
+	banner.text = str(arr[0])
+	banner.add_theme_color_override("font_color", Color(str(arr[1])))
+	var was: bool = parr.size() >= 3 and bool(parr[2]) and str(parr[0]) == str(arr[0])
+	banner.visible = bool(arr[2])
+	if banner.visible and not was:
+		banner.pivot_offset = banner.size / 2.0
+		banner.scale = Vector2(0.6, 0.6)
+		var pop := create_tween()
+		pop.tween_property(banner, "scale", Vector2.ONE, 0.28) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

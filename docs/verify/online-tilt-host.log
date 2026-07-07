@@ -1,0 +1,242 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET host port=9412 err=0 code=80CNC4 addr=192.168.0.101:9412
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 1673378149 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE seat 1 claimed by peer 1673378149
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+NETHASH side=host seq=15 h=37408d7b
+NETPROBE_TRACE tick=60 p1=(-3.400,0.001,-2.500)
+VERIFY_SNAP res://docs/verify/tilt_netshots_host/snap_online_host_claim_0524.png
+NETPROBE_TRACE tick=90 p1=(-3.400,0.001,-4.200)
+NETPROBE_TRACE tick=120 p1=(-3.343,0.001,-5.843)
+NETHASH side=host seq=30 h=404e9a5c
+NETPROBE_TRACE tick=150 p1=(-1.643,0.001,-5.843)
+NETPROBE_TRACE tick=180 p1=(0.057,0.001,-5.843)
+NETHASH side=host seq=45 h=1f898045
+NETPROBE_TRACE tick=210 p1=(0.113,0.001,-4.200)
+NETPROBE_TRACE tick=240 p1=(0.113,0.001,-2.500)
+NETHASH side=host seq=60 h=902cd8d5
+NETPROBE_TRACE tick=270 p1=(0.113,0.001,-2.443)
+NETPROBE_TRACE tick=300 p1=(0.113,0.001,-2.443)
+NETPROBE toggle seat=1 ready=true pf=714
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/tilt_netshots_host/snap_online_host_ready_0763.png
+NETHASH side=host seq=75 h=90e940bb
+NETHASH side=host seq=90 h=c7fcbf18
+NETHASH side=host seq=105 h=b481db65
+NETHASH side=host seq=120 h=eb9559c2
+NETHASH side=host seq=135 h=ec51c1a8
+NETHASH side=host seq=150 h=23654005
+NETHASH side=host seq=165 h=2421a7eb
+NETHASH side=host seq=180 h=5b352648
+NETHASH side=host seq=195 h=5bf18e2e
+NETHASH side=host seq=210 h=943ef1e2
+NETHASH side=host seq=225 h=94fb59c8
+VERIFY_SNAP res://docs/verify/tilt_netshots_host/snap_online_host_gate_1429.png
+NETHASH side=host seq=240 h=cc0ed825
+NETHASH side=host seq=255 h=cccb400b
+NETHASH side=host seq=270 h=03debe68
+TILT_EVT t=0.00 frame=1643 | begin players=4 seed=3300865038 rounds=2 bots=[false, false, true, true] test=
+TILT_EVT t=0.00 frame=1643 | round_start 1
+NETHASH side=host seq=285 h=049b264e
+VERIFY_SNAP res://docs/verify/tilt_netshots_host/snap_online_host_game_1721.png
+TILT_EVT t=1.48 frame=1722 | shove_windup p1
+NETHASH side=host seq=300 h=3ce88a02
+NETHASH_MOD side=host seq=40 h=5b625117 bytes=924
+NETHASH side=host seq=315 h=3da4f1e8
+TILT_EVT t=2.93 frame=1813 | shove_windup p1
+NETHASH side=host seq=330 h=74b87045
+VERIFY_SNAP res://docs/verify/tilt_netshots_host/snap_net_tilting_1869.png
+NETHASH_MOD side=host seq=80 h=37e7e21c bytes=924
+TILT_EVT t=4.45 frame=1904 | shove_windup p1
+NETHASH side=host seq=345 h=7574d82b
+TILT_EVT t=4.77 frame=1923 | coin p2 carried=1
+NETHASH side=host seq=360 h=ac885688
+TILT_EVT t=5.97 frame=1995 | shove_windup p1
+TILT_EVT t=6.03 frame=1999 | fall p0 shover=-1 gull_ko=false assist=-1 tilt=22.1
+TILT_EVT t=6.41 frame=2034 | status tilt=15.9 standing=3 radii=[6.5, 2.8, 0.7]
+NETHASH_MOD side=host seq=120 h=d130a500 bytes=932
+TILT_EVT t=6.53 frame=2041 | fall p1 shover=-1 gull_ko=false assist=-1 tilt=15.0
+TILT_EVT t=6.65 frame=2061 | splash p0
+NETHASH side=host seq=375 h=ad44be6e
+TILT_EVT t=7.25 frame=2097 | splash p1
+TILT_EVT t=7.50 frame=2112 | coin p2 carried=2
+NETHASH side=host seq=390 h=e4583ccb
+NETHASH_MOD side=host seq=160 h=824fa42e bytes=1028
+TILT_EVT t=8.54 frame=2174 | guano p1
+NETHASH side=host seq=405 h=e64e8a08
+NETHASH side=host seq=420 h=1d620865
+NETHASH_MOD side=host seq=200 h=58f24f1c bytes=1056
+NETHASH side=host seq=435 h=1e1e704b
+TILT_EVT t=11.04 frame=2323 | shove_windup p2
+TILT_EVT t=11.16 frame=2330 | shove p2 -> p3 r=1.5 out=0.53
+TILT_EVT t=11.42 frame=2346 | status tilt=8.4 standing=2 radii=[1.6, 3.2]
+NETHASH side=host seq=450 h=5531eea8
+NETHASH_MOD side=host seq=240 h=b4210727 bytes=1056
+NETHASH side=host seq=465 h=55ee568e
+TILT_EVT t=13.07 frame=2445 | guano p1
+TILT_EVT t=13.46 frame=2468 | coin p2 carried=3
+NETHASH side=host seq=480 h=8d01d4eb
+TILT_EVT t=14.42 frame=2526 | shove_windup p2
+NETHASH_MOD side=host seq=280 h=40ba505c bytes=1060
+NETHASH side=host seq=495 h=8dbe3cd1
+TILT_EVT t=14.84 frame=2551 | shove_windup p3
+TILT_EVT t=15.11 frame=2567 | coin p3 carried=1
+TILT_EVT t=15.32 frame=2580 | shove_windup p2
+TILT_EVT t=15.44 frame=2587 | shove p2 -> p3 r=1.5 out=-0.79
+NETHASH side=host seq=510 h=c60ba085
+TILT_EVT t=16.42 frame=2646 | status tilt=5.3 standing=2 radii=[1.5, 1.9]
+NETHASH_MOD side=host seq=320 h=f1ccdb76 bytes=1028
+TILT_EVT t=16.71 frame=2663 | coin p2 carried=4
+TILT_EVT t=16.79 frame=2668 | shove_windup p3
+TILT_EVT t=16.82 frame=2670 | shove_windup p2
+NETHASH side=host seq=525 h=c6c8086b
+TILT_EVT t=16.91 frame=2675 | clash p3<->p2 kb=0.4 r=[1.7,1.7]
+TILT_EVT t=17.57 frame=2715 | guano p1
+NETHASH side=host seq=540 h=fddb86c8
+NETHASH_MOD side=host seq=360 h=da8d2957 bytes=1040
+NETHASH side=host seq=555 h=fe97eeae
+TILT_EVT t=19.49 frame=2830 | coin p3 carried=2
+NETHASH side=host seq=570 h=35ab6d0b
+TILT_EVT t=20.16 frame=2870 | sudden_death
+NETHASH_MOD side=host seq=400 h=d7c1b830 bytes=1052
+NETHASH side=host seq=585 h=3667d4f1
+TILT_EVT t=21.44 frame=2947 | status tilt=30.6 standing=2 radii=[4.6, 2.2]
+NETHASH side=host seq=600 h=6eb538a5
+TILT_EVT t=22.07 frame=2985 | guano p1
+NETHASH_MOD side=host seq=440 h=8825fab7 bytes=1052
+NETHASH side=host seq=615 h=6f71a08b
+NETHASH side=host seq=630 h=a6851ee8
+NETHASH_MOD side=host seq=480 h=e13dac93 bytes=1052
+TILT_EVT t=24.57 frame=3135 | fall p2 shover=-1 gull_ko=false assist=-1 tilt=30.0
+TILT_EVT t=24.57 frame=3135 | round_end 1 kind=last_stand scores[RED=0, BLUE=1, GOLD=6, MINT=6]
+NETHASH side=host seq=645 h=a74186ce
+TILT_EVT t=25.17 frame=3183 | splash p2
+NETHASH side=host seq=660 h=de55052b
+NETHASH_MOD side=host seq=520 h=028329d3 bytes=1052
+NETHASH side=host seq=675 h=df116d11
+TILT_EVT t=27.78 frame=3340 | round_start 2
+NETHASH side=host seq=690 h=1624eb6e
+NETHASH_MOD side=host seq=560 h=61709462 bytes=924
+NETHASH side=host seq=705 h=181b38ab
+TILT_EVT t=29.37 frame=3435 | shove_windup p1
+NETHASH side=host seq=720 h=4f2eb708
+NETHASH_MOD side=host seq=600 h=1ad7c216 bytes=936
+NETHASH side=host seq=735 h=4feb1eee
+TILT_EVT t=30.87 frame=3525 | shove_windup p1
+NETHASH side=host seq=750 h=86fe9d4b
+TILT_EVT t=32.37 frame=3615 | shove_windup p1
+NETHASH_MOD side=host seq=640 h=cbd562cb bytes=968
+TILT_EVT t=32.73 frame=3637 | shove_windup p2
+TILT_EVT t=32.73 frame=3637 | shove_windup p3
+NETHASH side=host seq=765 h=87bb0531
+TILT_EVT t=32.85 frame=3644 | clash p2<->p3 kb=0.4 r=[1.9,2.0]
+TILT_EVT t=33.72 frame=3696 | fall p0 shover=-1 gull_ko=false assist=-1 tilt=22.3
+TILT_EVT t=33.77 frame=3705 | shove_windup p1
+NETHASH side=host seq=780 h=bece838e
+TILT_EVT t=34.19 frame=3737 | status tilt=21.9 standing=3 radii=[6.8, 2.2, 3.5]
+TILT_EVT t=34.24 frame=3740 | fall p1 shover=-1 gull_ko=false assist=-1 tilt=21.9
+TILT_EVT t=34.33 frame=3755 | splash p0
+NETHASH_MOD side=host seq=680 h=15f3a8cf bytes=1024
+TILT_EVT t=34.84 frame=3788 | splash p1
+NETHASH side=host seq=795 h=bf8aeb74
+TILT_EVT t=34.95 frame=3795 | guano p1
+NETHASH side=host seq=810 h=f7d84f28
+TILT_EVT t=36.05 frame=3861 | coin p2 carried=1
+NETHASH_MOD side=host seq=720 h=3b336f8c bytes=1068
+NETHASH side=host seq=825 h=f894b70e
+TILT_EVT t=37.80 frame=3966 | shove_windup p2
+NETHASH side=host seq=840 h=2fa8356b
+TILT_EVT t=37.87 frame=3970 | shove_windup p3
+TILT_EVT t=37.92 frame=3973 | shove p2 -> p3 r=2.4 out=0.95
+TILT_EVT t=38.02 frame=3979 | coin p3 carried=1
+NETHASH_MOD side=host seq=760 h=a2e26a5b bytes=1072
+NETHASH side=host seq=855 h=30649d51
+TILT_EVT t=39.20 frame=4050 | status tilt=21.4 standing=2 radii=[2.1, 4.7]
+TILT_EVT t=39.45 frame=4065 | guano p1
+NETHASH side=host seq=870 h=67781bae
+TILT_EVT t=40.30 frame=4116 | shove_windup p3
+TILT_EVT t=40.35 frame=4119 | shove_windup p2
+TILT_EVT t=40.42 frame=4123 | shove p3 -> p2 r=3.1 out=-0.86
+NETHASH_MOD side=host seq=800 h=b115c60e bytes=1072
+NETHASH side=host seq=885 h=68348394
+NETHASH side=host seq=900 h=a081e748
+TILT_EVT t=41.87 frame=4210 | shove_windup p3
+TILT_EVT t=41.89 frame=4211 | coin p3 carried=2
+TILT_EVT t=41.99 frame=4217 | shove p3 -> p2 r=1.3 out=0.38
+NETHASH_MOD side=host seq=840 h=2a6fa50e bytes=1072
+NETHASH side=host seq=915 h=a13e4f2e
+TILT_EVT t=43.19 frame=4289 | coin p3 carried=3
+NETHASH side=host seq=930 h=d851cd8b
+TILT_EVT t=43.95 frame=4335 | guano p1
+TILT_EVT t=44.20 frame=4350 | status tilt=16.7 standing=2 radii=[4.6, 0.7]
+NETHASH_MOD side=host seq=880 h=b9b8c548 bytes=1072
+NETHASH side=host seq=945 h=d90e3571
+TILT_EVT t=45.34 frame=4418 | shove_windup p3
+TILT_EVT t=45.35 frame=4419 | shove_windup p2
+TILT_EVT t=45.47 frame=4426 | shove p2 -> p3 r=1.1 out=-0.67
+NETHASH side=host seq=960 h=1021b3ce
+TILT_EVT t=46.20 frame=4470 | coin p2 carried=2
+NETHASH_MOD side=host seq=920 h=2a6815c4 bytes=1032
+NETHASH side=host seq=975 h=10de1bb4
+TILT_EVT t=47.74 frame=4562 | coin p2 carried=3
+NETHASH side=host seq=990 h=47f19a11
+TILT_EVT t=47.94 frame=4574 | sudden_death
+TILT_EVT t=48.45 frame=4605 | guano p1
+NETHASH_MOD side=host seq=960 h=d4a82963 bytes=1052
+NETHASH side=host seq=1005 h=aec72895
+TILT_EVT t=49.22 frame=4651 | status tilt=13.8 standing=2 radii=[1.5, 2.6]
+NETHASH side=host seq=1020 h=e5daa6f2
+NETHASH_MOD side=host seq=1000 h=62175761 bytes=1048
+NETHASH side=host seq=1035 h=e6970ed8
+NETHASH side=host seq=1050 h=1daa8d35
+TILT_EVT t=52.17 frame=4828 | shove_windup p2
+NETHASH_MOD side=host seq=1040 h=160fe4ec bytes=1052
+NETHASH side=host seq=1065 h=1e66f51b
+TILT_EVT t=52.97 frame=4876 | guano p1
+NETHASH side=host seq=1080 h=557a7378
+TILT_EVT t=53.97 frame=4936 | shove_windup p3
+TILT_EVT t=54.19 frame=4949 | overtime start standing=2 gain=2.40x window=20s
+TILT_EVT t=54.24 frame=4952 | status tilt=30.0 standing=2 radii=[4.6, 3.6]
+NETHASH_MOD side=host seq=1080 h=691e301d bytes=1060
+TILT_EVT t=54.65 frame=4977 | shove_windup p2
+TILT_EVT t=54.77 frame=4984 | shove_windup p3
+TILT_EVT t=54.77 frame=4984 | shove p2 -> p3 r=3.0 out=-0.83
+NETHASH side=host seq=1095 h=5636db5e
+NETHASH side=host seq=1110 h=8e843f12
+NETHASH_MOD side=host seq=1120 h=ce04a6be bytes=1060
+NETHASH side=host seq=1125 h=8f40a6f8
+TILT_EVT t=57.09 frame=5123 | fall p2 shover=-1 gull_ko=false assist=-1 tilt=30.0
+TILT_EVT t=57.09 frame=5123 | round_end 2 kind=last_stand scores[RED=0, BLUE=2, GOLD=11, MINT=13]
+TILT_EVT t=57.68 frame=5171 | splash p2
+NETHASH side=host seq=1140 h=c6542555
+NETHASH_MOD side=host seq=1160 h=0d0736c9 bytes=1044
+NETHASH side=host seq=1155 h=c7108d3b
+NETHASH side=host seq=1170 h=fe240b98
+KILL_EVENTS n=6 [{ "killer": -1, "victim": 0, "cause": "ring_out" }, { "killer": -1, "victim": 1, "cause": "ring_out" }, { "killer": -1, "victim": 2, "cause": "ring_out" }, { "killer": -1, "victim": 0, "cause": "ring_out" }, { "killer": -1, "victim": 1, "cause": "ring_out" }, { "killer": -1, "victim": 2, "cause": "ring_out" }]
+TILT_EVT t=60.30 frame=5328 | match_end {"currency_events":[{"amount":1,"player":0,"reason":"fell off the platter","type":"grudge"},{"amount":1,"player":1,"reason":"fell off the platter","type":"grudge"},{"amount":1,"player":2,"reason":"fell off the platter","type":"grudge"},{"amount":1,"player":0,"reason":"fell off the platter","type":"grudge"},{"amount":1,"player":1,"reason":"fell off the platter","type":"grudge"},{"amount":1,"player":2,"reason":"fell off the platter","type":"grudge"}],"highlights":["GOLD lugged 4 coins at once","MINT never lost the platter"],"kill_events":[{"cause":"ring_out","killer":-1,"victim":0},{"cause":"ring_out","killer":-1,"victim":1},{"cause":"ring_out","killer":-1,"victim":2},{"cause":"ring_out","killer":-1,"victim":0},{"cause":"ring_out","killer":-1,"victim":1},{"cause":"ring_out","killer":-1,"victim":2}],"monuments":[],"placements":[3,2,1,0],"points":{"0":0,"1":2,"2":11,"3":13}}
+VERIFY_SNAP res://docs/verify/tilt_netshots_host/snap_net_matchend_5329.png
+NETHASH_MOD side=host seq=1200 h=60ecb0af bytes=1036
+NETHASH side=host seq=1185 h=fee0737e
+NETHASH side=host seq=1200 h=372dd732
+NETHASH side=host seq=1215 h=37ea3f18
+NETHASH side=host seq=1230 h=6efdbd75
+NETHASH side=host seq=1245 h=6fba255b
+NETHASH side=host seq=1260 h=a6cda3b8
+VERIFY_SNAP res://docs/verify/tilt_netshots_host/snap_online_host_reckoning_5805.png
+NETPROBE_RESULTS RED:pts=1,grudge=5 BLUE:pts=2,grudge=5 GOLD:pts=3,grudge=4 MINT:pts=5,grudge=1
+NETPROBE saves restored
+NETPROBE_DONE
+NETHASH side=host seq=1275 h=a78a0b9e
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)
