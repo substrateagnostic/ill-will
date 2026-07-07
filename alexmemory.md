@@ -975,3 +975,63 @@ NEXT (fan-out wave, per the spec's port order): understudy rides this
 pattern nearly free (same hidden-info shape), then throne/tilt/mower...
 PATTERN NOTES section in the VERIFY doc says exactly what to copy verbatim
 and what is séance-specific.
+
+---
+
+## ESTATE + PACKAGING NIGHT (2026-07-07, Fable) — House Rules card + the ship kit
+
+Two deliverables, both verified on Godot 4.6.2, real user:// saves backed up
+and restored byte-identical.
+
+### 1. First-night HOUSE RULES card (estate/estate.gd + estate_state.gd flag)
+- On the OPENING auction of a brand-new estate ONLY (games_played 0, run_night
+  0, nights_played 0, and never taught before) the Executor delivers a five-line
+  economy primer BEFORE the auction: POINTS (the ladder), ♠ GRUDGE (bids + trap
+  tiles), ROYALTIES (your traps pay YOU), THE TRAIL (first to the manor
+  inherits), THE READING (nightly ledger, nobody flattered). Dry Saki register,
+  exclamation-free.
+- Seated humans press A to continue (the GET READY chip pattern — PRESS A flips
+  to READY). Bots, remote guests, and the shared/mouse seat (-3) are auto-ready.
+  A 5s countdown auto-advances so nothing ever stalls.
+- Shown ONCE PER SLOT: `house_rules_shown` persists in the slot save (flag-only
+  change to estate_state.gd). WIPE & START FRESH resets it (re-teaches a truly
+  new estate). Auto-skips for all-bot tables and net clients.
+- Regression-safe by construction: `--auctiontest` still PASSes (veteran save
+  skips the card; a forced-fresh run auto-advances in 5s and still reaches
+  GAME); `--estate --estatebots` fresh soak skips the card entirely (0
+  HOUSE_RULES lines, 0 script errors). New windowed proof hook
+  `--houserulestest` (self backs-up/restores the slot); screenshot at
+  docs/verify/shots/snap_house_rules_0062.png, read by eye.
+
+### 2. The ship package (icon / build script / blurb / name scan)
+- ICON: assets/ui/illwill.ico — gold SPADE (grudge currency) on dark-plum
+  parchment + LuckiestGuy logotype; 6 layers, spade-only below 48px so it reads
+  at 16. Generator build/generate_icon.py (pure Pillow). Wired into
+  export_presets.cfg; confirmed embedded in the exported exe (Explorer shows the
+  spade). assets/ui/icon.png (256) committed for the runtime icon.
+- build/package.ps1 (PS 5.1): import -> export-release Windows Desktop ->
+  illwill.exe -> zip {exe + README-FOR-PLAYERS.txt + STORE-BLURB.md} ->
+  build/illwill-0.1.0.zip. PROVEN this session (196.94 MB zip). Note the gotcha
+  it solves: the plain Godot editor exe detaches, so the script prefers the
+  *_console.exe build and polls the exe until its size stabilizes.
+- STORE-BLURB.md (repo root): ~150-word house-voice itch.io pitch + feature
+  bullets (13 games, persistent estate, vendettas, royalties, couch + online).
+- NAME SCAN in docs/design/13-ship-package.md (d): factual list of games / film
+  / music / books / brands named "Ill Will" + a strictly-descriptive collision
+  summary. NO legal conclusions — that's the attorney-owner's call.
+
+DECISIONS / THINGS TO REVIEW:
+1. DIRECTOR ACTION — project.godot (owned by another agent tonight): add under
+   [application] to set the RUNTIME window/taskbar icon (export icon only skins
+   the .exe file):
+     config/icon="res://assets/ui/icon.png"
+     config/windows_native_icon="res://assets/ui/illwill.ico"
+2. HOUSE_RULES_TIME is 5.0s (the auto-advance/bot cap, per the brief). It is the
+   hard ceiling even for humans — they can press A to advance sooner. Bump the
+   one const in estate.gd if playtests want more reading time.
+3. Package version (0.1.0) is read from export_presets.cfg
+   application/file_version — bump there and the zip name follows.
+4. NAME SCAN is descriptive only: two released games already carry the exact
+   name ("illWill" FPS 2023, "Ill Will" RPG Maker 2012); the name is far more
+   crowded outside games (film shorts, Nas's label, Dan Chaon novel, Ill Will
+   Press). Your call on what that means.
