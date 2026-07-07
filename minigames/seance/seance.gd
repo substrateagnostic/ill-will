@@ -913,10 +913,52 @@ func _begin_seance() -> void:
 	clue_label.visible = true
 	clue_label.text = clue
 	_refresh_blanks()
-	hint_label.text = "STICK = GUIDE THE PLANCHETTE    A = CHANT ON THE PULSE    B = SURGE"
+	hint_label.text = _controls_bar()
 	_say("Guide the spirit. Chant on the pulse. And keep your hands where the dead can see them.")
 	_flash_banner("THE SITTING BEGINS", Color(1.0, 0.85, 0.4), 1.8)
 	print("SEANCE_SITTING_START t=%.1f" % game_time)
+
+## ---- live-binding chant/hint bar (real keys, not "A"/"B"; docs/verify/realkeys-VERIFY.md) ----
+## Self-contained per the template; presentation only. Bindings are fixed per
+## match, so the bar is built once when the sitting begins. (The _net_state /
+## _net_apply mirror simply serializes hint_label.text verbatim — untouched.)
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
+## bar personalizes only these; an all-bot demo keeps the generic legend.
+func _human_seats() -> Array:
+	var out := []
+	for i in players.size():
+		if not players[i].is_bot and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = CHANT..."), else the per-seat "LABEL: KEY/NAME · KEY/NAME" form.
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The chant hint bar with real keys, or the original generic legend for an
+## all-bot demo (so bot-only receipts/demos stay byte-identical).
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return "STICK = GUIDE THE PLANCHETTE    A = CHANT ON THE PULSE    B = SURGE"
+	return "STICK = GUIDE THE PLANCHETTE    %s    %s" % [
+		_btn_hint("a", "CHANT ON THE PULSE"), _btn_hint("b", "SURGE")]
 
 func _tick_seance(delta: float) -> void:
 	seance_elapsed += delta

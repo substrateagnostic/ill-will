@@ -377,6 +377,46 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-07 — REAL-KEYS HINT BARS (5 games) + ECHO "killed by your own echo" irony pack (agent worktree)
+Two presentation deliverables, verified WINDOWED by eye (RTX 4050, Vulkan).
+
+**Bars now print real keys, not `A`/`B`.** Ported the `realkeys-VERIFY.md`
+template (the 3 self-contained helpers) into the last five bar-owning games:
+`echo_chamber` (it had NO bar — added a bottom-center one), `swap_meet`,
+`last_will`, `masked_ball`, `seance` (its SITTING chant bar ONLY — the
+`_net_state`/`_net_apply` mirror paths untouched). Mixed kb-vs-kb roster all
+rendered the per-seat "differ" form, e.g. last_will:
+`SHOVE: Space/RED · Enter/BLUE · HOP: E/RED · Shift/BLUE`. Both fallback
+branches verified on last_will (single-human collapses to `Space = SHOVE`;
+all-bot keeps the byte-identical generic legend). Shots in
+`docs/verify/polish-bars-irony-shots/`.
+
+**ECHO irony pack (doc 09 §2.1).** Dying to your OWN recorded ghost now says
+so: big center banner `KILLED BY THEIR OWN ECHO`, `grudge` 0dB, slow-mo
+0.3×/0.5s, a tracked `self_haunt` stat → prepended results highlight
+(carved at the will) + a `kill_events` cause slug `self_echo` (killer==victim,
+so NEMESIS rightly skips it). Confirmed end-to-end: `ECHO_SELF_HAUNT` fires,
+`KILL_EVENTS` carries two `"cause":"self_echo"` entries, match completes clean.
+
+DECISIONS ALEX MAY WANT TO REVIEW:
+1. **Determinism call.** The ghost-drift receipt (`max_err=0.000000`, all
+   rounds) is byte-identical before/after — that's the hard invariant and it
+   holds (transform-based replay). But echo's kill/placement ORDER was never
+   reproducible run-to-run even in the ORIGINAL code: I ran the unmodified
+   binary twice at `seed=1` and the kills diverged after round 1 (the hit-pause
+   uses a real-time timer + bots draw RNG per tick → wall-clock-coupled). So
+   the irony slow-mo can't be blamed for placement drift, and I did NOT
+   re-baseline or touch scoring. Flagged in case you want the kill order made
+   deterministic someday (would need a tick-counted freeze, not a real-time
+   timer — same pattern swap_meet already uses).
+2. **Echo bar is NEW** (echo had only a "GHOSTS: N" label). Placed bottom-
+   center, shown ~8.5s then hidden, label from the estate how-to card
+   (a=STRIKE, b=DASH/hold PARRY). If you'd rather it persist, one-line change.
+3. Scope: implemented ONLY doc 09 §2.1 (the self-haunt callout), per the
+   task's framing ("the killed by your own echo celebration"). The other §2
+   items (match-point banner, winner Cheer, ghost materialization) are still
+   on the bench.
+
 ### 2026-07-06 — ONLINE PHASE 1 IS REAL: two copies of ILL WILL played one night together
 The spine from doc 10 is built and proven on this machine: **HOST NIGHT /
 JOIN NIGHT on the title**, a 6-char invite code (`80CMWE` = your LAN

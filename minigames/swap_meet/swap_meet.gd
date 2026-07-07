@@ -237,6 +237,10 @@ func begin(cfg: Dictionary) -> void:
 			var bot := SwapBot.new()
 			bot.setup(self, i, int(cfg.rng_seed) * 977 + i * 131)
 			bots[i] = bot
+	# Personalize the persistent hint bar with each human seat's REAL keys, once
+	# per match now that the roster/bot map is known (docs/verify/realkeys-VERIFY.md).
+	if _hint_label != null:
+		_hint_label.text = _controls_bar()
 	_build_crown()
 	if _test_mode != "":
 		_setup_test()
@@ -1580,6 +1584,47 @@ func _mk_label(font: Font, size: int, outline: int) -> Label:
 	l.add_theme_color_override("font_outline_color", Color(0.05, 0.04, 0.09))
 	l.add_theme_constant_override("outline_size", outline)
 	return l
+
+## ---- live-binding hint bar (real keys, not "A"/"B"; docs/verify/realkeys-VERIFY.md) ----
+## Self-contained per the template; presentation only. Bindings are fixed per
+## match, so the bar is built once at match start (from begin()).
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
+## bar personalizes only these; an all-bot demo keeps the generic legend.
+func _human_seats() -> Array:
+	var out := []
+	for i in bot_enabled.size():
+		if not bot_enabled[i] and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = ..."), else the per-seat "LABEL: KEY/NAME · KEY/NAME" form.
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The main hint bar with real keys, or the original generic legend for an
+## all-bot demo (so bot-only receipts/demos stay byte-identical).
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return "STEER move · A = THROW SWAP ORB (trades places!) · hold B = DRIFT, release = BOOST"
+	return "STEER move   ·   %s   ·   %s" % [
+		_btn_hint("a", "THROW SWAP ORB"), _btn_hint("b", "DRIFT hold / BOOST release")]
 
 func _update_score_rows() -> void:
 	if _row_labels.is_empty():
