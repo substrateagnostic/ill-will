@@ -14,6 +14,8 @@ var _label: Label3D
 var _glow: OmniLight3D
 var _geyser: CPUParticles3D
 var _spin := 0.0
+var _restless_t := 0.0         # CLOSING BELL: "the pot grows restless" tremble
+var _label_base_px := 0.010
 
 
 func build() -> void:
@@ -101,8 +103,35 @@ func geyser() -> void:
 	_geyser.emitting = true
 
 
+## CLOSING BELL (doc 09 §6.1): the value number PULSES at the T-15 last-banks
+## call — a triple swell of the Label3D so the whole room's eyes go to the pot.
+func bell_pulse() -> void:
+	_label.pixel_size = _label_base_px
+	var tw := create_tween()
+	for i in 3:
+		tw.tween_property(_label, "pixel_size", _label_base_px * 1.55, 0.16) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(_label, "pixel_size", _label_base_px, 0.22) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+	tw.tween_callback(func() -> void: _label.pixel_size = _label_base_px)
+
+
+## CLOSING BELL (doc 09 §6.3): "THE POT GROWS RESTLESS" — the hoard trembles for
+## `t` seconds. Visual only (the model shivers; the collider-less pot is a prop).
+func restless(t := 1.4) -> void:
+	_restless_t = maxf(_restless_t, t)
+
+
 func tick(delta: float) -> void:
 	_spin += delta
 	# slow turntable spin so the hoard reads as the object of desire
 	_model.rotation.y = _spin * 0.5
 	_label.position.y += sin(_spin * 3.0) * delta * 0.15
+	if _restless_t > 0.0:
+		_restless_t = maxf(0.0, _restless_t - delta)
+		var amp := 0.045 * minf(_restless_t / 0.4, 1.0)   # eases out at the tail
+		_model.rotation.z = sin(_spin * 43.0) * amp
+		_model.rotation.x = cos(_spin * 37.0) * amp * 0.7
+		if _restless_t <= 0.0:
+			_model.rotation.z = 0.0
+			_model.rotation.x = 0.0

@@ -20,6 +20,7 @@ extends Minigame
 ##   --greedcap           state/event-based screenshots -> verify_out, then quit
 ##   --outdir=DIR         output dir for --greedcap (default verify_out)
 ##   --greedtest=intercept  run the pursuit-tuning test, print tally, quit
+##   --greedbellcap       stage + film the CLOSING BELL beats (windowed), quit
 ##   --shots=N,...        handled by the house VerifyCapture autoload (PNGs)
 
 enum Phase { WAITING, INTRO, PLAY, ROUND_END, MATCH_END }
@@ -109,6 +110,7 @@ var _cap_done := {}
 var _aim_probe_on := false
 var _aim_probe_deg := 0.0
 var _hitkit_cap := false        # verify: stage the HIT KIT / cooldown-ring shots
+var _bell_cap := false          # verify: stage + film the CLOSING BELL beats
 var _freeze := false            # verify: pause gameplay so a moment can be filmed
 
 # juice
@@ -117,6 +119,51 @@ var _cam_base: Transform3D
 var _slowmo := false
 var _vc: Node = null
 var _last_status := 0.0
+var _banner_col := "ffffff"        # last banner color (mirrored as html)
+
+# THE CLOSING BELL (doc 09 §6.1-3, owner-signed Q5) — presentation-only endgame
+# urgency: T-20 no-banks warning, T-15 "LAST BANKS!", T-10 rising ticks, and the
+# chute-approach strobe/tick while a fat pot closes on its own chute. None of it
+# touches rng or sim state; --greedtest receipts are untouched by construction.
+const BELL_WARN_AT := 20.0         # §6.3: nobody-banked straight line
+const BELL_LAST_AT := 15.0         # §6.1: the closing bell itself
+const BELL_TICKS_AT := 10.0        # final-stretch ticks (Q1 kit cadence, local)
+const BELL_APP_RANGE := 3.0        # §6.2: carrier-to-chute approach radius
+const BELL_APP_POT := 15           # §6.2: pot worth the drama
+const BELL_APP_TICK := 0.4         # §6.2: rising tick interval
+var _bell_last := false            # T-15 fired this round
+var _bell_warned := false          # T-20 fired this round
+var _bell_tick_s := -1             # last final-stretch second ticked
+var _bell_app := false             # chute-approach drama live
+var _bell_app_ticks := 0           # rising ticks played (drives pitch +0.06)
+var _bell_app_t := 0.0
+var _strobe_base := 0.9            # chute pad emission at rest
+var _tick_players: Array = []      # local pitched pool (bell ticks; séance style)
+var _tick_next := 0
+var _tick_stream: AudioStream = null
+
+# ONLINE PHASE 2 (docs/design/10 §4.3) — the render mirror, house pattern per
+# docs/verify/online-seance-VERIFY.md. Host runs the WHOLE sim as couch; the
+# estate pumps _net_state() (PUBLIC facts) at 20 Hz; the client boots this same
+# scene with config.net_mirror = true and _net_apply() drives the visuals, all
+# juice fired locally from state DELTAS. Greed has no hidden info — no private
+# channel needed. Reduced-motion (shake/hitstop) honors the CLIENT's own pref.
+var _mirror := false
+var _mir := {}                     # last applied snapshot (delta source)
+var _mir_gh: Array = []            # smooth local grab-hold per seat (the tension)
+var _mir_champ_done := false
+var _mir_snaps := {}               # evidence snapshots fired (probe runs only)
+# host-side event counters (juice rides deltas, never events)
+var _ev_grabs := 0
+var _ev_drops := 0
+var _ev_banks := 0
+var _ev_geysers := 0
+var _ev_punished := 0
+var _ev_leaks := 0
+var _ev_swings: Array = []         # per-seat tackle swings (whiffs included)
+var _ev_last_drop: Array = [-1, -1]
+var _ev_last_bank: Array = [-1, 0]
+var _net_champ := -1
 
 @onready var cam: Camera3D = $Camera3D
 @onready var sun: DirectionalLight3D = $Sun
@@ -155,6 +202,7 @@ func begin(config: Dictionary) -> void:
 	if _begun:
 		return
 	_begun = true
+	_mirror = bool(config.get("net_mirror", false))
 	roster = config.roster
 	rng.seed = int(config.rng_seed)
 	fx_rng.seed = int(config.rng_seed) + 9173
@@ -166,8 +214,6 @@ func begin(config: Dictionary) -> void:
 		rounds_total = clampi(_cli_rounds, 1, ROUNDS)
 	if _cli_roundtime > 0.0:
 		round_time = clampf(_cli_roundtime, 8.0, 180.0)
-	bots = GreedBots.new()
-	bots.setup(int(config.rng_seed) ^ 0x6EED, roster.size())
 	# Per-player: a seat is bot-driven if the roster says so (shell sets this
 	# from estate._is_bot; standalone fills it from PlayerInput) OR the legacy
 	# --greedbots flag forces ALL bots. Decided at begin() from roster data.
@@ -186,7 +232,22 @@ func begin(config: Dictionary) -> void:
 		biggest_bank[i] = 0
 		drops_caused[i] = 0
 		royalties[i] = 0
+		_ev_swings.append(0)
+		_mir_gh.append(0.0)
 		_tint_chute(i, pl.color)
+	hint_label.text = _controls_bar()   # live per-seat keys (realkeys-VERIFY)
+	if _mirror:
+		# RENDER MIRROR (spec §4.3): no bots, no round start, no economy — the
+		# host owns every fact. Pawns stand ready for the first _net_apply; the
+		# hint bar above already reads THIS machine's keys for THIS seat.
+		phase = Phase.WAITING
+		for i in roster.size():
+			(players[i] as GreedPlayer).global_position = _spawn_pos(i)
+		NetSession.set_aim_provider(_net_aim)
+		print("GREED_MIRROR boot players=%d my_seat=%d" % [roster.size(), NetSession.my_seat()])
+		return
+	bots = GreedBots.new()
+	bots.setup(int(config.rng_seed) ^ 0x6EED, roster.size())
 	_log("begin players=%d seed=%d rounds=%d bots=%s" % [
 		roster.size(), int(config.rng_seed), rounds_total, str(bot_enabled)])
 	_start_round()
@@ -194,6 +255,8 @@ func begin(config: Dictionary) -> void:
 		_run_greed_probe()
 	if _hitkit_cap:
 		_run_hitkit_cap()
+	if _bell_cap:
+		_run_bell_cap()
 
 
 # ===========================================================================
@@ -209,6 +272,10 @@ func _start_round() -> void:
 	burst_t = BURST_INTERVAL
 	carrier_index = -1
 	pot_state = PotState.ON_PEDESTAL
+	_bell_last = false
+	_bell_warned = false
+	_bell_tick_s = -1
+	_set_bell_approach(false)
 	if round_num == 1:
 		pot_value = POT_START
 	_clear_floor_coins()
@@ -235,9 +302,11 @@ func _end_round(kind: String) -> void:
 	if carrier_index >= 0:
 		(players[carrier_index] as GreedPlayer).set_carrier(false)
 		carrier_index = -1
+	_set_bell_approach(false)
 	var greed_punished := banks_this_round == 0
 	if greed_punished:
 		_scatter_entire_pot()
+		_ev_punished += 1
 		_flash_banner("GREED PUNISHED!\nTHE POT SCATTERS", Color(1.0, 0.35, 0.25), 2.8)
 		Sfx.play("grudge")
 		pot_value = POT_START
@@ -267,6 +336,7 @@ func _finish_match() -> void:
 			return int(points[a]) > int(points[b])
 		return a < b)
 	var champ: int = order[0]
+	_net_champ = champ
 	var champ_pl: Dictionary = roster[champ]
 	_flash_banner("%s WINS GREED INC.!" % champ_pl.name, champ_pl.color, 9999.0)
 	Sfx.play("match_win")
@@ -305,6 +375,11 @@ func _finish_match() -> void:
 # Main loop
 # ===========================================================================
 func _physics_process(delta: float) -> void:
+	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
+	if _mirror:
+		game_t += delta
+		_mirror_tick(delta)
+		return
 	if phase == Phase.WAITING:
 		return
 	if _freeze:                     # verify capture: gameplay held, visuals keep ticking
@@ -354,6 +429,7 @@ func _tick_play(delta: float) -> void:
 		if burst_t <= 0.0:
 			burst_t = BURST_INTERVAL
 			pot_value += BURST_AMOUNT
+			_ev_geysers += 1
 			pot.geyser()
 			Sfx.play("bumper", -3.0)
 			_flash_pot("+%d!" % BURST_AMOUNT, Color(1.0, 0.9, 0.35))
@@ -369,6 +445,7 @@ func _tick_play(delta: float) -> void:
 				if pot_value > POT_START and me.try_dash():
 					pot_value -= DASH_COIN_COST
 					pot_value = maxi(pot_value, 1)
+					_ev_leaks += 1
 					_leak_burst(me.global_position)
 					_flash_pot("-%d" % DASH_COIN_COST, Color(1.0, 0.5, 0.3))
 				elif me.dash_cd <= 0.0:
@@ -394,6 +471,9 @@ func _tick_play(delta: float) -> void:
 
 	# 5. HUD / arrows
 	_update_hud()
+
+	# 5b. THE CLOSING BELL (doc 09 §6.1-3) — presentation only, no sim writes
+	_tick_closing_bell(delta)
 
 	if _cap_on:
 		_capture_beats()
@@ -422,15 +502,20 @@ func _process(delta: float) -> void:
 		pot.tick(delta)
 	for p in players:
 		(p as GreedPlayer).tick_visual(delta, game_t)
-	# HUD timer colour
-	if phase == Phase.PLAY or phase == Phase.INTRO:
-		var remain := int(ceil(maxf(0.0, round_time - round_t)))
-		timer_label.text = str(remain)
-		var hot := remain <= 10
-		timer_label.add_theme_color_override("font_color",
-			Color(1, 0.3, 0.2) if hot else Color(1, 0.92, 0.6))
-	else:
-		timer_label.text = ""
+	# HUD timer colour (mirror: text + colour ride the snapshot instead)
+	if not _mirror:
+		if phase == Phase.PLAY or phase == Phase.INTRO:
+			var remain := int(ceil(maxf(0.0, round_time - round_t)))
+			timer_label.text = str(remain)
+			var hot := remain <= 10
+			timer_label.add_theme_color_override("font_color",
+				Color(1, 0.3, 0.2) if hot else Color(1, 0.92, 0.6))
+		else:
+			timer_label.text = ""
+	# CLOSING BELL §6.2: the carrier's chute pad strobes at 3 Hz while the
+	# approach drama is live (host: real state; mirror: the mirrored bell fact)
+	if _bell_app and carrier_index >= 0:
+		_drive_strobe(carrier_index, game_t)
 	# floor coin bob
 	for c in floor_coins:
 		(c.node as Node3D).rotation.y += delta * 3.0
@@ -510,6 +595,10 @@ func _do_grab(p: int) -> void:
 			(players[q] as GreedPlayer).show_grab_progress(0.0)
 	Sfx.play("confirm", -2.0)
 	_flash_pot("GRABBED!", roster[p].color)
+	_ev_grabs += 1
+	if NetSession.has_guests() and not _mir_snaps.has("host_carry"):
+		_mir_snaps["host_carry"] = true
+		VerifyCapture.snap("greed_host_carry")
 	_cap_event("grab")
 	_log("grab p%d pot=%d at=(%.1f,%.1f) chute=(%.1f,%.1f)" % [p, pot_value,
 		me.global_position.x, me.global_position.z, chute_pos(p).x, chute_pos(p).y])
@@ -518,6 +607,7 @@ func _do_grab(p: int) -> void:
 func _attempt_tackle(p: int) -> void:
 	var me: GreedPlayer = players[p]
 	var cp: GreedPlayer = players[carrier_index]
+	_ev_swings[p] += 1
 	me.do_tackle_swing()
 	# KBM humans lunge toward the cursor (grab unchanged, dash stays move-directed).
 	# Non-KBM / bots get ZERO aim -> no lunge -> identical to before.
@@ -577,6 +667,11 @@ func _drop_carrier(victim: int, tackler: int) -> void:
 	Sfx.play("death", -6.0)
 	_flash_banner("%s MUGGED %s!" % [roster[tackler].name, roster[victim].name],
 		roster[tackler].color, 1.8)
+	_ev_drops += 1
+	_ev_last_drop = [victim, tackler]
+	if NetSession.has_guests() and not _mir_snaps.has("host_drop"):
+		_mir_snaps["host_drop"] = true
+		VerifyCapture.snap("greed_host_drop")
 	_cap_event("drop")
 	_rebuild_scoreboard()
 	_log("drop victim=%d tackler=%d scatter=%d pot=%d" % [victim, tackler, scatter, pot_value])
@@ -614,6 +709,12 @@ func _do_bank(p: int) -> void:
 	carrier_index = -1
 	# ceremony
 	_bank_ceremony(p, amount)
+	_ev_banks += 1
+	_ev_last_bank = [p, amount]
+	_set_bell_approach(false)
+	if NetSession.has_guests() and not _mir_snaps.has("host_bank"):
+		_mir_snaps["host_bank"] = true
+		VerifyCapture.snap("greed_host_bank")
 	# pot resets and returns to the pedestal
 	pot_value = POT_START
 	pot_state = PotState.ON_PEDESTAL
@@ -655,24 +756,30 @@ func _spawn_floor_coins(around: Vector3, n: int) -> void:
 		var pos := Vector2(around.x + cos(ang) * r, around.z + sin(ang) * r)
 		pos.x = clampf(pos.x, -ARENA_HALF + 0.6, ARENA_HALF - 0.6)
 		pos.y = clampf(pos.y, -ARENA_HALF + 0.6, ARENA_HALF - 0.6)
-		var node := MeshInstance3D.new()
-		var m := CylinderMesh.new()
-		m.top_radius = 0.26
-		m.bottom_radius = 0.26
-		m.height = 0.09
-		node.mesh = m
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(1.0, 0.83, 0.16)
-		mat.metallic = 0.85
-		mat.roughness = 0.25
-		mat.emission_enabled = true
-		mat.emission = Color(1.0, 0.7, 0.08)
-		mat.emission_energy_multiplier = 0.8
-		node.material_override = mat
-		node.rotation.x = 0.22
-		add_child(node)
-		node.global_position = Vector3(pos.x, 0.35, pos.y)
-		floor_coins.append({"node": node, "pos": pos})
+		_make_coin(pos)
+
+
+## One floor-coin node (shared by the host spawner above and the mirror's
+## coin-list sync — render-only, no rng).
+func _make_coin(pos: Vector2) -> void:
+	var node := MeshInstance3D.new()
+	var m := CylinderMesh.new()
+	m.top_radius = 0.26
+	m.bottom_radius = 0.26
+	m.height = 0.09
+	node.mesh = m
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 0.83, 0.16)
+	mat.metallic = 0.85
+	mat.roughness = 0.25
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.7, 0.08)
+	mat.emission_energy_multiplier = 0.8
+	node.material_override = mat
+	node.rotation.x = 0.22
+	add_child(node)
+	node.global_position = Vector3(pos.x, 0.35, pos.y)
+	floor_coins.append({"node": node, "pos": pos})
 
 
 func _tick_floor_coins() -> void:
@@ -819,6 +926,7 @@ func _rebuild_scoreboard() -> void:
 
 func _flash_banner(text: String, color: Color, duration: float) -> void:
 	banner.text = text
+	_banner_col = color.to_html(false)
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
 	banner.pivot_offset = banner.size / 2.0
@@ -844,6 +952,461 @@ func _flash_pot(text: String, color: Color) -> void:
 	var tw := create_tween()
 	tw.tween_interval(0.9)
 	tw.tween_callback(func() -> void: pot_flash.visible = false)
+
+
+# ===========================================================================
+# THE CLOSING BELL (doc 09 §6.1-3, AAA queue Q5 — owner-signed)
+# Presentation only: banners, sfx, pad strobe, pot tremble/pulse. No rng, no
+# sim writes — --greedtest / --greedcap receipts are untouched by construction.
+# Every fact here also rides _net_state() so the mirror hears the same bell.
+# ===========================================================================
+var _strobe_pad := -1
+var _bell_warn_fired := false
+
+func _tick_closing_bell(delta: float) -> void:
+	var remain := round_time - round_t
+	# §6.3 the straight line before the GREED PUNISHED punchline
+	if not _bell_warned and remain <= BELL_WARN_AT:
+		_bell_warned = true
+		if banks_this_round == 0:
+			_bell_warn_fired = true
+			_flash_banner("NOBODY HAS BANKED —\nTHE POT GROWS RESTLESS", Color(1.0, 0.62, 0.25), 2.2)
+			pot.restless(1.6)
+			Sfx.play("grudge", -10.0)
+			_log("bell_warn t=%.1f pot=%d" % [round_t, pot_value])
+	# §6.1 the bell itself
+	if not _bell_last and remain <= BELL_LAST_AT:
+		_bell_last = true
+		_flash_banner("LAST BANKS!", Color(1.0, 0.85, 0.2), 1.5)
+		Sfx.play("grudge", -6.0)
+		pot.bell_pulse()
+		_log("bell_lastbanks t=%.1f pot=%d" % [round_t, pot_value])
+		if NetSession.has_guests() and not _mir_snaps.has("host_bell"):
+			_mir_snaps["host_bell"] = true
+			VerifyCapture.snap("greed_host_bell")
+	# final-stretch ticks, one per second T-10 .. T-1, rising pitch (Q1 cadence)
+	if remain <= BELL_TICKS_AT:
+		var s := int(ceil(maxf(remain, 0.0)))
+		if s != _bell_tick_s and s >= 1:
+			_bell_tick_s = s
+			_bell_tick(lerpf(1.0, 1.55, (10 - s) / 9.0), -9.0)
+	# §6.2 the approach: a fat pot closing on its own chute turns the room's head
+	var want := false
+	if carrier_index >= 0 and pot_value >= BELL_APP_POT:
+		var c: GreedPlayer = players[carrier_index]
+		if Vector2(c.global_position.x, c.global_position.z) \
+				.distance_to(chute_pos(carrier_index)) <= BELL_APP_RANGE:
+			want = true
+	if want and not _bell_app:
+		_log("bell_approach on p%d pot=%d" % [carrier_index, pot_value])
+	if not want:
+		if _bell_app:
+			_set_bell_approach(false)
+		return
+	_bell_app = true
+	_bell_app_t -= delta
+	if _bell_app_t <= 0.0:
+		_bell_app_t = BELL_APP_TICK
+		_bell_tick(1.0 + 0.06 * float(_bell_app_ticks), -10.0)
+		_bell_app_ticks += 1
+
+
+func _set_bell_approach(on: bool) -> void:
+	if not on and _strobe_pad >= 0 and _strobe_pad < chute_lights.size():
+		var mat := (chute_lights[_strobe_pad] as MeshInstance3D).material_override as StandardMaterial3D
+		if mat:
+			mat.emission_energy_multiplier = _strobe_base
+	_bell_app = on
+	if not on:
+		_bell_app_ticks = 0
+		_bell_app_t = 0.0
+		_strobe_pad = -1
+
+
+## 3 Hz pad strobe on the carrier's own chute while the approach drama is live.
+func _drive_strobe(ci: int, t: float) -> void:
+	if ci < 0 or ci >= chute_lights.size():
+		return
+	_strobe_pad = ci
+	var mat := (chute_lights[ci] as MeshInstance3D).material_override as StandardMaterial3D
+	if mat:
+		mat.emission_energy_multiplier = _strobe_base + (0.5 + 0.5 * sin(t * TAU * 3.0)) * 2.4
+
+
+## Exact-pitch tick (the Sfx pool randomizes pitch; the bell needs a LADDER).
+## Same lazy local-pool trick as the séance's _play_pitched.
+func _bell_tick(pitch: float, db: float) -> void:
+	if _tick_players.is_empty():
+		for i in 3:
+			var p := AudioStreamPlayer.new()
+			p.bus = "SFX"
+			add_child(p)
+			_tick_players.append(p)
+	if _tick_stream == null:
+		var bank: Dictionary = Sfx.BANK
+		if bank.has("card") and not (bank["card"] as Array).is_empty():
+			_tick_stream = load("res://assets/audio/%s.ogg" % str(bank["card"][0]))
+	if _tick_stream == null:
+		return
+	var p: AudioStreamPlayer = _tick_players[_tick_next]
+	_tick_next = (_tick_next + 1) % _tick_players.size()
+	p.stream = _tick_stream
+	p.pitch_scale = pitch
+	p.volume_db = db
+	p.play()
+
+
+# ===========================================================================
+# Live-binding hint bar (real keys, not "A"/"B" — docs/verify/realkeys-VERIFY.md)
+# ===========================================================================
+const HINT_GENERIC := "MOVE   -   A = GRAB / TACKLE   -   B = DASH   |   CARRY THE POT TO YOUR CHUTE TO BANK IT"
+
+## Seats driven by a HUMAN with a real local device (not a bot, not unassigned,
+## not a remote guest — their keys live on THEIR screen, mirrored there).
+func _human_seats() -> Array:
+	var out := []
+	for i in roster.size():
+		var idx := int(roster[i].get("index", i))
+		if not bot_enabled[i] and PlayerInput.device_of(idx) != -99:
+			out.append(idx)
+	return out
+
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key,
+## else the per-seat "LABEL: KEY/NAME · KEY/NAME" form (mixed devices).
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+
+## The main bar with real keys, or the generic legend for an all-bot demo.
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return HINT_GENERIC
+	return "MOVE   ·   %s   ·   %s   |   CARRY THE POT TO YOUR CHUTE TO BANK IT" % [
+		_btn_hint("a", "GRAB (hold) / TACKLE"), _btn_hint("b", "DASH")]
+
+
+# ===========================================================================
+# ONLINE PHASE 2 — the render mirror (docs/design/10 §4.3; house pattern per
+# docs/verify/online-seance-VERIFY.md). Host: _net_state() -> PUBLIC facts at
+# 20 Hz. Client: _net_apply() stores + diffs; ALL juice fires from deltas;
+# _mirror_tick() interpolates at 60 Hz. Greed has no hidden info — no private
+# channel. The vault itself is static and built identically by both ends.
+# ===========================================================================
+
+## HOST, pumped by the estate at 20 Hz. Everything here is on every couch
+## player's screen right now; nothing else enters the dict.
+func _net_state() -> Dictionary:
+	var pp: Array = []
+	for i in roster.size():
+		var pl: GreedPlayer = players[i]
+		pp.append(snappedf(pl.global_position.x, 0.01))
+		pp.append(snappedf(pl.global_position.z, 0.01))
+		pp.append(snappedf(pl.yaw, 0.01))
+		pp.append(1 if Vector2(pl.velocity.x, pl.velocity.z).length() > 0.6 else 0)
+		pp.append(1 if pl.stun_t > 0.0 else 0)
+		pp.append(snappedf(pl.dash_cd, 0.02))
+		pp.append(snappedf(pl.grab_hold, 0.02))
+	var pts: Array = []
+	for i in roster.size():
+		pts.append(int(points[i]))
+	var coins: Array = []
+	for c in floor_coins:
+		coins.append(snappedf((c.pos as Vector2).x, 0.01))
+		coins.append(snappedf((c.pos as Vector2).y, 0.01))
+	return {
+		"ph": phase,
+		"rl": round_label.text,
+		"tmr": timer_label.text,
+		"hv": hint_label.visible,
+		"ban": [banner.text, _banner_col, banner.visible],
+		"pv": pot_value,
+		"ps": pot_state,
+		"ci": carrier_index,
+		"lp": [snappedf(pot_loose_pos.x, 0.01), snappedf(pot_loose_pos.z, 0.01)],
+		"p": pp,
+		"pts": pts,
+		"sw": _ev_swings.duplicate(),
+		"coins": coins,
+		"ev": [_ev_grabs, _ev_drops, _ev_banks, _ev_geysers, _ev_punished, _ev_leaks],
+		"ld": _ev_last_drop,
+		"lb": _ev_last_bank,
+		"bell": [1 if _bell_last else 0, 1 if _bell_warn_fired else 0,
+			1 if _bell_app else 0, _bell_app_ticks],
+		"champ": _net_champ,
+	}
+
+
+## CLIENT. Latest-state-wins; every sfx/flash/shake fires from a DELTA against
+## the previous snapshot, so a dropped packet loses nothing but frames.
+func _net_apply(state: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = state
+	phase = (int(state.get("ph", phase))) as Phase   # render/probe fact only
+	round_label.text = str(state.get("rl", ""))
+	hint_label.visible = bool(state.get("hv", hint_label.visible))
+	_apply_mir_timer(str(state.get("tmr", "")), str(prev.get("tmr", "")))
+	_apply_mir_banner(state.get("ban", []), prev.get("ban", []))
+	# --- pot + carrier facts
+	var pci := int(prev.get("ci", -1))
+	var ci := int(state.get("ci", -1))
+	if ci != pci:
+		if pci >= 0 and pci < players.size():
+			(players[pci] as GreedPlayer).set_carrier(false)
+		if ci >= 0 and ci < players.size():
+			(players[ci] as GreedPlayer).set_carrier(true)
+	carrier_index = ci
+	pot_value = int(state.get("pv", pot_value))
+	var nps := int(state.get("ps", pot_state))
+	if nps != int(pot_state):
+		pot_state = nps as PotState
+		pot.set_carried(pot_state == PotState.CARRIED)
+	var lp: Array = state.get("lp", [])
+	if lp.size() >= 2:
+		pot_loose_pos = Vector3(float(lp[0]), 0.0, float(lp[1]))
+	# --- per-seat resyncs + one-shot deltas (dash, tackle swing, grab hold)
+	var pp: Array = state.get("p", [])
+	var ppp: Array = prev.get("p", [])
+	var sw: Array = state.get("sw", [])
+	var psw: Array = prev.get("sw", [])
+	for i in players.size():
+		var b := i * 7
+		if b + 6 >= pp.size():
+			break
+		var pl: GreedPlayer = players[i]
+		var dcd := float(pp[b + 5])
+		var pdcd := float(ppp[b + 5]) if b + 5 < ppp.size() else 0.0
+		if dcd - pdcd > 0.8:              # dash fired host-side this window
+			pl._one_shot("Dodge_Forward", GreedPlayer.DASH_TIME + 0.05)
+			Sfx.play("bounce", -6.0)
+		if absf(pl.dash_cd - dcd) > 0.1:  # ring resync (net_pose decays locally)
+			pl.dash_cd = dcd
+		var tgh := float(pp[b + 6])
+		if tgh <= 0.0:
+			_mir_gh[i] = 0.0
+		elif absf(_mir_gh[i] - tgh) > 0.08:
+			_mir_gh[i] = tgh
+		if i < sw.size() and int(sw[i]) > (int(psw[i]) if i < psw.size() else 0):
+			pl.do_tackle_swing()          # anim + coil + whoosh, exactly as couch
+	# --- scoreboard facts
+	if state.get("pts", []) != prev.get("pts", []) or ci != pci:
+		var pts: Array = state.get("pts", [])
+		for i in mini(pts.size(), players.size()):
+			points[i] = int(pts[i])
+		_rebuild_scoreboard()
+	# --- floor coins (list sync; pickup tick on shrink)
+	var coins: Array = state.get("coins", [])
+	if coins != prev.get("coins", []):
+		if coins.size() < Array(prev.get("coins", [])).size():
+			Sfx.play("card", -10.0)
+		_mir_sync_coins(coins)
+	# --- event-counter juice (grabs/drops/banks/geysers/punished/leaks)
+	_mir_event_juice(state, prev)
+	# --- the closing bell, mirrored
+	_mir_bell(state.get("bell", []), prev.get("bell", []))
+	# --- the champion moment
+	if phase == Phase.MATCH_END and not _mir_champ_done:
+		var champ := int(state.get("champ", -1))
+		if champ >= 0 and champ < players.size():
+			_mir_champ_done = true
+			(players[champ] as GreedPlayer).cheer()
+			_confetti((players[champ] as GreedPlayer).global_position + Vector3(0, 1.8, 0),
+				roster[champ].color)
+			if not _reduced_motion():
+				_shake = maxf(_shake, 0.5)
+
+
+func _apply_mir_timer(tmr: String, ptmr: String) -> void:
+	if tmr == timer_label.text:
+		return
+	timer_label.text = tmr
+	if not tmr.is_valid_int():
+		return
+	var remain := int(tmr)
+	timer_label.add_theme_color_override("font_color",
+		Color(1, 0.3, 0.2) if remain <= 10 else Color(1, 0.92, 0.6))
+	# final-stretch tick ladder plays LOCALLY off the mirrored countdown
+	if remain <= 10 and remain >= 1 and ptmr.is_valid_int() and int(ptmr) == remain + 1:
+		_bell_tick(lerpf(1.0, 1.55, (10 - remain) / 9.0), -9.0)
+
+
+func _apply_mir_banner(arr: Array, parr: Array) -> void:
+	if arr.size() < 3:
+		return
+	banner.text = str(arr[0])
+	banner.add_theme_color_override("font_color", Color(str(arr[1])))
+	var was: bool = parr.size() >= 3 and bool(parr[2]) and str(parr[0]) == str(arr[0])
+	banner.visible = bool(arr[2])
+	if banner.visible and not was:
+		banner.pivot_offset = banner.size / 2.0
+		banner.scale = Vector2(0.55, 0.55)
+		var pop := create_tween()
+		pop.tween_property(banner, "scale", Vector2.ONE, 0.28) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _mir_sync_coins(list: Array) -> void:
+	var want := list.size() / 2
+	while floor_coins.size() > want:
+		var c: Dictionary = floor_coins.pop_back()
+		(c.node as Node3D).queue_free()
+	while floor_coins.size() < want:
+		var k := floor_coins.size()
+		_make_coin(Vector2(float(list[k * 2]), float(list[k * 2 + 1])))
+	for k in want:
+		var pos := Vector2(float(list[k * 2]), float(list[k * 2 + 1]))
+		var c: Dictionary = floor_coins[k]
+		if (c.pos as Vector2) != pos:
+			c.pos = pos
+			(c.node as Node3D).global_position = Vector3(pos.x, 0.35, pos.y)
+
+
+func _mir_event_juice(state: Dictionary, prev: Dictionary) -> void:
+	var ev: Array = state.get("ev", [])
+	var pev: Array = prev.get("ev", [0, 0, 0, 0, 0, 0])
+	if ev.size() < 6:
+		return
+	while pev.size() < 6:
+		pev.append(0)
+	# GRAB — the pot changed hands
+	if int(ev[0]) > int(pev[0]):
+		Sfx.play("confirm", -2.0)
+		if carrier_index >= 0:
+			_flash_pot("GRABBED!", roster[carrier_index].color)
+		_mir_snap_once("greed_mirror_carry")
+	# DROP — a mug landed: full couch impact, banner rides the state
+	if int(ev[1]) > int(pev[1]):
+		var ld: Array = state.get("ld", [-1, -1])
+		var v := int(ld[0])
+		var t := int(ld[1])
+		if v >= 0 and v < players.size():
+			var vp: GreedPlayer = players[v]
+			vp.flash_pop()
+			var kdir := Vector3.FORWARD
+			if t >= 0 and t < players.size():
+				kdir = vp.global_position - (players[t] as GreedPlayer).global_position
+			_spark_burst(vp.global_position + Vector3(0, 1.0, 0), kdir,
+				roster[maxi(t, 0)].color, 1.0)
+			_coin_burst(vp.global_position + Vector3(0, 1.0, 0), 22)
+		Sfx.play("splat", -1.0)
+		Sfx.play("death", -6.0)
+		if not _reduced_motion():
+			_shake = maxf(_shake, 0.45)
+		_hit_pause()
+		_mir_snap_once("greed_mirror_drop")
+	# BANK — the ceremony (banner text rides the state; the rest is local)
+	if int(ev[2]) > int(pev[2]):
+		var lb: Array = state.get("lb", [-1, 0])
+		var p := int(lb[0])
+		if p >= 0 and p < players.size():
+			var at := chute_pos(p)
+			var world := Vector3(at.x, 0.2, at.y)
+			Sfx.play("match_win")
+			if not _reduced_motion():
+				_shake = maxf(_shake, 0.5)
+			_coin_rain(world, mini(int(lb[1]), 40), roster[p].color)
+			_confetti(world + Vector3(0, 1.4, 0), roster[p].color)
+			(players[p] as GreedPlayer).cheer()
+			if p < chute_lights.size():
+				var mat := (chute_lights[p] as MeshInstance3D).material_override as StandardMaterial3D
+				if mat:
+					var tw := create_tween()
+					mat.emission_energy_multiplier = 3.5
+					tw.tween_property(mat, "emission_energy_multiplier", _strobe_base, 1.2)
+		_mir_snap_once("greed_mirror_bank")
+	# GEYSER — the +5 burst
+	if int(ev[3]) > int(pev[3]):
+		pot.geyser()
+		Sfx.play("bumper", -3.0)
+		_flash_pot("+%d!" % BURST_AMOUNT, Color(1.0, 0.9, 0.35))
+	# GREED PUNISHED — the scatter (banner rides the state)
+	if int(ev[4]) > int(pev[4]):
+		_coin_burst(pot.global_position + Vector3(0, 1.0, 0),
+			mini(int(prev.get("pv", 30)) * 2, 90))
+		Sfx.play("grudge")
+		if not _reduced_motion():
+			_shake = maxf(_shake, 0.7)
+	# DASH LEAK — the carrier bled coins to escape
+	if int(ev[5]) > int(pev[5]) and carrier_index >= 0:
+		_leak_burst((players[carrier_index] as GreedPlayer).global_position)
+		_flash_pot("-%d" % DASH_COIN_COST, Color(1.0, 0.5, 0.3))
+
+
+func _mir_bell(bell: Array, pbell: Array) -> void:
+	if bell.size() < 4:
+		return
+	while pbell.size() < 4:
+		pbell.append(0)
+	if int(bell[0]) > int(pbell[0]):      # LAST BANKS! (banner rides the state)
+		Sfx.play("grudge", -6.0)
+		pot.bell_pulse()
+		_mir_snap_once("greed_mirror_bell")
+	if int(bell[1]) > int(pbell[1]):      # the pot grows restless
+		pot.restless(1.6)
+		Sfx.play("grudge", -10.0)
+	var app := int(bell[2]) == 1
+	if not app and _bell_app:
+		_set_bell_approach(false)
+	_bell_app = app                       # _process strobes the mirrored pad
+	var n := int(bell[3])
+	if n > int(pbell[3]) and n > 0:       # rising approach ticks, same ladder
+		_bell_tick(1.0 + 0.06 * float(n - 1), -10.0)
+
+
+## CLIENT, per physics tick: pawn glide + grab-hold fill + pot follow + arrows —
+## everything that must be smoother than the 20 Hz snapshots.
+func _mirror_tick(delta: float) -> void:
+	if _mir.is_empty():
+		return
+	var pp: Array = _mir.get("p", [])
+	for i in players.size():
+		var b := i * 7
+		if b + 6 >= pp.size():
+			break
+		var pl: GreedPlayer = players[i]
+		pl.net_pose(delta, Vector3(float(pp[b]), 0.1, float(pp[b + 1])),
+			float(pp[b + 2]), int(pp[b + 3]) == 1, int(pp[b + 4]) == 1)
+		# THE TENSION: the grab-hold ring fills at the host's real rate between
+		# snapshots (host adds delta per tick too), resynced on every apply.
+		if float(pp[b + 6]) > 0.0:
+			_mir_gh[i] = minf(_mir_gh[i] + delta, GRAB_TIME)
+		pl.show_grab_progress(_mir_gh[i] / GRAB_TIME)
+	_update_pot_transform()
+	_update_hud()
+
+
+## CLIENT: my aim, computed against my own mirrored render (doc 10 §1.3) and
+## relayed as a unit vector inside the 30 Hz input packet.
+func _net_aim() -> Dictionary:
+	var my := NetSession.my_seat()
+	var aim := Vector3.ZERO
+	if my >= 0 and my < players.size():
+		aim = PlayerInput.get_aim_dir(my, (players[my] as GreedPlayer).global_position, cam)
+	return {"aim": aim, "aim_screen": Vector2.ZERO}
+
+
+func _mir_snap_once(tag: String) -> void:
+	if _mir_snaps.has(tag):
+		return
+	_mir_snaps[tag] = true
+	VerifyCapture.snap(tag)
 
 
 # ===========================================================================
@@ -1269,7 +1832,9 @@ func _parse_args() -> void:
 			_aim_probe_deg = float(arg.trim_prefix("--aimprobe="))
 		elif arg == "--hitkitcap":
 			_hitkit_cap = true
-	if _cap_on or _aim_probe_on or _hitkit_cap:
+		elif arg == "--greedbellcap":
+			_bell_cap = true
+	if _cap_on or _aim_probe_on or _hitkit_cap or _bell_cap:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
 
 
@@ -1291,7 +1856,7 @@ func _default_config() -> Dictionary:
 			"color": GameState.PLAYER_COLORS[i],
 			"char_scene": CHAR_FALLBACKS[i],
 			"device": PlayerInput.device_of(i),
-			"bot": false if _aim_probe_on else PlayerInput.standalone_bot_default(i),
+			"bot": false if (_aim_probe_on or _bell_cap) else PlayerInput.standalone_bot_default(i),
 		})
 	return {"roster": r, "rounds": ROUNDS, "rng_seed": _cli_seed, "practice": false}
 
@@ -1544,6 +2109,42 @@ func _run_hitkit_cap() -> void:
 	await _grab_shot("hitkit_ring_ready", false)
 	await _settle(0.15)
 	print("GREED_HITKIT_CAP_DONE")
+	get_tree().quit()
+
+
+# ===========================================================================
+# CLOSING BELL capture (--greedbellcap, windowed): stages each §6.1-3 beat on
+# a LIVE round clock (the bell code runs untouched — we only move round_t and
+# park a staged carrier) and films it. Verify-only; no effect on normal play.
+# ===========================================================================
+func _run_bell_cap() -> void:
+	while phase != Phase.PLAY:
+		await get_tree().physics_frame
+	banner.visible = false
+	hint_label.visible = false
+	# 1) §6.2 approach drama: a 22-coin pot parked 2.4 m from its OWN chute
+	#    (inside the 3.0 m drama ring, outside the 1.75 m bank ring)
+	round_t = round_time - 26.0          # remain 26: no other bell beat yet
+	_do_grab(0)
+	pot_value = 22
+	var c := chute_pos(0)
+	var inward := (-c).normalized() * 2.4
+	(players[0] as GreedPlayer).global_position = Vector3(c.x + inward.x, 0.1, c.y + inward.y)
+	await _settle(0.9)
+	await _grab_shot("bell_approach", false)
+	# 2) §6.3 the T-20 straight line (nobody has banked)
+	round_t = round_time - 20.2
+	await _settle(0.7)
+	await _grab_shot("bell_warn", false)
+	# 3) §6.1 the bell: LAST BANKS! + pot Label3D pulse
+	round_t = round_time - 15.2
+	await _settle(0.45)
+	await _grab_shot("bell_lastbanks", false)
+	# 4) the final stretch: red timer + rising tick ladder
+	round_t = round_time - 9.6
+	await _settle(0.8)
+	await _grab_shot("bell_ticks", false)
+	print("GREED_BELLCAP_DONE")
 	get_tree().quit()
 
 

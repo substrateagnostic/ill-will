@@ -1,0 +1,297 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET host port=8910 err=0 code=80CMWE addr=192.168.0.101:8910
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 1507937243 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE seat 1 claimed by peer 1507937243
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+NETHASH side=host seq=15 h=214cabfe
+NETPROBE_TRACE tick=60 p1=(-3.343,0.001,-2.557)
+VERIFY_SNAP res://docs/verify/dw_netshots_host/snap_online_host_claim_1121.png
+NETPROBE_TRACE tick=90 p1=(-3.343,0.001,-4.257)
+NETPROBE_TRACE tick=120 p1=(-3.287,0.001,-5.900)
+NETHASH side=host seq=30 h=2b94216a
+NETPROBE_TRACE tick=150 p1=(-1.587,0.001,-5.900)
+NETPROBE_TRACE tick=180 p1=(0.057,0.001,-5.843)
+NETHASH side=host seq=45 h=11b5a4c4
+NETPROBE_TRACE tick=210 p1=(0.057,0.001,-4.143)
+NETPROBE_TRACE tick=240 p1=(0.057,0.001,-2.443)
+NETHASH side=host seq=60 h=b269945c
+NETPROBE_TRACE tick=270 p1=(0.057,0.001,-2.443)
+NETPROBE toggle seat=1 ready=true pf=735
+NETPROBE_TRACE tick=300 p1=(0.057,0.001,-2.443)
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/dw_netshots_host/snap_online_host_ready_1687.png
+NETHASH side=host seq=75 h=b325fc42
+NETHASH side=host seq=90 h=ea397a9f
+NETHASH side=host seq=105 h=d6be96ec
+NETHASH side=host seq=120 h=0dd21549
+NETHASH side=host seq=135 h=0e8e7d2f
+NETHASH side=host seq=150 h=45a1fb8c
+NETHASH side=host seq=165 h=465e6372
+NETHASH side=host seq=180 h=7d71e1cf
+NETHASH side=host seq=195 h=7e2e49b5
+NETHASH side=host seq=210 h=b67bad69
+NETHASH side=host seq=225 h=b738154f
+VERIFY_SNAP res://docs/verify/dw_netshots_host/snap_online_host_gate_3270.png
+NETHASH side=host seq=240 h=ee4b93ac
+NETHASH side=host seq=255 h=ef07fb92
+NETHASH side=host seq=270 h=261b79ef
+DW_ROUND_START 1/2 t=0.0 ts=1.000
+WARNING: Sending 1972 bytes unreliably which is above the MTU (1392), this will result in higher packet loss
+   at: put_packet (modules/enet/enet_multiplayer_peer.cpp:363)
+   GDScript backtrace (most recent call first):
+       [0] send_module_state (res://core/net_session.gd:402)
+       [1] _net_host_broadcast (res://estate/estate.gd:2217)
+       [2] _process (res://estate/estate.gd:1232)
+NETHASH side=host seq=285 h=26d7e1d5
+DW_FORCEEVICT seat=2 (evidence pin — never real play)
+DW_DEATH round=1 t=1.0s THE VOID CLAIMS GOLD (void)
+NETHASH side=host seq=300 h=5f254589
+VERIFY_SNAP res://docs/verify/dw_netshots_host/snap_online_host_game_3998.png
+VERIFY_SNAP res://docs/verify/dw_netshots_host/snap_dw_host_ghosthit_4040.png
+NETHASH_MOD side=host seq=40 h=4ccd6525 bytes=2028
+NETHASH side=host seq=315 h=5fe1ad6f
+NETHASH side=host seq=330 h=96f52bcc
+NETHASH side=host seq=345 h=97b193b2
+NETHASH_MOD side=host seq=80 h=bd280413 bytes=2028
+NETHASH side=host seq=360 h=cec5120f
+NETHASH side=host seq=375 h=cf8179f5
+NETHASH_MOD side=host seq=120 h=eb9c0c47 bytes=2020
+NETHASH side=host seq=390 h=0694f852
+NETHASH side=host seq=405 h=088b458f
+NETHASH_MOD side=host seq=160 h=8173e78f bytes=2032
+DW_DEATH round=1 t=9.3s THE VOID CLAIMS BLUE (void)
+NETHASH side=host seq=420 h=3f9ec3ec
+NETHASH side=host seq=435 h=405b2bd2
+NETHASH_MOD side=host seq=200 h=35f86f70 bytes=2072
+NETHASH side=host seq=450 h=776eaa2f
+NETHASH side=host seq=465 h=782b1215
+NETHASH_MOD side=host seq=240 h=e1bf0ef5 bytes=2084
+NETHASH side=host seq=480 h=af3e9072
+NETHASH side=host seq=495 h=affaf858
+NETHASH_MOD side=host seq=280 h=6cd71c55 bytes=2092
+NETHASH side=host seq=510 h=e8485c0c
+NETHASH side=host seq=525 h=e904c3f2
+NETHASH_MOD side=host seq=320 h=03a06560 bytes=2088
+NETHASH side=host seq=540 h=2018424f
+NETHASH side=host seq=555 h=20d4aa35
+NETHASH_MOD side=host seq=360 h=6975094a bytes=2092
+NETHASH side=host seq=570 h=57e82892
+NETHASH side=host seq=585 h=58a49078
+NETHASH side=host seq=600 h=90f1f42c
+NETHASH_MOD side=host seq=400 h=05d05dec bytes=2092
+NETHASH side=host seq=615 h=91ae5c12
+NETHASH side=host seq=630 h=c8c1da6f
+NETHASH_MOD side=host seq=440 h=76bc0aac bytes=2092
+NETHASH side=host seq=645 h=c97e4255
+NETHASH side=host seq=660 h=0091c0b2
+NETHASH_MOD side=host seq=480 h=f39599b6 bytes=2084
+NETHASH side=host seq=675 h=014e2898
+NETHASH side=host seq=690 h=3861a6f5
+NETHASH_MOD side=host seq=520 h=b21360ff bytes=2084
+NETHASH side=host seq=705 h=3a57f432
+NETHASH side=host seq=720 h=716b728f
+NETHASH_MOD side=host seq=560 h=2024609f bytes=2084
+NETHASH side=host seq=735 h=7227da75
+NETHASH side=host seq=750 h=a93b58d2
+NETHASH_MOD side=host seq=600 h=ee4791ca bytes=2092
+NETHASH side=host seq=765 h=a9f7c0b8
+NETHASH side=host seq=780 h=e10b3f15
+NETHASH_MOD side=host seq=640 h=49ef4277 bytes=2092
+NETHASH side=host seq=795 h=e1c7a6fb
+NETHASH side=host seq=810 h=1a150aaf
+NETHASH_MOD side=host seq=680 h=db655ea3 bytes=2096
+NETHASH side=host seq=825 h=1ad17295
+NETHASH side=host seq=840 h=51e4f0f2
+NETHASH_MOD side=host seq=720 h=59312679 bytes=2084
+NETHASH side=host seq=855 h=52a158d8
+NETHASH side=host seq=870 h=89b4d735
+NETHASH_MOD side=host seq=760 h=0bff0044 bytes=2084
+NETHASH side=host seq=885 h=8a713f1b
+NETHASH side=host seq=900 h=c2bea2cf
+NETHASH side=host seq=915 h=c37b0ab5
+NETHASH_MOD side=host seq=800 h=198a774e bytes=2080
+DW_HOUSE_AWAKENS round=1 t=45.0s at=45.0s cd_scale=0.5 ghosts=2
+VERIFY_SNAP res://docs/verify/dw_netshots_host/snap_dw_host_awakens_10294.png
+DW_GHOST_CD p2 release cd=2.0s (house awake)
+NETHASH side=host seq=930 h=fa8e8912
+NETHASH side=host seq=945 h=fb4af0f8
+NETHASH_MOD side=host seq=840 h=706ccff9 bytes=2092
+NETHASH side=host seq=960 h=325e6f55
+NETHASH side=host seq=975 h=331ad73b
+NETHASH_MOD side=host seq=880 h=fe92ec24 bytes=2088
+NETHASH side=host seq=990 h=6a2e5598
+NETHASH side=host seq=1005 h=d103e41c
+NETHASH_MOD side=host seq=920 h=c9fc94ed bytes=2092
+NETHASH side=host seq=1020 h=08176279
+NETHASH side=host seq=1035 h=08d3ca5f
+NETHASH_MOD side=host seq=960 h=47bbe49b bytes=2092
+NETHASH side=host seq=1050 h=3fe748bc
+NETHASH side=host seq=1065 h=40a3b0a2
+DW_GHOST_CD p2 release cd=2.0s (house awake)
+NETHASH_MOD side=host seq=1000 h=eecfcb11 bytes=2092
+NETHASH side=host seq=1080 h=77b72eff
+NETHASH side=host seq=1095 h=787396e5
+NETHASH_MOD side=host seq=1040 h=cac50e4e bytes=2088
+NETHASH side=host seq=1110 h=b0c0fa99
+NETHASH side=host seq=1125 h=b17d627f
+NETHASH_MOD side=host seq=1080 h=8171ad09 bytes=2092
+NETHASH side=host seq=1140 h=e890e0dc
+NETHASH side=host seq=1155 h=e94d48c2
+NETHASH side=host seq=1170 h=2060c71f
+NETHASH_MOD side=host seq=1120 h=d4868871 bytes=2092
+NETHASH side=host seq=1185 h=211d2f05
+NETHASH side=host seq=1200 h=596a92b9
+NETHASH_MOD side=host seq=1160 h=f6648609 bytes=2084
+NETHASH side=host seq=1215 h=5a26fa9f
+DW_GHOST_CD p2 release cd=2.0s (house awake)
+NETHASH side=host seq=1230 h=913a78fc
+NETHASH_MOD side=host seq=1200 h=964dd8b8 bytes=2092
+NETHASH side=host seq=1245 h=91f6e0e2
+NETHASH side=host seq=1260 h=c90a5f3f
+NETHASH_MOD side=host seq=1240 h=cec462cd bytes=2080
+NETHASH side=host seq=1275 h=c9c6c725
+NETHASH side=host seq=1290 h=00da4582
+NETHASH_MOD side=host seq=1280 h=c210914e bytes=2084
+NETHASH side=host seq=1305 h=02d092bf
+NETHASH side=host seq=1320 h=39e4111c
+NETHASH_MOD side=host seq=1320 h=342b1278 bytes=2084
+NETHASH side=host seq=1335 h=3aa07902
+NETHASH side=host seq=1350 h=71b3f75f
+NETHASH_MOD side=host seq=1360 h=8e8ce38c bytes=2092
+NETHASH side=host seq=1365 h=72705f45
+NETHASH side=host seq=1380 h=a983dda2
+NETHASH_MOD side=host seq=1400 h=043c0a5f bytes=2088
+NETHASH side=host seq=1395 h=aa404588
+DW_ROUND_START 2/2 t=78.2 ts=1.000
+NETHASH side=host seq=1410 h=e28da93c
+NETHASH side=host seq=1425 h=e34a1122
+NETHASH_MOD side=host seq=1440 h=e80e8a88 bytes=2004
+NETHASH side=host seq=1440 h=1a5d8f7f
+NETHASH side=host seq=1455 h=1b19f765
+NETHASH_MOD side=host seq=1480 h=ea001b09 bytes=2004
+NETHASH side=host seq=1470 h=522d75c2
+NETHASH side=host seq=1485 h=52e9dda8
+NETHASH_MOD side=host seq=1520 h=7e47315b bytes=2008
+NETHASH side=host seq=1500 h=8b37415c
+NETHASH side=host seq=1515 h=8bf3a942
+NETHASH_MOD side=host seq=1560 h=db08142c bytes=2032
+NETHASH side=host seq=1530 h=c307279f
+NETHASH side=host seq=1545 h=c3c38f85
+NETHASH_MOD side=host seq=1600 h=ccaa3ea7 bytes=2020
+NETHASH side=host seq=1560 h=fad70de2
+NETHASH side=host seq=1575 h=fb9375c8
+NETHASH_MOD side=host seq=1640 h=337a00c4 bytes=2020
+NETHASH side=host seq=1590 h=32a6f425
+NETHASH side=host seq=1605 h=349d4162
+NETHASH_MOD side=host seq=1680 h=0ffb8efb bytes=2020
+NETHASH side=host seq=1620 h=6bb0bfbf
+NETHASH side=host seq=1635 h=6c6d27a5
+NETHASH_MOD side=host seq=1720 h=7571f814 bytes=2024
+NETHASH side=host seq=1650 h=a380a602
+NETHASH side=host seq=1665 h=a43d0de8
+NETHASH side=host seq=1680 h=db508c45
+NETHASH_MOD side=host seq=1760 h=1cac790b bytes=2020
+NETHASH side=host seq=1695 h=dc0cf42b
+NETHASH side=host seq=1710 h=145a57df
+NETHASH_MOD side=host seq=1800 h=112bef32 bytes=2024
+NETHASH side=host seq=1725 h=1516bfc5
+NETHASH side=host seq=1740 h=4c2a3e22
+NETHASH_MOD side=host seq=1840 h=23bf8e88 bytes=2016
+NETHASH side=host seq=1755 h=4ce6a608
+NETHASH side=host seq=1770 h=83fa2465
+NETHASH_MOD side=host seq=1880 h=cb82a1c5 bytes=2024
+NETHASH side=host seq=1785 h=84b68c4b
+NETHASH side=host seq=1800 h=bd03efff
+NETHASH_MOD side=host seq=1920 h=2b886b00 bytes=2020
+NETHASH side=host seq=1815 h=bdc057e5
+NETHASH side=host seq=1830 h=f4d3d642
+NETHASH_MOD side=host seq=1960 h=df0fed95 bytes=2020
+NETHASH side=host seq=1845 h=f5903e28
+NETHASH side=host seq=1860 h=2ca3bc85
+NETHASH_MOD side=host seq=2000 h=95d03c92 bytes=2020
+NETHASH side=host seq=1875 h=2d60246b
+NETHASH side=host seq=1890 h=6473a2c8
+NETHASH_MOD side=host seq=2040 h=01c55666 bytes=2020
+NETHASH side=host seq=1905 h=6669f005
+NETHASH side=host seq=1920 h=9d7d6e62
+NETHASH side=host seq=1935 h=9e39d648
+NETHASH_MOD side=host seq=2080 h=54f25bd1 bytes=2024
+NETHASH side=host seq=1950 h=d54d54a5
+NETHASH side=host seq=1965 h=d609bc8b
+NETHASH_MOD side=host seq=2120 h=e92bb5b3 bytes=2020
+NETHASH side=host seq=1980 h=0d1d3ae8
+NETHASH side=host seq=1995 h=0dd9a2ce
+NETHASH_MOD side=host seq=2160 h=f37e2247 bytes=2020
+NETHASH side=host seq=2010 h=6e9d96b9
+NETHASH side=host seq=2025 h=6f59fe9f
+NETHASH_MOD side=host seq=2200 h=04b40e29 bytes=2020
+NETHASH side=host seq=2040 h=a66d7cfc
+DW_HOUSE_AWAKENS round=2 t=45.0s at=45.0s cd_scale=0.5 ghosts=0
+NETHASH side=host seq=2055 h=a729e4e2
+NETHASH_MOD side=host seq=2240 h=27cef638 bytes=2028
+NETHASH side=host seq=2070 h=de3d633f
+NETHASH side=host seq=2085 h=def9cb25
+NETHASH_MOD side=host seq=2280 h=08b16080 bytes=2024
+NETHASH side=host seq=2100 h=17472ed9
+NETHASH side=host seq=2115 h=180396bf
+NETHASH_MOD side=host seq=2320 h=df581378 bytes=2028
+NETHASH side=host seq=2130 h=4f17151c
+NETHASH side=host seq=2145 h=4fd37d02
+NETHASH_MOD side=host seq=2360 h=d0c0748f bytes=2024
+NETHASH side=host seq=2160 h=86e6fb5f
+NETHASH side=host seq=2175 h=87a36345
+NETHASH side=host seq=2190 h=beb6e1a2
+NETHASH_MOD side=host seq=2400 h=2395f3ac bytes=2028
+NETHASH side=host seq=2205 h=c0ad2edf
+NETHASH side=host seq=2220 h=f7c0ad3c
+NETHASH_MOD side=host seq=2440 h=2962bb87 bytes=2024
+NETHASH side=host seq=2235 h=f87d1522
+NETHASH side=host seq=2250 h=2f90937f
+NETHASH_MOD side=host seq=2480 h=f6f6b7e3 bytes=2028
+NETHASH side=host seq=2265 h=304cfb65
+NETHASH side=host seq=2280 h=676079c2
+NETHASH_MOD side=host seq=2520 h=dae5f70e bytes=2024
+NETHASH side=host seq=2295 h=681ce1a8
+NETHASH side=host seq=2310 h=a06a455c
+NETHASH_MOD side=host seq=2560 h=ba03e816 bytes=2028
+NETHASH side=host seq=2325 h=a126ad42
+NETHASH side=host seq=2340 h=d83a2b9f
+NETHASH_MOD side=host seq=2600 h=4ea8ecf6 bytes=2024
+NETHASH side=host seq=2355 h=d8f69385
+NETHASH side=host seq=2370 h=100a11e2
+NETHASH_MOD side=host seq=2640 h=f34cb145 bytes=2028
+NETHASH side=host seq=2385 h=10c679c8
+NETHASH side=host seq=2400 h=4913dd7c
+NETHASH_MOD side=host seq=2680 h=22307c2b bytes=2020
+NETHASH side=host seq=2415 h=49d04562
+NETHASH side=host seq=2430 h=80e3c3bf
+NETHASH side=host seq=2445 h=81a02ba5
+NETHASH_MOD side=host seq=2720 h=2216e23d bytes=2024
+NETHASH side=host seq=2460 h=b8b3aa02
+NETHASH side=host seq=2475 h=b97011e8
+NETHASH_MOD side=host seq=2760 h=1d4f332a bytes=2028
+KILL_EVENTS n=2 [{"cause":"void","killer":-1,"victim":2},{"cause":"void","killer":-1,"victim":1}]
+DW_MATCH_OVER champ=RED pts=8
+NETHASH side=host seq=2490 h=f0839045
+NETHASH side=host seq=2505 h=f279dd82
+NETHASH side=host seq=2520 h=298d5bdf
+NETHASH side=host seq=2535 h=2a49c3c5
+NETHASH side=host seq=2550 h=615d4222
+VERIFY_SNAP res://docs/verify/dw_netshots_host/snap_online_host_reckoning_26625.png
+NETPROBE_RESULTS RED:pts=5,grudge=3 BLUE:pts=3,grudge=4 GOLD:pts=1,grudge=3 MINT:pts=2,grudge=1
+NETPROBE saves restored
+NETPROBE_DONE
+NETHASH side=host seq=2565 h=6219aa08
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)

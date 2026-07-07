@@ -480,6 +480,65 @@ member so its private card is THE PLAY):
 - Lanes touched: `minigames/understudy/**` + `docs/verify/` only. Estate
   shell + net_session UNTOUCHED (the generic 20 Hz pump just works).
 
+### 2026-07-07 — ONLINE WAVE 2×: GREED + DEAD WEIGHT mirrors, and greed's CLOSING BELL (agent worktree)
+
+Two more games play across the wire on the séance's house pattern, plus the
+owner-signed Q5 polish. Docs: `docs/verify/online-greed-VERIFY.md`,
+`docs/verify/online-deadweight-VERIFY.md`, `docs/verify/greedbell-shots/`.
+
+- **GREED INC. mirror:** two-instance night (pool=greed, remote seat 1 on
+  the tape) — 89/89 snapshot digests matched host↔client, ~927 B median
+  snapshots (~18.5 kB/s per guest), paired shots read by eye: GRABBED!,
+  MINT MUGGED GOLD! (with the -2 dash-leak flash on both), GOLD BANKS 6!
+  (coin rain both screens), and LAST BANKS! with the pot's number caught
+  MID-PULSE on both. The grab-hold ring fills smoothly on the mirror (local
+  extrapolation at the host's rate) — the 0.6 s tension survives the wire.
+- **THE CLOSING BELL (doc 09 §6.1-3):** T-20 "NOBODY HAS BANKED — THE POT
+  GROWS RESTLESS" + pot tremble, T-15 "LAST BANKS!" + pot-number pulse +
+  grudge sting, T-10 rising tick ladder, and the §6.2 approach drama — a
+  15+ pot within 3 m of its own chute strobes that pad at 3 Hz with ticks
+  rising +0.06/0.4 s until banked or dropped. Rang at T-15 in BOTH rounds
+  of the live online night, and on the guest's screen. Bell facts ride the
+  snapshot. `--greedbellcap` films all four beats (staged clock, live code).
+- **GREED real keys:** the main hint bar now prints live bindings
+  (`Space = GRAB (hold) / TACKLE · E = DASH`), realkeys template; a guest's
+  mirror builds the bar from ITS OWN machine's bindings.
+- **DEAD WEIGHT mirror (first Jolt-heavy port):** every rigid body freezes
+  client-side and puppets from snapshots — 12 furniture transforms with
+  slerped quaternions stream, so the POSSESSED ARMCHAIR LUNGE plays in the
+  guest's room with the same glow/wobble/sparks (fired locally from
+  deltas). 68/68 digests matched; ~2.0 kB snapshots (~41 kB/s per guest —
+  fattest mirror yet, still nothing next to video). HOUSE AWAKENS
+  candlelight mirrors from one bool. Money-shot pair on film: the
+  gold-possessed prop mid-slam, sparks on both screens.
+- **Receipts:** `--greedtest=intercept` (3 seeds) and `--dwbalance=20`
+  (3 seeds) byte-identical to a pristine-HEAD worktree, re-verified after
+  every host-side addition. user:// backed up before any run, prefs staged
+  to mg_rounds=2 for short nights, everything restored md5-identical.
+
+DECISIONS ALEX MAY WANT TO REVIEW:
+1. **DW stalemate observed on the couch sim itself:** with two input-idle
+   humans, bots shove them ONTO the lip and then edge-avoidance refuses to
+   finish the job — a full 150 s night with zero deaths. Pre-existing couch
+   behavior (not the mirror), documented in the DW VERIFY doc. Worth a
+   balance pass: let bots commit past |3.6| when the victim is already on
+   the lip, or nudge lip-campers.
+2. `--dwevict=N` evidence pin added (séance `--seancechar` precedent): fells
+   a seat through the REAL `_fall()` path 1 s into round 1 so probe nights
+   always film the poltergeist arc. Loud log line, fenced out of balance
+   sims, never set in real play.
+3. Ghosts have no possess-cooldown widget on the couch, so the mirror has
+   nothing to mirror for it (fighters' shove/hop rings ARE mirrored). If a
+   ghost CD ring ever ships couch-side, add one number per ghost row.
+4. Windows probe-rig gotcha now documented in the greed VERIFY doc: the
+   winget godot shim DETACHES windowed instances from redirected shells and
+   parent+child shred a `>`-redirected log. Fix: engine `--log-file` per
+   instance (used tonight) or pipe through `cat`.
+
+NEXT (fan-out): tilt/mower/throne are pure-kinematic ports on the same
+pattern; swap/echo/orbital/last_will remain of the realtime set; podium
+mirroring still the shared phase-3 chore.
+
 ### 2026-07-06 — ONLINE PHASE 1 IS REAL: two copies of ILL WILL played one night together
 The spine from doc 10 is built and proven on this machine: **HOST NIGHT /
 JOIN NIGHT on the title**, a 6-char invite code (`80CMWE` = your LAN

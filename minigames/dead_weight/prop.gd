@@ -297,6 +297,17 @@ func _on_body_entered(body: Node) -> void:
 	if owner_game != null and owner_game.has_method("note_ghost_hit"):
 		owner_game.call_deferred("note_ghost_hit")
 
+## ONLINE mirror round reset: the render-only half of reset_for_round. No
+## freeze/teleport — a frozen mirror prop takes its transform from snapshots;
+## this just clears any leftover possession glow and applies the round dent.
+func net_round_reset(darken: float) -> void:
+	release()
+	dent = darken
+	_visual.rotation = Vector3.ZERO
+	for i in _mats.size():
+		_mats[i].albedo_color = _albedo_base[i].lerp(Color(0.12, 0.12, 0.14), clampf(dent, 0.0, 0.6))
+
+
 func reset_for_round(darken: float) -> void:
 	release()
 	dent = darken

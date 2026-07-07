@@ -54,6 +54,12 @@ var _round_resolving := false
 var _decider := "none"                # what ended the round (balance metric)
 var _house_awake := false             # final-stretch ghost buff live this round
 var _awaken_override := -1.0          # --dwawaken=S (verify): film the moment early
+var _evict_pin := -1                  # --dwevict=N (evidence pin, --seancechar
+                                      # precedent): fell seat N through the REAL
+                                      # _fall() path 1 s into round 1 so a probe
+                                      # night is GUARANTEED a poltergeist + a
+                                      # furniture assault on film. Logged loud;
+                                      # never set in real play.
 var _env: Environment = null          # stage refs for the candlelight dim (fx)
 var _sun: DirectionalLight3D = null
 var _dim_tw: Tween = null
@@ -79,6 +85,23 @@ var _time_token := 0
 var _last_hitstop := -99.0       # HIT KIT global one-at-a-time hitstop throttle (0.14s)
 var _hitkit_cap := false         # --hitkitcap: stage the HIT KIT / cooldown-ring shots
 var _cap_dir := "verify_out/hitkit"
+var _banner_col := "ffffff"      # last banner color (mirrored as html)
+
+# ONLINE PHASE 2 (docs/design/10 §4.3) — the render mirror, house pattern per
+# docs/verify/online-seance-VERIFY.md. Host runs the WHOLE sim (Jolt included)
+# exactly as couch; the estate pumps _net_state() at 20 Hz; the client boots
+# this same scene with config.net_mirror = true, freezes every body, and
+# _net_apply()/_mirror_tick() puppet the fighters, wisps and FURNITURE from
+# snapshots — the armchair lunge is a streamed transform, the possession glow,
+# wobble and all impact juice fire locally from state deltas. Reduced-motion
+# (shake/hitstop) honors the CLIENT's own pref on every mirrored beat.
+const NET_ANIMS := ["Idle", "Running_A", "Hit_A", "Jump_Idle", "Interact", "Jump_Start"]
+var _mirror := false
+var _mir := {}                   # last applied snapshot (delta source for juice)
+var _mir_snaps := {}             # evidence snapshots fired once (probe runs)
+var _mir_done := false           # champion confetti fired
+var _net_ghost_hits := 0         # possessed-prop slams (host counter -> mirror juice)
+var _net_champ := -1
 
 @onready var cam: Camera3D = $CameraRig/Camera3D
 @onready var banner: Label = $UI/Banner
@@ -271,6 +294,8 @@ func _parse_args() -> void:
 			_awaken_override = maxf(0.5, float(arg.trim_prefix("--dwawaken=")))
 		elif arg == "--hitkitcap":
 			_hitkit_cap = true
+		elif arg.begins_with("--dwevict="):
+			_evict_pin = int(arg.trim_prefix("--dwevict="))
 		elif arg.begins_with("--outdir="):
 			_cap_dir = arg.trim_prefix("--outdir=")
 	if _aim_probe_on:
@@ -344,6 +369,7 @@ func begin(config: Dictionary) -> void:
 
 func _begin(config: Dictionary) -> void:
 	_started = true
+	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.get("rng_seed", 1))
 	rounds_total = clampi(int(config.get("rounds", 3)), 1, 9)
 	if _balance_rounds > 0:
@@ -392,8 +418,25 @@ func _begin(config: Dictionary) -> void:
 	_layout_spawns(players.size())
 	_build_props()
 	_rebuild_scoreboard()
-	hint_label.text = _controls_bar()
+	hint_label.text = _controls_bar()   # on a client this reads THIS seat's keys
 	round_index = 0
+	if _mirror:
+		# RENDER MIRROR (spec §4.3): no round start, no bots, no Jolt sim — every
+		# body freezes and becomes a snapshot puppet. The host owns every fact.
+		phase = Phase.PRE
+		for i in players.size():
+			var f: DWFighter = _fighters[i]
+			if f == null:
+				continue
+			f.freeze = true
+			f.set_physics_process(false)
+			f.set_process(false)             # anim/rings are driven by _mirror_tick
+			f.global_position = _spawns[i % _spawns.size()]
+		for prop in _props:
+			(prop as DWProp).freeze = true   # transforms stream; wobble stays local
+		NetSession.set_aim_provider(_net_aim)
+		print("DW_MIRROR boot players=%d my_seat=%d" % [players.size(), NetSession.my_seat()])
+		return
 	_start_round()
 	if _aim_probe_on:
 		_run_dw_probe()
@@ -483,6 +526,16 @@ func _start_round() -> void:
 	_refresh_hint()
 	if _balance_rounds == 0:
 		_flash_banner("ROUND %d\nFIGHT!" % (round_index + 1), Color(1, 0.85, 0.2), 1.6)
+	# --dwevict evidence pin (probe nights only; --seancechar precedent): fell
+	# the pinned seat through the REAL _fall() path 1 s into round 1, so the
+	# poltergeist-and-furniture arc is guaranteed on film. Loud, never real play.
+	if _evict_pin >= 0 and round_index == 0 and _balance_rounds == 0 and not _mirror:
+		var pin := _evict_pin
+		get_tree().create_timer(1.0).timeout.connect(func() -> void:
+			if phase == Phase.ROUND and pin < _fighters.size() \
+					and _fighters[pin] != null and _fighters[pin].alive:
+				print("DW_FORCEEVICT seat=%d (evidence pin — never real play)" % pin)
+				_fighters[pin]._fall())
 
 func _living_count() -> int:
 	var n := 0
@@ -650,6 +703,7 @@ func _finish_match() -> void:
 			return players[a].total > players[b].total
 		return a < b)
 	var champ: int = order[0]
+	_net_champ = champ
 	print("DW_MATCH_OVER champ=%s pts=%d" % [players[champ].name, players[champ].total])
 	_flash_banner("%s WINS DEAD WEIGHT" % players[champ].name, players[champ].color, 6.0)
 	Sfx.play("match_win")
@@ -778,6 +832,15 @@ func _controls_bar() -> String:
 func _refresh_hint() -> void:
 	if hint_label == null:
 		return
+	if _mirror:
+		# On a mirror only MY seat's death swaps the bar (other seats' hints
+		# live on their own screens; roster bot-flags are meaningless here).
+		var my := NetSession.my_seat()
+		if my >= 0 and _ghosts.has(my):
+			hint_label.text = _ghost_hint_line(my)
+		else:
+			hint_label.text = _controls_bar()
+		return
 	var dead_humans: Array = []
 	for i in players.size():
 		if i < players.size() and not players[i].is_bot and _ghosts.has(i):
@@ -812,6 +875,11 @@ func _physics_process(delta: float) -> void:
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+
+	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
+	if _mirror:
+		_mirror_tick(delta)
+		return
 
 	if phase == Phase.BETWEEN and _between_timer > 0.0:
 		_between_timer -= delta
@@ -861,6 +929,9 @@ func _awaken_house() -> void:
 		Sfx.play("grudge")
 		_flash_banner("THE HOUSE AWAKENS", Color(0.72, 0.55, 0.95), 2.2)
 		_dim_to_candlelight()
+		if NetSession.has_guests() and not _mir_snaps.has("dw_host_awakens"):
+			_mir_snaps["dw_host_awakens"] = true
+			VerifyCapture.snap("dw_host_awakens")
 
 ## Ghost possess-cooldown scale — poltergeist.gd reads this on every release().
 func ghost_possess_cd_scale() -> float:
@@ -1261,8 +1332,12 @@ func on_possess(_g: DWGhost, _p: DWProp) -> void:
 		_dbg.possess += 1
 
 func note_ghost_hit() -> void:
+	_net_ghost_hits += 1   # mirrored fact; pure counter, sim never reads it
 	if _balance_rounds > 0:
 		_dbg.ghost_hits += 1
+	elif NetSession.has_guests() and not _mir_snaps.has("dw_host_ghosthit"):
+		_mir_snaps["dw_host_ghosthit"] = true
+		VerifyCapture.snap("dw_host_ghosthit")
 
 # ---------------------------------------------------------------- fx / ui
 func _time_hit(scale: float, real_duration: float) -> void:
@@ -1279,6 +1354,7 @@ func _update_timer_label() -> void:
 
 func _flash_banner(text: String, color: Color, duration: float) -> void:
 	banner.text = text
+	_banner_col = color.to_html(false)
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
 	banner.pivot_offset = banner.size / 2.0
@@ -1567,6 +1643,321 @@ func _run_hitkit_cap() -> void:
 	await _settle(0.15)
 	print("DW_HITKIT_CAP_DONE")
 	get_tree().quit()
+
+# ---------------------------------------------------------------- ONLINE (phase 2)
+# House pattern (docs/verify/online-seance-VERIFY.md PATTERN NOTES): host sim
+# untouched, _net_state() = one flat dict of PUBLIC facts, _net_apply() diffs
+# and fires ALL juice from deltas, _mirror_tick() interpolates at 60 Hz. Dead
+# weight has no hidden info — no private channel. The soul of this mirror is
+# the FURNITURE: possessed-prop transforms stream, so the client watches the
+# armchair lunge exactly as the couch does.
+
+## HOST, pumped by the estate at 20 Hz. Ask of every key: is this on every
+## couch screen right now? Fighters, wisps, furniture, HUD — yes. Nothing else.
+func _net_state() -> Dictionary:
+	var fs: Array = []
+	for i in players.size():
+		var f: DWFighter = _fighters[i]
+		if f == null:
+			fs.append_array([0, 0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0, 0.0, 0.0, 0])
+			continue
+		fs.append(1 if f.alive else 0)
+		fs.append(snappedf(f.global_position.x, 0.01))
+		fs.append(snappedf(f.global_position.y, 0.01))
+		fs.append(snappedf(f.global_position.z, 0.01))
+		fs.append(snappedf(f.model_pivot.rotation.y, 0.01) if f.model_pivot else 0.0)
+		fs.append(maxi(NET_ANIMS.find(f._cur_anim), 0))
+		fs.append(snappedf(maxf(f._shove_cd, 0.0), 0.02))
+		fs.append(snappedf(maxf(f._hop_cd, 0.0), 0.02))
+		fs.append(f.net_hits)
+		fs.append(snappedf(f.net_hit_dir.x, 0.01))
+		fs.append(snappedf(f.net_hit_dir.z, 0.01))
+		fs.append(f.net_shoves)
+	var gs: Array = []
+	for i in players.size():
+		if _ghosts.has(i):
+			var g: DWGhost = _ghosts[i]
+			var pidx := -1
+			if g.possessing != null and is_instance_valid(g.possessing):
+				pidx = _props.find(g.possessing)
+			gs.append_array([1, snappedf(g.global_position.x, 0.01),
+				snappedf(g.global_position.y, 0.01), snappedf(g.global_position.z, 0.01), pidx])
+		else:
+			gs.append_array([0, 0.0, 0.0, 0.0, -1])
+	var ps: Array = []
+	for prop in _props:
+		var pr := prop as DWProp
+		ps.append(snappedf(pr.global_position.x, 0.01))
+		ps.append(snappedf(pr.global_position.y, 0.01))
+		ps.append(snappedf(pr.global_position.z, 0.01))
+		var q := pr.global_transform.basis.get_rotation_quaternion()
+		ps.append(snappedf(q.x, 0.001))
+		ps.append(snappedf(q.y, 0.001))
+		ps.append(snappedf(q.z, 0.001))
+		ps.append(snappedf(q.w, 0.001))
+		ps.append(pr.possessed_by)
+	var sc: Array = []
+	var gk: Array = []
+	var dth: Array = []
+	for p in players:
+		sc.append(int(p.total))
+		gk.append(int(p.ghost_kills))
+		dth.append(int(p.deaths))
+	return {
+		"ph": phase,
+		"ri": round_index,
+		"rl": round_label.text,
+		"tmr": timer_label.text,
+		"ban": [banner.text, _banner_col, banner.visible],
+		"aw": 1 if _house_awake else 0,
+		"f": fs,
+		"g": gs,
+		"pr": ps,
+		"sc": sc,
+		"gk": gk,
+		"dth": dth,
+		"gh": _net_ghost_hits,
+		"champ": _net_champ,
+	}
+
+
+## CLIENT. Latest-state-wins; all juice from deltas (counters, never events).
+func _net_apply(state: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = state
+	phase = (int(state.get("ph", phase))) as Phase   # render/probe fact only
+	round_label.text = str(state.get("rl", ""))
+	timer_label.text = str(state.get("tmr", ""))
+	_apply_mir_banner(state.get("ban", []), prev.get("ban", []))
+	# --- round rollover: candles out, ghosts folded, furniture dent applied
+	var ri := int(state.get("ri", 0))
+	if ri != int(prev.get("ri", ri)):
+		_mir_round_reset(ri)
+	# --- THE HOUSE AWAKENS: the mood shift, fired locally from the fact
+	if int(state.get("aw", 0)) == 1 and int(prev.get("aw", 0)) == 0:
+		Sfx.play("grudge")
+		_dim_to_candlelight()
+		_mir_snap_once("dw_mirror_awakens")
+	elif int(state.get("aw", 1)) == 0 and int(prev.get("aw", 0)) == 1:
+		_house_asleep()
+	# --- fighters: alive flags, cooldown resync, hit/shove one-shots
+	var fs: Array = state.get("f", [])
+	var pfs: Array = prev.get("f", [])
+	for i in players.size():
+		var b := i * 12
+		if b + 11 >= fs.size():
+			break
+		var f: DWFighter = _fighters[i]
+		if f == null:
+			continue
+		var alive := int(fs[b]) == 1
+		if alive != f.alive:
+			f.alive = alive
+			f.visible = alive
+			if alive and f.model_pivot:      # revived for the next round
+				f.model_pivot.scale = Vector3.ONE
+		var scd := float(fs[b + 6])
+		if absf(f._shove_cd - scd) > 0.1:
+			f._shove_cd = scd
+		var hcd := float(fs[b + 7])
+		if absf(f._hop_cd - hcd) > 0.1:
+			f._hop_cd = hcd
+		var hits := int(fs[b + 8])
+		var phits := int(pfs[b + 8]) if b + 8 < pfs.size() else hits
+		if hits > phits and alive:
+			# a shove or a hurled prop connected: squash-pop + spark, as couch
+			var d := Vector3(float(fs[b + 9]), 0.0, float(fs[b + 10]))
+			f.flash_pop()
+			spark_at(f.global_position + Vector3(0, 0.9, 0) - d * 0.3, d, players[i].color, 1.0)
+			Sfx.play("bumper", -3.0)
+			if not _reduced_motion():
+				_shake = maxf(_shake, 0.28)
+		var sh := int(fs[b + 11])
+		var psh := int(pfs[b + 11]) if b + 11 < pfs.size() else sh
+		if sh > psh and alive:
+			# shove fired: whoosh + windup ring/arc along the mirrored facing
+			Sfx.play("bounce", -7.0)
+			var yaw := float(fs[b + 4])
+			on_shove_fired(f.global_position, Vector3(sin(yaw), 0.0, cos(yaw)), players[i].color)
+			f.windup_coil(false)
+	# --- deaths: fx + shake + hitstop (client's reduced-motion pref rules)
+	var dth: Array = state.get("dth", [])
+	var pdth: Array = prev.get("dth", [])
+	for i in mini(dth.size(), players.size()):
+		var pd := int(pdth[i]) if i < pdth.size() else int(dth[i])
+		if int(dth[i]) > pd:
+			var at := Vector3.ZERO
+			if _fighters[i] != null:
+				at = _fighters[i].global_position
+			Sfx.play("splat")
+			Sfx.play("death")
+			_spawn_death_fx(at, players[i].color)
+			if not _reduced_motion():
+				_shake = maxf(_shake, 0.5)
+				_time_hit(0.32, 0.4)
+	# --- ghosts + THE FURNITURE possession glow
+	_mir_apply_ghosts(state.get("g", []), prev.get("g", []))
+	# --- scoreboard facts
+	if state.get("sc", []) != prev.get("sc", []) or state.get("gk", []) != prev.get("gk", []) \
+			or state.get("g", []) != prev.get("g", []) or state.get("f", []).size() != pfs.size():
+		var sc: Array = state.get("sc", [])
+		var gk: Array = state.get("gk", [])
+		for i in mini(sc.size(), players.size()):
+			players[i].total = int(sc[i])
+			if i < gk.size():
+				players[i].ghost_kills = int(gk[i])
+		_rebuild_scoreboard()
+	# --- the money shot receipt: a possessed prop just slammed a living body
+	if int(state.get("gh", 0)) > int(prev.get("gh", 0)):
+		_mir_snap_once("dw_mirror_ghosthit")
+	# --- champion confetti (the banner itself rides the state)
+	if phase == Phase.DONE and not _mir_done:
+		var champ := int(state.get("champ", -1))
+		if champ >= 0 and champ < players.size():
+			_mir_done = true
+			Sfx.play("match_win")
+			_spawn_confetti(_spawns[champ % _spawns.size()] + Vector3(0, 1.2, 0), players[champ].color)
+
+
+func _mir_round_reset(ri: int) -> void:
+	round_index = ri
+	_house_asleep()
+	_clear_ghosts()
+	var darken := ri * 0.22
+	for prop in _props:
+		(prop as DWProp).net_round_reset(darken)
+	_refresh_hint()
+
+
+## Ghost lifecycle + possession glow, from the mirrored per-seat ghost rows.
+func _mir_apply_ghosts(gs: Array, pgs: Array) -> void:
+	for i in players.size():
+		var b := i * 5
+		if b + 4 >= gs.size():
+			break
+		var on := int(gs[b]) == 1
+		var pos := Vector3(float(gs[b + 1]), float(gs[b + 2]), float(gs[b + 3]))
+		if on and not _ghosts.has(i):
+			_spawn_ghost(i, pos)
+			var ng: DWGhost = _ghosts[i]
+			ng.set_physics_process(false)   # a wisp puppet — never free-flies
+			ng.global_position = pos
+			_refresh_hint()
+		elif not on and _ghosts.has(i):
+			var og: DWGhost = _ghosts[i]
+			og.force_release()
+			og.queue_free()
+			_ghosts.erase(i)
+			_refresh_hint()
+		if not on or not _ghosts.has(i):
+			continue
+		var g: DWGhost = _ghosts[i]
+		var pidx := int(gs[b + 4])
+		var ppidx := int(pgs[b + 4]) if b + 4 < pgs.size() else -1
+		if pidx != ppidx:
+			if ppidx >= 0 and ppidx < _props.size() and (_props[ppidx] as DWProp).possessed_by == i:
+				(_props[ppidx] as DWProp).release()
+				Sfx.play("card", -6.0)
+			if pidx >= 0 and pidx < _props.size():
+				(_props[pidx] as DWProp).possess(i, players[i].color)
+				g.possessing = _props[pidx]
+				Sfx.play("grudge", -2.0)
+				_mir_snap_once("dw_mirror_possess")
+			else:
+				g.possessing = null
+
+
+## CLIENT, per physics tick: glide every puppet toward its authoritative spot.
+## Fighters (pos + pivot yaw + anim + rings), wisps (pos + pulse), FURNITURE
+## (pos + slerped rotation — the lunge, the tumble). Wobble/glow on a possessed
+## prop keeps running in prop.gd's own _physics_process (frozen body, live fx).
+func _mirror_tick(delta: float) -> void:
+	if _mir.is_empty():
+		return
+	var w := 1.0 - exp(-14.0 * delta)
+	var fs: Array = _mir.get("f", [])
+	for i in players.size():
+		var b := i * 12
+		if b + 11 >= fs.size():
+			break
+		var f: DWFighter = _fighters[i]
+		if f == null or not f.alive:
+			continue
+		f.global_position = f.global_position.lerp(
+			Vector3(float(fs[b + 1]), float(fs[b + 2]), float(fs[b + 3])), w)
+		if f.model_pivot:
+			f.model_pivot.rotation.y = lerp_angle(f.model_pivot.rotation.y, float(fs[b + 4]), w)
+		f._set_anim(NET_ANIMS[clampi(int(fs[b + 5]), 0, NET_ANIMS.size() - 1)])
+		f._shove_cd = maxf(0.0, f._shove_cd - delta)   # smooth ring fill between snaps
+		f._hop_cd = maxf(0.0, f._hop_cd - delta)
+		f._drive_rings(delta)
+	var gs: Array = _mir.get("g", [])
+	for i in players.size():
+		var b := i * 5
+		if b + 4 >= gs.size():
+			break
+		if not _ghosts.has(i):
+			continue
+		var g: DWGhost = _ghosts[i]
+		g.global_position = g.global_position.lerp(
+			Vector3(float(gs[b + 1]), float(gs[b + 2]), float(gs[b + 3])), w)
+		if g._orb:
+			var s := 1.0 + sin(game_time * 6.0) * 0.12
+			g._orb.scale = Vector3(s, s, s)
+	var ps: Array = _mir.get("pr", [])
+	for k in _props.size():
+		var b := k * 8
+		if b + 7 >= ps.size():
+			break
+		var pr := _props[k] as DWProp
+		pr.global_position = pr.global_position.lerp(
+			Vector3(float(ps[b]), float(ps[b + 1]), float(ps[b + 2])), w)
+		var tq := Quaternion(float(ps[b + 3]), float(ps[b + 4]), float(ps[b + 5]), float(ps[b + 6]))
+		if tq.length_squared() > 0.5:
+			var cq := pr.global_transform.basis.get_rotation_quaternion()
+			pr.global_transform.basis = Basis(cq.slerp(tq.normalized(), w))
+
+
+func _apply_mir_banner(arr: Array, parr: Array) -> void:
+	if arr.size() < 3:
+		return
+	banner.text = str(arr[0])
+	banner.add_theme_color_override("font_color", Color(str(arr[1])))
+	var was: bool = parr.size() >= 3 and bool(parr[2]) and str(parr[0]) == str(arr[0])
+	banner.visible = bool(arr[2])
+	if banner.visible and not was:
+		banner.pivot_offset = banner.size / 2.0
+		banner.scale = Vector2(0.6, 0.6)
+		var pop := create_tween()
+		pop.tween_property(banner, "scale", Vector2.ONE, 0.26) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## CLIENT: my aim against my own mirrored render (doc 10 §1.3) — the fling
+## cursor anchors on my possessed prop, the shove cursor on my fighter.
+func _net_aim() -> Dictionary:
+	var my := NetSession.my_seat()
+	var aim := Vector3.ZERO
+	if my >= 0 and my < players.size():
+		if _ghosts.has(my):
+			var g: DWGhost = _ghosts[my]
+			var anchor := g.global_position
+			if g.possessing != null and is_instance_valid(g.possessing):
+				anchor = g.possessing.global_position
+			aim = PlayerInput.get_aim_dir(my, anchor, cam)
+		elif _fighters[my] != null:
+			aim = PlayerInput.get_aim_dir(my, _fighters[my].global_position, cam)
+	return {"aim": aim, "aim_screen": Vector2.ZERO}
+
+
+func _mir_snap_once(tag: String) -> void:
+	if _mir_snaps.has(tag):
+		return
+	_mir_snaps[tag] = true
+	VerifyCapture.snap(tag)
+
 
 # ---------------------------------------------------------------- verify hooks
 func get_phase_name() -> String:

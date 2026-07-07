@@ -396,6 +396,23 @@ func apply_knock(dir: Vector3, power: float) -> void:
 	_knock = dir.normalized() * power
 
 
+## ONLINE mirror pose (render-only; docs/design/10 §4.3). The client's greed.gd
+## drives every pawn from 20 Hz snapshots: glide to the authoritative spot, face
+## the authoritative yaw, and run the SAME locomotion-anim logic the host uses
+## (stun_t doubles as the mirrored stun flag; _anim_hold still honors one-shots
+## like the dash/tackle/cheer fired from event deltas). Never runs on a host.
+func net_pose(delta: float, tp: Vector3, tyaw: float, moving: bool, stunned: bool) -> void:
+	global_position = global_position.lerp(tp, 1.0 - exp(-14.0 * delta))
+	yaw = lerp_angle(yaw, tyaw, 1.0 - exp(-14.0 * delta))
+	_pivot.rotation.y = yaw + MODEL_YAW_OFFSET
+	_anim_hold = maxf(0.0, _anim_hold - delta)
+	dash_cd = maxf(0.0, dash_cd - delta)      # local decay; resynced per snapshot
+	stun_t = 1.0 if stunned else 0.0
+	if _stun_stars.emitting != stunned:
+		_stun_stars.emitting = stunned
+	_update_locomotion_anim(moving)
+
+
 func _update_locomotion_anim(moving: bool) -> void:
 	if _anim_hold > 0.0:
 		return

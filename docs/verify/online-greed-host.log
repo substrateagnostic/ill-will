@@ -1,0 +1,426 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+NET host port=8910 err=0 code=80CMWE addr=192.168.0.101:8910
+NETPROBE mode=host
+NETCODE 127.0.0.1:8910 -> 0008PE -> 127.0.0.1:8910 PASS
+NETCODE 192.168.1.42:8910 -> 8158WE -> 192.168.1.42:8910 PASS
+NETCODE 10.0.7.200:8912 -> G00Z42 -> 10.0.7.200:8912 PASS
+NETCODE 172.20.3.9:9000 -> T062AT -> 172.20.3.9:9000 PASS
+NETCODE 192.168.240.17:11999 -> FG27WZ -> 192.168.240.17:11999 PASS
+NETCODE 203.0.113.5:8910 -> '' (public IPv4 shares raw IP:PORT; Steam-code rendezvous is phase 3)
+NET peer 93722908 connected
+NETPROBE anchor seat1 (0.0,0.1,-2.5)
+NETPROBE_TRACE tick=0 p1=(0.000,0.100,-2.500)
+NETPROBE seat 1 claimed by peer 93722908
+NETPROBE_TRACE tick=30 p1=(-1.700,0.001,-2.500)
+NETPROBE_TRACE tick=60 p1=(-3.400,0.001,-2.500)
+NETHASH side=host seq=15 h=72d4cf98
+VERIFY_SNAP res://docs/verify/greed_netshots_host/snap_online_host_claim_0593.png
+NETPROBE_TRACE tick=90 p1=(-3.400,0.001,-4.200)
+NETPROBE_TRACE tick=120 p1=(-3.400,0.001,-5.900)
+NETHASH side=host seq=30 h=ab82fce9
+NETPROBE_TRACE tick=150 p1=(-1.757,0.001,-5.957)
+NETPROBE_TRACE tick=180 p1=(-0.057,0.001,-5.957)
+NETHASH side=host seq=45 h=8c9ebab1
+NETPROBE_TRACE tick=210 p1=(-0.000,0.001,-4.313)
+NETPROBE_TRACE tick=240 p1=(-0.000,0.001,-2.613)
+NETHASH side=host seq=60 h=58646c8f
+NETPROBE_TRACE tick=270 p1=(-0.000,0.001,-2.613)
+NETPROBE_TRACE tick=300 p1=(-0.000,0.001,-2.613)
+NETPROBE toggle seat=1 ready=true pf=518
+NETPROBE seat1 lobby ready=true
+VERIFY_SNAP res://docs/verify/greed_netshots_host/snap_online_host_ready_1153.png
+NETHASH side=host seq=75 h=5ef9a2f5
+NETHASH side=host seq=90 h=9f6fe612
+NETHASH side=host seq=105 h=6b778b1f
+NETHASH side=host seq=120 h=abedce3c
+NETHASH side=host seq=135 h=b28304a2
+NETHASH side=host seq=150 h=f2f947bf
+NETHASH side=host seq=165 h=f98e7e25
+NETHASH side=host seq=180 h=3a04c142
+NETHASH side=host seq=195 h=4099f7a8
+NETHASH side=host seq=210 h=f712de5c
+NETHASH side=host seq=225 h=fda814c2
+VERIFY_SNAP res://docs/verify/greed_netshots_host/snap_online_host_gate_2741.png
+NETHASH side=host seq=240 h=3e1e57df
+NETHASH side=host seq=255 h=44b38e45
+NETHASH side=host seq=270 h=8529d162
+GREED_EVT t=0.00 frame=3258 | begin players=4 seed=3300865038 rounds=2 bots=[false, false, true, true]
+GREED_EVT t=0.00 frame=3258 | round_start 1 pot=5
+NETHASH side=host seq=285 h=8bbf07c8
+NETHASH side=host seq=300 h=4237ee7c
+VERIFY_SNAP res://docs/verify/greed_netshots_host/snap_online_host_game_3430.png
+NETHASH_MOD side=host seq=40 h=4e51f80d bytes=900
+NETHASH side=host seq=315 h=48cd24e2
+NETHASH side=host seq=330 h=894367ff
+NETHASH side=host seq=345 h=8fd89e65
+NETHASH_MOD side=host seq=80 h=41b15152 bytes=896
+NETHASH side=host seq=360 h=d04ee182
+GREED_EVT t=5.80 frame=4051 | grab p2 pot=8 at=(-1.3,0.8) chute=(-5.6,5.6)
+VERIFY_SNAP res://docs/verify/greed_netshots_host/snap_greed_host_carry_4052.png
+NETHASH side=host seq=375 h=d6e417e8
+GREED_EVT t=6.77 frame=4171 | bank p2 amount=6 total=6 at=(-4.5,4.3)
+VERIFY_SNAP res://docs/verify/greed_netshots_host/snap_greed_host_bank_4172.png
+NETHASH_MOD side=host seq=120 h=97d52e52 bytes=916
+NETHASH side=host seq=390 h=175a5b05
+NETHASH side=host seq=405 h=93f23502
+NETHASH_MOD side=host seq=160 h=d4413edc bytes=904
+NETHASH side=host seq=420 h=d468781f
+NETHASH side=host seq=435 h=dafdae85
+NETHASH_MOD side=host seq=200 h=2048e8ba bytes=908
+GREED_EVT t=11.62 frame=4851 | status t=10 pot=9 state=ON_PEDESTAL carrier=-1 coins=0
+NETHASH side=host seq=450 h=1b73f1a2
+NETHASH side=host seq=465 h=22092808
+NETHASH_MOD side=host seq=240 h=9d4ecbb7 bytes=908
+NETHASH side=host seq=480 h=627f6b25
+GREED_EVT t=15.05 frame=5343 | grab p3 pot=11 at=(1.5,0.6) chute=(5.6,5.6)
+NETHASH side=host seq=495 h=6914a18b
+NETHASH_MOD side=host seq=280 h=4692ffb0 bytes=912
+GREED_EVT t=16.03 frame=5484 | bank p3 amount=9 total=9 at=(4.5,4.3)
+NETHASH side=host seq=510 h=1f8d883f
+NETHASH side=host seq=525 h=2622bea5
+NETHASH_MOD side=host seq=320 h=2bdd7160 bytes=908
+NETHASH side=host seq=540 h=669901c2
+NETHASH side=host seq=555 h=6d2e3828
+GREED_EVT t=20.22 frame=6087 | grab p3 pot=8 at=(1.2,0.9) chute=(5.6,5.6)
+NETHASH_MOD side=host seq=360 h=5877ace0 bytes=912
+NETHASH side=host seq=570 h=ada47b45
+GREED_EVT t=21.18 frame=6226 | bank p3 amount=6 total=15 at=(4.4,4.3)
+NETHASH side=host seq=585 h=b439b1ab
+GREED_EVT t=21.62 frame=6288 | status t=20 pot=5 state=ON_PEDESTAL carrier=-1 coins=0
+NETHASH side=host seq=600 h=6ab2985f
+NETHASH_MOD side=host seq=400 h=a1ed5fc3 bytes=908
+NETHASH side=host seq=615 h=7147cec5
+NETHASH side=host seq=630 h=b1be11e2
+NETHASH_MOD side=host seq=440 h=54feb85d bytes=896
+GREED_EVT t=25.45 frame=6840 | grab p3 pot=8 at=(1.5,0.6) chute=(5.6,5.6)
+NETHASH side=host seq=645 h=b8534848
+NETHASH side=host seq=660 h=f8c98b65
+GREED_EVT t=26.58 frame=7003 | bank p3 amount=8 total=23 at=(4.5,4.2)
+NETHASH_MOD side=host seq=480 h=783c4c40 bytes=908
+NETHASH side=host seq=675 h=ff5ec1cb
+NETHASH side=host seq=690 h=3fd504e8
+NETHASH_MOD side=host seq=520 h=aef81bb6 bytes=904
+NETHASH side=host seq=705 h=bc6cdee5
+NETHASH side=host seq=720 h=fce32202
+NETHASH_MOD side=host seq=560 h=433b1ed2 bytes=908
+GREED_EVT t=31.63 frame=7729 | status t=30 pot=9 state=ON_PEDESTAL carrier=-1 coins=0
+NETHASH side=host seq=735 h=03785868
+NETHASH side=host seq=750 h=43ee9b85
+NETHASH_MOD side=host seq=600 h=dc0a012a bytes=908
+NETHASH side=host seq=765 h=4a83d1eb
+GREED_EVT t=34.22 frame=8101 | grab p3 pot=11 at=(1.5,0.6) chute=(5.6,5.6)
+NETHASH side=host seq=780 h=8afa1508
+GREED_EVT t=35.35 frame=8263 | bank p3 amount=11 total=34 at=(4.5,4.3)
+NETHASH_MOD side=host seq=640 h=26b917d6 bytes=908
+NETHASH side=host seq=795 h=918f4b6e
+NETHASH side=host seq=810 h=48083222
+NETHASH_MOD side=host seq=680 h=50026e27 bytes=908
+NETHASH side=host seq=825 h=4e9d6888
+NETHASH side=host seq=840 h=8f13aba5
+NETHASH side=host seq=855 h=95a8e20b
+NETHASH_MOD side=host seq=720 h=b1e340b4 bytes=908
+NETHASH side=host seq=870 h=d61f2528
+GREED_EVT t=41.65 frame=9170 | status t=40 pot=10 state=ON_PEDESTAL carrier=-1 coins=0
+NETHASH side=host seq=885 h=dcb45b8e
+NETHASH_MOD side=host seq=760 h=f57e444b bytes=908
+NETHASH side=host seq=900 h=932d4242
+NETHASH side=host seq=915 h=99c278a8
+NETHASH_MOD side=host seq=800 h=dc438a2c bytes=908
+NETHASH side=host seq=930 h=da38bbc5
+NETHASH side=host seq=945 h=e0cdf22b
+NETHASH_MOD side=host seq=840 h=1b2f469c bytes=908
+NETHASH side=host seq=960 h=21443548
+GREED_EVT t=47.72 frame=10041 | grab p2 pot=15 at=(-1.6,0.5) chute=(-5.6,5.6)
+GREED_EVT t=48.40 frame=10140 | drop victim=2 tackler=3 scatter=3 pot=10
+VERIFY_SNAP res://docs/verify/greed_netshots_host/snap_greed_host_drop_10141.png
+NETHASH side=host seq=975 h=27d96bae
+NETHASH_MOD side=host seq=880 h=f3c87901 bytes=980
+GREED_EVT t=49.30 frame=10262 | grab p3 pot=10 at=(-2.4,2.5) chute=(5.6,5.6)
+NETHASH side=host seq=990 h=684faecb
+NETHASH side=host seq=1005 h=58a7cc4f
+GREED_EVT t=51.07 frame=10517 | bank p3 amount=8 total=44 at=(3.9,5.1)
+NETHASH_MOD side=host seq=920 h=bd18c84e bytes=940
+NETHASH side=host seq=1020 h=991e0f6c
+GREED_EVT t=51.65 frame=10601 | status t=50 pot=5 state=ON_PEDESTAL carrier=-1 coins=1
+NETHASH side=host seq=1035 h=9fb345d2
+NETHASH_MOD side=host seq=960 h=cf75faea bytes=940
+NETHASH side=host seq=1050 h=e02988ef
+NETHASH side=host seq=1065 h=e6bebf55
+GREED_EVT t=55.27 frame=11122 | grab p2 pot=8 at=(-0.7,1.5) chute=(-5.6,5.6)
+NETHASH_MOD side=host seq=1000 h=1fda9be0 bytes=948
+NETHASH side=host seq=1080 h=27350272
+GREED_EVT t=56.22 frame=11258 | bank p2 amount=6 total=14 at=(-4.3,4.5)
+NETHASH side=host seq=1095 h=2dca38d8
+NETHASH side=host seq=1110 h=e4431f8c
+NETHASH_MOD side=host seq=1040 h=476f6244 bytes=916
+NETHASH side=host seq=1125 h=ead855f2
+NETHASH side=host seq=1140 h=2b4e990f
+NETHASH_MOD side=host seq=1080 h=2426e8ab bytes=916
+GREED_EVT t=60.42 frame=11863 | grab p2 pot=8 at=(-1.4,0.8) chute=(-5.6,5.6)
+NETHASH side=host seq=1155 h=31e3cf75
+GREED_EVT t=61.37 frame=12000 | bank p2 amount=6 total=20 at=(-4.5,4.3)
+GREED_EVT t=61.67 frame=12042 | status t=60 pot=5 state=ON_PEDESTAL carrier=-1 coins=0
+NETHASH side=host seq=1170 h=725a1292
+NETHASH_MOD side=host seq=1120 h=f3594842 bytes=916
+NETHASH side=host seq=1185 h=78ef48f8
+NETHASH side=host seq=1200 h=2f682fac
+NETHASH_MOD side=host seq=1160 h=85905931 bytes=916
+NETHASH side=host seq=1215 h=35fd6612
+GREED_EVT t=65.57 frame=12602 | grab p2 pot=8 at=(-1.5,0.6) chute=(-5.6,5.6)
+NETHASH side=host seq=1230 h=7673a92f
+GREED_EVT t=66.53 frame=12740 | bank p2 amount=6 total=26 at=(-4.5,4.3)
+NETHASH_MOD side=host seq=1200 h=c3c31d47 bytes=924
+NETHASH side=host seq=1245 h=7d08df95
+NETHASH side=host seq=1260 h=bd7f22b2
+NETHASH_MOD side=host seq=1240 h=53e3470f bytes=916
+NETHASH side=host seq=1275 h=c4145918
+NETHASH side=host seq=1290 h=048a9c35
+NETHASH_MOD side=host seq=1280 h=055f1c0a bytes=916
+NETHASH side=host seq=1305 h=81227632
+GREED_EVT t=71.68 frame=13481 | status t=70 pot=9 state=ON_PEDESTAL carrier=-1 coins=0
+NETHASH side=host seq=1320 h=c198b94f
+NETHASH_MOD side=host seq=1320 h=f38eee44 bytes=916
+NETHASH side=host seq=1335 h=c82defb5
+GREED_EVT t=74.12 frame=13830 | grab p2 pot=11 at=(-0.4,1.5) chute=(-5.6,5.6)
+NETHASH side=host seq=1350 h=08a432d2
+GREED_EVT t=75.12 frame=13974 | bank p2 amount=9 total=35 at=(-4.3,4.5)
+NETHASH_MOD side=host seq=1360 h=44dc86c7 bytes=920
+NETHASH side=host seq=1365 h=0f396938
+GREED_EVT t=76.62 frame=14190 | bell_lastbanks t=75.0 pot=6
+VERIFY_SNAP res://docs/verify/greed_netshots_host/snap_greed_host_bell_14191.png
+NETHASH side=host seq=1380 h=4fafac55
+NETHASH side=host seq=1395 h=5644e2bb
+NETHASH_MOD side=host seq=1400 h=9c09603f bytes=912
+NETHASH side=host seq=1410 h=0cbdc96f
+GREED_EVT t=79.33 frame=14564 | grab p2 pot=8 at=(-1.5,0.6) chute=(-5.6,5.6)
+NETHASH side=host seq=1425 h=1352ffd5
+NETHASH_MOD side=host seq=1440 h=70387eba bytes=916
+GREED_EVT t=80.30 frame=14703 | bank p2 amount=6 total=41 at=(-4.5,4.3)
+NETHASH side=host seq=1440 h=53c942f2
+GREED_EVT t=81.70 frame=14903 | status t=80 pot=6 state=ON_PEDESTAL carrier=-1 coins=0
+NETHASH side=host seq=1455 h=5a5e7958
+NETHASH_MOD side=host seq=1480 h=6908d569 bytes=916
+NETHASH side=host seq=1470 h=9ad4bc75
+NETHASH side=host seq=1485 h=a169f2db
+GREED_EVT t=84.48 frame=15303 | grab p3 pot=8 at=(1.0,1.1) chute=(5.6,5.6)
+NETHASH_MOD side=host seq=1520 h=42b0245d bytes=916
+NETHASH side=host seq=1500 h=57e2d98f
+GREED_EVT t=85.60 frame=15464 | bank p3 amount=8 total=52 at=(4.4,4.4)
+NETHASH side=host seq=1515 h=5e780ff5
+NETHASH_MOD side=host seq=1560 h=d7092464 bytes=916
+NETHASH side=host seq=1530 h=9eee5312
+NETHASH side=host seq=1545 h=a5838978
+NETHASH_MOD side=host seq=1600 h=41eb5597 bytes=916
+NETHASH side=host seq=1560 h=e5f9cc95
+GREED_EVT t=89.78 frame=16066 | grab p3 pot=8 at=(0.8,1.2) chute=(5.6,5.6)
+NETHASH side=host seq=1575 h=ec8f02fb
+GREED_EVT t=90.93 frame=16229 | bank p3 amount=8 total=60 at=(4.4,4.5)
+NETHASH_MOD side=host seq=1640 h=fd783280 bytes=916
+NETHASH side=host seq=1590 h=2d054618
+GREED_EVT t=91.62 frame=16327 | round_end 1 kind=timeout punished=false scores[RED=0, BLUE=0, GOLD=41, MINT=60]
+NETHASH side=host seq=1605 h=a99d2015
+NETHASH_MOD side=host seq=1680 h=7a1e9a8b bytes=908
+NETHASH side=host seq=1620 h=ea136332
+NETHASH side=host seq=1635 h=f0a89998
+GREED_EVT t=94.83 frame=16789 | round_start 2 pot=5
+NETHASH side=host seq=1650 h=311edcb5
+NETHASH_MOD side=host seq=1720 h=fa8c9046 bytes=892
+NETHASH side=host seq=1665 h=37b4131b
+NETHASH side=host seq=1680 h=782a5638
+NETHASH_MOD side=host seq=1760 h=9366a783 bytes=908
+NETHASH side=host seq=1695 h=7ebf8c9e
+NETHASH side=host seq=1710 h=35387352
+NETHASH_MOD side=host seq=1800 h=e4a3369a bytes=908
+NETHASH side=host seq=1725 h=3bcda9b8
+NETHASH side=host seq=1740 h=7c43ecd5
+GREED_EVT t=102.15 frame=17842 | grab p2 pot=9 at=(-0.4,1.6) chute=(-5.6,5.6)
+NETHASH_MOD side=host seq=1840 h=5b76eddb bytes=916
+GREED_EVT t=102.65 frame=17914 | drop victim=2 tackler=3 scatter=1 pot=6
+NETHASH side=host seq=1755 h=82d9233b
+GREED_EVT t=103.56 frame=18044 | grab p3 pot=6 at=(-1.2,2.6) chute=(5.6,5.6)
+NETHASH side=host seq=1770 h=c34f6658
+NETHASH_MOD side=host seq=1880 h=881a783d bytes=944
+NETHASH side=host seq=1785 h=c9e49cbe
+GREED_EVT t=105.41 frame=18312 | bank p3 amount=6 total=67 at=(3.9,5.1)
+NETHASH side=host seq=1800 h=805d8372
+GREED_EVT t=106.46 frame=18463 | status t=10 pot=5 state=ON_PEDESTAL carrier=-1 coins=1
+NETHASH_MOD side=host seq=1920 h=61c2dba1 bytes=936
+NETHASH side=host seq=1815 h=86f2b9d8
+NETHASH side=host seq=1830 h=c768fcf5
+NETHASH_MOD side=host seq=1960 h=abaf38d6 bytes=936
+NETHASH side=host seq=1845 h=cdfe335b
+NETHASH side=host seq=1860 h=0e747678
+NETHASH_MOD side=host seq=2000 h=23d04729 bytes=940
+NETHASH side=host seq=1875 h=1509acde
+NETHASH side=host seq=1890 h=557feffb
+NETHASH side=host seq=1905 h=d217c9f8
+NETHASH_MOD side=host seq=2040 h=4c593398 bytes=936
+NETHASH side=host seq=1920 h=128e0d15
+NETHASH side=host seq=1935 h=1923437b
+NETHASH_MOD side=host seq=2080 h=adee08a8 bytes=916
+NETHASH side=host seq=1950 h=59998698
+GREED_EVT t=116.46 frame=19900 | status t=20 pot=14 state=ON_PEDESTAL carrier=-1 coins=0
+NETHASH side=host seq=1965 h=602ebcfe
+NETHASH_MOD side=host seq=2120 h=f25af667 bytes=916
+NETHASH side=host seq=1980 h=a0a5001b
+NETHASH side=host seq=1995 h=a73a3681
+NETHASH_MOD side=host seq=2160 h=dc226229 bytes=916
+NETHASH side=host seq=2010 h=940a33ac
+GREED_EVT t=121.24 frame=20589 | grab p3 pot=23 at=(0.6,1.5) chute=(5.6,5.6)
+NETHASH side=host seq=2025 h=9a9f6a12
+GREED_EVT t=121.76 frame=20663 | drop victim=3 tackler=2 scatter=4 pot=17
+NETHASH_MOD side=host seq=2200 h=6f4f0936 bytes=1020
+NETHASH side=host seq=2040 h=db15ad2f
+GREED_EVT t=122.63 frame=20793 | grab p2 pot=17 at=(1.4,2.5) chute=(-5.6,5.6)
+GREED_EVT t=123.13 frame=20865 | drop victim=2 tackler=3 scatter=3 pot=12
+NETHASH side=host seq=2055 h=e1aae395
+GREED_EVT t=123.73 frame=20956 | grab p3 pot=12 at=(1.8,3.4) chute=(5.6,5.6)
+GREED_EVT t=124.22 frame=21026 | bank p3 amount=10 total=81 at=(4.1,4.7)
+NETHASH_MOD side=host seq=2240 h=305d2c0e bytes=1012
+NETHASH side=host seq=2070 h=222126b2
+NETHASH side=host seq=2085 h=28b65d18
+GREED_EVT t=126.47 frame=21350 | status t=30 pot=6 state=ON_PEDESTAL carrier=-1 coins=3
+NETHASH_MOD side=host seq=2280 h=471105f3 bytes=984
+NETHASH side=host seq=2100 h=df2f43cc
+NETHASH side=host seq=2115 h=e5c47a32
+GREED_EVT t=128.43 frame=21632 | grab p3 pot=8 at=(1.5,0.6) chute=(5.6,5.6)
+NETHASH side=host seq=2130 h=263abd4f
+NETHASH_MOD side=host seq=2320 h=cfaf3f9c bytes=964
+GREED_EVT t=129.42 frame=21774 | bank p3 amount=6 total=89 at=(4.5,4.3)
+NETHASH side=host seq=2145 h=2ccff3b5
+NETHASH side=host seq=2160 h=6d4636d2
+NETHASH_MOD side=host seq=2360 h=04f4c653 bytes=960
+NETHASH side=host seq=2175 h=73db6d38
+NETHASH side=host seq=2190 h=b451b055
+NETHASH_MOD side=host seq=2400 h=6a1ae5d7 bytes=964
+GREED_EVT t=133.68 frame=22388 | grab p2 pot=8 at=(-1.6,0.5) chute=(-5.6,5.6)
+NETHASH side=host seq=2205 h=30e98a52
+GREED_EVT t=134.67 frame=22529 | bank p2 amount=6 total=49 at=(-4.5,4.2)
+NETHASH side=host seq=2220 h=715fcd6f
+NETHASH_MOD side=host seq=2440 h=6cc85463 bytes=956
+NETHASH side=host seq=2235 h=77f503d5
+GREED_EVT t=136.48 frame=22791 | status t=40 pot=6 state=ON_PEDESTAL carrier=-1 coins=1
+NETHASH side=host seq=2250 h=b86b46f2
+NETHASH_MOD side=host seq=2480 h=ff730214 bytes=936
+NETHASH side=host seq=2265 h=bf007d58
+GREED_EVT t=138.98 frame=23150 | grab p2 pot=8 at=(-1.5,0.4) chute=(-5.6,5.6)
+NETHASH side=host seq=2280 h=ff76c075
+GREED_EVT t=139.98 frame=23291 | bank p2 amount=6 total=55 at=(-4.5,4.3)
+NETHASH_MOD side=host seq=2520 h=d1ac17f9 bytes=948
+NETHASH side=host seq=2295 h=060bf6db
+NETHASH side=host seq=2310 h=bc84dd8f
+NETHASH_MOD side=host seq=2560 h=283c823e bytes=940
+NETHASH side=host seq=2325 h=c31a13f5
+NETHASH side=host seq=2340 h=03905712
+NETHASH_MOD side=host seq=2600 h=619528c6 bytes=940
+NETHASH side=host seq=2355 h=0a258d78
+NETHASH side=host seq=2370 h=4a9bd095
+GREED_EVT t=146.50 frame=24232 | status t=50 pot=10 state=ON_PEDESTAL carrier=-1 coins=1
+NETHASH side=host seq=2385 h=513106fb
+NETHASH_MOD side=host seq=2640 h=2c8d41f9 bytes=940
+NETHASH side=host seq=2400 h=07a9edaf
+NETHASH side=host seq=2415 h=0e3f2415
+NETHASH_MOD side=host seq=2680 h=d7193985 bytes=940
+NETHASH side=host seq=2430 h=4eb56732
+NETHASH side=host seq=2445 h=554a9d98
+NETHASH_MOD side=host seq=2720 h=58ff562a bytes=940
+NETHASH side=host seq=2460 h=95c0e0b5
+NETHASH side=host seq=2475 h=9c56171b
+NETHASH_MOD side=host seq=2760 h=1f760ab0 bytes=940
+NETHASH side=host seq=2490 h=dccc5a38
+NETHASH side=host seq=2505 h=59643435
+NETHASH_MOD side=host seq=2800 h=711cbc6f bytes=940
+GREED_EVT t=155.92 frame=25582 | grab p2 pot=23 at=(-1.5,0.5) chute=(-5.6,5.6)
+NETHASH side=host seq=2520 h=99da7752
+GREED_EVT t=156.42 frame=25655 | drop victim=2 tackler=3 scatter=4 pot=17
+GREED_EVT t=156.50 frame=25671 | status t=60 pot=17 state=LOOSE carrier=-1 coins=4
+GREED_EVT t=157.02 frame=25746 | grab p3 pot=17 at=(-2.4,1.9) chute=(5.6,5.6)
+NETHASH side=host seq=2535 h=a06fadb8
+GREED_EVT t=157.54 frame=25820 | drop victim=3 tackler=2 scatter=3 pot=12
+NETHASH_MOD side=host seq=2840 h=6af63a5b bytes=1052
+NETHASH side=host seq=2550 h=e0e5f0d5
+GREED_EVT t=158.14 frame=25910 | grab p2 pot=12 at=(-1.4,3.0) chute=(-5.6,5.6)
+GREED_EVT t=158.89 frame=26018 | bank p2 amount=10 total=68 at=(-4.2,4.7)
+NETHASH side=host seq=2565 h=e77b273b
+NETHASH_MOD side=host seq=2880 h=0dea5b0b bytes=968
+NETHASH side=host seq=2580 h=27f16a58
+NETHASH side=host seq=2595 h=2e86a0be
+NETHASH_MOD side=host seq=2920 h=2949a323 bytes=940
+NETHASH side=host seq=2610 h=e4ff8772
+NETHASH side=host seq=2625 h=eb94bdd8
+NETHASH side=host seq=2640 h=2c0b00f5
+NETHASH_MOD side=host seq=2960 h=bf27b623 bytes=940
+NETHASH side=host seq=2655 h=32a0375b
+GREED_EVT t=166.16 frame=27063 | grab p3 pot=11 at=(1.5,0.6) chute=(5.6,5.6)
+NETHASH side=host seq=2670 h=73167a78
+GREED_EVT t=166.51 frame=27113 | status t=70 pot=11 state=CARRIED carrier=3 coins=1
+NETHASH_MOD side=host seq=3000 h=094b55b1 bytes=940
+GREED_EVT t=167.31 frame=27228 | bank p3 amount=11 total=105 at=(4.5,4.3)
+NETHASH side=host seq=2685 h=79abb0de
+NETHASH side=host seq=2700 h=30249792
+NETHASH_MOD side=host seq=3040 h=b1f2fba6 bytes=940
+NETHASH side=host seq=2715 h=36b9cdf8
+NETHASH side=host seq=2730 h=77301115
+NETHASH_MOD side=host seq=3080 h=f2f71791 bytes=940
+GREED_EVT t=171.46 frame=27823 | bell_lastbanks t=75.0 pot=8
+GREED_EVT t=171.56 frame=27837 | grab p3 pot=8 at=(0.5,1.5) chute=(5.6,5.6)
+NETHASH side=host seq=2745 h=7dc5477b
+NETHASH side=host seq=2760 h=be3b8a98
+GREED_EVT t=172.71 frame=28003 | bank p3 amount=8 total=113 at=(4.3,4.5)
+NETHASH_MOD side=host seq=3120 h=5219e56b bytes=936
+NETHASH side=host seq=2775 h=c4d0c0fe
+NETHASH side=host seq=2790 h=0547041b
+NETHASH_MOD side=host seq=3160 h=b474d6f6 bytes=940
+NETHASH side=host seq=2805 h=81dede18
+GREED_EVT t=176.53 frame=28552 | status t=80 pot=8 state=ON_PEDESTAL carrier=-1 coins=0
+NETHASH side=host seq=2820 h=c2552135
+GREED_EVT t=176.91 frame=28608 | grab p2 pot=8 at=(-1.5,0.6) chute=(-5.6,5.6)
+NETHASH_MOD side=host seq=3200 h=3a6a75f5 bytes=924
+GREED_EVT t=177.88 frame=28747 | bank p2 amount=6 total=76 at=(-4.5,4.3)
+NETHASH side=host seq=2835 h=c8ea579b
+NETHASH side=host seq=2850 h=09609ab8
+NETHASH_MOD side=host seq=3240 h=37a51748 bytes=916
+NETHASH side=host seq=2865 h=0ff5d11e
+NETHASH side=host seq=2880 h=506c143b
+NETHASH_MOD side=host seq=3280 h=a0543486 bytes=920
+GREED_EVT t=182.06 frame=29349 | grab p3 pot=8 at=(1.3,0.7) chute=(5.6,5.6)
+NETHASH side=host seq=2895 h=57014aa1
+NETHASH side=host seq=2910 h=0d7a3155
+GREED_EVT t=183.21 frame=29514 | bank p3 amount=8 total=122 at=(4.5,4.3)
+NETHASH side=host seq=2925 h=140f67bb
+NETHASH_MOD side=host seq=3320 h=5c051e08 bytes=916
+NETHASH side=host seq=2940 h=5485aad8
+NETHASH side=host seq=2955 h=5b1ae13e
+NETHASH_MOD side=host seq=3360 h=457e3da6 bytes=916
+GREED_EVT t=186.46 frame=29955 | round_end 2 kind=timeout punished=false scores[RED=0, BLUE=0, GOLD=76, MINT=122]
+NETHASH side=host seq=2970 h=9b91245b
+NETHASH side=host seq=2985 h=a2265ac1
+NETHASH_MOD side=host seq=3400 h=a0e2d844 bytes=908
+NETHASH side=host seq=3000 h=8ef657ec
+GREED_EVT t=189.68 frame=30238 | match_end {"currency_events":[{"amount":1,"player":3,"reason":"mugged GOLD off the pot","type":"royalty"},{"amount":1,"player":2,"reason":"got mugged off the pot","type":"grudge"},{"amount":1,"player":0,"reason":"banked nothing in round 1","type":"grudge"},{"amount":1,"player":1,"reason":"banked nothing in round 1","type":"grudge"},{"amount":1,"player":3,"reason":"mugged GOLD off the pot","type":"royalty"},{"amount":1,"player":2,"reason":"got mugged off the pot","type":"grudge"},{"amount":1,"player":2,"reason":"mugged MINT off the pot","type":"royalty"},{"amount":1,"player":3,"reason":"got mugged off the pot","type":"grudge"},{"amount":1,"player":3,"reason":"mugged GOLD off the pot","type":"royalty"},{"amount":1,"player":2,"reason":"got mugged off the pot","type":"grudge"},{"amount":1,"player":3,"reason":"mugged GOLD off the pot","type":"royalty"},{"amount":1,"player":2,"reason":"got mugged off the pot","type":"grudge"},{"amount":1,"player":2,"reason":"mugged MINT off the pot","type":"royalty"},{"amount":1,"player":3,"reason":"got mugged off the pot","type":"grudge"},{"amount":1,"player":0,"reason":"banked nothing in round 2","type":"grudge"},{"amount":1,"player":1,"reason":"banked nothing in round 2","type":"grudge"}],"highlights":["MINT's biggest heist: 11 coins","MINT forced 4 drops"],"kill_events":[{"cause":"mugged","killer":3,"victim":2},{"cause":"mugged","killer":3,"victim":2},{"cause":"mugged","killer":2,"victim":3},{"cause":"mugged","killer":3,"victim":2},{"cause":"mugged","killer":3,"victim":2},{"cause":"mugged","killer":2,"victim":3}],"monuments":[],"placements":[3,2,0,1],"points":{"0":0,"1":0,"2":76,"3":122}}
+KILL_EVENTS n=6 [{"cause":"mugged","killer":3,"victim":2},{"cause":"mugged","killer":3,"victim":2},{"cause":"mugged","killer":2,"victim":3},{"cause":"mugged","killer":3,"victim":2},{"cause":"mugged","killer":3,"victim":2},{"cause":"mugged","killer":2,"victim":3}]
+NETHASH side=host seq=3015 h=958b8e52
+NETHASH_MOD side=host seq=3440 h=754ae209 bytes=920
+NETHASH side=host seq=3030 h=d601d16f
+NETHASH side=host seq=3045 h=dc9707d5
+NETHASH_MOD side=host seq=3480 h=c32f3f0d bytes=920
+NETHASH side=host seq=3060 h=1d0d4af2
+NETHASH side=host seq=3075 h=23a28158
+NETHASH_MOD side=host seq=3520 h=d0f4b2e8 bytes=920
+NETHASH side=host seq=3090 h=6418c475
+NETHASH side=host seq=3105 h=e0b09e72
+NETHASH_MOD side=host seq=3560 h=1ed90fec bytes=920
+NETHASH side=host seq=3120 h=2126e18f
+NETHASH side=host seq=3135 h=27bc17f5
+NETHASH side=host seq=3150 h=68325b12
+NETHASH side=host seq=3165 h=6ec79178
+NETHASH side=host seq=3180 h=af3dd495
+NETHASH side=host seq=3195 h=b5d30afb
+VERIFY_SNAP res://docs/verify/greed_netshots_host/snap_online_host_reckoning_31667.png
+NETPROBE_RESULTS RED:pts=2,grudge=5 BLUE:pts=1,grudge=5 GOLD:pts=3,grudge=6 MINT:pts=5,grudge=3
+NETPROBE saves restored
+NETPROBE_DONE
+WARNING: ObjectDB instances leaked at exit (run with --verbose for details).
+   at: cleanup (core/object/object.cpp:2641)
