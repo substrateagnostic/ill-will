@@ -805,3 +805,67 @@ KNOWN LIMIT (flagging for wave 2): bot MATCH OUTCOMES are not run-to-run
 reproducible (pre-existing v3 — bot think timers are wall-clock; tick-phased
 traps amplify). The physics receipts sidestep it; wave 2's "reproducible chaos"
 exit should move bot cadence to physics ticks.
+
+================================================================
+2026-07-07 — BALANCE FIVE: your signed-off changes are in (one commit per game)
+================================================================
+Doc 09's five parked BALANCE items, all signed by you, now live. Full receipts
+in docs/verify/balance-five-VERIFY.md; the short version + my judgment calls:
+
+1. THRONE — THE COURT WILL NOT ADJOURN (§9.1). Contested at 0:00 (vacant
+   seat / drained grip / challenger within 2.5m of the dais) = no
+   adjournment: play on until a clean 3s uncontested reign, cap +30s, then
+   the current leader wins. Crisis double-pay persists through OT.
+   Receipts: an uncontested horn reproduces the old outcome exactly (seed 3:
+   36.8% max share both sides); seed 1 entered OT and EVENED the shares
+   (31.4% -> 25.9% max). 55% fairness cap passes everywhere. Judgment: with
+   four bots the horn instant is usually a kill instant, so the flash banner
+   kept losing its slot to "X DETHRONES Y" — the persistent crisis line now
+   carries "THE COURT WILL NOT ADJOURN — THRONE PAYS DOUBLE" for the whole
+   of overtime, and the timer runs hot-red "OT n". Filmed, read by eye.
+
+2. TILT — OVERTIME INSTEAD OF SPLIT (§3.3). Tie at the horn = "THE ESTATE
+   SPLITS NOTHING / OVERTIME": 20s on a sudden-death platter at 1.5x tilt.
+   Judgment: 1.5x multiplies the sudden-death gain already in force (1.6 x
+   1.5 = 2.40x) — meaner than doc 09's 2.0x sketch, same spirit; the platter
+   itself breaks the tie. The old split only fires if the sea refuses a
+   verdict for 20 MORE seconds ("THE SEA REFUSES A VERDICT"). Receipt:
+   30s-round probe, 3 seeds — HEAD split the pot in 7 of 9 rounds; the
+   branch produced 9/9 true winners, 0 splits, every OT resolved in
+   0.1-9.6s. Shipping 60s soaks: fall sequences frame-identical.
+
+3. TILT — GULL ASSIST ROYALTY (§3.4). A gull KO (fall within 2s of a guano
+   slip) pays +1 royalty to whoever shoved the victim within 3s: cause
+   "gull_assist", killer = shover, banner "AIR RAID! X'S GULL SINKS Y — Z
+   COLLECTS". Judgment: doc 09's first draft paid the GULL; the signed
+   wording pays the SHOVER — I built the signed version (the gull keeps its
+   direct-hit stats/highlights; a pure gull KO with no recent shove stays
+   uncredited ring_out as before). New deterministic self-test
+   --tilttest=gull PASSES; seed 13 even threw an organic case: RED softened
+   MINT 2.7s before RED's own gull finished the job — outside the old 1.5s
+   royalty window, inside the new 3s assist window.
+
+4. DEAD WEIGHT — THE HOUSE AWAKENS (§8.3). Final 30s of every round: ghost
+   possess-cooldowns halve (4.0 -> 2.0s; running cooldowns halved on the
+   spot), the room dims to candlelight (four guttering candles), banner
+   "THE HOUSE AWAKENS". All fx behind fx_on(). Judgment: the 22s balance-sim
+   rounds map the window to the same FRACTION of the cap (60% = live T-30)
+   so --dwbalance measures the same regime. Receipts: living-win band
+   IDENTICAL before/after on all 3 seeds (65/60/75%) while DW_GHOST_CD
+   lines prove the halved cooldown reaches ghost hands 8-12x per sim.
+   --dwawaken=S (verify-only) films the moment early.
+
+5. UNDERSTUDY — CASTING COMPRESSION (§12.3). Roll-call teaches the colours
+   ONCE (Act 1); from Act 2 the eyes-down silences tighten 2.0s -> 1.2s.
+   The voice-summons language (three pitched ticks + the flip tick) is
+   untouched, every round. Wall receipts (windowed, realtime, same seeded
+   bot beats): Act-2 casting span 29.0s -> 16.8s (-12.1s, predicted 12.0).
+   Across a 4-round night ~37s of pure ceremony silence removed. --ustally
+   byte-identical across 3 seeds.
+
+Full 4-bot matches to finished() for all four games (logs in the verify
+doc). One ops incident, documented there: a "stopped" background script
+survived its kill on Windows and re-ran harnesses over my baseline logs —
+baselines re-captured via HEAD-swapped scripts, restoration byte-verified.
+Lesson learned: killing the shell does not kill its godot children; give
+every phase its own output dir.
