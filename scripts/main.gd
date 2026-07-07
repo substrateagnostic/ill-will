@@ -82,6 +82,15 @@ var _bot_think_t := 0.0
 ## restores the exact v3 interface (drag putt, no walk gate, diorama-only cam).
 var avatar_shot: AvatarShot = null
 var _embodied := true
+## PAR v4 WAVE 2 — live chaos griefing. The controller direct-drives the
+## non-stroking avatars in the CHAOS round (see grief_controller.gd). Griefing
+## earns GRUDGE + a highlight, never points; a grief that directly precedes a
+## death/DNF within GRIEF_CREDIT_TICKS is credited on the ledger below.
+const GRIEF_CREDIT_TICKS := 300
+var grief: GriefController = null
+var _nogrief := false
+var _grief_last := {}        # victim -> {"by": int, "tick": int}
+var _grief_trap_last := {}   # trap instance id -> {"by": int, "tick": int}
 
 @onready var putt_controller: Node3D = $PuttController
 @onready var placement: Node3D = $PlacementController
@@ -98,6 +107,12 @@ var _embodied := true
 @onready var draft_label: Label = $UI/DraftPanel/DraftBox/DraftLabel
 @onready var card_row: HBoxContainer = $UI/DraftPanel/DraftBox/CardRow
 @onready var build_hint: Label = $UI/BuildHint
+## Realkeys hint bars (docs/verify/realkeys-VERIFY.md template): the persistent
+## PUTT bar shows the CURRENT seat's live verbs (mouse seats show mouse verbs);
+## the CHAOS bar merges the human griefers' real keys. Built in code so no
+## .tscn churn; hidden whenever there is nothing human to personalize.
+var _putt_bar: Label
+var _grief_bar: Label
 
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -111,6 +126,8 @@ func _ready() -> void:
 			_killcam_test_mode = arg.trim_prefix("--killcamtest=")
 		elif arg == "--v3putt":
 			_embodied = false
+		elif arg == "--nogrief":
+			_nogrief = true
 	if _embodied:
 		_embodied = bool(PartySetup.pref("par_embodied", true))
 	# Seed the bot rng FROM GameState.rng without consuming its stream (read the
@@ -139,6 +156,11 @@ func _ready() -> void:
 	add_child(avatar_shot)
 	avatar_shot.setup(self, putt_controller, camera_rig, $UI)
 	avatar_shot.contact_fired.connect(_on_swing_contact)
+	grief = GriefController.new()
+	grief.name = "GriefController"
+	add_child(grief)
+	grief.setup(self)
+	_build_hint_bars()
 	# v3 drag putt lives behind the settings pref (spec OQ2); embodied-off = v3 feel.
 	putt_controller.drag_enabled = (not _embodied) or bool(PartySetup.pref("par_drag_putt", false))
 	_spawn_balls()
@@ -239,6 +261,23 @@ func _enter_chaos_round() -> void:
 	Sfx.play("match_win", -4.0)
 	_flash_banner("CHAOS ROUND\nNO WAITING — ALL LIVE", Color(1.0, 0.55, 0.2), 2.8)
 	_set_chaos_turn_banner()
+	# WAVE 2: the non-stroking avatars go live. Gated exactly like the killcam's
+	# determinism guard — autoplay/physputt receipt runs keep the v3-identical
+	# chaos so the frozen-ball traces stay comparable.
+	if _grief_allowed():
+		grief.activate(course, avatars, balls)
+		_show_grief_bar()
+
+## Live griefing runs in real chaos play (embodied) but never under the trace
+## harness (autoplay/autobuild/physputt), --nogrief, or --v3putt.
+func _grief_allowed() -> bool:
+	if _nogrief or not _embodied:
+		return false
+	if VerifyCapture.autobuild or not VerifyCapture.autoplay.is_empty():
+		return false
+	if not VerifyCapture.physputts.is_empty():
+		return false
+	return _killcam_test_mode == ""
 
 ## Chaos is simultaneous: a per-player "X'S TURN" banner lies. Replace the turn
 ## label with a persistent, heat-pulsing "CHAOS — EVERYONE AT ONCE" (same
@@ -324,6 +363,7 @@ func _begin_draft_turn() -> void:
 		btn.pressed.connect(_on_card_picked.bind(idx))
 		card_row.add_child(btn)
 	draft_panel.visible = true
+	_putt_bar.visible = false
 	turn_label.text = "%s IS SCHEMING" % player.name
 	turn_label.add_theme_color_override("font_color", player.color)
 	stroke_label.text = ""
@@ -371,11 +411,17 @@ func _begin_putt_phase() -> void:
 	phase = Phase.PUTT
 	round_manager.start_round(GameState.standings(), balls, GameState.is_chaos_round())
 
+## WAVE 2 exit criterion: the bot driver ticks on PHYSICS frames now (fixed
+## 1/60 delta), so the tick a bot fires on — and therefore every tick-phased
+## powered-trap interaction — is identical run to run for a given --seed.
+## (v3 accumulated wall-clock _process deltas; same-seed matches diverged.)
+func _physics_process(delta: float) -> void:
+	_bot_tick(delta)
+
 func _process(delta: float) -> void:
 	# mouse putting is disabled on a bot's turn (the bot drives it instead)
 	var cur := round_manager.current_player()
 	putt_controller.enabled = phase == Phase.PUTT and round_manager.is_turn_ready() and not _is_bot(cur)
-	_bot_tick(delta)
 	if phase == Phase.PUTT and GameState.is_chaos_round():
 		_track_chaos_concurrency()
 	if phase == Phase.BUILD:
@@ -440,7 +486,10 @@ func _on_ball_gutter(body: Node3D, target: Vector3) -> void:
 	# Two-hop detour: dip out to a side waypoint (below the lip), then rise to the
 	# green near the cup. Quadratic-ish path via nested lerps for a swept feel.
 	var mid := Vector3((start.x + target.x) * 0.5, -1.1, (start.z + target.z) * 0.5 + 1.2)
+	# Physics-driven tween: the DELIVERY TICK is part of the sim's timeline (the
+	# next stroke fires relative to it), so it must not drift with render rate.
 	var tw := create_tween()
+	tw.set_process_mode(Tween.TWEEN_PROCESS_PHYSICS)
 	tw.tween_method(func(t: float): _gutter_step(b, start, mid, target, t), 0.0, 1.0, 1.35).set_trans(Tween.TRANS_SINE)
 	tw.tween_callback(func(): _gutter_land(b, target))
 
@@ -478,6 +527,7 @@ func _on_turn_started(p: int) -> void:
 	turn_label.text = "%s'S TURN" % player.name
 	turn_label.add_theme_color_override("font_color", player.color)
 	_update_stroke_label(p)
+	_update_putt_bar(p)
 
 ## Contact frame fired (the ball is away): hand the roll back to the diorama so
 ## trap-dodging reads from the overview — the readability the v1 spec demanded.
@@ -547,6 +597,7 @@ func _on_ball_died(killer: Trap, victim: int) -> void:
 		credit = killer.display_name
 	if GameState.is_chaos_round():
 		_highlights.append("CHAOS CLAIMED %s" % v.name)
+		_credit_grief(victim, killer)
 	print("DEATH: %s by %s (round %d)" % [v.name, credit, GameState.round_num])
 	_flash_banner("%s DIED!\nDEATH BY: %s" % [v.name, credit], credit_color, 2.4)
 	round_manager.on_ball_died(victim)
@@ -699,9 +750,63 @@ func _on_ball_resolved(p: int, status: String) -> void:
 	if status == "dnf":
 		GameState.players[p].grudge += 1
 		_flash_banner("%s IS OUT OF STROKES" % GameState.players[p].name, Color(0.7, 0.7, 0.7), 1.4)
+		if GameState.is_chaos_round():
+			_credit_grief(p, null)
+
+# --- WAVE 2: the grief ledger (grudge + highlight, never points) -----------------
+
+## GriefController reports a connected shove on `victim` / an early-triggered
+## trap. If a death or DNF follows inside the credit window, the griefer is
+## credited below. Pure social ledger — zero score, per the spec.
+func note_grief(by: int, victim: int, _verb: String) -> void:
+	_grief_last[victim] = {"by": by, "tick": Engine.get_physics_frames()}
+
+func note_grief_trap(by: int, t: Trap) -> void:
+	_grief_trap_last[t.get_instance_id()] = {"by": by, "tick": Engine.get_physics_frames()}
+
+func _credit_grief(victim: int, killer: Trap) -> void:
+	var now := Engine.get_physics_frames()
+	var g := {}
+	if killer != null and _grief_trap_last.has(killer.get_instance_id()):
+		var e: Dictionary = _grief_trap_last[killer.get_instance_id()]
+		if now - int(e["tick"]) <= GRIEF_CREDIT_TICKS:
+			g = e
+	if g.is_empty() and _grief_last.has(victim):
+		var e2: Dictionary = _grief_last[victim]
+		if now - int(e2["tick"]) <= GRIEF_CREDIT_TICKS:
+			g = e2
+	if g.is_empty():
+		return
+	var by := int(g["by"])
+	if by < 0 or by == victim:
+		return
+	var gp = GameState.players[by]
+	gp.grudge += 1
+	_currency_log.append({"type": "grudge", "player": by, "amount": 1, "reason": "griefed %s" % GameState.players[victim].name})
+	_highlights.append("%s GRIEFED %s" % [gp.name, GameState.players[victim].name])
+	_flash_banner("%s GRIEFED %s" % [gp.name, GameState.players[victim].name], gp.color, 1.5)
+	print("GRIEF_CREDIT by=%d victim=%d" % [by, victim])
+	_rebuild_scoreboard()
+
+## A griefer avatar fell past the pit line (the widow's walk chasm, or clean
+## off the table). Shoved = the shover's highlight; walked = the course's dry
+## register. No score either way — the avatar respawns at its last safe step.
+func on_avatar_pitfall(p: int, by: int) -> void:
+	var chasm := GameState.course_id == "widows_walk"
+	if by >= 0 and by != p:
+		var what := "INTO THE CHASM" if chasm else "OFF THE EDGE"
+		_highlights.append("%s SHOVED %s %s" % [GameState.players[by].name, GameState.players[p].name, what])
+		_flash_banner("%s SHOVED %s\n%s" % [GameState.players[by].name, GameState.players[p].name, what], GameState.players[by].color, 1.8)
+	elif chasm:
+		_flash_banner("%s WALKED THE WIDOW'S WALK" % GameState.players[p].name, Color(0.8, 0.8, 0.85), 1.3)
+	else:
+		_flash_banner("%s FELL OFF THE COURSE" % GameState.players[p].name, Color(0.8, 0.8, 0.85), 1.3)
 
 func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 	phase = Phase.BETWEEN
+	grief.deactivate()
+	_grief_bar.visible = false
+	_putt_bar.visible = false
 	camera_rig.set_mode(camera_rig.Mode.DIORAMA)
 	GameState.award_round_points(finish_order)
 	_rebuild_scoreboard()
@@ -747,7 +852,9 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 		return
 	Sfx.play("round_over")
 	_flash_banner("ROUND OVER", Color(1, 0.85, 0.2), 2.6)
-	await get_tree().create_timer(3.0).timeout
+	# Physics-time gap (exactly 180 ticks), so round N+1 starts on the same tick
+	# every run — trap phases and bot cadence stay seed-reproducible match-wide.
+	await get_tree().create_timer(3.0, true, true).timeout
 	_start_round()
 
 func _flash_banner(text: String, color: Color, duration: float) -> void:
@@ -929,6 +1036,102 @@ func _bot_putt(actor: int) -> void:
 
 func get_phase_name() -> String:
 	return Phase.keys()[phase]
+
+# --- realkeys hint bars (per docs/verify/realkeys-VERIFY.md) ----------------------
+
+func _build_hint_bars() -> void:
+	_putt_bar = _make_bar()
+	_grief_bar = _make_bar()
+
+func _make_bar() -> Label:
+	var l := Label.new()
+	l.visible = false
+	l.anchor_left = 0.0
+	l.anchor_right = 1.0
+	l.anchor_top = 1.0
+	l.anchor_bottom = 1.0
+	l.offset_top = -60.0
+	l.offset_bottom = -20.0
+	l.add_theme_font_size_override("font_size", 22)
+	l.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.12))
+	l.add_theme_constant_override("outline_size", 6)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	$UI.add_child(l)
+	return l
+
+func _human_seats() -> Array:
+	var out: Array = []
+	for i in GameState.players.size():
+		if not _is_bot(i) and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend across the human seats (realkeys template): all
+## seats share the binding -> "Key = LABEL"; mixed -> "LABEL: Key/NAME · ...".
+func _btn_hint(seats: Array, action: String, label: String) -> String:
+	if seats.is_empty():
+		return ""
+	var descs: Array = []
+	var all_same := true
+	for p in seats:
+		var d: String = PlayerInput.describe_binding(p, action)
+		descs.append(d)
+		if d != descs[0]:
+			all_same = false
+	if all_same:
+		return "%s = %s" % [descs[0], label]
+	var parts: Array = []
+	for i in seats.size():
+		parts.append("%s/%s" % [descs[i], GameState.PLAYER_NAMES[seats[i]]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The current seat's shot verbs (turn-based, so the bar is per-seat). Mouse
+## seats show mouse verbs — the first tester's ask.
+func _putt_bar_text(p: int) -> String:
+	var d: int = PlayerInput.device_of(p)
+	if not _embodied or (d == -3 and putt_controller.drag_enabled):
+		return "AIM: MOUSE   ·   DRAG BACK FROM YOUR BALL — RELEASE TO PUTT"
+	if d == -3 or d == -99:
+		return "AIM: MOUSE   ·   HOLD LMB TO CHARGE — RELEASE TO SWING"
+	if d == -4:
+		return "AIM: MOUSE   ·   HOLD LEFT CLICK TO CHARGE — RELEASE TO SWING"
+	if d >= 0:
+		return "AIM: LEFT STICK   ·   HOLD %s TO CHARGE — RELEASE TO SWING" % PlayerInput.describe_binding(p, "a")
+	return "AIM: %s   ·   HOLD %s TO CHARGE — RELEASE TO SWING" % [
+		PlayerInput.describe_binding(p, "move"), PlayerInput.describe_binding(p, "a")]
+
+func _update_putt_bar(p: int) -> void:
+	if GameState.is_chaos_round() or _is_bot(p) or phase != Phase.PUTT:
+		_putt_bar.visible = false
+		return
+	_putt_bar.text = _putt_bar_text(p)
+	_putt_bar.add_theme_color_override("font_color", GameState.players[p].color)
+	_putt_bar.visible = true
+
+## The chaos grief bar: merged real keys for every human seat that can walk
+## (kb halves / KB+MOUSE / pads). Pure-mouse seats grief on autopilot (OQ1).
+func _show_grief_bar() -> void:
+	var movers: Array = []
+	var mouse_only := false
+	for p in _human_seats():
+		var d: int = PlayerInput.device_of(p)
+		if d == -3:
+			mouse_only = true
+		else:
+			movers.append(p)
+	if movers.is_empty() and not mouse_only:
+		_grief_bar.visible = false
+		return
+	var text := ""
+	if not movers.is_empty():
+		text = "GRIEF: MOVE   ·   %s   ·   %s" % [
+			_btn_hint(movers, "a", "SHOVE"),
+			_btn_hint(movers, "b", "HOP / TRIGGER TRAP")]
+	if mouse_only:
+		text += ("   ·   " if text != "" else "") + "MOUSE SEAT GRIEFS ON AUTO — YOUR SHOT IS STILL YOURS"
+	_grief_bar.text = text
+	_grief_bar.add_theme_color_override("font_color", Color(1.0, 0.72, 0.28))
+	_grief_bar.visible = true
 
 # --- KILLCAM screenshot harness (--killcamtest=signed|self|chaos) --------------
 ## Drives any draft/build to completion, then stages a controlled kill on ball 0

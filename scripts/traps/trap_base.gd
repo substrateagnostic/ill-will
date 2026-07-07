@@ -49,6 +49,14 @@ func kill_ball(ball: Ball) -> void:
 		return
 	ball.die(self)
 
+## PAR v4 WAVE 2 — chaos grief-trigger: a griefer standing at a powered trap
+## snaps it to its strike phase early (crusher slams, fan gusts, bumper kicks,
+## windmill lurches). Overrides change trap TIMING/state only — the KILL rule
+## is untouched: traps still only kill_ball() on ball contact. Default: not a
+## powered trap; nothing to trigger.
+func grief_trigger() -> bool:
+	return false
+
 func set_author(idx: int, color: Color) -> void:
 	author_index = idx
 	author_color = color

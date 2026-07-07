@@ -17,6 +17,16 @@ func _physics_process(delta: float) -> void:
 		if _cooldowns[k] <= 0.0:
 			_cooldowns.erase(k)
 
+## WAVE 2 grief-trigger: kick anything already touching the sensor NOW (the
+## normal _on_body path, cooldowns included) + a visible pulse so a whiff reads.
+func grief_trigger() -> bool:
+	for body in $Sense.get_overlapping_bodies():
+		_on_body(body)
+	var tw := create_tween()
+	tw.tween_property($Body, "scale", Vector3(1.25, 0.85, 1.25), 0.06)
+	tw.tween_property($Body, "scale", Vector3.ONE, 0.12)
+	return true
+
 func _on_body(body: Node3D) -> void:
 	if is_ghost or not body is Ball or _cooldowns.has(body):
 		return

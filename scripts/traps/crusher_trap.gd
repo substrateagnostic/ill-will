@@ -26,6 +26,11 @@ func _ready() -> void:
 	$Hammer/HammerMesh.visible = false
 	$Hammer.add_child(wrap)
 
+## WAVE 2 grief-trigger: snap the cycle to the slam phase NOW (timing only).
+func grief_trigger() -> bool:
+	_t = 1.5
+	return true
+
 func _physics_process(delta: float) -> void:
 	_t = fmod(_t + delta * speed_scale, 2.6)
 	var y := UP_Y
