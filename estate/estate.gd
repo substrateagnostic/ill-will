@@ -1567,6 +1567,10 @@ func _show_house_rules() -> void:
 		chip.modulate.a = 0.85
 		row.add_child(chip)
 		phase_box.add_child(row)
+	# Humans get time to actually READ the primer — 5s is the bots/auto cap,
+	# not a reading deadline. A pressing A still advances immediately.
+	if not _house_rules_needed.is_empty():
+		_house_rules_countdown = 45.0
 	var count := Label.new()
 	count.name = "RulesCountdown"
 	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
