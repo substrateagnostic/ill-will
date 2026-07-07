@@ -377,6 +377,36 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-07 — ONLINE PHASE 2, ARENA MIRROR #1 — THE THRONE (agent worktree)
+The first REALTIME arena plays online. Proves the séance house pattern carries
+a Jolt-physics brawl, not just UI/turn games: **physics stays host-side; the
+client renders interpolated transforms and fires all the juice from state
+deltas.** Two instances, one machine, a full ~2-min match with a remote seat 1.
+
+- Mirrored on the client (screenshots read by eye,
+  `docs/verify/throne_netshots_join/`): the whole arena — the crowned king on
+  the dais with the gold-stream fountain + the `♔` crown glyph in the score
+  panel (`snap_mirror_reign`); the guard-wall lifecycle; and the
+  **SUCCESSION CRISIS — THRONE PAYS DOUBLE** banner + hot-red timer
+  (`snap_mirror_crisis`). The probe match even ran into OVERTIME, so **THE
+  COURT WILL NOT ADJOURN** was exercised across the wire.
+- Juice from counters, not events: decree blast → shockwave+shake+boom; grip
+  drain → king pop+shake; dethrone → slow-beat echo + the crown tumbles off
+  the seat as a physics body. Drop-tolerant, one pipe.
+- Royals are frozen + net_mirror on the client (Royal._physics_process /
+  _update_anim short-circuit); throne.gd's _mirror_tick lerps each toward the
+  latest snapshot and keeps the grip-pip HUD + cooldown rings glued to the king.
+- Receipts: `--thronebalance` (real match, FX) is wall-clock-coupled by its
+  slow-mo beats and wanders run-to-run on identical code — so the byte receipt
+  is the no-FX fixed-step `--thronebalancefast`, byte-identical to a
+  pristine-HEAD worktree (seeds 1/2/3, shares + dethronings + OT all equal).
+  NETHASH_MOD 43/43 client digests matched the host (zero disagreements);
+  bandwidth mean ~855 B/snap (≈17 kB/s @ 20 Hz); user:// saves restored,
+  md5-verified.
+- Lanes: `minigames/throne/**` + `docs/verify/` only. Estate + net_session
+  UNTOUCHED. (Honest gap: the ragdoll TUMBLE spin isn't mirrored — position +
+  Hit_A + the tumbling crown are; the fallen slides but stays upright.)
+
 ### 2026-07-07 — ONLINE PHASE 2, GAME MIRROR #2 — THE UNDERSTUDY (agent worktree)
 The second theater game plays ONLINE end to end. It rode the séance house
 pattern nearly free (same hidden-info shape). The win worth seeing:
