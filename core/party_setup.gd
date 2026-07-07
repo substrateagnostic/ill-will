@@ -69,14 +69,7 @@ func _ready() -> void:
 	var quit_btn := Button.new()
 	quit_btn.text = "QUIT TO TITLE  (forfeits the current game)"
 	quit_btn.custom_minimum_size = Vector2(0, 44)
-	quit_btn.pressed.connect(func():
-		open = false
-		panel.visible = false
-		get_tree().paused = false
-		PlayerInput.save_setup()
-		_save_prefs()
-		Sfx.play("card")
-		get_tree().change_scene_to_file("res://estate/estate.tscn"))
+	quit_btn.pressed.connect(quit_to_title)
 	box.add_child(quit_btn)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--opensettings="):
@@ -85,6 +78,46 @@ func _ready() -> void:
 				if not open:
 					toggle()
 				tabs.current_tab = clampi(t, 0, tabs.get_tab_count() - 1))
+
+## Forfeit whatever is running and return to the title, leaving NOTHING behind.
+## Playtest bug (Andrew, round 2): modules launch parented at the TREE ROOT, so
+## change_scene_to_file frees the estate but not a live game — quitting mid-
+## match left a zombie module simulating under the next launch ("echo chamber
+## is now on top" of golf). free_stray_root_nodes() is the root fix; the time
+## scale reset covers quitting mid-hitstop (HIT KIT runs at 0.15 for 45ms).
+func quit_to_title() -> void:
+	open = false
+	panel.visible = false
+	get_tree().paused = false
+	Engine.time_scale = 1.0
+	PlayerInput.save_setup()
+	_save_prefs()
+	Music.stop()
+	Sfx.play("card")
+	free_stray_root_nodes()
+	get_tree().change_scene_to_file("res://estate/estate.tscn")
+
+## Free every child of /root that is neither an autoload nor the current scene
+## (modules and podiums live there during play; on any path back to the title
+## they are zombies). Autoload names come from ProjectSettings so the list can
+## never drift. Returns how many nodes were freed (receipt for the harness).
+func free_stray_root_nodes() -> int:
+	var autoloads := {}
+	for prop in ProjectSettings.get_property_list():
+		var pname := str(prop.name)
+		if pname.begins_with("autoload/"):
+			autoloads[pname.trim_prefix("autoload/")] = true
+	var freed := 0
+	var root := get_tree().root
+	for child in root.get_children():
+		if child == get_tree().current_scene:
+			continue
+		if autoloads.has(str(child.name)):
+			continue
+		print("ROOTSWEEP freeing stray: ", child.name)
+		child.queue_free()
+		freed += 1
+	return freed
 
 func _input(event: InputEvent) -> void:
 	if _listen_action != "" and event is InputEventKey and event.pressed:

@@ -12,6 +12,8 @@ const STARTING_GRUDGE := 2
 
 var night_length := 3
 var night_length_forced := false  # --night=N pins it (soaks) over the pref
+var pending_play := false  # slot panel picked an estate: auto-PLAY after the
+                           # scene reload instead of dumping back on the title
 var games_played := 0
 var pot := 0
 var players: Array = []

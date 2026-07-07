@@ -87,6 +87,17 @@ var _ready_gate_needed: Array = []  # human seats that must press A to launch
 @onready var wall_text: Label3D = $GraffitiWall/Lines
 
 func _ready() -> void:
+	# Defense-in-depth vs zombie games (Andrew round 2): modules/podiums live at
+	# the TREE ROOT during play; on ANY path that reboots the estate scene, a
+	# survivor there is a stale game stacking under this boot. Sweep first.
+	PartySetup.free_stray_root_nodes()
+	Engine.time_scale = 1.0
+	# Slot panel picks (PLAY THIS ESTATE / START FRESH) reload this scene; the
+	# player expects to be IN the game, not back at the title (Andrew: "trying
+	# to start a new estate game just brings me back to the main menu").
+	if EstateState.pending_play:
+		EstateState.pending_play = false
+		call_deferred("_play_pressed")
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
 	var start_night_now := false
 	var args := OS.get_cmdline_user_args()
@@ -106,6 +117,17 @@ func _ready() -> void:
 			get_tree().create_timer(1.2).timeout.connect(func():
 				exhibition = true
 				_launch_game(gid))
+		elif arg.begins_with("--quittest="):
+			# Zombie-module receipt (Andrew round 2): forfeit the running game
+			# after N seconds. Combined with --exhibtest, the reload re-arms and
+			# relaunches, so each cycle proves quit -> sweep -> clean relaunch.
+			var qt := float(arg.trim_prefix("--quittest="))
+			get_tree().create_timer(qt).timeout.connect(func():
+				var names: Array = []
+				for c in get_tree().root.get_children():
+					names.append(str(c.name))
+				print("QUITTEST root before quit: ", ", ".join(names))
+				PartySetup.quit_to_title())
 		elif arg == "--lobbyshot":
 			get_tree().create_timer(1.2).timeout.connect(func():
 				_enter_lobby()
@@ -290,6 +312,7 @@ func _build_slot_panel() -> void:
 		load_btn.pressed.connect(func():
 			Sfx.play("confirm")
 			EstateState.load_slot(n)
+			EstateState.pending_play = true
 			get_tree().reload_current_scene())
 		row.add_child(load_btn)
 		var wipe_btn := Button.new()
@@ -302,6 +325,7 @@ func _build_slot_panel() -> void:
 				return
 			Sfx.play("grudge")
 			EstateState.new_game(n)
+			EstateState.pending_play = true
 			get_tree().reload_current_scene())
 		row.add_child(wipe_btn)
 		phase_box.add_child(row)
