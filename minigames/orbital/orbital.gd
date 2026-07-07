@@ -139,6 +139,12 @@ var _vignette: ColorRect
 var _vig_mat: ShaderMaterial
 var _threat_pool: Array = []  # AudioStreamPlayer pool for pitched threat tones
 var _threat_next := 0
+# THE FINAL STRETCH kit (doc 09 §Q1/§4.3): T-30 "FINAL ORBIT" — tense music,
+# last-10s ticks, timer pulse. The lighting nudge here is the doc's starfield
+# tint 20% toward red (kit vignette OFF — the threat ladder owns the red
+# screen edges). Never attached under --orbtest, so probe receipts hold.
+var _stretch: FinalStretch = null
+var _star_mat: StandardMaterial3D = null   # starfield tint target (FINAL ORBIT)
 
 func _ready() -> void:
 	_parse_args()
@@ -240,6 +246,9 @@ func begin(cfg: Dictionary) -> void:
 	if _cbar != "":
 		_hint_label.text = _cbar
 	phase = Phase.PLAY
+	if _test_mode == "":
+		_stretch = FinalStretch.attach(self, _timer_label, {"vignette": false})
+		_stretch.play_started()   # FINAL STRETCH: light bed over the void
 	_update_score_rows()
 	if _test_mode == "circ":
 		_circ_start()
@@ -386,6 +395,7 @@ func _build_stars() -> void:
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.vertex_color_use_as_albedo = true
 	mmi.material_override = mat
+	_star_mat = mat   # FINAL ORBIT tints the whole field via this multiplier
 	add_child(mmi)
 
 func _build_planet_visual(center: Vector3, r: float, col: Color) -> void:
@@ -534,6 +544,8 @@ func _physics_process(delta: float) -> void:
 				_spawn_ball_at(pi, _random_visible_n(), false)
 				Sfx.play("confirm")
 				_flash_event("A NEW BALL DRIFTS IN", Color(0.85, 0.88, 1.0))
+			if _stretch != null and not _stretch.escalated and time_left <= 30.0:
+				_final_orbit()   # FINAL STRETCH (§4.3): T-30 crescendo
 			time_left -= sdt
 			if time_left <= 0.0:
 				_end_match()
@@ -744,8 +756,21 @@ func on_ball_rest(bb: OrbBall) -> void:
 
 ## --- match end ---------------------------------------------------------------
 
+## FINAL ORBIT (doc 09 §4.3, via the §Q1 kit): T-30 banner + Executor line +
+## tense track + the starfield leaning 20% toward red. Presentation only.
+func _final_orbit() -> void:
+	_stretch.escalate()
+	_flash_banner("FINAL ORBIT", Color(1.0, 0.45, 0.3), 2.4)
+	_flash_event("THE ESTATE CALLS TIME. OLD ORBITS STILL KILL.", Color(1.0, 0.75, 0.65))
+	if _star_mat != null:
+		var tw := create_tween()
+		tw.tween_property(_star_mat, "albedo_color",
+			Color.WHITE.lerp(Color(1.0, 0.25, 0.18), 0.2), 2.0)
+
 func _end_match() -> void:
 	phase = Phase.END
+	if _stretch != null:
+		_stretch.match_ended()
 	var order: Array = _points.keys()
 	order.sort_custom(func(a, b):
 		if _points[a] != _points[b]:
@@ -847,6 +872,8 @@ func _process(delta: float) -> void:
 	if _orb_probe_line != null:
 		_update_probe_line()
 	_update_timer_label()
+	if _stretch != null and phase == Phase.PLAY:
+		_stretch.tick(time_left)   # FINAL STRETCH last-10s ladder + timer pulse
 	if _hint_label.visible and now > 7.0:
 		_hint_label.visible = false
 	if _event_label.visible and now > _event_until:

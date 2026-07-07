@@ -1326,3 +1326,60 @@ WORTH KNOWING (shared dev machine, overnight fleet):
 
 STILL OPEN (unchanged phase-2/3 chores): podium not mirrored (spectate
 card), local echo v1 none, killcam-skip gating for games that have one.
+
+================================================================
+FINAL STRETCH + DECIDING MOMENT (AAA queue Q1+Q2, the last two items)
+game-feel agent, overnight — for Alex's review
+================================================================
+
+WHAT SHIPPED (all presentation; receipts byte-identical, see
+docs/verify/finalstretch-VERIFY.md):
+
+- core/final_stretch.gd — THE FINAL STRETCH kit. One shared helper: the
+  anthology finally PLAYS your music. game_light under every timed game,
+  crossfade to game_tense at each game's own threshold, a warm-red screen-
+  edge nudge, last-10s rising tick ladder (exact-pitch pool, greed's bell
+  cadence generalized) + timer pulse. Wired into NINE games: tilt (sudden
+  death), mower (OT — the sting its VERIFY always claimed), greed (the
+  CLOSING BELL brings the tense track; bell keeps its own ticks, no
+  double-trigger), throne (succession crisis), orbital (NEW T-30 "FINAL
+  ORBIT" beat + Executor line + starfield 20% toward red), swap (final
+  lap + distance tick ladder over the last 10%), echo (round 5 plays
+  tense start-to-finish, "THE ESTATE COLLECTS ITS ECHOES"), dead_weight
+  (HOUSE AWAKENS), last_will (the final race plays tense; Executor:
+  "The final race. The estate settles all accounts tonight.").
+- All five mirrored games fire it CLIENT-side from facts already on the
+  wire (sd/ot/bell/hot/aw + clocks). Snapshots grew by zero bytes.
+- THE DECIDING MOMENT (Q2): deep slow-mo is now RESERVED. Ordinary deaths
+  demoted to 0.5x/0.2s in tilt/dead_weight/last_will (echo was already
+  compliant); the round/match-DECIDING kill promotes to 0.25x for
+  0.8-0.9s + a real-time fov punch (-5/-6) + a name banner ("LAST ONE
+  STANDING" in DW, "THE DYING SECONDS CLAIM X" in echo round-5 endings).
+  Throne got doc 09 §9.3's exact call: dethrone keeps its 0.2x/0.6s crown
+  tumble and gains the synced 49->44->49 punch (host + mirror).
+  Reduced-motion: punches no-op, freezes fall back to the demoted beat.
+
+JUDGMENT CALLS (flag if you disagree):
+1. Where a game already had a bespoke endgame beat, the kit added ONLY
+   music + nudge + pulse (doc 09's reconciliation rule) — no second
+   banner, no second tick ladder. Greed's kit ticks are OFF by option.
+2. Echo's "deciding kill" = any KO in round 5's last 10s (no time to
+   answer it). With respawns there is no literal last-one-standing there.
+3. Last will's fov punch is the will theater's existing -6 beat — the
+   deep freeze slots under it; no second camera move added.
+4. tilt tests still call the demoted slow-mo (receipts unaffected,
+   tick-driven) — deciding promotion is fenced out of --tilttest.
+
+RECEIPTS: 9 harnesses byte-diffed vs a git-stash baseline (tilttest x3,
+covtest, willtally, thronebalancefast, greedtest, mbtally, dwbalance=20
+seed 1 still LIVING WIN 65.0%). Six raw-identical; mower/dw/lw differ
+only in wall-clock perf ms + Godot exit-noise lines (proven run-to-run
+noise on identical code; sim lines byte-identical). Full 4-bot matches
+to finished() in all nine touched games, 0 script errors. Estate boot
+smoke clean. Windowed stills read by eye in docs/verify/
+finalstretch-shots/: final stretch in greed/tilt/orbital/dw/echo,
+deciding freeze in tilt/dw/echo (fov punch visibly IN on all three).
+
+WITH THE REAL TRACKS IN assets/music/, THIS IS THE WAVE WHERE THE WHOLE
+ANTHOLOGY LIGHTS UP AT ONCE — the kit was a no-op until your soundtrack
+landed; now every game's last seconds are heard.

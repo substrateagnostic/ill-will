@@ -100,6 +100,11 @@ var _crown: Node3D = null
 var _crown_on := -1
 var _final_lap_called := false
 var _end_t := -1.0
+# THE FINAL STRETCH kit (doc 09 §Q1/§7.3): the FINAL LAP is swap's stretch —
+# tense music + the lighting nudge at the call, and a distance-driven tick
+# ladder once the leader enters the last 10%. No lap timer, so no timer-label
+# pulse. Never attached under --swaptest, so scripted receipts hold.
+var _stretch: FinalStretch = null
 
 var _begun := false
 var _cli_seed := 1
@@ -242,6 +247,8 @@ func begin(cfg: Dictionary) -> void:
 	if _hint_label != null:
 		_hint_label.text = _controls_bar()
 	_build_crown()
+	if _test_mode == "":
+		_stretch = FinalStretch.attach(self, null)
 	if _test_mode != "":
 		_setup_test()
 		return
@@ -448,6 +455,7 @@ func _physics_process(delta: float) -> void:
 		_intro_tick(sdt)
 	if phase == Phase.PLAY:
 		race_t += sdt
+		_stretch_tick()
 	if sdt > 0.0:
 		for bot in bots:
 			if bot != null:
@@ -529,6 +537,8 @@ func _intro_tick(sdt: float) -> void:
 		4:
 			_flash_banner("[color=#ffffff]GO!!![/color]", 0.8)
 			Sfx.play("confirm")
+			if _stretch != null:
+				_stretch.play_started()   # FINAL STRETCH: light bed off the line
 			phase = Phase.PLAY
 			for k in karts:
 				(k as SwapKart).locked = false
@@ -707,6 +717,21 @@ func _gates_below(prog: float) -> int:
 			c += 1
 	return c
 
+## FINAL STRETCH ticks (§7.3): once the leader enters the last 10% of the
+## final lap, the remaining distance maps onto the kit's 10-step rising
+## ladder — the room hears the line coming. Reads decided state only.
+func _stretch_tick() -> void:
+	if _stretch == null or not _stretch.escalated or _finish_count > 0:
+		return
+	var lead := _leader_all()
+	if lead < 0:
+		return
+	var window := track.total_len * 0.1
+	var remain: float = laps_total * track.total_len - (karts[lead] as SwapKart).progress
+	if remain > window or remain < 0.0:
+		return
+	_stretch.tick(10.0 * remain / window)
+
 func _check_laps(kart: SwapKart) -> void:
 	var laps_done := int(floorf(kart.progress / track.total_len))
 	if laps_done <= kart.laps_hw:
@@ -721,6 +746,8 @@ func _check_laps(kart: SwapKart) -> void:
 		_finish_kart(kart)
 	elif kart.laps_hw == laps_total - 1 and not _final_lap_called and _leader_all() == kart.index:
 		_final_lap_called = true
+		if _stretch != null:
+			_stretch.escalate()   # FINAL STRETCH: MK's final lap is HEARD (§7.3)
 		_flash_banner("[color=#ffd84d]FINAL LAP![/color]", 1.4)
 		Sfx.play("round_over", -4.0)
 
@@ -731,6 +758,8 @@ func _finish_kart(kart: SwapKart) -> void:
 	kart.finish_place = _finish_count
 	_points[kart.index] += FINISH_PTS[kart.finish_place - 1]
 	kart.cheer_forever()
+	if kart.finish_place == 1 and _stretch != null:
+		_stretch.match_ended()   # nudge fades so the finish beat owns the screen
 	# The race winner crossing with P2 a kart-length behind gets the money
 	# shot instead of a plain banner (doc 09 §7.1). Everything below is
 	# presentation - placements/points/physics are already decided above.

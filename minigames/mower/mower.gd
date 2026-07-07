@@ -65,6 +65,11 @@ var _cli_roundtime := -1.0
 
 var _shake := 0.0
 var _slowmo := false
+# THE FINAL STRETCH kit (doc 09 §Q1): OVERTIME is mower's stretch — the kit
+# adds the music escalation the VERIFY doc always claimed (light->tense at OT)
+# + last-10s ticks + timer pulse around the bespoke "OVERTIME! DOUBLE-WIDE
+# CUTS" banner. Never attached under --covtest (receipts untouched).
+var _stretch: FinalStretch = null
 var _engine_i := 0
 var _engine_t := 0.0
 var _last_status := 0.0
@@ -150,6 +155,8 @@ func begin(config: Dictionary) -> void:
 	# overtime = final 20s of a full round; on short test rounds fall back to
 	# the last 40% so a truncated round still exercises the OT path once.
 	_ot_start = maxf(round_time - OVERTIME_LEN, round_time * 0.6)
+	if not _covtest:
+		_stretch = FinalStretch.attach(self, timer_label)
 	# lawn + obstacles
 	lawn = MowerLawn.new()
 	lawn.name = "Lawn"
@@ -394,6 +401,8 @@ func _start_round() -> void:
 	_last_status = 0.0
 	_worst_step_ms = 0.0
 	_over12 = 0
+	if _stretch != null:
+		_stretch.play_started()   # FINAL STRETCH: light bed under the mowing
 	_flash_banner("MOW!", Color(1, 0.9, 0.3), 1.0)
 	hint_label.visible = true
 	var bar := _controls_bar()
@@ -560,6 +569,8 @@ func _resolve_solids() -> void:
 func _enter_overtime() -> void:
 	overtime = true
 	lawn.set_overtime(1.0)
+	if _stretch != null:
+		_stretch.escalate()   # FINAL STRETCH: the OT sting mower always claimed
 	_flash_banner("OVERTIME!\nDOUBLE-WIDE CUTS", Color(1, 0.35, 0.25), 2.4)
 	Sfx.play("grudge")
 	Sfx.play("round_over", -4.0)
@@ -569,6 +580,8 @@ func _enter_overtime() -> void:
 func _end_round() -> void:
 	phase = Phase.RESULTS
 	phase_t = 0.0
+	if _stretch != null:
+		_stretch.match_ended()   # nudge fades under the tally ceremony
 	lawn.commit()
 	# coverage math assert (spec "Risks & tests")
 	var sum := lawn.uncut_pct()
@@ -706,6 +719,10 @@ func _process(delta: float) -> void:
 		timer_label.text = str(remain)
 		var hot := overtime or remain <= 10
 		timer_label.add_theme_color_override("font_color", Color(1, 0.35, 0.25) if hot else Color(0.15, 0.35, 0.1))
+		# FINAL STRETCH ticks + timer pulse (host and mirror share this block —
+		# the mirror's round_t is the authoritative host clock off the wire)
+		if _stretch != null and phase == Phase.PLAY:
+			_stretch.tick(round_time - round_t)
 		_update_meter()
 		_score_t -= delta
 		if _score_t <= 0.0:
@@ -1116,6 +1133,8 @@ func _net_apply(state: Dictionary) -> void:
 		Sfx.play("grudge")
 		Sfx.play("round_over", -4.0)
 		_shake = maxf(_shake, 0.25)
+		if _stretch != null:
+			_stretch.escalate()   # FINAL STRETCH fires client-side off the ot fact
 	overtime = ot
 	# --- the authoritative lawn
 	if state.has("grid"):
@@ -1157,8 +1176,12 @@ func _net_apply(state: Dictionary) -> void:
 		print("MOWER_MIRROR phase -> %s rt=%.1f" % [Phase.keys()[ph], round_t])
 		if ph == Phase.INTRO or (first and ph == Phase.PLAY):
 			Sfx.play("confirm")
+			if _stretch != null:
+				_stretch.play_started()
 	if ph == Phase.RESULTS and not _mir_tally_up:
 		_mir_tally_up = true
+		if _stretch != null:
+			_stretch.match_ended()
 		# the host's verdict + the mirrored final grid = the same ceremony,
 		# staged locally: camera pull, per-player turf reveal, count-up, stamp.
 		_results = {"placements": state.get("plc", range(roster.size()))}

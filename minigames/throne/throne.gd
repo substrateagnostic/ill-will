@@ -124,6 +124,11 @@ var _fx := true
 var _crisis_announced := false
 var _shake := 0.0
 var _time_token := 0
+# THE FINAL STRETCH kit (doc 09 §Q1): the SUCCESSION CRISIS is throne's
+# stretch — the kit adds music (light->tense at T-30) + last-10s ticks +
+# timer pulse around the bespoke crisis banner/label. Gated on _fx so the
+# reproducible --thronebalancefast receipts never construct it.
+var _stretch: FinalStretch = null
 var _gold_stream: CPUParticles3D = null
 # THE COOLDOWN RING — the king's court powers, feet-anchored (research fix #3).
 var _decree_ring: CooldownRing = null   # primary (outer) — DECREE BLAST recharge
@@ -241,6 +246,8 @@ func _begin(config: Dictionary) -> void:
 	_started = true
 	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.get("rng_seed", 1))
+	if _fx or _mirror:
+		_stretch = FinalStretch.attach(self, timer_label)
 	if _balance and not _mirror:
 		Engine.time_scale = _balance_scale
 	var roster: Array = config.get("roster", [])
@@ -360,6 +367,8 @@ func _start_match() -> void:
 	phase = Phase.PLAY
 	game_time = 0.0
 	_rebuild_scoreboard()
+	if _stretch != null:
+		_stretch.play_started()   # FINAL STRETCH: light bed under the court
 	if _fx:
 		_flash_banner("SEIZE THE THRONE", Color(1, 0.85, 0.25), 2.2)
 
@@ -700,6 +709,10 @@ func _dethrone(slayer: int, dir: Vector3) -> void:
 		_flash_banner("%s DETHRONES %s" % [players[slayer].name, players[fallen].name], players[slayer].color, 1.8)
 		_shake = maxf(_shake, 0.95)
 		_time_hit(0.2, 0.6)      # slow-mo beat as the crown tumbles down the steps
+		# DECIDING MOMENT camera language (doc 09 §9.3/Q2): sync a fov punch
+		# 49->44->49 to the same 0.6s window — LL's "cheap KO camera" lesson.
+		# Reduced-motion skips it inside the kit helper.
+		FinalStretch.fov_punch(cam, 49.0, 5.0, 0.6)
 	print("THRONE_DETHRONE t=%.1f %s dethroned %s (reign %.1fs)" % [game_time, players[slayer].name, players[fallen].name, reign_len])
 	_rebuild_scoreboard()
 
@@ -787,6 +800,8 @@ func _finish_match() -> void:
 		return a < b)
 	var champ: int = order[0]
 	_set_gold_stream(false)
+	if _stretch != null:
+		_stretch.match_ended()
 	Sfx.play("match_win")
 	_flash_banner("%s RULES\nTHE THRONE" % players[champ].name, players[champ].color, 6.0)
 	_spawn_confetti(SEAT_POS + Vector3(0, 1.4, 0), players[champ].color)
@@ -1288,11 +1303,17 @@ func _update_timer_label() -> void:
 	if crisis and not _crisis_announced:
 		_crisis_announced = true
 		crisis_label.visible = true
+		if _stretch != null:
+			_stretch.escalate()   # FINAL STRETCH: the crisis brings the tense track
 		if _fx:
 			Sfx.play("round_over")
 			_flash_banner("SUCCESSION CRISIS\nTHRONE PAYS DOUBLE", Color(1, 0.4, 0.3), 2.4)
 	if crisis:
 		timer_label.add_theme_color_override("font_color", Color(1, 0.4, 0.3))
+	# FINAL STRETCH ticks + timer pulse into the horn (overtime keeps the tense
+	# bed; the OT countdown is the crisis label's drama, not another ladder)
+	if _stretch != null:
+		_stretch.tick(_match_time - game_time)
 
 func _flash_banner(text: String, color: Color, duration: float) -> void:
 	if not _fx:
@@ -1596,6 +1617,8 @@ func _net_apply(state: Dictionary) -> void:
 		return
 	var prev := _mir
 	_mir = state
+	if prev.is_empty() and _stretch != null:
+		_stretch.play_started()   # FINAL STRETCH: light bed on first snapshot
 	phase = int(state.get("ph", Phase.PRE))
 	game_time = float(state.get("gt", game_time))
 	king = int(state.get("king", -1))
@@ -1617,6 +1640,15 @@ func _net_apply(state: Dictionary) -> void:
 	timer_label.text = str(state.get("tmr", ""))
 	timer_label.add_theme_color_override("font_color",
 		Color(1, 0.4, 0.3) if bool(state.get("hot", false)) else Color(1, 0.92, 0.6))
+	# FINAL STRETCH on the mirror: escalate off the hot fact (crisis or OT);
+	# ticks/pulse off the authoritative gt clock (regulation only)
+	if _stretch != null:
+		if bool(state.get("hot", false)):
+			_stretch.escalate()
+		if phase == Phase.PLAY:
+			_stretch.tick(_match_time - game_time)
+		elif phase == Phase.DONE:
+			_stretch.match_ended()
 	var cl: Array = state.get("crisis", ["", false])
 	crisis_label.text = str(cl[0])
 	crisis_label.visible = bool(cl[1])
@@ -1663,11 +1695,13 @@ func _net_apply(state: Dictionary) -> void:
 			_royals[king].flash_pop()
 		_shake = maxf(_shake, 0.28)
 		Sfx.play("bounce", -1.0)
-	# --- dethrone (the slow-beat's local echo: shake + splat)
+	# --- dethrone (the slow-beat's local echo: shake + splat + fov punch —
+	# the host's deep beat already slows the snapshot stream)
 	if int(state.get("kn", 0)) > int(prev.get("kn", 0)):
 		_shake = maxf(_shake, 0.9)
 		Sfx.play("splat")
 		Sfx.play("death", -3.0)
+		FinalStretch.fov_punch(cam, 49.0, 5.0, 0.6)
 	# --- evidence snap once the arena is live and a king reigns
 	if phase == Phase.PLAY and king >= 0 and seating_index < 0 and not _mir_snapped.has("mirror_reign"):
 		_mir_snapped["mirror_reign"] = true

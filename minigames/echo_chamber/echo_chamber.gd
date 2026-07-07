@@ -95,6 +95,11 @@ var _self_haunts: Dictionary = {}
 var _shake := 0.0
 var _cam_base := Vector3.ZERO
 var _last_hitpause := -1.0
+# THE FINAL STRETCH kit (doc 09 §Q1): round 5 — the whole arena of echoes —
+# is echo's stretch. Tense music for the final round, last-10s ticks + timer
+# pulse every round (the anthology's silent-countdown gap A). Not attached
+# under --ringtest / --aimprobe so the scripted evidence paths stay clean.
+var _stretch: FinalStretch = null
 var _perf_accum := 0.0
 var _perf_frames := 0
 var _perf_degraded := false
@@ -207,6 +212,8 @@ func begin(config: Dictionary) -> void:
 			if is_instance_valid(controls_label):
 				controls_label.visible = false)
 	print("ECHO_BEGIN players=%d seed=%d bots=%s round_len=%.1f" % [roster.size(), _seed, str(_bots), round_len])
+	if not _ring_test and not _aim_probe_on:
+		_stretch = FinalStretch.attach(self, timer_label)
 	_enter_intro(1)
 	if _aim_probe_on:
 		_run_aim_probe()
@@ -594,6 +601,14 @@ func _enter_intro(n: int) -> void:
 	_shrink_at = round_len * 0.45 if n == _rounds else 999.0
 	var sub := "%d GHOSTS HAUNT THE ARENA" % ghosts.size() if ghosts.size() > 0 else "NO GHOSTS YET — MAKE SOME"
 	_flash_banner("ROUND %d\n%s" % [n, sub], Color(1, 0.85, 0.2), 0.0)
+	# THE FINAL STRETCH (doc 09 §Q1): the last round plays TENSE from its first
+	# second — every recorded self is on the floor. Earlier rounds re-arm light.
+	if _stretch != null:
+		if n >= _rounds and _rounds > 1:
+			_stretch.escalate()
+			_flash_credit("THE ESTATE COLLECTS ITS ECHOES", Color(1.0, 0.8, 0.35))
+		else:
+			_stretch.round_reset()
 	Sfx.play("round_over")
 	print("ECHO_ROUND_START round=%d ghosts=%d frame=%d" % [n, ghosts.size(), Engine.get_process_frames()])
 	_rebuild_scoreboard()
@@ -714,6 +729,8 @@ func _verify_determinism() -> void:
 func _finish_match() -> void:
 	state = St.DONE
 	_phase_timer = RESULT_HOLD
+	if _stretch != null:
+		_stretch.match_ended()
 	var order := _placements()
 	var champ: int = order[0]
 	timer_label.text = ""
@@ -861,6 +878,8 @@ func _tick_play(delta: float) -> void:
 	var remain := maxf(0.0, round_len - _round_time)
 	timer_label.text = "%0.1f" % remain
 	timer_label.add_theme_color_override("font_color", Color(1, 0.35, 0.3) if remain < 6.0 else Color(1, 1, 1))
+	if _stretch != null:
+		_stretch.tick(remain)   # FINAL STRETCH last-10s ladder + timer pulse
 	ghost_label.text = "GHOSTS: %d" % ghosts.size()
 	_rebuild_scoreboard()
 
@@ -1112,7 +1131,18 @@ func _on_death(victim: int, is_fall: bool, killer: int = -1, cause: String = "sh
 	_respawns.append({"f": fighters[victim], "t": RESPAWN_TIME, "hp": hp_amt, "mode": mode})
 	_shake = maxf(_shake, 0.7 if self_echo else 0.55)
 	_spawn_death_fx(fighters[victim].global_position, _colors[victim])
-	if self_echo:
+	# THE DECIDING MOMENT (doc 09 §Q2): a KO inside the final round's dying 10
+	# seconds decides the match — there is no time to answer it. Deep freeze +
+	# fov punch + a named beat. Ordinary KOs keep the 45ms hitpause (echo was
+	# already demote-compliant); the self-echo irony beat keeps its §2.1 depth.
+	var deciding: bool = round_no >= _rounds and _rounds > 1 and state == St.PLAY \
+			and _round_time >= round_len - 10.0
+	if deciding and FinalStretch.motion_ok():
+		_slowmo(0.25, 0.85)
+		FinalStretch.fov_punch(camera, 52.0, 6.0, 0.85)
+		if not self_echo:
+			_flash_banner("THE DYING SECONDS CLAIM %s" % _names[victim], _colors[victim], 1.8)
+	elif self_echo:
 		_slowmo(0.3, 0.5)
 	else:
 		_hitpause()

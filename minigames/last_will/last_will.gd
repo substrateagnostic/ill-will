@@ -124,6 +124,12 @@ var _rig_home := Vector3.ZERO      # camera rig pos before the resolution pan
 var _cam_zoom := 1.0
 var _ghost_rail: Node3D
 
+# THE FINAL STRETCH kit (doc 09 §Q1): the FINAL RACE is last will's stretch —
+# every curse written across the night is on the road at once. Tense music
+# from the final "RACE N" call + hard-cap ticks + timer pulse. Gated on
+# fx_on() (not _tally) so the --willtally receipts never construct it.
+var _stretch: FinalStretch = null
+
 # meta
 var _currency: Array = []
 ## Anthology kill ledger (module contract results.kill_events): each entry
@@ -309,6 +315,8 @@ func begin(config: Dictionary) -> void:
 		pawns.append(pawn)
 	print("LW_BEGIN players=%d seed=%d races=%d bots=%s" % [players.size(),
 		rng.seed, races_total, str(players.map(func(p): return p.is_bot))])
+	if not _tally:
+		_stretch = FinalStretch.attach(self, timer_label)
 	hint_label.text = _controls_bar()
 	hud.build(players)
 	race_index = 0
@@ -475,10 +483,19 @@ func _start_race() -> void:
 		pawns[i].set_world_frozen(true)
 	race_label.text = "RACE %d / %d" % [race_index + 1, races_total]
 	_refresh_hint()
+	# THE FINAL STRETCH (doc 09 §Q1): the last race runs TENSE start to finish —
+	# the whole night's curses are on the road. Earlier races re-arm the light bed.
+	if _stretch != null:
+		if race_index >= races_total - 1 and races_total > 1:
+			_stretch.escalate()
+		else:
+			_stretch.round_reset()
 	if not _tally:
 		_flash_banner("RACE %d\nFIRST TO THE CRYPT INHERITS" % (race_index + 1), Color(1, 0.85, 0.2), 2.0)
 		if race_index == 0:
 			_flash_exec(EXEC_DEPART, 3.4)
+		elif race_index >= races_total - 1 and races_total > 1:
+			_flash_exec("The final race. The estate settles all accounts tonight.", 3.4)
 		elif curses.size() > 0:
 			_flash_sub("THE COURSE REMEMBERS — %d CURSES ACTIVE" % curses.size(), Color(0.7, 1.0, 0.7), 2.6)
 
@@ -933,7 +950,13 @@ func _on_pawn_died(index: int, cause: String) -> void:
 		Sfx.play("death")
 		_spawn_burst(pawn.global_position + Vector3(0, 0.4, 0), players[index].color, 30)
 		_shake = maxf(_shake, 0.5)
-		_time_hit(0.3, 0.38)
+		# THE DECIDING MOMENT (doc 09 §10.2/§Q2): a death that leaves <=1 racer
+		# with lives gets the deep freeze (the will theater's own -6 fov beat
+		# follows it); ordinary deaths demote to 0.5x/0.2s.
+		if _racers_with_lives() <= 1 and players.size() >= 2 and not _reduced_motion():
+			_time_hit(0.25, 0.9)
+		else:
+			_time_hit(0.5, 0.2)
 	_flash_banner(line, lcolor, 1.6)
 
 	_will_queue.append(index)
@@ -946,6 +969,15 @@ func _set_frozen(v: bool) -> void:
 	for pawn in pawns:
 		if pawn.alive:
 			pawn.set_world_frozen(v)
+
+## Racers still in contention: lives left and not yet through the crypt door.
+## The death that drops this to <=1 is the race-deciding one (doc 09 §10.2).
+func _racers_with_lives() -> int:
+	var n := 0
+	for p in players:
+		if int(p.lives) > 0 and not bool(p.finished):
+			n += 1
+	return n
 
 # ================================================================ the will (THE SHOW)
 func _begin_will(deceased: int) -> void:
@@ -1286,6 +1318,8 @@ func _points_table() -> Array:
 # ================================================================ match end
 func _finish_match() -> void:
 	phase = Phase.MATCH_END
+	if _stretch != null:
+		_stretch.match_ended()
 	_tally_stats.races = races_total
 	var order: Array = range(players.size())
 	order.sort_custom(func(a, b):
@@ -1651,6 +1685,8 @@ func _time_hit(scale: float, real_duration: float) -> void:
 
 func _update_timer_label() -> void:
 	timer_label.text = "%d:%02d" % [int(race_elapsed / 60.0), int(fmod(race_elapsed, 60.0))]
+	if _stretch != null and phase == Phase.RACE:
+		_stretch.tick(HARD_CAP - race_elapsed)   # ladder into the hard cap
 	if race_elapsed < HARD_CAP - 30.0:
 		timer_label.add_theme_color_override("font_color", Color(0.85, 0.97, 1))
 	else:
