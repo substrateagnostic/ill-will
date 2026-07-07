@@ -417,6 +417,69 @@ DECISIONS ALEX MAY WANT TO REVIEW:
    items (match-point banner, winner Cheer, ghost materialization) are still
    on the bench.
 
+### 2026-07-07 — ONLINE PHASE 2, ARENA MIRROR #1 — THE THRONE (agent worktree)
+The first REALTIME arena plays online. Proves the séance house pattern carries
+a Jolt-physics brawl, not just UI/turn games: **physics stays host-side; the
+client renders interpolated transforms and fires all the juice from state
+deltas.** Two instances, one machine, a full ~2-min match with a remote seat 1.
+
+- Mirrored on the client (screenshots read by eye,
+  `docs/verify/throne_netshots_join/`): the whole arena — the crowned king on
+  the dais with the gold-stream fountain + the `♔` crown glyph in the score
+  panel (`snap_mirror_reign`); the guard-wall lifecycle; and the
+  **SUCCESSION CRISIS — THRONE PAYS DOUBLE** banner + hot-red timer
+  (`snap_mirror_crisis`). The probe match even ran into OVERTIME, so **THE
+  COURT WILL NOT ADJOURN** was exercised across the wire.
+- Juice from counters, not events: decree blast → shockwave+shake+boom; grip
+  drain → king pop+shake; dethrone → slow-beat echo + the crown tumbles off
+  the seat as a physics body. Drop-tolerant, one pipe.
+- Royals are frozen + net_mirror on the client (Royal._physics_process /
+  _update_anim short-circuit); throne.gd's _mirror_tick lerps each toward the
+  latest snapshot and keeps the grip-pip HUD + cooldown rings glued to the king.
+- Receipts: `--thronebalance` (real match, FX) is wall-clock-coupled by its
+  slow-mo beats and wanders run-to-run on identical code — so the byte receipt
+  is the no-FX fixed-step `--thronebalancefast`, byte-identical to a
+  pristine-HEAD worktree (seeds 1/2/3, shares + dethronings + OT all equal).
+  NETHASH_MOD 43/43 client digests matched the host (zero disagreements);
+  bandwidth mean ~855 B/snap (≈17 kB/s @ 20 Hz); user:// saves restored,
+  md5-verified.
+- Lanes: `minigames/throne/**` + `docs/verify/` only. Estate + net_session
+  UNTOUCHED. (Honest gap: the ragdoll TUMBLE spin isn't mirrored — position +
+  Hit_A + the tumbling crown are; the fallen slides but stays upright.)
+
+### 2026-07-07 — ONLINE PHASE 2, GAME MIRROR #2 — THE UNDERSTUDY (agent worktree)
+The second theater game plays ONLINE end to end. It rode the séance house
+pattern nearly free (same hidden-info shape). The win worth seeing:
+
+THE MONEY-SHOT PAIR (two PNGs, one casting window, remote seat 1 = a CAST
+member so its private card is THE PLAY):
+- HOST screen: `SUMMONED ACROSS THE WIRE · THE SCRIPT IS DELIVERED TO THEIR
+  SCREEN ALONE`. The machine running the whole sim shows a REDACTED card.
+- CAST CLIENT screen: `TONIGHT'S PLAY · THE SHIPWRECK · You have read the
+  script.` The play flash exists on exactly one screen — and it's the right
+  one. The understudy's peer would instead get the "you never got the
+  script" card. Nobody learns another's role. Online is structurally better
+  than couch here (no eyes-closed honor system on the wire).
+  `docs/verify/us_netshots_{host,join}/`.
+
+- Mirrored, both screens: the casting theater, the rehearsal cue grid + the
+  actors' delivered-cue status labels, the live vote board (carets forming,
+  accusation chips), and the verdict — `THEY WALK — RED WAS THE UNDERSTUDY`
+  with RED spotlit and the scoreboard's `(u/s)` tag revealed at RESOLVE
+  exactly as on the host.
+- Per-peer voice summons: each remote seat hears ONLY its own colour called
+  (roll-call + cast ticks ride the private channel). Blind-table trust →
+  structural privacy across the wire.
+- Real-keys hint bar retrofit (realkeys-VERIFY template): the persistent bar
+  now prints the player's LIVE key (`STICK = CHOOSE · Space = COMMIT`), not a
+  generic "A". Self-contained helpers, presentation-only.
+- Receipts: US_TALLY byte-identical to a pristine-HEAD worktree (seeds
+  1/2/3) — transport provably didn't touch the sim; NETHASH_MOD 43/43 +
+  46/46 snapshot digests matched; bandwidth mean ~907 B/snap (≈18 kB/s @
+  20 Hz); user:// saves restored, md5-verified.
+- Lanes touched: `minigames/understudy/**` + `docs/verify/` only. Estate
+  shell + net_session UNTOUCHED (the generic 20 Hz pump just works).
+
 ### 2026-07-06 — ONLINE PHASE 1 IS REAL: two copies of ILL WILL played one night together
 The spine from doc 10 is built and proven on this machine: **HOST NIGHT /
 JOIN NIGHT on the title**, a 6-char invite code (`80CMWE` = your LAN

@@ -134,6 +134,27 @@ var _hitkit_cap := false               # verify: stage the HIT KIT / ring shots
 var _freeze := false                   # verify: hold gameplay to film a moment
 var _cap_dir := "verify_out"
 
+# --- ONLINE PHASE 2: the render mirror (docs/design/10 §4.3) ---------------
+# THE THRONE is the FIRST arena mirror. It rides THE SÉANCE's house pattern
+# (minigames/seance/seance.gd): the host runs the WHOLE physics sim exactly as
+# couch; the estate pumps _net_state() (compact PUBLIC facts) to every guest at
+# 20 Hz. The client boots the SAME scene with config.net_mirror = true; the sim,
+# bots and input sampling never run. Physics stays HOST-SIDE — the client renders
+# king/royal transforms (interpolated) + anim tags, and fires every court-power
+# juice (decree shockwave, grip-drain pop, dethrone slow-beat) from state DELTAS.
+# There is no hidden info in the arena, so nothing rides the private channel.
+var _mirror := false
+var _mir := {}                     # last applied snapshot (delta source for juice)
+var _banner_col := "ffff33"        # wire fact for the mirror banner
+var _decree_n := 0                 # host: total decree blasts (mirror juice delta)
+var _dethrone_n := 0               # host: total dethronings (mirror juice delta)
+var _shove_n := 0                  # host: total grip-drain hits (mirror juice delta)
+# client mirror scratch
+var _mir_king := -1                # last crowned seat the mirror has a crown on
+var _mir_guard: StaticBody3D = null
+var _mir_roy: Array = []           # per-royal interp targets [pos, yaw, anim, king]
+var _mir_snapped: Dictionary = {}  # mirror-side evidence snaps
+
 @onready var arena: Node3D = $Arena
 @onready var cam: Camera3D = $CameraRig/Camera3D
 @onready var spawn_root: Node3D = $SpawnRoot
@@ -218,12 +239,14 @@ func _begin(config: Dictionary) -> void:
 	if _started:
 		return
 	_started = true
+	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.get("rng_seed", 1))
-	if _balance:
+	if _balance and not _mirror:
 		Engine.time_scale = _balance_scale
 	var roster: Array = config.get("roster", [])
-	bots = ThroneBots.new()
-	bots.setup(int(config.get("rng_seed", 1)) ^ 0x7405, roster.size())
+	if not _mirror:
+		bots = ThroneBots.new()
+		bots.setup(int(config.get("rng_seed", 1)) ^ 0x7405, roster.size())
 
 	for i in roster.size():
 		var r: Dictionary = roster[i]
@@ -257,6 +280,11 @@ func _begin(config: Dictionary) -> void:
 		spawn_root.add_child(royal)
 		royal.setup(i, col, char_scene, self)
 		royal.global_position = _spawn_pos(i, roster.size())
+		if _mirror:
+			# RENDER MIRROR: the body never simulates — the host owns physics.
+			# Frozen static + net_mirror short-circuit; net_render drives it.
+			royal.net_mirror = true
+			royal.freeze = true
 		_royals.append(royal)
 
 		score_accum[i] = 0.0
@@ -266,6 +294,15 @@ func _begin(config: Dictionary) -> void:
 		_last_coin[i] = 0
 
 	hint_label.text = _controls_bar()
+	if _mirror:
+		# no bots, no match start, no coronation — the host owns every fact. The
+		# arena stands ready and waits for the first _net_apply.
+		phase = Phase.PRE
+		for i in players.size():
+			_mir_roy.append([_royals[i].global_position, 0.0, "Idle", false])
+		_rebuild_scoreboard()
+		print("THRONE_MIRROR boot players=%d my_seat=%d" % [players.size(), NetSession.my_seat()])
+		return
 	print("THRONE_BEGIN players=%d seed=%d bots=%s balance=%s" % [
 		players.size(), int(config.get("rng_seed", 1)), str(bot_enabled), str(_balance)])
 	_start_match()
@@ -337,6 +374,11 @@ func _physics_process(delta: float) -> void:
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+
+	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
+	if _mirror:
+		_mirror_tick(delta)
+		return
 
 	if phase != Phase.PLAY:
 		return
@@ -488,6 +530,7 @@ func _try_decree() -> void:
 	decree_cd = DECREE_CD_BASE + float(decree_uses) * DECREE_FATIGUE
 	_decree_cd_max = decree_cd
 	decree_uses += 1
+	_decree_n += 1        # the WIRE carries only this count — the mirror shockwaves off it
 	var hits := 0
 	for r in _royals:
 		if r.is_king:
@@ -603,6 +646,7 @@ func on_king_shoved(attacker: int, dir: Vector3) -> void:
 	if king < 0 or seating_index >= 0 or attacker == king:
 		return
 	grip -= 1
+	_shove_n += 1         # mirror pops the king + shakes off this count delta
 	_update_throne_hud()
 	# HIT KIT: the grip-drain must read as a real hit, not a soft bump. King
 	# squash-pop + spark always; micro-hitstop + shake unless reduced-motion.
@@ -629,6 +673,7 @@ func _dethrone(slayer: int, dir: Vector3) -> void:
 	var fallen := king
 	var reign_len := game_time - reign_start
 	_last_dethrone_t = game_time
+	_dethrone_n += 1     # mirror fires the slow-beat / splat off this count delta
 	longest_reign[fallen] = maxf(longest_reign[fallen], reign_len)
 	dethronings[slayer] += 1
 	_currency_log.append({"type": "royalty", "player": slayer, "amount": 1,
@@ -1253,6 +1298,7 @@ func _flash_banner(text: String, color: Color, duration: float) -> void:
 	if not _fx:
 		return
 	banner.text = text
+	_banner_col = color.to_html(false)   # wire fact for the mirror
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
 	banner.pivot_offset = banner.size / 2.0
@@ -1495,6 +1541,193 @@ func _spawn_confetti(pos: Vector3, color: Color) -> void:
 		p.material_override = mat
 		p.emitting = true
 		get_tree().create_timer(2.4).timeout.connect(p.queue_free)
+
+# =====================================================================
+# ONLINE (phase 2) — the first ARENA mirror (docs/design/10 §4.3)
+# =====================================================================
+# Physics stays HOST-SIDE; the client renders. _net_state() fans compact PUBLIC
+# facts at 20 Hz; the mirror interpolates royal transforms in _mirror_tick and
+# fires every court-power juice from state DELTAS (counters, not events, so a
+# dropped packet loses nothing but intermediate frames). No hidden info in the
+# arena — nothing rides the private channel.
+
+## HOST, pumped by the estate at 20 Hz. Compact PUBLIC facts only.
+func _net_state() -> Dictionary:
+	var roy: Array = []
+	for i in players.size():
+		var r: Royal = _royals[i]
+		roy.append([
+			snappedf(r.global_position.x, 0.01), snappedf(r.global_position.y, 0.01),
+			snappedf(r.global_position.z, 0.01), snappedf(r.model_yaw(), 0.02),
+			r.anim_tag(),
+		])
+	var st := {
+		"ph": phase,
+		"gt": snappedf(game_time, 0.05),
+		"king": king, "seat": seating_index,
+		"grip": grip, "fat": decree_uses,
+		"roy": roy,
+		"gold": _gold_stream != null and _gold_stream.emitting,
+		"dcd": snappedf(decree_cd, 0.02), "gcd": snappedf(guard_cd, 0.02),
+		"dcdmax": snappedf(_decree_cd_max, 0.02),
+		"tmr": timer_label.text,
+		"hot": _overtime or (_match_time - game_time <= CRISIS_TIME),
+		"crisis": [crisis_label.text, crisis_label.visible],
+		"ban": [banner.text, _banner_col, banner.visible],
+		"sc": _scores_pack(),
+		"dn": _decree_n, "kn": _dethrone_n, "sn": _shove_n,
+	}
+	if active_guard != null and is_instance_valid(active_guard):
+		st["guard"] = [snappedf(active_guard.global_position.x, 0.01),
+			snappedf(active_guard.global_position.z, 0.01),
+			snappedf(active_guard.rotation.y, 0.02)]
+	return st
+
+func _scores_pack() -> Array:
+	var out: Array = []
+	for i in players.size():
+		out.append(int(score_accum[i]))
+	return out
+
+## CLIENT. Latest-state-wins; all juice fires from DELTAS. Continuous motion
+## only sets targets; _mirror_tick interpolates at the render rate.
+func _net_apply(state: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = state
+	phase = int(state.get("ph", Phase.PRE))
+	game_time = float(state.get("gt", game_time))
+	king = int(state.get("king", -1))
+	seating_index = int(state.get("seat", -1))
+	grip = int(state.get("grip", 0))
+	decree_uses = int(state.get("fat", 0))
+	decree_cd = float(state.get("dcd", 0.0))
+	guard_cd = float(state.get("gcd", 0.0))
+	_decree_cd_max = float(state.get("dcdmax", DECREE_CD_BASE))
+	# --- royal interp targets (motion smoothed in _mirror_tick)
+	var roy: Array = state.get("roy", [])
+	for i in mini(roy.size(), _mir_roy.size()):
+		var rr: Array = roy[i]
+		_mir_roy[i][0] = Vector3(float(rr[0]), float(rr[1]), float(rr[2]))
+		_mir_roy[i][1] = float(rr[3])
+		_mir_roy[i][2] = str(rr[4])
+		_mir_roy[i][3] = (i == king)
+	# --- timer + crisis + banner
+	timer_label.text = str(state.get("tmr", ""))
+	timer_label.add_theme_color_override("font_color",
+		Color(1, 0.4, 0.3) if bool(state.get("hot", false)) else Color(1, 0.92, 0.6))
+	var cl: Array = state.get("crisis", ["", false])
+	crisis_label.text = str(cl[0])
+	crisis_label.visible = bool(cl[1])
+	if crisis_label.visible and not _mir_snapped.has("mirror_crisis"):
+		_mir_snapped["mirror_crisis"] = true
+		VerifyCapture.snap("mirror_crisis")   # crisis / overtime banner mirrored
+	_apply_mir_banner(state.get("ban", []), prev.get("ban", []))
+	# --- crown lifecycle (attach on coronation, tumble on dethrone)
+	if king != _mir_king:
+		if king >= 0:
+			_attach_crown(_royals[king])
+		elif _mir_king >= 0 and _mir_king < _royals.size():
+			_detach_crown_to_physics(_royals[_mir_king], Vector3(0, 0, 1))
+		_mir_king = king
+	# --- reign gold stream
+	_set_gold_stream(bool(state.get("gold", false)))
+	# --- guard wall lifecycle
+	if state.has("guard"):
+		if _mir_guard == null or not is_instance_valid(_mir_guard):
+			var g: Array = state["guard"]
+			_mir_spawn_guard(Vector3(float(g[0]), SEAT_POS.y, float(g[1])), float(g[2]))
+			if not _mir_snapped.has("mirror_guard"):
+				_mir_snapped["mirror_guard"] = true
+				VerifyCapture.snap("mirror_guard")   # guard wall lifecycle mirrored
+	elif _mir_guard != null and is_instance_valid(_mir_guard):
+		_mir_guard.queue_free()
+		_mir_guard = null
+	active_guard = _mir_guard   # so _update_cd_rings reads the guard's presence
+	# --- scoreboard (rebuild on score / crown change)
+	var sc: Array = state.get("sc", [])
+	if sc != prev.get("sc", []) or king != int(prev.get("king", -2)) or seating_index != int(prev.get("seat", -2)):
+		for i in mini(sc.size(), players.size()):
+			score_accum[i] = float(sc[i])
+		_rebuild_scoreboard()
+	# --- decree blast (shockwave + shake + boom from the count delta)
+	if int(state.get("dn", 0)) > int(prev.get("dn", 0)):
+		var kc: Color = players[king].color if king >= 0 else Color.WHITE
+		_spawn_shockwave(SEAT_POS, kc)
+		_shake = maxf(_shake, 0.45)
+		Sfx.play("bumper", 1.0)
+	# --- grip drain (king pop + shake)
+	if int(state.get("sn", 0)) > int(prev.get("sn", 0)):
+		if king >= 0 and king < _royals.size():
+			_royals[king].flash_pop()
+		_shake = maxf(_shake, 0.28)
+		Sfx.play("bounce", -1.0)
+	# --- dethrone (the slow-beat's local echo: shake + splat)
+	if int(state.get("kn", 0)) > int(prev.get("kn", 0)):
+		_shake = maxf(_shake, 0.9)
+		Sfx.play("splat")
+		Sfx.play("death", -3.0)
+	# --- evidence snap once the arena is live and a king reigns
+	if phase == Phase.PLAY and king >= 0 and seating_index < 0 and not _mir_snapped.has("mirror_reign"):
+		_mir_snapped["mirror_reign"] = true
+		VerifyCapture.snap("mirror_reign")
+
+## CLIENT, per render tick: interpolate royal transforms toward the latest
+## authoritative snapshot; keep the throne HUD + cooldown rings glued to the
+## king. Cooldowns tick down locally between 20 Hz snapshots for smooth rings.
+func _mirror_tick(delta: float) -> void:
+	if _mir.is_empty():
+		return
+	game_time += delta
+	if decree_cd > 0.0:
+		decree_cd -= delta
+	if guard_cd > 0.0:
+		guard_cd -= delta
+	var k := 1.0 - exp(-18.0 * delta)
+	for i in mini(_mir_roy.size(), _royals.size()):
+		var t: Array = _mir_roy[i]
+		var r: Royal = _royals[i]
+		var np: Vector3 = r.global_position.lerp(t[0] as Vector3, k)
+		var ny: float = lerp_angle(r.model_yaw(), float(t[1]), k)
+		r.net_render(np, ny, str(t[2]), bool(t[3]))
+	_update_throne_hud()
+
+func _apply_mir_banner(arr: Array, parr: Array) -> void:
+	if arr.size() < 3:
+		return
+	banner.text = str(arr[0])
+	banner.add_theme_color_override("font_color", Color(str(arr[1])))
+	var was: bool = parr.size() >= 3 and bool(parr[2]) and str(parr[0]) == str(arr[0])
+	banner.visible = bool(arr[2])
+	if banner.visible and not was:
+		banner.pivot_offset = banner.size / 2.0
+		banner.scale = Vector2(0.6, 0.6)
+		var tw := create_tween()
+		tw.tween_property(banner, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+## Visual-only guard wall on the mirror (no collision — the host owns physics).
+func _mir_spawn_guard(pos: Vector3, yaw: float) -> void:
+	var wall := StaticBody3D.new()
+	wall.name = "MirGuard"
+	wall.collision_layer = 0
+	wall.collision_mask = 0
+	spawn_root.add_child(wall)
+	wall.global_position = pos
+	wall.rotation.y = yaw
+	var mi := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(2.6, 1.4, 0.35)
+	mi.mesh = bm
+	mi.position = Vector3(0, 0.7, 0)
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.32, 0.3, 0.36)
+	mat.emission_enabled = true
+	mat.emission = players[king].color if king >= 0 else Color.WHITE
+	mat.emission_energy_multiplier = 0.35
+	mi.material_override = mat
+	wall.add_child(mi)
+	_mir_guard = wall
 
 # =====================================================================
 # verify hooks

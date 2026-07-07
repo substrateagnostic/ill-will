@@ -223,6 +223,18 @@ func flip_to_cast(play_title: String) -> void:
 	_flip()
 	_prompt.text = "PRESS  A  WHEN COMMITTED"
 
+## ONLINE: a REMOTE seat's card is dealt to its peer alone. The host screen and
+## every other guest's mirror flip to THIS — a redacted face, no play, no role.
+## (Seance's "THE CARD IS DELIVERED TO THEIR SCREEN ALONE", the understudy cut.)
+func flip_to_redacted(pname: String, col: Color, glyph: String) -> void:
+	_face_kicker.text = "%s %s" % [glyph, pname]
+	_face_kicker.add_theme_color_override("font_color", col)
+	_face_title.text = "SUMMONED\nACROSS THE WIRE"
+	_face_title.add_theme_color_override("font_color", Color(0.62, 0.58, 0.68))
+	_face_body.text = "THE SCRIPT IS DELIVERED TO THEIR SCREEN ALONE"
+	_flip()
+	_prompt.text = "their part is theirs alone"
+
 func flip_to_understudy(candidates: Array) -> void:
 	_face_kicker.text = "YOU ARE THE"
 	_face_kicker.add_theme_color_override("font_color", Color(0.6, 0.2, 0.2))

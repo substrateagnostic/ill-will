@@ -51,6 +51,7 @@ var crown_anchor: Node3D
 var _cur_anim := ""
 var _anim_lock := 0.0
 var _squash_tw: Tween             # owns the HIT KIT windup/pop model scale
+var net_mirror := false           # ONLINE: this body renders host state, never simulates
 
 func setup(p_index: int, p_color: Color, char_scene: PackedScene, p_owner: Node) -> void:
 	index = p_index
@@ -207,6 +208,8 @@ func launch(dir: Vector3, force: float) -> void:
 
 # ----------------------------------------------------------------- physics
 func _physics_process(delta: float) -> void:
+	if net_mirror:
+		return   # ONLINE mirror: the host owns physics; net_render drives this body
 	if _shove_cd > 0.0: _shove_cd -= delta
 	if _dash_cd > 0.0: _dash_cd -= delta
 	if re_sit_cd > 0.0: re_sit_cd -= delta
@@ -259,7 +262,29 @@ func _physics_process(delta: float) -> void:
 		rotation = Vector3.ZERO
 
 func _process(delta: float) -> void:
+	if net_mirror:
+		return   # ONLINE mirror: net_render sets the anim tag from the host
 	_update_anim(delta)
+
+# --- ONLINE mirror (docs/design/10 §4.3) ------------------------------------
+## The model's facing yaw (host packs this; the mirror lerps toward it).
+func model_yaw() -> float:
+	return model_pivot.rotation.y if model_pivot else 0.0
+
+## Current anim tag for the wire (Idle / Running_A / Hit_A / Interact).
+func anim_tag() -> String:
+	return _cur_anim
+
+## Apply a host snapshot on the mirror: place the (frozen) body, face the model,
+## and re-play the anim when the tag changes. No physics, no input.
+func net_render(pos: Vector3, yaw: float, tag: String, king_now: bool) -> void:
+	global_position = pos
+	is_king = king_now
+	if model_pivot:
+		model_pivot.rotation.y = yaw
+	if tag != _cur_anim and anim != null and anim.has_animation(tag):
+		_cur_anim = tag
+		anim.play(tag)
 
 func _update_anim(delta: float) -> void:
 	if anim == null:

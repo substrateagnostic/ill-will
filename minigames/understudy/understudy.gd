@@ -154,11 +154,44 @@ var _snapped: Dictionary = {}
 var _cli_players := 4
 var _cli_seed := 1
 var _rounds_override := 0
+var _force_und := -1               # --usforceund=N: pin the round understudy (evidence only)
 
 # fx tokens
 var _banner_token := 0
 var _sub_token := 0
 var _cast_wall_ms := 0             # casting-compression receipt (non-tally only)
+
+# --- ONLINE PHASE 2: the render mirror (docs/design/10 §4.3) ---------------
+# Rides THE SÉANCE's house pattern (minigames/seance/seance.gd): the host runs
+# the WHOLE sim exactly as couch; the estate pumps _net_state() (compact PUBLIC
+# facts only) to every guest at 20 Hz. The client boots the SAME scene with
+# config.net_mirror = true; the sim, bots and input sampling never run —
+# _net_apply() drives the visuals and all juice fires from state DELTAS. Hidden
+# info NEVER rides the fan-out: THE PLAY (cast) and the UNDERSTUDY card go via
+# NetSession.send_module_private -> rpc_id, this seat's peer and nobody else.
+var _mirror := false
+var _mir := {}                     # last applied snapshot (delta source for juice)
+var _banner_col := "ffffff"        # wire facts for the mirror
+var _sub_col := "ffffff"
+# host side of the wire: the PUBLIC (always-redacted) casting overlay fact. The
+# card FACE — play title / understudy — never passes through here; it is dealt
+# per-peer. `{"m": mode, "seat": s}`: rcintro|teach|call|gap|flip|closed.
+var _cast_pub := {}
+var _reh_locked_on := false        # on-script flag of the beat's locked cue (wire)
+var _res_verdict := ["", "ffffff"] # RESOLVE verdict text + colour (wire)
+var _res_lines: Array = []         # RESOLVE staggered reveal lines (wire)
+var _res_caught := false
+var _match_champ := -1
+# client mirror scratch
+var _mir_reveal_open := false
+var _mir_cast_sig := ""            # last applied casting overlay signature
+var _mir_call_card := {}           # MY private cast card (play title / understudy)
+var _mir_reh_beat := -999          # last grid beat rendered
+var _mir_reh_locked := -1          # locked cue already painted this beat
+var _mir_vote_built := false
+var _mir_res_shown := false
+var _mir_champ_done := false
+var _mir_snapped: Dictionary = {}  # mirror-side evidence snaps
 
 @onready var cam: Camera3D = $CameraRig/Camera3D
 @onready var stage_root: Node3D = $StageRoot
@@ -205,6 +238,11 @@ func _parse_args() -> void:
 			_cli_players = clampi(int(arg.trim_prefix("--players=")), 2, 4)
 		elif arg.begins_with("--seed="):
 			_cli_seed = int(arg.trim_prefix("--seed="))
+		elif arg.begins_with("--usforceund="):
+			# Evidence-only pin: force the round's understudy seat AFTER the seeded
+			# draws (rng stream untouched). Lets the online probe put a CAST member
+			# on the remote seat so the private PLAY card lands there. Never in play.
+			_force_und = int(arg.trim_prefix("--usforceund="))
 	if _tally:
 		var fast := 8.0
 		Engine.time_scale = fast
@@ -231,11 +269,13 @@ func begin(config: Dictionary) -> void:
 	if _started:
 		return
 	_started = true
+	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.get("rng_seed", 1))
 	roster = config.get("roster", [])
 	var n: int = roster.size()
-	bots = USBots.new()
-	bots.setup(int(config.get("rng_seed", 1)) ^ 0x5D511D, n)
+	if not _mirror:
+		bots = USBots.new()
+		bots.setup(int(config.get("rng_seed", 1)) ^ 0x5D511D, n)
 
 	players.clear()
 	actors.clear()
@@ -266,6 +306,15 @@ func begin(config: Dictionary) -> void:
 		a.setup(idx, players[i].color, players[i].name, load(char_path), 0.0)
 		actors.append(a)
 
+	if _mirror:
+		# RENDER MIRROR: no plays, no rotation, no rounds — the host owns every
+		# fact. The stage stands ready and waits for the first _net_apply.
+		phase = Phase.WAITING
+		hint_label.text = _controls_bar()
+		_rebuild_scoreboard()
+		print("US_MIRROR boot players=%d my_seat=%d" % [n, NetSession.my_seat()])
+		return
+
 	# rounds: default one turn as understudy per player; honor overrides
 	rounds_total = n
 	if config.get("practice", false):
@@ -284,7 +333,9 @@ func begin(config: Dictionary) -> void:
 
 	print("US_BEGIN players=%d seed=%d rounds=%d bots=%s" % [n, rng.seed, rounds_total,
 		str(players.map(func(p): return p.is_bot))])
-	hint_label.text = "STICK = CHOOSE     A = COMMIT"
+	# ONLINE host: with guests connected, nothing extra is needed here — the
+	# casting sends its private cards inline (see _present_call / _tick_casting).
+	hint_label.text = _controls_bar()
 	round_index = 0
 	_start_round()
 
@@ -489,6 +540,9 @@ func _start_round() -> void:
 		_round_pts[players[i].index] = 0
 
 	round_understudy = int(_und_perm[round_index % _und_perm.size()])
+	if _force_und >= 0 and _force_und < players.size():
+		round_understudy = players[_force_und].index
+		print("US_FORCEUND seat=%d (evidence pin — never real play)" % _force_und)
 	players[_seat_of(round_understudy)].und_rounds += 1
 	for i in players.size():
 		if players[i].index != round_understudy:
@@ -520,10 +574,54 @@ func _seat_of(pindex: int) -> int:
 			return i
 	return 0
 
+## ---- live-binding hint bar (real keys, not "A"; see docs/verify/realkeys-VERIFY.md) ----
+## Self-contained copies of the house helper trio (no shared file — no collision
+## with the other realkeys lanes). Bindings are fixed per match, so the bar is
+## built once at begin(); no live polling.
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned).
+func _human_seats() -> Array:
+	var out := []
+	for i in players.size():
+		if not bool(players[i].is_bot) and int(players[i].device) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = COMMIT"), else the per-seat "LABEL: KEY/NAME · KEY/NAME"
+## form (mixed keyboard + pad).
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(players[i].index), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(players[int(seats[j])].index)]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The main bar with real keys, or the generic text for an all-bot demo.
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return "STICK = CHOOSE     A = COMMIT"
+	return "STICK = CHOOSE   ·   %s" % _btn_hint("a", "COMMIT")
+
 # ============================================================== tick
 func _physics_process(delta: float) -> void:
 	for a in actors:
 		a.tick(delta)
+	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Juice + snaps only.
+	if _mirror:
+		_mirror_tick(delta)
+		return
 	match phase:
 		Phase.INTRO:
 			_t += delta
@@ -566,6 +664,7 @@ func _enter_casting() -> void:
 		print("US_CASTING act=%d rollcall=yes seat_gap=%.1fs" % [round_index + 1, _cast_gap()])
 		_say("Your colour has a voice. Learn it now — eyes open — before the lights fall.")
 		reveal_ui.show_rollcall_intro()
+		_cast_pub = {"m": "rcintro"}
 	else:
 		# rounds 2+: colours already learned — straight to the first summons,
 		# same voice-summons language, tighter gaps between seats.
@@ -586,6 +685,13 @@ func _present_call() -> void:
 	for i in actors.size():
 		actors[i].set_lit(0.6 if i != _cast_seat else USActor.SPOT_FOCUS)
 	reveal_ui.show_call(pl.name, pl.color, PlayerBadge.glyph(pl.index))
+	_cast_pub = {"m": "call", "seat": _cast_seat}
+	# ONLINE: a REMOTE seat's card leaves for its peer at the window START
+	# (reliable rpc_id); the client plays its own summons + shows the face-down
+	# card, then flips it locally on the host's public "flip" fact. No other
+	# machine — not even the host — ever holds this seat's role content.
+	if NetSession.is_host() and NetSession.is_seat_remote(_cast_seat):
+		NetSession.send_module_private(_cast_seat, _private_call_payload(_cast_seat))
 
 ## Roll-call teaching slot: light the taught colour, name it huge.
 func _present_teach(seat: int) -> void:
@@ -593,6 +699,12 @@ func _present_teach(seat: int) -> void:
 	for i in actors.size():
 		actors[i].set_lit(0.6 if i != seat else USActor.SPOT_FOCUS)
 	reveal_ui.show_teach(pl.name, pl.color, PlayerBadge.glyph(pl.index))
+	_cast_pub = {"m": "teach", "seat": seat}
+	# ONLINE: a remote seat learns its voice on ITS machine only — nobody else's
+	# mirror ticks (couch keeps every tick; it is one shared room, and the pacing
+	# is the point there).
+	if NetSession.is_host() and NetSession.is_seat_remote(seat):
+		NetSession.send_module_private(seat, {"kind": "summons"})
 
 func _tick_casting(delta: float) -> void:
 	if _cast_step == Cast.ROLLCALL:
@@ -628,13 +740,20 @@ func _tick_casting(delta: float) -> void:
 			peek = true
 		if peek:
 			_play_summons_tick(_cast_seat)   # fourth confirmation tick as the card turns
-			if pl.index == round_understudy:
+			if NetSession.is_host() and NetSession.is_seat_remote(_cast_seat):
+				# the card already left via rpc_id — the HOST screen (and every
+				# other guest's mirror) shows a REDACTED flip. The role flash
+				# physically exists on the owning peer's machine alone.
+				reveal_ui.flip_to_redacted(pl.name, pl.color, PlayerBadge.glyph(pl.index))
+				_mir_snap_soon("host_redacted", 0.45)   # the money-shot's host half
+			elif pl.index == round_understudy:
 				var cands: Array = []
 				for k in PLAYS:
 					cands.append(PLAYS[k].title)
 				reveal_ui.flip_to_understudy(cands)
 			else:
 				reveal_ui.flip_to_cast(str(PLAYS[tonight_play].title))
+			_cast_pub = {"m": "flip", "seat": _cast_seat}
 			_cast_step = Cast.PEEK
 			_cast_bot_t = 0.0
 	else:
@@ -655,6 +774,7 @@ func _tick_casting(delta: float) -> void:
 			if _cast_seat >= players.size():
 				_cast_step = Cast.CALL
 				reveal_ui.close()
+				_cast_pub = {"m": "closed"}
 				_enter_rehearsal()
 			elif _tally:
 				# original path: straight to the next call, no interstitial gap
@@ -664,6 +784,7 @@ func _tick_casting(delta: float) -> void:
 				# eyes down, hold the silence, then summon the next colour
 				_cast_step = Cast.GAP
 				reveal_ui.show_gap()
+				_cast_pub = {"m": "gap"}
 
 func _tick_rollcall(delta: float) -> void:
 	if _rc_seat < 0:
@@ -827,6 +948,7 @@ func _deliver_cue(seat: int, idx: int) -> void:
 		offscript_count[pl.index] = int(offscript_count[pl.index]) + 1
 	board.lock_word(idx, on_script, pl.color)
 	_reh_locked_word = idx
+	_reh_locked_on = on_script
 	_reh_step = 1
 	_reh_bot_t = 0.0
 	if on_script:
@@ -1088,10 +1210,13 @@ func _enter_resolve() -> void:
 
 func _reveal_lines(u: int, caught: bool, majority: bool, maj_target: int, correct_cast: Array, _misfire: Array) -> void:
 	var lines: Array = []
+	_res_caught = caught
 	if caught:
-		board.show_verdict("UNMASKED — %s WAS THE UNDERSTUDY" % player_name(u), Color(1.0, 0.4, 0.35))
+		_res_verdict = ["UNMASKED — %s WAS THE UNDERSTUDY" % player_name(u), Color(1.0, 0.4, 0.35).to_html(false)]
+		board.show_verdict(str(_res_verdict[0]), Color(1.0, 0.4, 0.35))
 	else:
-		board.show_verdict("THEY WALK — %s WAS THE UNDERSTUDY" % player_name(u), players[_seat_of(u)].color)
+		_res_verdict = ["THEY WALK — %s WAS THE UNDERSTUDY" % player_name(u), (players[_seat_of(u)].color as Color).to_html(false)]
+		board.show_verdict(str(_res_verdict[0]), players[_seat_of(u)].color)
 	var d := 0.4
 	if not majority:
 		lines.append({"text": "A SPLIT HOUSE — NO MAJORITY TO CONVICT", "color": Color(0.9, 0.55, 0.4), "delay": d})
@@ -1108,6 +1233,10 @@ func _reveal_lines(u: int, caught: bool, majority: bool, maj_target: int, correc
 	if not caught:
 		lines.append({"text": "%s +%d  SURVIVED THE STAGE" % [player_name(u), int(_round_pts[u])], "color": uc, "delay": d})
 	board.show_res_lines(lines)
+	# capture the ledger for the wire (colours -> html; same content + delays)
+	_res_lines.clear()
+	for ln in lines:
+		_res_lines.append([str(ln.text), (ln.color as Color).to_html(false), float(ln.delay)])
 
 func _round_winner() -> int:
 	var best := 0
@@ -1161,6 +1290,7 @@ func _finish_match() -> void:
 				"label": "%s, the Unerring Eye" % players[i].name})
 
 	var champ: int = players[order[0]].index
+	_match_champ = champ
 	var results: Dictionary = {
 		"placements": placements,
 		"points": points,
@@ -1321,6 +1451,7 @@ func _flash_banner(text: String, color: Color, duration: float) -> void:
 	if _tally:
 		return
 	banner.text = text
+	_banner_col = color.to_html(false)   # wire fact for the mirror
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
 	banner.pivot_offset = banner.size / 2.0
@@ -1339,6 +1470,7 @@ func _flash_sub(text: String, color: Color, duration: float) -> void:
 	if _tally:
 		return
 	sub_banner.text = text
+	_sub_col = color.to_html(false)   # wire fact for the mirror
 	sub_banner.add_theme_color_override("font_color", color)
 	sub_banner.visible = true
 	_sub_token += 1
@@ -1390,6 +1522,369 @@ func _do_snap(tag: String) -> void:
 	var path := "res://docs/verify/shots/understudy_%s.png" % tag
 	img.save_png(path)
 	print("US_SNAP ", path)
+
+# ============================================================== ONLINE (phase 2)
+# THE UNDERSTUDY rides THE SÉANCE's house pattern (minigames/seance/seance.gd):
+# _net_state() fans compact PUBLIC facts to every guest at 20 Hz; hidden info —
+# THE PLAY (cast) and the UNDERSTUDY card — is dealt per-peer via rpc_id. What
+# is understudy-specific: every key inside the dicts, and the two-card casting
+# theater (play title vs understudy) instead of the séance charlatan flash.
+
+## The private card for a REMOTE seat, composed HERE (host authority), sent
+## rpc_id to that seat's peer at the CALL. Cast peers get THE PLAY; the
+## understudy's peer gets the "you never got the script" card.
+func _private_call_payload(seat: int) -> Dictionary:
+	var d := {
+		"kind": "call",
+		"seat": seat,
+		"nm": str(players[seat].name),
+		"col": (players[seat].color as Color).to_html(false),
+	}
+	if players[seat].index == round_understudy:
+		d["role"] = "understudy"
+		var cands: Array = []
+		for k in PLAYS:
+			cands.append(PLAYS[k].title)
+		d["cands"] = cands
+	else:
+		d["role"] = "cast"
+		d["title"] = str(PLAYS[tonight_play].title)
+	return d
+
+## HOST, pumped by the estate at 20 Hz. Compact PUBLIC facts only — the play
+## title and the round's understudy (pre-RESOLVE) never enter this dict, because
+## it fans out to every guest and a guest may BE the understudy.
+func _net_state() -> Dictionary:
+	var st := {
+		"ph": phase,
+		"rnd": round_label.text,
+		"tmr": timer_label.text,
+		"hint": hint_label.text,
+		"say": executor_line.text,
+		"ban": [banner.text, _banner_col, banner.visible],
+		"sub": [sub_banner.text, _sub_col, sub_banner.visible],
+		"tot": _totals_pack(),
+		"act": _actors_pack(),
+	}
+	if phase == Phase.CASTING and not _cast_pub.is_empty():
+		st["cast"] = _cast_pub
+	if phase == Phase.REHEARSAL and _beat < _beat_order.size():
+		var seat: int = int(_beat_order[_beat])
+		st["reh"] = {
+			"b": _beat, "grid": cur_grid.duplicate(), "seat": seat,
+			"cur": _reh_cursor, "step": _reh_step,
+			"lock": _reh_locked_word, "lockon": _reh_locked_on,
+		}
+	if phase >= Phase.VOTE and phase <= Phase.RESOLVE:
+		var cur: Array = []
+		var lk: Array = []
+		for i in players.size():
+			var vi: int = players[i].index
+			cur.append(int(_vote_cursor.get(vi, -1)))
+			lk.append(bool(_vote_locked.get(vi, false)))
+		st["vote"] = {"cur": cur, "lk": lk}
+	if phase >= Phase.RESOLVE:
+		st["und"] = round_understudy
+		if not _res_lines.is_empty():
+			st["res"] = {"v": _res_verdict, "lines": _res_lines, "caught": _res_caught}
+	if phase == Phase.MATCH_END and _match_champ >= 0:
+		st["champ"] = _match_champ
+	return st
+
+## Per-seat totals for the scoreboard mirror.
+func _totals_pack() -> Array:
+	var out: Array = []
+	for i in players.size():
+		out.append(int(players[i].total))
+	return out
+
+## Per-actor visual state: [lit, status_text, status_col_html, anim_tag].
+func _actors_pack() -> Array:
+	var out: Array = []
+	for a in actors:
+		out.append(a.net_pack())
+	return out
+
+## CLIENT. Latest-state-wins; all juice fires from DELTAS against the previous
+## snapshot, so a dropped packet loses nothing but intermediate frames.
+func _net_apply(state: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = state
+	var ph := int(state.get("ph", Phase.WAITING))
+	var prev_ph := int(prev.get("ph", -1))
+	phase = ph
+	# --- plain text facts
+	round_label.text = str(state.get("rnd", round_label.text))
+	timer_label.text = str(state.get("tmr", ""))
+	hint_label.text = str(state.get("hint", hint_label.text))
+	executor_line.text = str(state.get("say", ""))
+	_apply_mir_banner(banner, state.get("ban", []), prev.get("ban", []), true)
+	_apply_mir_banner(sub_banner, state.get("sub", []), prev.get("sub", []), false)
+	# --- understudy identity is public knowledge only from RESOLVE
+	if state.has("und"):
+		round_understudy = int(state["und"])
+	# --- scoreboard (rebuild on any total / phase-boundary change)
+	var tot: Array = state.get("tot", [])
+	var ptot: Array = prev.get("tot", [])
+	if tot != ptot or ph != prev_ph:
+		for i in mini(tot.size(), players.size()):
+			players[i].total = int(tot[i])
+		_rebuild_scoreboard()
+	# --- actors
+	var act: Array = state.get("act", [])
+	for i in mini(act.size(), actors.size()):
+		var ap: Array = act[i]
+		if ap.size() >= 4:
+			actors[i].net_apply(float(ap[0]), str(ap[1]), str(ap[2]), str(ap[3]))
+	# --- phase-entry furniture
+	if ph != prev_ph:
+		_mir_phase_change(ph, prev_ph)
+	# --- casting overlay (public, redacted; my own card owns the flip)
+	_apply_mir_cast(state)
+	# --- rehearsal grid
+	if ph == Phase.REHEARSAL:
+		_apply_mir_reh(state)
+	# --- vote board
+	_apply_mir_vote(state, prev)
+	# --- resolution ledger
+	if ph >= Phase.RESOLVE:
+		_apply_mir_res(state)
+	# --- match champion confetti
+	if state.has("champ") and not _mir_champ_done:
+		_mir_champ_done = true
+		var c: int = int(state["champ"])
+		var cs: int = _seat_of(c)
+		if cs >= 0 and cs < actors.size():
+			_spawn_confetti(actors[cs].global_position + Vector3(0, 2.0, 0), players[cs].color)
+			Sfx.play("match_win")
+
+## Little on the mirror needs a 60 Hz tick — the actors interpolate their own
+## spotlights via tweens on the host and we snap to them; anims and cursors are
+## discrete. Kept for the house shape and any future smoothing.
+func _mirror_tick(_delta: float) -> void:
+	pass
+
+func _apply_mir_banner(lab: Label, arr: Array, parr: Array, pop: bool) -> void:
+	if arr.size() < 3:
+		return
+	lab.text = str(arr[0])
+	lab.add_theme_color_override("font_color", Color(str(arr[1])))
+	var was: bool = parr.size() >= 3 and bool(parr[2]) and str(parr[0]) == str(arr[0])
+	lab.visible = bool(arr[2])
+	if pop and lab.visible and not was:
+		lab.pivot_offset = lab.size / 2.0
+		lab.scale = Vector2(0.6, 0.6)
+		var tw := create_tween()
+		tw.tween_property(lab, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _mir_phase_change(ph: int, _prev_ph: int) -> void:
+	print("US_MIRROR phase -> %s" % Phase.keys()[ph])
+	match ph:
+		Phase.INTRO:
+			# new round: reset per-round mirror scratch
+			_mir_reh_beat = -999
+			_mir_reh_locked = -1
+			_mir_vote_built = false
+			_mir_res_shown = false
+			_mir_cast_sig = ""
+			_mir_call_card = {}
+			board.hide_all()
+			_set_base_ui(true)
+			for a in actors:
+				a.set_focus(false)
+				a.hide_status()
+		Phase.CASTING:
+			_set_base_ui(false)
+		Phase.REHEARSAL:
+			_set_base_ui(true)
+			board.hide_resolution()
+			board.show_rehearsal(true)
+		Phase.VOTE:
+			board.show_rehearsal(false)
+		Phase.RESOLVE:
+			board.show_vote_panel(false)
+		Phase.MATCH_END:
+			board.hide_all()
+			_set_base_ui(true)
+
+## Public casting overlay facts. My OWN card (delivered rpc_id) owns the flip;
+## every other seat's flip is REDACTED — the money shot pair.
+func _apply_mir_cast(state: Dictionary) -> void:
+	var c: Dictionary = state.get("cast", {})
+	if c.is_empty():
+		if _mir_reveal_open:
+			reveal_ui.close()
+			_mir_reveal_open = false
+			_mir_cast_sig = ""
+		return
+	var mode := str(c.get("m", "closed"))
+	var seat := int(c.get("seat", -1))
+	var sig := mode + ":" + str(seat)
+	if sig == _mir_cast_sig:
+		return
+	_mir_cast_sig = sig
+	match mode:
+		"closed":
+			if _mir_reveal_open:
+				reveal_ui.close()
+				_mir_reveal_open = false
+		"rcintro":
+			_mir_open_reveal()
+			reveal_ui.show_rollcall_intro()
+		"teach":
+			_mir_open_reveal()
+			if seat >= 0 and seat < players.size():
+				reveal_ui.show_teach(players[seat].name, players[seat].color, PlayerBadge.glyph(players[seat].index))
+		"gap":
+			_mir_open_reveal()
+			reveal_ui.show_gap()
+		"call":
+			_mir_open_reveal()
+			if seat >= 0 and seat < players.size():
+				reveal_ui.show_call(players[seat].name, players[seat].color, PlayerBadge.glyph(players[seat].index))
+		"flip":
+			_mir_open_reveal()
+			if seat == NetSession.my_seat() and not _mir_call_card.is_empty():
+				_mir_show_my_card()
+			elif seat >= 0 and seat < players.size():
+				reveal_ui.show_call(players[seat].name, players[seat].color, PlayerBadge.glyph(players[seat].index))
+				reveal_ui.flip_to_redacted(players[seat].name, players[seat].color, PlayerBadge.glyph(players[seat].index))
+
+func _mir_open_reveal() -> void:
+	if not _mir_reveal_open:
+		reveal_ui.open()
+		_mir_reveal_open = true
+
+## The flip of MY OWN card — the play title (cast) or UNDERSTUDY — from the card
+## delivered to this screen alone. The host and every other guest see redacted.
+func _mir_show_my_card() -> void:
+	var seat := int(_mir_call_card.get("seat", maxi(NetSession.my_seat(), 0)))
+	reveal_ui.show_call(str(_mir_call_card.get("nm", players[seat].name)),
+		Color(str(_mir_call_card.get("col", "fff"))), PlayerBadge.glyph(players[seat].index))
+	if str(_mir_call_card.get("role", "cast")) == "understudy":
+		reveal_ui.flip_to_understudy(_mir_call_card.get("cands", []))
+	else:
+		reveal_ui.flip_to_cast(str(_mir_call_card.get("title", "")))
+	_mir_snap_soon("mirror_card", 0.45)   # after the flip tween settles
+
+func _apply_mir_reh(state: Dictionary) -> void:
+	var reh: Dictionary = state.get("reh", {})
+	if reh.is_empty():
+		return
+	var seat := int(reh.get("seat", 0))
+	if seat < 0 or seat >= players.size():
+		return
+	var b := int(reh.get("b", -1))
+	if b != _mir_reh_beat:
+		_mir_reh_beat = b
+		_mir_reh_locked = -1
+		board.show_rehearsal(true)
+		board.show_grid(reh.get("grid", []))
+		board.set_active(players[seat].name, players[seat].color, PlayerBadge.glyph(players[seat].index))
+		board.set_word_cursor(int(reh.get("cur", 0)), players[seat].color)
+		if b >= 2:   # a couple beats in — the casting overlay is long gone
+			_mir_snap("mirror_rehearsal")
+	if int(reh.get("step", 0)) == 0:
+		board.set_word_cursor(int(reh.get("cur", 0)), players[seat].color)
+	var lock := int(reh.get("lock", -1))
+	if lock >= 0 and _mir_reh_locked != lock:
+		_mir_reh_locked = lock
+		board.lock_word(lock, bool(reh.get("lockon", false)), players[seat].color)
+
+func _apply_mir_vote(state: Dictionary, prev: Dictionary) -> void:
+	var v: Dictionary = state.get("vote", {})
+	if v.is_empty():
+		return
+	if not _mir_vote_built:
+		_mir_vote_built = true
+		board.show_rehearsal(false)
+		var entries: Array = []
+		for i in players.size():
+			entries.append({"index": players[i].index, "name": players[i].name, "color": players[i].color})
+		board.show_vote(entries)
+		board.show_vote_panel(true)
+		_mir_snap("mirror_vote_open")
+	var cur: Array = v.get("cur", [])
+	var lk: Array = v.get("lk", [])
+	var pv: Dictionary = prev.get("vote", {})
+	var plk: Array = pv.get("lk", [])
+	var pcur: Array = pv.get("cur", [])
+	var any_lock := false
+	for i in mini(players.size(), cur.size()):
+		var vi: int = players[i].index
+		var locked: bool = i < lk.size() and bool(lk[i])
+		var plocked: bool = i < plk.size() and bool(plk[i])
+		var tcol: int = int(cur[i])
+		if locked and not plocked:
+			board.lock_vote(vi, players[i].name, players[i].color, tcol)
+			any_lock = true
+		elif not locked:
+			var pc: int = int(pcur[i]) if i < pcur.size() else -2
+			if tcol != pc:
+				board.set_vote_cursor(vi, tcol)
+	if any_lock:
+		_mir_snap("mirror_vote")
+
+func _apply_mir_res(state: Dictionary) -> void:
+	var res: Dictionary = state.get("res", {})
+	if res.is_empty() or _mir_res_shown:
+		return
+	_mir_res_shown = true
+	board.show_vote_panel(false)
+	var v: Array = res.get("v", ["", "ffffff"])
+	board.show_verdict(str(v[0]), Color(str(v[1])))
+	var lines: Array = []
+	for l in res.get("lines", []):
+		lines.append({"text": str(l[0]), "color": Color(str(l[1])), "delay": float(l[2])})
+	board.show_res_lines(lines)
+	Sfx.play("grudge", -1.0)
+	_mir_snap("mirror_verdict")
+
+## CLIENT: hidden info, delivered rpc_id — it exists on THIS machine only.
+func _net_apply_private(data: Dictionary) -> void:
+	if not _mirror:
+		return
+	match String(data.get("kind", "")):
+		"summons":
+			# roll-call: my colour learns its voice on MY machine only
+			var my := NetSession.my_seat()
+			if my >= 0 and my < players.size():
+				_mir_summons(my)
+		"call":
+			# my cast card is now on this screen (and nowhere else). Stored; the
+			# public "flip" fact flips it face-up when the host registers my A.
+			_mir_call_card = data
+			var seat := int(data.get("seat", maxi(NetSession.my_seat(), 0)))
+			print("US_PRIV call card received (seat %d, %s) — content lives on this screen alone" % [
+				seat, str(data.get("role", "?"))])
+			_mir_summons(seat)
+
+## Three summons ticks in a seat's own tone (the eyes-closed cue), local only.
+func _mir_summons(seat: int) -> void:
+	_play_summons_tick(seat)
+	var tw := create_tween()
+	tw.tween_interval(SUMMONS_GAP)
+	tw.tween_callback(_play_summons_tick.bind(seat))
+	tw.tween_interval(SUMMONS_GAP)
+	tw.tween_callback(_play_summons_tick.bind(seat))
+
+func _mir_snap(tag: String) -> void:
+	if _mir_snapped.has(tag):
+		return
+	_mir_snapped[tag] = true
+	VerifyCapture.snap(tag)
+
+## Deferred one-shot snap (host OR client): let a flip/close tween settle first
+## so the frame captures the finished card, not a mid-animation frame.
+func _mir_snap_soon(tag: String, delay: float) -> void:
+	if _mir_snapped.has(tag):
+		return
+	_mir_snapped[tag] = true
+	var tw := create_tween()
+	tw.tween_interval(delay)
+	tw.tween_callback(func(): VerifyCapture.snap(tag))
 
 # ============================================================== verify hooks
 func get_phase_name() -> String:
