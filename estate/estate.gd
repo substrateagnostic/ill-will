@@ -74,6 +74,20 @@ var _net_module_seq := 0
 var _client_last_state := {}      # client: last mirrored lobby facts
 var _client_panel_sig := ""       # client: rebuild panel only when facts change
 var _client_walker_targets := {}  # client: p -> {pos, rot, moving} interp targets
+# ----- ONLINE PHASE 3 (this lane): PODIUMS + NIGHT CEREMONIES mirror. The host
+# narrates each ceremony stage as facts riding the 5 Hz lobby channel; clients
+# restage the same podium/panel locally — render truth, never simulate it. -----
+var _net_ceremony := {}           # host: current ceremony stage facts ({} = none)
+var _net_ticker: Array = []       # host: reckoning ticker lines (facts while RECKONING)
+var _net_auction_flavor := {}     # host: executor quip + vendetta notice this auction
+var _net_chooser := -1            # host: who won the auction (CHOOSING phase fact)
+var _client_podium: Podium = null # client: the restaged podium (host decides its end)
+var _client_cer_stage := ""       # client: ceremony stage currently rendered
+var _client_banner_sig := ""      # client: last mirrored banner (flash once per change)
+var _client_trail := {}           # client: p -> stone rendered on the local trail
+var _client_trail_tweens := {}    # client: p -> running advance tween (parade mirror)
+var _client_hats_sig := ""        # client: last applied wardrobe facts
+var _client_statues := {}         # client: statue idx already added to the gate
 
 # ----- READY ROOM v2 (seat tri-state, join/ready, pre-game GET READY card) -----
 var _lobby_ready := {}            # seat -> bool: lobby READY chip toggled on
@@ -392,6 +406,7 @@ func _build_slot_panel() -> void:
 
 func _enter_title() -> void:
 	phase = Phase.TITLE
+	_net_set_ceremony({})
 	Music.play_slot("lobby")
 	$UI/TopBar.visible = false
 	phase_panel.visible = false
@@ -508,6 +523,7 @@ func _hide_title() -> void:
 
 func _enter_lobby() -> void:
 	phase = Phase.LOBBY
+	_net_set_ceremony({})
 	_hide_title()
 	Music.play_slot("lobby")
 	$UI/TopBar.visible = false
@@ -816,6 +832,7 @@ func _update_lobby_start_btn() -> void:
 
 func _enter_selector() -> void:
 	phase = Phase.SELECTOR
+	_net_set_ceremony({})
 	_hide_title()
 	Music.play_slot("lobby")
 	Sfx.play("card")
@@ -1350,6 +1367,7 @@ func _clear_panel(title: String, color := Color(1, 0.9, 0.5)) -> void:
 ## begins when someone presses CONTINUE. No countdown for humans.
 func _enter_grounds() -> void:
 	phase = Phase.GROUNDS
+	_net_set_ceremony({})   # boundary handoff: guests return to grounds + panel
 	Music.play_slot("grounds")
 	_grounds_timer = GROUNDS_TIME
 	_tile_buyers.clear()
@@ -1625,6 +1643,9 @@ func _enter_auction() -> void:
 	if _maybe_show_house_rules():
 		return
 	phase = Phase.AUCTION
+	_net_set_ceremony({})
+	_net_auction_flavor = {}
+	_net_chooser = -1
 	Music.play_slot("auction")
 	high_bid = 0
 	high_bidder = -1
@@ -1658,6 +1679,7 @@ func _enter_auction() -> void:
 		vl.add_theme_font_size_override("font_size", 15)
 		vl.add_theme_color_override("font_color", Color(0.9, 0.75, 0.75))
 		phase_box.add_child(vl)
+		_net_auction_flavor["vendetta"] = vl.text
 	var exec_lines := [
 		"The Executor opens the bidding. Spite is legal tender.",
 		"The Executor reminds the room that generosity is not on the block.",
@@ -1670,6 +1692,7 @@ func _enter_auction() -> void:
 	eq.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
 	eq.modulate.a = 0.8
 	phase_box.add_child(eq)
+	_net_auction_flavor["quip"] = eq.text
 	var opts := Label.new()
 	var names: Array = []
 	for id in auction_options:
@@ -1768,6 +1791,7 @@ func _resolve_auction() -> void:
 		_rebuild_top_bar()
 	else:
 		chooser = EstateState.standings().back()
+	_net_chooser = chooser
 	if _is_bot(chooser):
 		_launch_game(auction_options[EstateState.rng.randi_range(0, auction_options.size() - 1)])
 		return
@@ -1909,6 +1933,7 @@ func _do_launch_game(id: String, practice := false) -> void:
 	if phase == Phase.GAME:
 		return
 	phase = Phase.GAME
+	_net_set_ceremony({})
 	Music.stop()
 	_hide_title()
 	banner.visible = false
@@ -1997,6 +2022,11 @@ func _on_module_finished(results: Dictionary) -> void:
 func _present_match_podium(placements: Array) -> void:
 	phase_panel.visible = false
 	banner.visible = false
+	# Guests get the same ceremony: set the stage facts in the SAME frame that
+	# dropped the mirror fact, so one client rebuild folds the game and raises
+	# the podium (no spectate-card flicker between them).
+	_net_set_ceremony({"stage": "match_podium", "game": _net_game_name,
+		"placements": placements})
 	var podium := Podium.new()
 	add_child(podium)
 	var entries: Array = []
@@ -2021,6 +2051,8 @@ func _enter_reckoning(ticker: Array) -> void:
 		var extra := ticker.size() - 7
 		ticker = ticker.slice(0, 7)
 		ticker.append("...and %d more (carved into the graffiti wall)" % extra)
+	_net_ticker = ticker.duplicate()
+	_net_set_ceremony({})   # podium folds on every guest; the ticker takes over
 	for line in ticker:
 		var l := Label.new()
 		l.text = str(line)
@@ -2063,6 +2095,7 @@ func _run_parade() -> int:
 		var tw: Tween = $Trail.advance_pawn(p, from, to)
 		await tw.finished
 		EstateState.trail_pos[p] = to
+		_net_push_facts()   # guests' pawns chase the trail fact per advance
 		print("PARADE p=%d from=%d to=%d" % [p, from, to])
 		for s in range(from + 1, to + 1):
 			if s in Trail.TOLLGATES:
@@ -2105,6 +2138,9 @@ func _night_ceremonies() -> void:
 	add_child(podium)
 	var entries: Array = []
 	var order := EstateState.standings()
+	_net_set_ceremony({"stage": "night_podium", "placements": order,
+		"champ": champ.index, "statue": EstateState.gate_statues.back(),
+		"statue_idx": EstateState.gate_statues.size() - 1})
 	for rank in order.size():
 		var pl = EstateState.players[order[rank]]
 		entries.append({
@@ -2133,24 +2169,32 @@ func _enter_will_reading(champ) -> void:
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_color_override("font_color", champ.color)
 	phase_box.add_child(head)
+	var aw_facts: Array = []
 	for aw in awards:
 		var pl = EstateState.players[aw.player]
 		var l := Label.new()
 		l.text = "%s, %s — %s" % [pl.name, aw.title, aw.line]
+		aw_facts.append([int(aw.player), l.text])
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.add_theme_color_override("font_color", pl.color)
 		l.modulate.a = 0.0
 		phase_box.add_child(l)
+	var vend_text := ""
 	if not EstateState.vendetta.is_empty() and EstateState.vendetta_settled_by < 0:
 		var v: Dictionary = EstateState.vendetta
 		var open_l := Label.new()
 		open_l.text = "The matter of %s and %s remains open. The estate is patient." % [
 			EstateState.players[int(v.hunter)].name, EstateState.players[int(v.prey)].name]
+		vend_text = open_l.text
 		open_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		open_l.add_theme_font_size_override("font_size", 15)
 		open_l.modulate.a = 0.0
 		open_l.self_modulate.a = 0.7
 		phase_box.add_child(open_l)
+	# The superlative cards travel as composed lines — the guest's reading is
+	# word-for-word the couch's, sequenced by the same stagger.
+	_net_set_ceremony({"stage": "will", "champ": champ.index, "head": head.text,
+		"awards": aw_facts, "vendetta": vend_text})
 	var i := 0
 	for c in phase_box.get_children():
 		if c is Label and c.modulate.a == 0.0:
@@ -2178,6 +2222,7 @@ func _night_parade() -> void:
 	_parade_running = true
 	phase_panel.visible = false
 	Music.play_slot("grounds")
+	_net_set_ceremony({"stage": "parade"})
 	var summit := await _run_parade()
 	EstateState.save_estate()
 	_parade_running = false
@@ -2208,6 +2253,7 @@ func _run_over(p: int) -> void:
 	add_child(podium)
 	var order: Array = EstateState.trail_pos.keys()
 	order.sort_custom(func(a, b): return EstateState.trail_pos[a] > EstateState.trail_pos[b])
+	_net_set_ceremony({"stage": "run_podium", "placements": order, "heir": p})
 	var entries: Array = []
 	for rank in order.size():
 		var q = EstateState.players[order[rank]]
@@ -2222,6 +2268,7 @@ func _run_over(p: int) -> void:
 	_clear_panel("THE ESTATE HAS AN HEIR", Color(1, 0.85, 0.2))
 	var l := Label.new()
 	l.text = "%s took the manor after %d nights.\n“The keys, the grounds, the grudges — all of it passes to %s.\nThe estate offers its condolences to everyone else.”  — The Executor" % [pl.name, maxi(1, EstateState.run_night), pl.name]
+	_net_set_ceremony({"stage": "heir", "heir": p, "text": l.text})
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(700, 0)
@@ -2240,6 +2287,11 @@ func _run_over(p: int) -> void:
 				_enter_title())
 
 func _flash(text: String, color: Color, dur: float) -> void:
+	# Mid-ceremony banners (WINS THE NIGHT, tollgate claims, REACHES THE MANOR)
+	# ride the stage facts so guests see the same words at the same beat.
+	if not _net_ceremony.is_empty():
+		_net_ceremony["banner"] = [text, color.to_html(), dur]
+		_net_push_facts()
 	banner.text = text
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
@@ -2432,7 +2484,26 @@ func _net_build_lobby_state() -> Dictionary:
 		"addr": NetSession.listen_addr(),
 		"seats": seats,
 		"standings": standings,
+		"trail": EstateState.trail_pos.duplicate(),
+		"hats": _net_hats(),
 	}
+	if phase == Phase.RECKONING and not _net_ticker.is_empty():
+		state["ticker"] = _net_ticker
+	if phase == Phase.AUCTION or phase == Phase.CHOOSING:
+		var names: Array = []
+		for id in auction_options:
+			names.append(String(MODULES[id].name))
+		state["auction"] = {
+			"options": names,
+			"high_bid": high_bid,
+			"leader": high_bidder,
+			"clock": ceili(maxf(_bid_timer, 0.0)),
+			"pot": EstateState.pot,
+			"flavor": _net_auction_flavor,
+			"chooser": _net_chooser,
+		}
+	if not _net_ceremony.is_empty():
+		state["ceremony"] = _net_ceremony
 	if _ready_gate_active:
 		var waiting: Array = []
 		for i in _ready_gate_needed:
@@ -2449,6 +2520,27 @@ func _net_build_lobby_state() -> Dictionary:
 		if _net_mirror_id != "" and _module != null:
 			state["mirror"] = _net_mirror_id   # phase 2: clients boot this scene
 	return state
+
+## The estate's wardrobe truth per seat: {p: [worn cosmetic ids]}. Guests
+## restage podiums/walkers from THESE — their local cosmetics.json is a
+## different estate's closet.
+func _net_hats() -> Dictionary:
+	var hats := {}
+	for i in EstateState.players.size():
+		var loadout: Dictionary = Cosmetics.get_player_cosmetics(i)
+		if not loadout.is_empty():
+			hats[i] = loadout.values()
+	return hats
+
+## Enter/replace/leave a mirrored ceremony stage. Stage flips matter more than
+## the 5 Hz cadence, so every change pushes the facts immediately (reliable).
+func _net_set_ceremony(cer: Dictionary) -> void:
+	_net_ceremony = cer
+	_net_push_facts()
+
+func _net_push_facts() -> void:
+	if NetSession.is_host() and NetSession.has_guests():
+		NetSession.send_lobby_state(_net_build_lobby_state())
 
 func _net_build_walker_state(seq: int) -> Dictionary:
 	var w := {}
@@ -2649,12 +2741,23 @@ func _client_teardown_mirror() -> void:
 ## The client lobby: rebuilt from mirrored facts, never from local state.
 func _client_build_panel() -> void:
 	var state := _client_last_state
+	if state.has("hats"):
+		_client_apply_hats(state["hats"])
+	var cer: Dictionary = state.get("ceremony", {})
+	if state.has("trail"):
+		_client_apply_trail(state["trail"], String(cer.get("stage", "")) == "parade")
+	# CEREMONIES FIRST: the match podium plays while the host phase still reads
+	# GAME — a guest must see the podium, never the spectate card, at that beat.
+	if not cer.is_empty():
+		_client_render_ceremony(cer)
+		return
+	_client_end_ceremony()
 	var phase_name := String(state.get("phase", "LOBBY"))
 	if phase_name == "GAME":
 		if state.has("mirror"):
 			_client_ensure_mirror(String(state["mirror"]))
 			return
-		# no mirror for this game (or the host is on the podium): spectate card
+		# no mirror for this game: spectate card
 		_client_teardown_mirror()
 		_client_build_spectate_panel(state)
 		return
@@ -2693,16 +2796,33 @@ func _client_build_panel() -> void:
 		phase_box.add_child(row)
 	if phase_name == "RECKONING":
 		var r_t := Label.new()
-		r_t.text = "— THE RECKONING SETTLES ON THE HOST'S SCREEN —"
+		r_t.text = "— THE RECKONING —"
 		r_t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		r_t.add_theme_font_size_override("font_size", 16)
 		r_t.add_theme_color_override("font_color", Color(1, 0.9, 0.5))
 		phase_box.add_child(r_t)
+		# The host's ticker, verbatim. Static (no stagger): this panel rebuilds
+		# on every fact change, and re-fading lines every ping tick would strobe.
+		for line in state.get("ticker", []):
+			var tl := Label.new()
+			tl.text = str(line)
+			tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			tl.add_theme_font_size_override("font_size", 15)
+			phase_box.add_child(tl)
+		var lad := Label.new()
+		lad.text = "— THE LADDER —"
+		lad.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lad.add_theme_font_size_override("font_size", 14)
+		lad.modulate.a = 0.7
+		phase_box.add_child(lad)
 		for s in state.get("standings", []):
 			var rl := Label.new()
 			rl.text = "%s  %d pts  ♠%d" % [String(s.get("name", "?")), int(s.get("points", 0)), int(s.get("grudge", 0))]
 			rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			phase_box.add_child(rl)
+	var auc: Dictionary = state.get("auction", {})
+	if not auc.is_empty():
+		_client_build_auction_rows(auc)
 	var gate: Dictionary = state.get("gate", {})
 	if not gate.is_empty():
 		var g_t := Label.new()
@@ -2774,8 +2894,244 @@ func _client_build_spectate_panel(state: Dictionary) -> void:
 			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 			phase_box.add_child(l)
 
+## ----- PHASE 3 (this lane): podiums + night ceremonies on the guest screen --
+## The host narrates stages as facts; the guest RESTAGES them — same Podium
+## scene, same composed lines, same banners — and never simulates an outcome.
+
+## Auction visibility (spec item 3): bids, pot, the vendetta book and the
+## Executor's quip as read-only rows. Bidding stays couch-side (no new inputs).
+func _client_build_auction_rows(auc: Dictionary) -> void:
+	var chooser := int(auc.get("chooser", -1))
+	var a_t := Label.new()
+	a_t.text = "— THE AUCTION —" if chooser < 0 else "— %s CHOOSES THE GAME —" % GameState.PLAYER_NAMES[chooser]
+	a_t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	a_t.add_theme_font_size_override("font_size", 16)
+	a_t.add_theme_color_override("font_color", Color(1, 0.9, 0.5) if chooser < 0 else GameState.PLAYER_COLORS[chooser])
+	phase_box.add_child(a_t)
+	var flavor: Dictionary = auc.get("flavor", {})
+	for key in ["vendetta", "quip"]:
+		if String(flavor.get(key, "")) != "":
+			var fl := Label.new()
+			fl.text = String(flavor[key])
+			fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			fl.custom_minimum_size = Vector2(680, 0)
+			fl.add_theme_font_size_override("font_size", 14)
+			fl.add_theme_color_override("font_color",
+				Color(0.9, 0.75, 0.75) if key == "vendetta" else Color(0.85, 0.8, 0.95))
+			fl.modulate.a = 0.85
+			phase_box.add_child(fl)
+	var opts := Label.new()
+	var names: Array = auc.get("options", [])
+	opts.text = "on the block:  " + " / ".join(PackedStringArray(names))
+	opts.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	phase_box.add_child(opts)
+	if chooser < 0:
+		var bid_l := Label.new()
+		var leader := int(auc.get("leader", -1))
+		var lead_txt := "no bids — cheapest seat chooses" if leader < 0 else \
+			"%s leads at %d♠" % [GameState.PLAYER_NAMES[leader], int(auc.get("high_bid", 0))]
+		bid_l.text = "%s   (%ds)   ·   POT %d♠" % [lead_txt, int(auc.get("clock", 0)), int(auc.get("pot", 0))]
+		bid_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		if leader >= 0:
+			bid_l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[leader])
+		phase_box.add_child(bid_l)
+		var note := Label.new()
+		note.text = "the couch holds the paddles tonight — your grudge is safe from your own thumb"
+		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		note.add_theme_font_size_override("font_size", 13)
+		note.modulate.a = 0.55
+		phase_box.add_child(note)
+
+func _client_render_ceremony(cer: Dictionary) -> void:
+	# Banners ride the stage; flash each distinct one exactly once.
+	var b: Array = cer.get("banner", [])
+	var bsig := JSON.stringify(b)
+	if bsig != _client_banner_sig:
+		_client_banner_sig = bsig
+		if b.size() >= 3:
+			_flash(String(b[0]), Color.from_string(String(b[1]), Color.WHITE), float(b[2]))
+	var stg := String(cer.get("stage", ""))
+	if stg == _client_cer_stage:
+		return  # already staged; only incremental facts (banner/trail) changed
+	_client_cer_stage = stg
+	# A fresh stage without a banner fact means the host cleared its banner
+	# (podium flash -> will reading, will -> parade). Match it.
+	if not cer.has("banner"):
+		banner.visible = false
+		_client_banner_sig = ""
+	print("NET ceremony stage: %s" % stg)
+	match stg:
+		"match_podium", "night_podium", "run_podium":
+			_client_show_podium(cer)
+		"will":
+			_client_show_will(cer)
+		"parade":
+			_client_clear_podium()
+			phase_panel.visible = false
+			Music.play_slot("grounds")
+		"heir":
+			_client_show_heir(cer)
+
+func _client_end_ceremony() -> void:
+	if _client_cer_stage == "":
+		return
+	_client_cer_stage = ""
+	_client_banner_sig = ""
+	_client_clear_podium()
+	banner.visible = false
+
+func _client_clear_podium() -> void:
+	if _client_podium != null:
+		if is_instance_valid(_client_podium):
+			_client_podium.queue_free()
+		_client_podium = null
+		cam.current = true
+
+## The same Podium scene the couch watches, restaged from placement facts.
+## Hats ride the wardrobe facts — the host's closet, not this machine's.
+func _client_show_podium(cer: Dictionary) -> void:
+	_client_teardown_mirror()
+	_client_clear_podium()
+	phase_panel.visible = false
+	var stg := String(cer.get("stage", ""))
+	if stg == "night_podium" and cer.has("statue"):
+		var sidx := int(cer.get("statue_idx", 0))
+		if not _client_statues.has(sidx):
+			_client_statues[sidx] = true
+			$Trail.add_statue(cer["statue"], sidx)
+	if stg == "run_podium":
+		Music.play_slot("ceremony")
+	var hats: Dictionary = _client_last_state.get("hats", {})
+	var podium := Podium.new()
+	_client_podium = podium
+	add_child(podium)
+	var entries: Array = []
+	var placements: Array = cer.get("placements", [])
+	for rank in placements.size():
+		var p := int(placements[rank])
+		entries.append({
+			"name": GameState.PLAYER_NAMES[p], "color": GameState.PLAYER_COLORS[p],
+			"rank": rank, "char_scene": CHAR_SCENES[p],
+			"cosmetics": _hats_of(hats, p),
+		})
+	podium.stage_entries(entries)
+
+## THE READING OF THE WILL, word for word, with the couch's 0.45 s stagger.
+func _client_show_will(cer: Dictionary) -> void:
+	_client_clear_podium()
+	Music.play_slot("ceremony")
+	var champ := int(cer.get("champ", 0))
+	_clear_panel("THE READING OF THE WILL", Color(0.85, 0.75, 1.0))
+	var head := Label.new()
+	head.text = String(cer.get("head", ""))
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.add_theme_color_override("font_color", GameState.PLAYER_COLORS[champ])
+	phase_box.add_child(head)
+	var awards: Array = cer.get("awards", [])
+	for aw in awards:
+		if not (aw is Array) or aw.size() < 2:
+			continue
+		var l := Label.new()
+		l.text = String(aw[1])
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[clampi(int(aw[0]), 0, 3)])
+		l.modulate.a = 0.0
+		phase_box.add_child(l)
+	if String(cer.get("vendetta", "")) != "":
+		var open_l := Label.new()
+		open_l.text = String(cer["vendetta"])
+		open_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		open_l.add_theme_font_size_override("font_size", 15)
+		open_l.modulate.a = 0.0
+		open_l.self_modulate.a = 0.7
+		phase_box.add_child(open_l)
+	var i := 0
+	for c in phase_box.get_children():
+		if c is Label and c.modulate.a == 0.0:
+			var tw := create_tween()
+			tw.tween_interval(0.45 * i)
+			tw.tween_property(c, "modulate:a", 1.0, 0.3)
+			i += 1
+	var foot := Label.new()
+	foot.text = "the host turns the page — the parade follows"
+	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	foot.add_theme_font_size_override("font_size", 13)
+	foot.modulate.a = 0.55
+	phase_box.add_child(foot)
+	print("WILL_READ_MIRROR awards=%d vendetta=%s" % [awards.size(), str(String(cer.get("vendetta", "")) != "")])
+	await get_tree().create_timer(0.45 * i + 0.6).timeout
+	if _client_cer_stage == "will":
+		VerifyCapture.snap("will_reading_mirror")
+
+func _client_show_heir(cer: Dictionary) -> void:
+	_client_clear_podium()
+	var heir := clampi(int(cer.get("heir", 0)), 0, 3)
+	_clear_panel("THE ESTATE HAS AN HEIR", Color(1, 0.85, 0.2))
+	var l := Label.new()
+	l.text = String(cer.get("text", ""))
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(700, 0)
+	l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[heir])
+	phase_box.add_child(l)
+	var foot := Label.new()
+	foot.text = "the run is over — the host decides what the estate does with the rest of the evening"
+	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	foot.add_theme_font_size_override("font_size", 13)
+	foot.modulate.a = 0.55
+	phase_box.add_child(foot)
+	print("HEIR_MIRROR heir=%d" % heir)
+	VerifyCapture.snap("heir_mirror")
+
+## Seat the local trail pawns at the HOST's stones; during the parade stage,
+## advances animate stone-by-stone exactly like the couch (host paces them —
+## each advance lands as its own fact push).
+func _client_apply_trail(trail: Dictionary, animate: bool) -> void:
+	var reseat := false
+	for k in trail:
+		var p := int(str(k))
+		var to := int(trail[k])
+		var cur := int(_client_trail.get(p, -1))
+		if to == cur:
+			continue
+		var old: Tween = _client_trail_tweens.get(p, null)
+		if old != null and old.is_valid():
+			old.kill()
+		if animate and cur >= 0 and to > cur and $Trail.pawns.has(p):
+			_client_trail_tweens[p] = $Trail.advance_pawn(p, cur, to)
+		else:
+			reseat = true
+		_client_trail[p] = to
+	if reseat:
+		$Trail.seat_all(_client_trail)
+
+## Wear the host estate's wardrobe truth on the mirrored walkers.
+func _client_apply_hats(hats: Dictionary) -> void:
+	var sig := JSON.stringify(hats)
+	if sig == _client_hats_sig:
+		return
+	_client_hats_sig = sig
+	for i in walkers.size():
+		if not is_instance_valid(walkers[i]):
+			continue
+		for slot in ["head", "hand_l", "hand_r", "chest"]:
+			Cosmetics.unequip(walkers[i], slot)
+		for cid in _hats_of(hats, i):
+			Cosmetics.equip(walkers[i], String(cid))
+
+## RPC dictionaries keep int keys, JSON round-trips make them strings — take both.
+func _hats_of(hats: Dictionary, p: int) -> Array:
+	if hats.has(p):
+		return hats[p]
+	return hats.get(str(p), [])
+
 func _on_net_session_closed(reason: String) -> void:
 	_client_teardown_mirror()   # no-op unless a mirror is actually up
+	_client_end_ceremony()
+	_client_trail.clear()
+	_client_trail_tweens.clear()
+	_client_hats_sig = ""
 	_client_last_state = {}
 	_client_walker_targets.clear()
 	_client_panel_sig = ""
@@ -2882,6 +3238,10 @@ func _netprobe_host_flow(ps: String, pf: String) -> void:
 	_start_night_from_lobby()
 	await get_tree().create_timer(1.5).timeout
 	_continue_to_night()
+	var auction_up := func() -> bool: return phase == Phase.AUCTION
+	if await _np_wait(auction_up, 20.0):
+		await get_tree().create_timer(1.0).timeout
+		await _np_snap("online_host_auction")
 	var gate_up := func() -> bool: return _ready_gate_active
 	if await _np_wait(gate_up, 40.0):
 		_ready_gate_ready[0] = true
@@ -2895,6 +3255,10 @@ func _netprobe_host_flow(ps: String, pf: String) -> void:
 		return
 	await get_tree().create_timer(1.2).timeout
 	await _np_snap("online_host_game")
+	var podium_up := func() -> bool: return String(_net_ceremony.get("stage", "")) == "match_podium"
+	if await _np_wait(podium_up, 40.0 if mockonly else 420.0):
+		await get_tree().create_timer(1.5).timeout
+		await _np_snap("online_host_matchpodium")
 	var reckoned := func() -> bool: return phase == Phase.RECKONING
 	# a real séance night runs ~4 min; the mock night is done inside 40 s
 	if await _np_wait(reckoned, 40.0 if mockonly else 420.0):
@@ -2904,6 +3268,29 @@ func _netprobe_host_flow(ps: String, pf: String) -> void:
 	for pl in EstateState.players:
 		parts += " %s:pts=%d,grudge=%d" % [pl.name, pl.points, pl.grudge]
 	print(parts)
+	# NIGHT CEREMONIES leg (--night=1 probes): the reckoning settles the night —
+	# press the host's own CONTINUE, then walk night podium -> will reading ->
+	# parade -> boundary, pausing at each stage so both sides' snaps land.
+	if phase == Phase.RECKONING and EstateState.games_played >= EstateState.night_length:
+		_after_reckoning()
+		var npod_up := func() -> bool: return String(_net_ceremony.get("stage", "")) == "night_podium"
+		if await _np_wait(npod_up, 20.0):
+			await get_tree().create_timer(2.0).timeout
+			await _np_snap("online_host_nightpodium")
+		var will_up := func() -> bool: return String(_net_ceremony.get("stage", "")) == "will"
+		if await _np_wait(will_up, 30.0):
+			await get_tree().create_timer(4.0).timeout
+			await _np_snap("online_host_will")
+		_night_parade()
+		var parade_up := func() -> bool: return String(_net_ceremony.get("stage", "")) == "parade"
+		if await _np_wait(parade_up, 15.0):
+			await get_tree().create_timer(1.0).timeout
+			await _np_snap("online_host_parade")
+		var at_boundary := func() -> bool: return phase == Phase.GROUNDS
+		if await _np_wait(at_boundary, 60.0):
+			await get_tree().create_timer(1.5).timeout
+			await _np_snap("online_host_boundary")
+		print("NETPROBE ceremonies leg done (boundary=%s)" % str(phase == Phase.GROUNDS))
 	await _netprobe_finish(ps, pf)
 
 func _netprobe_finish(ps: String, pf: String) -> void:
@@ -2933,6 +3320,10 @@ func _netprobe_join_flow() -> void:
 	print("NETPROBE client sees own ready=%s" % str(ready_seen))
 	await get_tree().create_timer(0.5).timeout
 	await _np_snap("online_client_ready")
+	var auction_seen := func() -> bool: return not (_client_last_state.get("auction", {}) as Dictionary).is_empty()
+	if await _np_wait(auction_seen, 40.0):
+		await get_tree().create_timer(1.0).timeout
+		await _np_snap("online_client_auction")
 	var gate_seen := func() -> bool: return _client_last_state.has("gate")
 	if await _np_wait(gate_seen, 40.0):
 		await get_tree().create_timer(0.6).timeout
@@ -2943,11 +3334,40 @@ func _netprobe_join_flow() -> void:
 		# phase 1 this was the spectate card; with a mirrorable game it is the
 		# booted mirror itself (the séance stage, INTRO/CAST)
 		await _np_snap("online_client_game")
+	var pod_seen := func() -> bool: return _client_cer_fact() == "match_podium"
+	if await _np_wait(pod_seen, 420.0):
+		await get_tree().create_timer(1.5).timeout
+		await _np_snap("online_client_matchpodium")
 	var reck_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "RECKONING"
-	if await _np_wait(reck_seen, 420.0):
+	if await _np_wait(reck_seen, 60.0):
 		await get_tree().create_timer(1.0).timeout
 		await _np_snap("online_client_reckoning")
+	# NIGHT CEREMONIES leg — only when the host's night actually settles
+	# (--night=1 probes). A phase-1/2 probe host quits at the reckoning instead;
+	# the session drop skips this whole block.
+	var night_end_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "NIGHT_END" or not NetSession.is_online()
+	if await _np_wait(night_end_seen, 30.0) and NetSession.is_online():
+		var npod_seen := func() -> bool: return _client_cer_fact() == "night_podium"
+		if await _np_wait(npod_seen, 20.0):
+			await get_tree().create_timer(2.0).timeout
+			await _np_snap("online_client_nightpodium")
+		var will_seen := func() -> bool: return _client_cer_fact() == "will"
+		if await _np_wait(will_seen, 30.0):
+			await get_tree().create_timer(3.6).timeout
+			await _np_snap("online_client_will")
+		var parade_seen := func() -> bool: return _client_cer_fact() == "parade"
+		if await _np_wait(parade_seen, 30.0):
+			await get_tree().create_timer(1.2).timeout
+			await _np_snap("online_client_parade")
+		var grounds_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "GROUNDS" and _client_cer_fact() == ""
+		if await _np_wait(grounds_seen, 60.0):
+			await get_tree().create_timer(1.5).timeout
+			await _np_snap("online_client_boundary")
 	print("NETPROBE_CLIENT_DONE")
 	# outlive the host by a breath so its quit lands first, then leave
 	await get_tree().create_timer(6.0).timeout
 	get_tree().quit()
+
+## The ceremony stage as the CLIENT knows it — from facts, never local state.
+func _client_cer_fact() -> String:
+	return String((_client_last_state.get("ceremony", {}) as Dictionary).get("stage", ""))
