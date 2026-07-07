@@ -84,9 +84,15 @@ func cup_position() -> Vector3:
 func no_build_zones() -> Array:
 	var zones: Array = []
 	if tee_slots.size() > 0:
+		# One disc PER TEE, not just the centroid: with tees spread up to 1.2m
+		# from center, the single centroid disc left the outer spawns exposed —
+		# a crusher could legally park beside a tee and menace the ball at
+		# spawn (owner report, round 2). The centroid disc is kept because its
+		# coverage is not a strict subset of the per-tee union.
 		var centroid := Vector3.ZERO
 		for t in tee_slots:
 			centroid += t
+			zones.append({"pos": Vector3(t.x, 0.0, t.z), "radius": tee_no_build_radius})
 		centroid /= float(tee_slots.size())
 		zones.append({"pos": Vector3(centroid.x, 0.0, centroid.z), "radius": tee_no_build_radius})
 	zones.append({"pos": cup_position(), "radius": cup_no_build_radius})

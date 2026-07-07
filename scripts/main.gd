@@ -318,6 +318,9 @@ func _begin_draft_turn() -> void:
 		btn.clip_text = false
 		if cursed:
 			btn.modulate = Color(1.0, 0.75, 1.0)
+		# Same seat gate as placement: a human can't click a card on a BOT's
+		# draft turn (bots pick via debug_pick_card, which bypasses the button).
+		btn.disabled = _is_bot(p)
 		btn.pressed.connect(_on_card_picked.bind(idx))
 		card_row.add_child(btn)
 	draft_panel.visible = true
@@ -341,7 +344,10 @@ func _on_card_picked(card_idx: int) -> void:
 	build_hint.visible = true
 	var info: Dictionary = TrapCatalog.info(id)
 	turn_label.text = "%s PLACES: %s" % [player.name, info.name]
-	placement.begin(TrapCatalog.load_scene(id), p, player.color, info.get("params", {}))
+	# Seat gate: the shared mouse may drive the ghost only on a HUMAN's build
+	# turn. A bot's ghost ignores all device input (it places via its own
+	# debug_place_scan path), so fast clicks can't steal or move a bot's trap.
+	placement.begin(TrapCatalog.load_scene(id), p, player.color, info.get("params", {}), not _is_bot(p))
 	# Course saturated for this footprint? Skip the placement silently.
 	if not placement.has_valid_placement():
 		placement.cancel()
