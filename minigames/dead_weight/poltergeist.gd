@@ -165,8 +165,20 @@ func release() -> void:
 	if possessing != null and is_instance_valid(possessing) and possessing.possessed_by == index:
 		possessing.release()
 	possessing = null
-	_possess_cd = POSSESS_CD
+	# HOUSE AWAKENS (doc 09 §8.3, Alex-signed): the game halves the possess
+	# cooldown in the final stretch — the dead get lively when the living win.
+	var cd_scale := 1.0
+	if owner_game != null and owner_game.has_method("ghost_possess_cd_scale"):
+		cd_scale = float(owner_game.ghost_possess_cd_scale())
+	_possess_cd = POSSESS_CD * cd_scale
+	if cd_scale != 1.0:
+		# receipt: the awakened house is measurably in this ghost's hands
+		print("DW_GHOST_CD p%d release cd=%.1fs (house awake)" % [index, _possess_cd])
 	Sfx.play("card", -6.0)
+
+## THE HOUSE AWAKENS: a cooldown already running is halved on the spot too.
+func house_awakens() -> void:
+	_possess_cd *= 0.5
 
 func force_release() -> void:
 	# called at round reset

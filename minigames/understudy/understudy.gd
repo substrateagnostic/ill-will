@@ -72,7 +72,15 @@ const MARK_X := [-3.7, -1.25, 1.25, 3.7]
 const SEAT_TAP_PITCH := [0.9, 1.0, 1.12, 1.26]
 const SUMMONS_TICK_DB := -4.0
 const SUMMONS_GAP := 0.35          # seconds between the three summons ticks
-const CAST_GAP := 2.2              # silence between one seat's eyes-down and the next summons
+# CASTING COMPRESSION (doc 09 §12.3, Alex-signed): the eyes-closed ceremony
+# cost too much wall-clock across 4 rounds. Roll-call teaches the colours ONCE
+# (round 1 only — they're learned), and from round 2 the silence between one
+# seat's eyes-down and the next summons tightens 2.0s -> 1.2s. The summons
+# language itself (three pitched ticks + the fourth as the card flips) is
+# untouched, every round. All of this is presentation timing: the --ustally
+# sim path never sees it (tally skips roll-call and gaps entirely).
+const CAST_GAP := 2.0              # round 1: silence between eyes-down and next summons
+const CAST_GAP_LATER := 1.2        # round 2+: the house wastes less of the night
 const ROLLCALL_INTRO := 2.0        # eyes-open teaching intro hold
 const ROLLCALL_SEAT := 1.75        # per-colour teaching slot
 
@@ -150,6 +158,7 @@ var _rounds_override := 0
 # fx tokens
 var _banner_token := 0
 var _sub_token := 0
+var _cast_wall_ms := 0             # casting-compression receipt (non-tally only)
 
 @onready var cam: Camera3D = $CameraRig/Camera3D
 @onready var stage_root: Node3D = $StageRoot
@@ -538,6 +547,7 @@ func _enter_casting() -> void:
 	phase = Phase.CASTING
 	_cast_seat = 0
 	_cast_bot_t = 0.0
+	_cast_wall_ms = Time.get_ticks_msec()
 	reveal_ui.open()
 	_set_base_ui(false)
 	if _tally:
@@ -545,15 +555,29 @@ func _enter_casting() -> void:
 		_cast_step = Cast.CALL
 		_say("The casting. When your colour is called, and only then, look up.")
 		_present_call()
-	else:
+	elif round_index == 0:
 		# VOICE ROLL-CALL: teach every colour its summons, eyes OPEN, before the
-		# lights fall — so a blind player can recognise the call later.
+		# lights fall — so a blind player can recognise the call later. ONCE per
+		# match (casting compression): from Act 2 the colours are learned.
 		_cast_step = Cast.ROLLCALL
 		_rc_seat = -1
 		_rc_seat_t = 0.0
 		_rc_tick_i = 0
+		print("US_CASTING act=%d rollcall=yes seat_gap=%.1fs" % [round_index + 1, _cast_gap()])
 		_say("Your colour has a voice. Learn it now — eyes open — before the lights fall.")
 		reveal_ui.show_rollcall_intro()
+	else:
+		# rounds 2+: colours already learned — straight to the first summons,
+		# same voice-summons language, tighter gaps between seats.
+		_cast_step = Cast.CALL
+		print("US_CASTING act=%d rollcall=no seat_gap=%.1fs" % [round_index + 1, _cast_gap()])
+		_say("The casting. When your colour is called, and only then, look up.")
+		_present_call()
+
+## The silence between one seat's eyes-down and the next summons: 2.0s while
+## the table is still learning (Act 1), 1.2s once the colours are known.
+func _cast_gap() -> float:
+	return CAST_GAP if round_index == 0 else CAST_GAP_LATER
 
 func _present_call() -> void:
 	var pl: Dictionary = players[_cast_seat]
@@ -575,9 +599,10 @@ func _tick_casting(delta: float) -> void:
 		_tick_rollcall(delta)
 		return
 	if _cast_step == Cast.GAP:
-		# ≥2s of silence between one seat's eyes-down and the next summons
+		# the silence between one seat's eyes-down and the next summons
+		# (2.0s in Act 1, 1.2s from Act 2 — casting compression)
 		_cast_bot_t += delta
-		if _cast_bot_t >= CAST_GAP:
+		if _cast_bot_t >= _cast_gap():
 			_cast_step = Cast.CALL
 			_cast_bot_t = 0.0
 			_present_call()
@@ -712,6 +737,9 @@ func _play_summons_tick(seat: int) -> void:
 # ============================================================== rehearsal
 func _enter_rehearsal() -> void:
 	phase = Phase.REHEARSAL
+	if not _tally:
+		print("US_CASTING_DONE act=%d wall=%.1fs" % [round_index + 1,
+			float(Time.get_ticks_msec() - _cast_wall_ms) / 1000.0])
 	_set_base_ui(true)
 	board.show_rehearsal(true)
 	# shuffle each pass independently (seeded) so exposure is not welded to seat

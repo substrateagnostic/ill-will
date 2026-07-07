@@ -35,6 +35,8 @@ var tilt := Vector2.ZERO       # radians, local XZ, points downhill
 var tilt_vel := Vector2.ZERO
 var max_tilt_deg := BASE_MAX_DEG
 var gain_scale := 1.0
+var overtime_scale := 1.0      # OVERTIME (doc 09 §3.3): tie at the horn tilts
+                               # 1.5x harder on top of the sudden-death gain
 
 var _forced := false
 var _force_target := Vector2.ZERO
@@ -57,7 +59,7 @@ func update_tilt(delta: float, mass_points: Array) -> void:
 			var pos: Vector2 = mp.pos
 			var m: float = mp.m
 			torque += pos * m
-		var mag_deg := torque.length() * GAIN_DEG * gain_scale
+		var mag_deg := torque.length() * GAIN_DEG * gain_scale * overtime_scale
 		if mag_deg > 0.001:
 			target = torque.normalized() * deg_to_rad(minf(mag_deg, max_tilt_deg))
 	var acc := (target - tilt) * (OMEGA * OMEGA) - tilt_vel * (2.0 * ZETA * OMEGA)
@@ -89,7 +91,13 @@ func reset() -> void:
 	tilt_vel = Vector2.ZERO
 	disc.rotation = Vector3.ZERO
 	_forced = false
+	overtime_scale = 1.0
 	set_sudden_death(false)
+
+## OVERTIME: the horn found >1 survivor — the platter itself breaks the tie,
+## tilting 1.5x harder than sudden death until someone goes over.
+func set_overtime(on: bool) -> void:
+	overtime_scale = 1.5 if on else 1.0
 
 func set_sudden_death(on: bool) -> void:
 	max_tilt_deg = SUDDEN_MAX_DEG if on else BASE_MAX_DEG

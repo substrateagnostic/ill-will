@@ -4,7 +4,9 @@ extends Minigame
 ## everyone else must gang up to drain the king's GRIP and fling them down the
 ## steps — then instantly betray each other in a scramble for the empty seat.
 ## One continuous 2.5-min match; the last 30s is a "succession crisis" worth
-## double. Placements by throne-seconds.
+## double. Placements by throne-seconds. If the crown is contested at 0:00
+## (vacant throne, drained grip, or a challenger in striking range) THE COURT
+## WILL NOT ADJOURN: overtime until a clean 3s uncontested reign, cap +30s.
 ##
 ## Anthology module contract: root of minigames/throne/throne.tscn, extends
 ## Minigame (begin(config) -> finished(results)). Runs standalone too — if
@@ -38,6 +40,16 @@ const MATCH_TIME := 100.0  # playtest (Andrew): dethrone mode was loooooong
 const CRISIS_TIME := 30.0          # last 30s: throne scores double
 const CRISIS_RATE := 2.0
 const NORMAL_RATE := 1.0
+
+# OVERTIME WHILE CONTESTED (doc 09 §9.1, Alex-signed): the KOTH genre's defining
+# rule — no victory while the hill is contested. If the crown is contested at
+# 0:00 (throne vacant mid-scramble, king freshly hit, or a challenger within
+# striking range of the dais), play continues until a king holds a clean
+# 3-second uncontested reign. Hard cap +30s, then the current leader wins.
+# Crisis double-pay persists through overtime (remaining time stays <= 30s).
+const OVERTIME_CAP := 30.0         # hard cap on overtime length
+const OT_SETTLE := 3.0             # clean uncontested reign that ends overtime
+const CONTEST_RADIUS := 2.5        # challenger this close to the dais = contested
 
 const SEAT_RADIUS := 1.7           # touch this close to the seat to claim it
 const CEREMONY := 0.4              # coronation delay before the reign is live
@@ -96,6 +108,11 @@ var _currency_log: Array = []
 var _kill_events: Array = []
 var _highlights: Array = []
 var _next_pity_at := 60.0
+
+# ---- overtime state
+var _overtime := false             # the court refused to adjourn at 0:00
+var _ot_uncontested := 0.0         # continuous clean-reign seconds in overtime
+var _ot_end := "none"              # balance receipt: "settled" | "cap" | "none"
 
 # ---- modes / fx
 var _started := false
@@ -348,7 +365,25 @@ func _physics_process(delta: float) -> void:
 	_update_pity()
 
 	if game_time >= _match_time:
-		_finish_match()
+		if not _overtime:
+			if _throne_contested():
+				_enter_overtime()
+			else:
+				_finish_match()
+		else:
+			# overtime runs until a clean OT_SETTLE-second uncontested reign
+			var settled := king >= 0 and seating_index < 0 and not _challenger_near()
+			_ot_uncontested = (_ot_uncontested + delta) if settled else 0.0
+			if _ot_uncontested >= OT_SETTLE:
+				_ot_end = "settled"
+				print("THRONE_OT_END t=%.1f settled: %s holds a clean %.1fs reign" % [
+					game_time, players[king].name, OT_SETTLE])
+				_finish_match()
+			elif game_time - _match_time >= OVERTIME_CAP:
+				_ot_end = "cap"
+				print("THRONE_OT_END t=%.1f cap: +%.0fs elapsed, current leader wins" % [
+					game_time, OVERTIME_CAP])
+				_finish_match()
 
 func _apply_intent(i: int, r: Royal, mv: Vector2, a: bool, b: bool) -> void:
 	if i == king:
@@ -641,6 +676,50 @@ func _update_pity() -> void:
 			print("THRONE_PITY t=%.1f court pities %s" % [game_time, players[i].name])
 
 # =====================================================================
+# overtime (no victory while the throne is contested)
+# =====================================================================
+## A challenger inside striking range of the dais keeps the crown contested.
+func _challenger_near() -> bool:
+	for r in _royals:
+		if r.is_king:
+			continue
+		var d: float = Vector2(r.global_position.x - SEAT_POS.x,
+			r.global_position.z - SEAT_POS.z).length()
+		if d <= CONTEST_RADIUS:
+			return true
+	return false
+
+## Contested at the horn: throne vacant / mid-coronation scramble, the king's
+## grip already drained below full (someone is mid-siege), or a challenger in
+## striking range of the dais.
+func _throne_contested() -> bool:
+	if king < 0 or seating_index >= 0:
+		return true
+	if grip < GRIP_MAX:
+		return true
+	return _challenger_near()
+
+func _enter_overtime() -> void:
+	_overtime = true
+	_ot_uncontested = 0.0
+	var why := "vacant"
+	if king >= 0 and seating_index < 0:
+		why = "grip=%d/%d" % [grip, GRIP_MAX] if grip < GRIP_MAX else "challenger_near"
+	elif seating_index >= 0:
+		why = "coronation"
+	print("THRONE_OVERTIME t=%.1f contested (%s) — play continues (cap +%.0fs, settle %.1fs)" % [
+		game_time, why, OVERTIME_CAP, OT_SETTLE])
+	# the persistent crisis line carries the ruling for the whole of overtime —
+	# the flash banner loses its slot whenever a dethrone lands on the horn
+	# (drama keeps the banner; the standing line keeps the explanation)
+	crisis_label.text = "THE COURT WILL NOT ADJOURN — THRONE PAYS DOUBLE"
+	if _fx:
+		Sfx.play("grudge")
+		Sfx.play("round_over", -4.0)
+		_flash_banner("THE COURT WILL NOT ADJOURN", Color(1, 0.4, 0.3), 2.6)
+		_shake = maxf(_shake, 0.4)
+
+# =====================================================================
 # finish
 # =====================================================================
 func _finish_match() -> void:
@@ -651,6 +730,10 @@ func _finish_match() -> void:
 		_print_balance()
 		get_tree().quit()
 		return
+
+	if _overtime:
+		_highlights.append("the court refused to adjourn: %ds of overtime" % [
+			int(round(game_time - _match_time))])
 
 	var order: Array = range(players.size())
 	order.sort_custom(func(a, b):
@@ -725,6 +808,8 @@ func _print_balance() -> void:
 	print("seed=%d match=%.0fs total_seated=%.1fs" % [rng.seed, _match_time, total])
 	print("shares: " + ", ".join(PackedStringArray(parts)))
 	print("THRONE_BALANCE seed=%d max_share=%.1f%% cap=55%% %s" % [rng.seed, maxpct, verdict])
+	var ot_len := maxf(0.0, game_time - _match_time)
+	print("THRONE_OT seed=%d entered=%s len=%.1fs end=%s" % [rng.seed, str(_overtime), ot_len, _ot_end])
 	var dcounts: Array = []
 	for i in players.size():
 		dcounts.append("%s=%d" % [players[i].name, dethronings[i]])
@@ -1146,6 +1231,12 @@ func _update_throne_hud() -> void:
 	fatigue_fill.size.x = (GRIP_MAX * 36 - 6) * fat
 
 func _update_timer_label() -> void:
+	if _overtime:
+		# count what remains of the overtime cap, hot red — the court is in session
+		var ot_left: int = int(ceil(maxf(0.0, OVERTIME_CAP - (game_time - _match_time))))
+		timer_label.text = "OT %d" % ot_left
+		timer_label.add_theme_color_override("font_color", Color(1, 0.4, 0.3))
+		return
 	var remaining: int = int(ceil(maxf(0.0, _match_time - game_time)))
 	timer_label.text = "%d:%02d" % [remaining / 60, remaining % 60]
 	var crisis := _match_time - game_time <= CRISIS_TIME
