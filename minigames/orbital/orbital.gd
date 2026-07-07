@@ -146,6 +146,30 @@ var _threat_next := 0
 var _stretch: FinalStretch = null
 var _star_mat: StandardMaterial3D = null   # starfield tint target (FINAL ORBIT)
 
+## --- ONLINE (phase 2) --------------------------------------------------------
+## House pattern (docs/verify/online-seance-VERIFY.md PATTERN NOTES): host sim
+## untouched, _net_state() = one flat dict of PUBLIC facts pumped at 20 Hz by
+## the estate, _net_apply() diffs + fires ALL juice from deltas, _mirror_tick()
+## interpolates at 60 Hz. Orbital has no hidden info — no private channel. The
+## soul of this mirror is the BALLS: state + velocity stream, so the client's
+## own heat/threat/trail presentation (all velocity-derived) renders the same
+## menace the couch sees, and a 30-second-old ghost orbit pulses identically.
+const NET_ANIMS := ["Idle", "Running_A", "Jump_Idle", "1H_Ranged_Aiming",
+	"Throw", "PickUp", "Jump_Land", "Death_A", "Cheer"]
+var _mirror := false
+var _mir := {}                  # last applied snapshot (delta source for juice)
+var _mir_ball_t := 0.0          # seconds since last snapshot (ball dead-reckoning)
+var _mir_snaps := {}            # evidence snapshots fired once (probe runs)
+var _mir_done := false          # champion confetti fired
+var _banner_col := "ffffff"     # last banner color (wire fact)
+var _event_col := "ffffff"      # last event-line color (wire fact)
+var _event_gen := 0             # bumps per flash so repeats still fire
+var _net_fo := 0                # FINAL ORBIT flag (0/1) — the kit trigger fact
+var _net_bounce := 0            # ball-bounce counter + last impact (sfx fact)
+var _net_bounce_imp := 0.0
+var _net_kill: Array = [0, -1, -1, 0.0]   # [gen, victim, killer, ball speed]
+var _net_champ := -1            # pre-announced winner (end facts beat the fold)
+
 func _ready() -> void:
 	_parse_args()
 	_build_static()
@@ -202,6 +226,7 @@ func begin(cfg: Dictionary) -> void:
 		return
 	_begun = true
 	config = cfg
+	_mirror = bool(cfg.get("net_mirror", false))
 	rng.seed = int(cfg.rng_seed)
 	match_len = _match_override if _match_override > 0.0 else (MATCH_LEN if not cfg.get("practice", false) else 90.0)
 	time_left = match_len
@@ -238,13 +263,23 @@ func begin(cfg: Dictionary) -> void:
 	bots.resize(roster.size())
 	for i in roster.size():
 		bot_enabled[i] = bots_enabled or bool(roster[i].get("bot", false))
-		if bot_enabled[i] and _test_mode == "":
+		if bot_enabled[i] and _test_mode == "" and not _mirror:
 			var bot := OrbBot.new()
 			bot.setup(self, i, int(cfg.rng_seed) * 977 + i * 131)
 			bots[i] = bot
 	var _cbar := _controls_bar()
 	if _cbar != "":
 		_hint_label.text = _cbar
+	if _mirror:
+		# RENDER MIRROR (spec §4.3, house pattern): no bots, no sim, no rng
+		# draws — the host owns every fact. The world, pawns, start balls and
+		# pedestals above are deterministic consts, so the first snapshot lands
+		# on identical furniture. phase stays WAIT until _net_apply flips it.
+		_stretch = FinalStretch.attach(self, _timer_label, {"vignette": false})
+		_update_score_rows()
+		NetSession.set_aim_provider(_net_aim)
+		print("ORB_MIRROR boot players=%d my_seat=%d" % [pawns.size(), NetSession.my_seat()])
+		return
 	phase = Phase.PLAY
 	if _test_mode == "":
 		_stretch = FinalStretch.attach(self, _timer_label, {"vignette": false})
@@ -501,6 +536,9 @@ func pawn_name(i: int) -> String:
 ## --- simulation loop --------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
+	if _mirror:
+		_mirror_tick(delta)
+		return
 	if phase == Phase.WAIT:
 		return
 	# Slow-mo NEVER touches Engine.time_scale (the engine applies that at
@@ -627,6 +665,9 @@ func _do_catch(pw: OrbPawn, bb: OrbBall) -> void:
 	if b_age > _best_catch_age:
 		_best_catch_age = b_age
 		_best_catch_txt = "%s plucked a %d-second orbit out of the sky" % [pawn_name(pw.index), int(b_age)]
+	if NetSession.has_guests() and not _mir_snaps.has("orb_host_catch"):
+		_mir_snaps["orb_host_catch"] = true
+		VerifyCapture.snap("orb_host_catch")
 	print("CATCH t=%.1f p=%d ball_age=%.1f stolen=%s" % [now, pw.index, b_age, stolen])
 
 func _do_kill(pw: OrbPawn, bb: OrbBall) -> void:
@@ -636,6 +677,8 @@ func _do_kill(pw: OrbPawn, bb: OrbBall) -> void:
 	# structured kill attribution (module contract): killer = last thrower
 	# (-1 = environment/never-thrown ball; == victim = self-orbit), victim = pawn.
 	_kill_events.append({"killer": killer, "victim": victim, "cause": "orbit_hit"})
+	# wire fact (memory-only): the mirror fires burst/impact/sfx off this row
+	_net_kill = [int(_net_kill[0]) + 1, victim, killer, snappedf(bb.vel.length(), 0.1)]
 	deaths[victim] += 1
 	_currency.append({"type": "grudge", "player": victim, "amount": 1, "reason": "orbital dodgeball to the face"})
 	if pw.held != null:
@@ -749,6 +792,8 @@ func on_land(pw: OrbPawn, prev_planet: int) -> void:
 		print("HOP t=%.1f p=%d %d->%d" % [now, pw.index, prev_planet, pw.planet])
 
 func on_ball_bounce(_bb: OrbBall, impact: float) -> void:
+	_net_bounce += 1   # wire fact; pure counter, sim never reads it
+	_net_bounce_imp = snappedf(impact, 0.1)
 	Sfx.play("bounce", clampf(-14.0 + impact * 1.4, -14.0, -3.0))
 
 func on_ball_rest(bb: OrbBall) -> void:
@@ -759,6 +804,7 @@ func on_ball_rest(bb: OrbBall) -> void:
 ## FINAL ORBIT (doc 09 §4.3, via the §Q1 kit): T-30 banner + Executor line +
 ## tense track + the starfield leaning 20% toward red. Presentation only.
 func _final_orbit() -> void:
+	_net_fo = 1   # wire fact: the mirror's kit escalates + tints off this flip
 	_stretch.escalate()
 	_flash_banner("FINAL ORBIT", Color(1.0, 0.45, 0.3), 2.4)
 	_flash_event("THE ESTATE CALLS TIME. OLD ORBITS STILL KILL.", Color(1.0, 0.75, 0.65))
@@ -766,6 +812,9 @@ func _final_orbit() -> void:
 		var tw := create_tween()
 		tw.tween_property(_star_mat, "albedo_color",
 			Color.WHITE.lerp(Color(1.0, 0.25, 0.18), 0.2), 2.0)
+	if NetSession.has_guests() and not _mir_snaps.has("orb_host_finalorbit"):
+		_mir_snaps["orb_host_finalorbit"] = true
+		VerifyCapture.snap("orb_host_finalorbit")
 
 func _end_match() -> void:
 	phase = Phase.END
@@ -777,6 +826,7 @@ func _end_match() -> void:
 			return int(_points[a]) > int(_points[b])
 		return int(a) < int(b))
 	var winner: int = order[0]
+	_net_champ = winner   # wire fact: mirror confetti keys off this + phase END
 	if not pawns[winner].alive:
 		pawns[winner].respawn(_least_crowded_planet(), _random_visible_n())
 	pawns[winner]._play_once("Cheer")
@@ -808,7 +858,12 @@ func _end_match() -> void:
 		"monuments": monuments,
 		"kill_events": _kill_events.duplicate(),
 	}
-	report_finished(results)
+	# ONLINE: the estate's 20 Hz pump stops the same tick finished() fires, so
+	# facts minted here would never reach mirrors (masked-ball lesson). Hold the
+	# report one real beat — END phase, winner banner and champ fact hit the
+	# wire first. Prints below stay inline; results are already duplicated, so
+	# the receipt blocks are byte-identical either way.
+	get_tree().create_timer(0.45).timeout.connect(report_finished.bind(results))
 	print("ORBITAL_RESULTS ", JSON.stringify(results))
 	print("KILL_EVENTS n=", _kill_events.size(), " ", JSON.stringify(_kill_events))
 	var verdict := "PASS" if (not _age_fail and _max_flight_age < MAX_FLIGHT_AGE_ASSERT) else "FAIL"
@@ -901,6 +956,12 @@ func _process(delta: float) -> void:
 		_cam.fov = CAM_FOV
 	_update_threat_audio(delta)
 	_update_vignette(delta)
+	# probe-night evidence latch (has_guests only, once): a top-heat ball
+	# screaming near a living body — the pair for the mirror's identical frame
+	if not _mirror and NetSession.has_guests() and not _mir_snaps.has("orb_host_heat"):
+		if _heat_moment():
+			_mir_snaps["orb_host_heat"] = true
+			VerifyCapture.snap("orb_host_heat")
 
 func _draw_aim_previews() -> void:
 	_aim_im.clear_surfaces()
@@ -1180,6 +1241,7 @@ func _update_timer_label() -> void:
 func _flash_banner(text: String, color: Color, duration: float) -> void:
 	_banner_gen += 1
 	var gen := _banner_gen
+	_banner_col = color.to_html(false)
 	_banner.text = text
 	_banner.add_theme_color_override("font_color", color)
 	_banner.visible = true
@@ -1197,6 +1259,9 @@ func _flash_banner(text: String, color: Color, duration: float) -> void:
 				_banner.visible = false)
 
 func _flash_event(text: String, color: Color) -> void:
+	if not _mirror:   # mirror replays flashes from the wire; gens are host facts
+		_event_col = color.to_html(false)
+		_event_gen += 1
 	_event_label.text = text
 	_event_label.add_theme_color_override("font_color", color)
 	_event_label.visible = true
@@ -1299,6 +1364,317 @@ func _threat_grab(tag: String) -> void:
 	var path := "res://verify_out/orbital_threat_%s.png" % tag
 	img.save_png(path)
 	print("THREAT_CAP ", path)
+
+
+## --- ONLINE (phase 2): the mirror ---------------------------------------------
+## Host sim untouched. Ask of every key: is this on every couch screen right
+## now? Pawn poses, ball state+velocity (the whole threat ladder is derived
+## from velocity client-side), HUD strings, counters — yes. Nothing else.
+
+## HOST, pumped by the estate at 20 Hz.
+func _net_state() -> Dictionary:
+	var fs: Array = []
+	for p in pawns:
+		var pw: OrbPawn = p
+		fs.append(1 if pw.alive else 0)
+		fs.append(1 if pw.visible else 0)
+		fs.append(snappedf(pw.global_position.x, 0.01))
+		fs.append(snappedf(pw.global_position.y, 0.01))
+		fs.append(snappedf(pw.global_position.z, 0.01))
+		var q := pw.global_transform.basis.get_rotation_quaternion()
+		fs.append(snappedf(q.x, 0.001))
+		fs.append(snappedf(q.y, 0.001))
+		fs.append(snappedf(q.z, 0.001))
+		fs.append(snappedf(q.w, 0.001))
+		fs.append(maxi(NET_ANIMS.find(pw._cur_anim), 0))
+		fs.append(snappedf(pw.charge, 0.02))
+		fs.append(snappedf(maxf(pw.invuln, 0.0), 0.05))
+	var bs: Array = []
+	for b in balls:
+		var bb: OrbBall = b
+		bs.append(int(bb.state))
+		bs.append(snappedf(bb.global_position.x, 0.01))
+		bs.append(snappedf(bb.global_position.y, 0.01))
+		bs.append(snappedf(bb.global_position.z, 0.01))
+		bs.append(snappedf(bb.vel.x, 0.01))
+		bs.append(snappedf(bb.vel.y, 0.01))
+		bs.append(snappedf(bb.vel.z, 0.01))
+		bs.append(bb.owner_idx)
+		bs.append(bb.holder_idx)
+		bs.append(snappedf(bb.age(now), 0.1) if bb.state == OrbBall.S.FLYING else 0.0)
+	var sc: Array = []
+	var ct: Array = []
+	var dth: Array = []
+	for p in pawns:
+		var idx: int = (p as OrbPawn).index
+		sc.append(int(_points.get(idx, 0)))
+		ct.append(int(catches.get(idx, 0)))
+		dth.append(int(deaths.get(idx, 0)))
+	return {
+		"ph": phase,
+		"tl": snappedf(time_left, 0.05),
+		"ban": [_banner.text, _banner_col, _banner.visible],
+		"ev": [_event_label.text, _event_col, _event_gen],
+		"fo": _net_fo,
+		"bn": [_net_bounce, _net_bounce_imp],
+		"lk": _net_kill.duplicate(),
+		"f": fs,
+		"b": bs,
+		"sc": sc,
+		"ct": ct,
+		"dth": dth,
+		"champ": _net_champ,
+	}
+
+
+## CLIENT. Latest-state-wins; all juice fires from DELTAS (counters, never
+## events — a dropped packet loses nothing but in-between frames).
+func _net_apply(state: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = state
+	_mir_ball_t = 0.0
+	if prev.is_empty() and _stretch != null:
+		_stretch.play_started()   # FINAL STRETCH: light bed on first snapshot
+	phase = (int(state.get("ph", phase))) as Phase   # render/probe fact only
+	time_left = float(state.get("tl", time_left))
+	_apply_mir_banner(state.get("ban", []), prev.get("ban", []))
+	# --- event line: gen bump replays the flash (same text twice still fires)
+	var ev: Array = state.get("ev", [])
+	var pev: Array = prev.get("ev", [])
+	if ev.size() >= 3 and int(ev[2]) != (int(pev[2]) if pev.size() >= 3 else 0):
+		_flash_event(str(ev[0]), Color(str(ev[1])))
+	# --- FINAL ORBIT: kit escalation + starfield shift, locally, off the flip
+	if int(state.get("fo", 0)) == 1 and int(prev.get("fo", 0)) == 0:
+		if _stretch != null:
+			_stretch.escalate()
+		if _star_mat != null:
+			var tw := create_tween()
+			tw.tween_property(_star_mat, "albedo_color",
+				Color.WHITE.lerp(Color(1.0, 0.25, 0.18), 0.2), 2.0)
+		_mir_snap_once("orb_mirror_finalorbit")
+	# --- pawn facts: alive edges, anim, charge/invuln resync, catch flashes
+	var fs: Array = state.get("f", [])
+	var pfs: Array = prev.get("f", [])
+	var ct: Array = state.get("ct", [])
+	var pct: Array = prev.get("ct", [])
+	for i in pawns.size():
+		var b := i * 12
+		if b + 11 >= fs.size():
+			break
+		var pw: OrbPawn = pawns[i]
+		var alive := int(fs[b]) == 1
+		if alive != pw.alive:
+			pw.alive = alive
+			if alive:   # respawned: pop back exactly as the couch hears it
+				pw.global_position = Vector3(float(fs[b + 2]), float(fs[b + 3]), float(fs[b + 4]))
+				if pw._visual != null:
+					pw._visual.visible = true
+				Sfx.play("confirm", -4.0)
+				_spawn_burst(pw.body_center(), pawn_color(pw.index), 12)
+		pw.visible = int(fs[b + 1]) == 1
+		pw._play(NET_ANIMS[clampi(int(fs[b + 9]), 0, NET_ANIMS.size() - 1)])
+		var chg := float(fs[b + 10])
+		if chg < 0.0 or pw.charge < 0.0 or absf(pw.charge - chg) > 0.08:
+			pw.charge = chg   # THE TENSION: hold-fill resync (advances locally)
+		var inv := float(fs[b + 11])
+		if absf(pw.invuln - inv) > 0.12:
+			pw.invuln = inv
+		if i < ct.size() and int(ct[i]) > (int(pct[i]) if i < pct.size() else int(ct[i])):
+			# a catch connected: the couch's bumper + white burst + shake
+			Sfx.play("bumper")
+			_shake = maxf(_shake, 0.18)
+			_spawn_burst(pw.body_center(), Color(1, 1, 1), 16)
+			_mir_snap_once("orb_mirror_catch")
+	# --- balls: spawn-to-count, state transitions, colors, velocity, age
+	_mir_sync_balls(state.get("b", []), prev.get("b", []))
+	# --- held glue: pawns hold the mirrored balls (aim preview reads .held)
+	for p in pawns:
+		(p as OrbPawn).held = null
+	for b in balls:
+		var bb: OrbBall = b
+		if bb.state == OrbBall.S.HELD and bb.holder_idx >= 0 and bb.holder_idx < pawns.size():
+			(pawns[bb.holder_idx] as OrbPawn).held = bb
+	# --- bounce sfx from the counter (one voice per window is plenty)
+	var bn: Array = state.get("bn", [])
+	var pbn: Array = prev.get("bn", [])
+	if bn.size() >= 2 and int(bn[0]) > (int(pbn[0]) if pbn.size() >= 2 else int(bn[0])):
+		Sfx.play("bounce", clampf(-14.0 + float(bn[1]) * 1.4, -14.0, -3.0))
+	# --- the kill row: burst + speed-scaled impact + sfx, exactly as couch
+	var lk: Array = state.get("lk", [])
+	var plk: Array = prev.get("lk", [0])
+	if lk.size() >= 4 and int(lk[0]) > int(plk[0] if plk.size() >= 1 else 0):
+		var victim := int(lk[1])
+		Sfx.play("splat")
+		Sfx.play("death")
+		_kill_impact(float(lk[3]))
+		if victim >= 0 and victim < pawns.size():
+			_spawn_burst((pawns[victim] as OrbPawn).body_center(), pawn_color(victim), 30)
+	# --- scoreboard facts
+	if state.get("sc", []) != prev.get("sc", []):
+		var sc: Array = state.get("sc", [])
+		for i in mini(sc.size(), pawns.size()):
+			_points[(pawns[i] as OrbPawn).index] = int(sc[i])
+		_update_score_rows()
+	# --- the champion moment (champ fact beats the fold by one real beat)
+	if phase == Phase.END and not _mir_done:
+		var champ := int(state.get("champ", -1))
+		if champ >= 0 and champ < pawns.size():
+			_mir_done = true
+			if _stretch != null:
+				_stretch.match_ended()
+			Sfx.play("match_win")
+			_spawn_burst((pawns[champ] as OrbPawn).body_center(), pawn_color(champ), 40)
+
+
+## CLIENT, per physics tick: glide pawns, dead-reckon balls between snapshots,
+## grow hold-fills and trails — everything smoother than 20 Hz.
+func _mirror_tick(delta: float) -> void:
+	if _mir.is_empty():
+		return
+	now += delta
+	_mir_ball_t += delta
+	if phase == Phase.PLAY:
+		time_left = maxf(time_left - delta, 0.0)
+	var w := 1.0 - exp(-14.0 * delta)
+	var fs: Array = _mir.get("f", [])
+	for i in pawns.size():
+		var b := i * 12
+		if b + 11 >= fs.size():
+			break
+		var pw: OrbPawn = pawns[i]
+		pw.global_position = pw.global_position.lerp(
+			Vector3(float(fs[b + 2]), float(fs[b + 3]), float(fs[b + 4])), w)
+		var tq := Quaternion(float(fs[b + 5]), float(fs[b + 6]), float(fs[b + 7]), float(fs[b + 8]))
+		if tq.length_squared() > 0.5:
+			var cq := pw.global_transform.basis.get_rotation_quaternion()
+			pw.global_transform.basis = Basis(cq.slerp(tq.normalized(), w))
+		# derive the tangent frame from the mirrored basis (_orient invariants:
+		# +Y = surface up, +Z = heading) so the dotted aim preview just works
+		pw.srf_n = pw.global_transform.basis.y.normalized()
+		pw.heading = pw.global_transform.basis.z.normalized()
+		if pw.charge >= 0.0 and pw.held != null:
+			pw.charge = minf(pw.charge + delta / OrbPawn.AIM_TIME, 1.0)
+		pw.invuln = maxf(pw.invuln - delta, 0.0)
+	var bs: Array = _mir.get("b", [])
+	for k in balls.size():
+		var b := k * 10
+		if b + 9 >= bs.size():
+			break
+		var bb: OrbBall = balls[k]
+		if bb.state == OrbBall.S.HELD:
+			if bb.holder_idx >= 0 and bb.holder_idx < pawns.size():
+				var hp: OrbPawn = pawns[bb.holder_idx]
+				bb.global_position = hp.body_center() + hp.up_dir() * 0.5 + hp.heading * 0.25
+			continue
+		var snap_pos := Vector3(float(bs[b + 1]), float(bs[b + 2]), float(bs[b + 3]))
+		if bb.state == OrbBall.S.FLYING:
+			# dead-reckon: advance the snapshot by its own velocity, then glide
+			bb.global_position = bb.global_position.lerp(
+				snap_pos + bb.vel * _mir_ball_t, 1.0 - exp(-20.0 * delta))
+			if bb.trail != null:
+				bb.trail.add_point(bb.global_position, now)
+			# top-heat evidence latch: same condition as the host's pair
+			if not _mir_snaps.has("orb_mirror_heat") and bb.heat_factor() >= 0.75:
+				for p in pawns:
+					var pw2: OrbPawn = p
+					if pw2.alive and bb.global_position.distance_to(pw2.body_center()) < 6.0:
+						_mir_snap_once("orb_mirror_heat")
+						break
+		else:
+			bb.global_position = bb.global_position.lerp(snap_pos, w)
+
+
+## Host-side pair of the mirror's top-heat latch (probe nights only).
+func _heat_moment() -> bool:
+	for b in balls:
+		var bb: OrbBall = b
+		if bb.heat_factor() < 0.75:
+			continue
+		for p in pawns:
+			var pw: OrbPawn = p
+			if pw.alive and bb.global_position.distance_to(pw.body_center()) < 6.0:
+				return true
+	return false
+
+
+func _mir_sync_balls(bs: Array, pbs: Array) -> void:
+	var want := bs.size() / 10
+	var fresh_from := balls.size()
+	while balls.size() < want:
+		_mir_spawn_ball()
+	for k in balls.size():
+		var b := k * 10
+		if b + 9 >= bs.size():
+			break
+		var bb: OrbBall = balls[k]
+		if k >= fresh_from:   # just drifted in: land on its spot, no glide-in
+			bb.global_position = Vector3(float(bs[b + 1]), float(bs[b + 2]), float(bs[b + 3]))
+		var st := int(bs[b])
+		var pst := int(pbs[b]) if b < pbs.size() else st
+		var own := int(bs[b + 7])
+		var hol := int(bs[b + 8])
+		if st != int(bb.state):
+			if st == OrbBall.S.HELD:
+				bb.pick_up(hol)          # clears the trail, tints to the holder
+				Sfx.play("card", -6.0)
+			elif st == OrbBall.S.FLYING and pst == OrbBall.S.HELD:
+				Sfx.play("putt")         # a throw left somebody's hand
+			bb.state = st as OrbBall.S
+		if own != bb.owner_idx or hol != bb.holder_idx:
+			bb.owner_idx = own
+			bb.holder_idx = hol
+			bb.refresh_color()
+		bb.vel = Vector3(float(bs[b + 4]), float(bs[b + 5]), float(bs[b + 6]))
+		bb.throw_time = now - float(bs[b + 9])   # age() true: ghost pulse + labels
+
+
+## A drifted-in ball on the mirror: same node kit, position rides the wire.
+func _mir_spawn_ball() -> OrbBall:
+	var b := OrbBall.new()
+	b.world = self
+	_ball_root.add_child(b)
+	b.state = OrbBall.S.REST
+	var t := OrbTrail.new()
+	_trail_root.add_child(t)
+	b.trail = t
+	b.refresh_color()
+	balls.append(b)
+	return b
+
+
+func _apply_mir_banner(arr: Array, parr: Array) -> void:
+	if arr.size() < 3:
+		return
+	_banner.text = str(arr[0])
+	_banner.add_theme_color_override("font_color", Color(str(arr[1])))
+	var was: bool = parr.size() >= 3 and bool(parr[2]) and str(parr[0]) == str(arr[0])
+	_banner.visible = bool(arr[2])
+	if _banner.visible and not was:
+		_banner.pivot_offset = _banner.size / 2.0
+		_banner.scale = Vector2(0.55, 0.55)
+		var pop := create_tween()
+		pop.tween_property(_banner, "scale", Vector2.ONE, 0.28) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## CLIENT: my aim against my own mirrored render (doc 10 §1.3). Orbital aims in
+## SCREEN space (the sphere game), so the relay carries aim_screen, which the
+## host's get_aim_screen returns verbatim for a remote seat.
+func _net_aim() -> Dictionary:
+	var my := NetSession.my_seat()
+	var scr := Vector2.ZERO
+	if my >= 0 and my < pawns.size():
+		scr = PlayerInput.get_aim_screen(my, (pawns[my] as OrbPawn).body_center(), _cam)
+	return {"aim": Vector3.ZERO, "aim_screen": scr}
+
+
+func _mir_snap_once(tag: String) -> void:
+	if _mir_snaps.has(tag):
+		return
+	_mir_snaps[tag] = true
+	VerifyCapture.snap(tag)
 
 
 ## --- debug/verify surface ------------------------------------------------------
