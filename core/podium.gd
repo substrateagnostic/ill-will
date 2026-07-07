@@ -48,6 +48,14 @@ func _ready() -> void:
 	add_child(cam)
 
 func present(entries: Array, ceremony_time := CEREMONY_TIME) -> void:
+	stage_entries(entries)
+	await get_tree().create_timer(ceremony_time).timeout
+	done.emit()
+
+## Build the tableau without the timer. present() rides it on the host; net
+## mirrors call it directly — the HOST decides when a mirrored ceremony ends,
+## so a client podium must never free itself on a local clock.
+func stage_entries(entries: Array) -> void:
 	cam.current = true
 	for entry in entries:
 		var rank: int = entry.rank
@@ -78,7 +86,12 @@ func present(entries: Array, ceremony_time := CEREMONY_TIME) -> void:
 		inst.scale = Vector3(0.9, 0.9, 0.9)
 		add_child(inst)
 		inst.global_position = global_position + pos
-		if entry.has("player"):
+		# Net mirrors ship explicit worn ids (the HOST's wardrobe truth) because
+		# a guest's local cosmetics.json knows nothing about the host's estate.
+		if entry.has("cosmetics"):
+			for cid in entry.cosmetics:
+				Cosmetics.equip(inst, String(cid))
+		elif entry.has("player"):
 			Cosmetics.apply_to_character(inst, entry.player)
 		if rank >= 3:
 			inst.rotation_degrees.y = 200.0
@@ -99,8 +112,6 @@ func present(entries: Array, ceremony_time := CEREMONY_TIME) -> void:
 		add_child(tag)
 	_confetti()
 	Sfx.play("match_win")
-	await get_tree().create_timer(ceremony_time).timeout
-	done.emit()
 
 func _confetti() -> void:
 	for x in [-2.0, 0.0, 2.0]:

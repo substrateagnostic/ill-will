@@ -377,6 +377,29 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-07 — ONLINE PHASE 3: remote guests get THE DRAMA (podiums + night ceremonies + auction card) (estate-online agent worktree)
+The biggest online gap is closed: guests no longer stare at the spectate
+card while the couch gets the fireworks. A remote friend now sees, on their
+own screen: the **match podium** (same tableau, same confetti, **their
+bought hats** — host wardrobe rides the facts), the full **RECKONING
+ticker**, the **night podium** with the WINS-THE-NIGHT banner, **THE READING
+OF THE WILL word-for-word** with the couch's 0.45 s stagger (this one's the
+money shot: `docs/verify/cer_netshots_join/snap_will_reading_mirror_13917.png`
+vs host `snap_will_reading_14211.png`), **THE PARADE** animating stone-by-
+stone on their own trail, the free-roam boundary handoff, and (code-complete)
+the RUN-OVER heir ceremony. Plus the **auction is finally visible online**:
+block, bids, clock, pot, Executor quip, vendetta book — read-only ("the
+couch holds the paddles tonight"; remote bidding is a named later chore).
+HOW: no new RPCs — host narrates ceremony stages as facts on the existing
+5 Hz lobby channel; `podium.gd` got an additive `stage_entries()` so the
+client restages the SAME scene and the HOST decides when it folds. Receipts:
+two-instance probe on private port 9473 end-to-end in 110 s, twice;
+NETHASH 98/98 + 28/28 zero mismatches; import pass, estatebots ceremony
+soak, auctiontest PASS, strolltest, readytest, couch-tape probe all green;
+user:// backed up + restored byte-identical. Full story:
+`docs/verify/online-ceremonies-VERIFY.md`. Honest gaps: guest top bar,
+local lawn décor, static guest ticker, run-over stage not probe-driven yet.
+
 ### 2026-07-07 — REAL-KEYS HINT BARS (5 games) + ECHO "killed by your own echo" irony pack (agent worktree)
 Two presentation deliverables, verified WINDOWED by eye (RTX 4050, Vulkan).
 
