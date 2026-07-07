@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/course.gd" id="1_course"]
 [ext_resource type="Texture2D" path="res://assets/textures/grass_stripes.png" id="2_grass"]
@@ -17,6 +17,10 @@ roughness = 0.7
 [sub_resource type="StandardMaterial3D" id="mat_wood_dark"]
 albedo_color = Color(0.62, 0.34, 0.55, 1)
 roughness = 0.8
+
+[sub_resource type="StandardMaterial3D" id="mat_deck"]
+albedo_color = Color(0.45, 0.38, 0.32, 1)
+roughness = 0.85
 
 [sub_resource type="StandardMaterial3D" id="mat_table"]
 albedo_color = Color(0.42, 0.29, 0.2, 1)
@@ -41,90 +45,96 @@ height = 0.02
 
 [node name="Course" type="Node3D"]
 script = ExtResource("1_course")
-play_rects = Array[Rect2]([Rect2(-3.4, -8.3, 6.8, 10.4), Rect2(-3.4, -8.3, 11.6, 4.7)])
-tee_slots = Array[Vector3]([Vector3(-1.2, 0.15, 1.5), Vector3(-0.4, 0.15, 1.5), Vector3(0.4, 0.15, 1.5), Vector3(1.2, 0.15, 1.5)])
-extra_no_build = [{"pos": Vector3(0.5, 0, -5.4), "radius": 1.5}]
-course_center = Vector3(2.0, 0, -3.2)
-course_extent = Vector3(5.6, 0, 6.0)
-camera_position = Vector3(2.0, 17.0, 5.5)
+play_rects = Array[Rect2]([Rect2(-4.76, -12.22, 9.52, 14.56), Rect2(-4.76, -12.22, 16.24, 6.58)])
+walk_rects = Array[Rect2]([Rect2(5.3, -4.9, 6.9, 7.3)])
+tee_slots = Array[Vector3]([Vector3(-1.5, 0.15, 1.5), Vector3(-0.5, 0.15, 1.5), Vector3(0.5, 0.15, 1.5), Vector3(1.5, 0.15, 1.5)])
+extra_no_build = [{"pos": Vector3(0.7, 0, -8.16), "radius": 2.1}]
+course_center = Vector3(2.8, 0, -5.1)
+course_extent = Vector3(7.8, 0, 8.4)
+camera_position = Vector3(2.8, 21.0, 7.1)
 camera_fov = 62.0
 
 [node name="Table" type="CSGBox3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.4, -0.75, -3.1)
-size = Vector3(16, 0.7, 14)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.4, -0.75, -4.9)
+size = Vector3(23, 0.7, 20)
 material = SubResource("mat_table")
 
 [node name="Geo" type="CSGCombiner3D" parent="."]
 use_collision = true
 
 [node name="FloorV" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, -3.1)
-size = Vector3(7.4, 0.4, 11.0)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.2, -4.94)
+size = Vector3(10.36, 0.4, 15.4)
 material = SubResource("mat_green")
 
 [node name="FloorH" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.45, -0.2, -5.9)
-size = Vector3(12.3, 0.4, 5.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.43, -0.2, -8.86)
+size = Vector3(17.22, 0.4, 7.56)
 material = SubResource("mat_green")
 
 [node name="CupHole" type="CSGCylinder3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.3, -0.2, -5.9)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.82, -0.2, -8.86)
 operation = 2
 radius = 0.3
 height = 0.6
 
 [node name="WallS" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.155, 2.4)
-size = Vector3(7.6, 0.71, 0.25)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.155, 2.76)
+size = Vector3(10.64, 0.71, 0.25)
 material = SubResource("mat_wood")
 
 [node name="WallW" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -3.7, 0.155, -3.1)
-size = Vector3(0.25, 0.71, 11.2)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -5.18, 0.155, -4.94)
+size = Vector3(0.25, 0.71, 15.68)
 material = SubResource("mat_wood")
 
 [node name="WallN" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2.45, 0.155, -8.6)
-size = Vector3(12.55, 0.71, 0.25)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.43, 0.155, -12.64)
+size = Vector3(17.57, 0.71, 0.25)
 material = SubResource("mat_wood")
 
 [node name="WallEfar" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.6, 0.155, -5.9)
-size = Vector3(0.25, 0.71, 5.4)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 12.04, 0.155, -8.86)
+size = Vector3(0.25, 0.71, 7.56)
 material = SubResource("mat_wood")
 
 [node name="WallSH" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.15, 0.155, -3.2)
-size = Vector3(4.9, 0.71, 0.25)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.61, 0.155, -5.08)
+size = Vector3(6.86, 0.71, 0.25)
 material = SubResource("mat_wood")
 
 [node name="WallEV" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 3.7, 0.155, -0.4)
-size = Vector3(0.25, 0.71, 5.6)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5.18, 0.155, -1.16)
+size = Vector3(0.25, 0.71, 7.84)
 material = SubResource("mat_wood")
 
 [node name="Bank" type="CSGBox3D" parent="Geo"]
-transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 0.5, 0.155, -5.4)
-size = Vector3(0.25, 0.71, 5.2)
+transform = Transform3D(0.707107, 0, -0.707107, 0, 1, 0, 0.707107, 0, 0.707107, 0.7, 0.155, -8.16)
+size = Vector3(0.25, 0.71, 7.28)
 material = SubResource("mat_wood_dark")
+
+[node name="ApronElbow" type="CSGBox3D" parent="Geo"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.75, -0.2, -1.25)
+size = Vector3(6.9, 0.4, 7.3)
+material = SubResource("mat_deck")
 
 [node name="TrapContainer" type="Node3D" parent="."]
 
 [node name="GravestoneContainer" type="Node3D" parent="."]
 
 [node name="CupLiner" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.3, -0.47, -5.9)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.82, -0.47, -8.86)
 mesh = SubResource("liner_mesh")
 surface_material_override/0 = SubResource("mat_hole")
 
 [node name="CupArea" type="Area3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.3, -0.32, -5.9)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.82, -0.32, -8.86)
 
 [node name="Shape" type="CollisionShape3D" parent="CupArea"]
 shape = SubResource("cup_shape")
 
 [node name="Flag" type="Node3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 6.3, 0, -5.9)
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8.82, 0, -8.86)
 
 [node name="FlagModel" parent="Flag" instance=ExtResource("3_flag")]
 transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0.28, 0, 0)

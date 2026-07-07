@@ -100,13 +100,14 @@ func _check_valid() -> bool:
 		return false
 	var p: Vector3 = ghost.active_placement_pos()
 	var r: float = ghost.active_footprint_radius()
-	# Footprint must stay on the green: check center + 4 cardinal edge points so
-	# a trap can't poke over a wall or off a leg of the dogleg.
-	if not course.is_point_on_green(p):
+	# Footprint must stay on BUILDABLE green (play_rects only — the widow's walk
+	# elevated green/ramp are rest-legal but never build ground): center + 4
+	# cardinal edge points so a trap can't poke over a wall or off a dogleg leg.
+	if not course.is_point_buildable(p):
 		return false
 	var m := r * 0.6
 	for off in [Vector3(m, 0, 0), Vector3(-m, 0, 0), Vector3(0, 0, m), Vector3(0, 0, -m)]:
-		if not course.is_point_on_green(p + off):
+		if not course.is_point_buildable(p + off):
 			return false
 	for zone in course.no_build_zones():
 		var zp: Vector3 = zone["pos"]

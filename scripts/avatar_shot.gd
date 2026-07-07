@@ -29,9 +29,16 @@ const SWING_CONTACT_T := 0.18  # s into 2H_Melee_Attack_Slice when contact fires
 const SWING_TOTAL_T := 0.85    # s the swing state holds before returning to idle
 const POWER_MIN := 1.2
 const POWER_MAX := 13.0
+## WAVE 2 — grief flinch: a shove that connects with the acting golfer either
+## staggers the address (no stroke lost) or jolts the aim by FLINCH_DEG and, if
+## the meter was live, fires the shot NOW. Only the (power, angle) INPUT to the
+## frozen debug_putt changes — the sim itself stays byte-identical.
+const FLINCH_DEG := 13.0
+const STAGGER_T := 0.45
 
 var state: int = State.IDLE
 var actor := -1
+var _stagger_t := 0.0
 
 var _main: Node3D
 var _putt: Node3D
@@ -85,6 +92,7 @@ func begin_turn(p: int, avatar: PlayerAvatar, ball: Ball, is_bot: bool, chaos: b
 	_auto_charge = false
 	_fired = false
 	_walk_t = 0.0
+	_stagger_t = 0.0
 	_aim_dir = _dir_to_cup()
 	if _avatar == null or _ball == null or ball.is_sunk or ball.is_dead or ball.is_petrified:
 		state = State.IDLE
@@ -92,9 +100,14 @@ func begin_turn(p: int, avatar: PlayerAvatar, ball: Ball, is_bot: bool, chaos: b
 	state = State.WALK
 	_avatar.walk_to(_ball.global_position, _chaos)
 
-## The current actor's avatar has arrived and holds the address stance.
+## The current actor's avatar has arrived and holds the address stance. A
+## staggered golfer (fresh grief shove) does NOT count as addressed — bot think
+## clocks and the swingplay harness both wait out the reel.
 func is_addressed(p: int) -> bool:
-	return state == State.ADDRESS and actor == p
+	return state == State.ADDRESS and actor == p and _stagger_t <= 0.0
+
+func is_staggered(p: int) -> bool:
+	return actor == p and state == State.ADDRESS and _stagger_t > 0.0
 
 ## True while the machine is actively running p's shot (walking in, aiming,
 ## charging or swinging). False when begin_turn declined (dead/sunk ball) or
@@ -117,7 +130,7 @@ func on_external_stroke() -> void:
 
 ## Bot layer: fire the seeded (power, angle) through the swing. Pass-through.
 func bot_swing(power: float, angle_deg: float) -> bool:
-	if state != State.ADDRESS:
+	if state != State.ADDRESS or _stagger_t > 0.0:
 		return false
 	_pending_power = power
 	_pending_angle = angle_deg
@@ -139,6 +152,48 @@ func auto_swing(power: float, angle_deg: float) -> bool:
 	state = State.CHARGE
 	_meter_root.visible = true
 	return true
+
+## WAVE 2 — a griefer's shove connected with the acting golfer. Returns what
+## happened: "stagger" (address interrupted; no stroke lost), "fired" (the live
+## charge released NOW with a deflected angle — the flinch penalty), "deflect"
+## (swing already falling; contact fires with the jolted angle), "" (machine
+## not in a shovable phase — e.g. still walking, or already fired). All paths
+## still resolve through the one frozen debug_putt entry point.
+func flinch(p: int, shove_dir: Vector3) -> String:
+	if actor != p:
+		return ""
+	match state:
+		State.ADDRESS:
+			_stagger_t = STAGGER_T
+			if _avatar != null:
+				_avatar.play_action("Hit_A", STAGGER_T)
+			return "stagger"
+		State.CHARGE:
+			var angle := rad_to_deg(atan2(-_aim_dir.x, -_aim_dir.z)) \
+				+ _flinch_sign(shove_dir) * FLINCH_DEG
+			_pending_power = maxf(_charge_power, POWER_MIN)
+			_pending_angle = angle
+			_aim_dir = _dir_for_angle(angle)
+			_auto_charge = false
+			_meter_root.visible = false
+			_start_swing()
+			return "fired"
+		State.SWING:
+			if _fired:
+				return ""
+			var d := _flinch_sign(shove_dir) * FLINCH_DEG
+			if _pending_power >= 0.0:
+				_pending_angle += d
+				_aim_dir = _dir_for_angle(_pending_angle)
+			else:
+				_aim_dir = _aim_dir.rotated(Vector3.UP, deg_to_rad(d))
+			return "deflect"
+	return ""
+
+## Deflect toward the side the shove pushes across the aim line (deterministic).
+func _flinch_sign(shove_dir: Vector3) -> float:
+	shove_dir.y = 0.0
+	return 1.0 if _aim_dir.cross(shove_dir).y >= 0.0 else -1.0
 
 # --- per-tick machine (fixed 1/60 physics delta => deterministic timings) ---------
 
@@ -185,6 +240,10 @@ func _tick_address(delta: float) -> void:
 		state = State.WALK
 		_walk_t = 0.0
 		_putt.hide_preview()
+		return
+	if _stagger_t > 0.0:
+		# Shoved while addressing: reel (Hit_A plays), no aim/charge until it passes.
+		_stagger_t -= delta
 		return
 	if _is_bot:
 		# hold the stance facing the cup; main's bot driver calls bot_swing().
