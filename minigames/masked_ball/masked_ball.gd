@@ -66,7 +66,28 @@ extends Minigame
 ##                    SCRIPTED beats (a forced waste at ~26s, a forced human
 ##                    unmask at ~48s) so every reveal state is photographed;
 ##                    saves docs/verify/shots/maskedball_*.png and quits
+##   --mbnetdemo      two-instance NETPROBE rig (docs/verify/
+##                    online-maskedball-VERIFY.md): host side shortens the
+##                    waltz to 90s, calms the bots (photo_mode) and scripts
+##                    ONE reveal beat at ~40s; client side drives its remote
+##                    seat through the REAL input pipe (stroll, feather-glint,
+##                    the one mark, a bluff curtsy) via the _dbg_aim-style
+##                    injection seam, and photographs the reveal moments
 ##   --shots=N,... / --quitafter=N   global VerifyCapture harness
+##
+## ONLINE (phase 2, docs/design/10-online-first-architecture.md §4.3): the
+## host runs this ENTIRE sim exactly as couch; the estate pumps _net_state()
+## to guests at 20 Hz and clients boot this same scene with
+## config.net_mirror = true, where _net_apply()/_mirror_tick() puppet the
+## twenty dancers from public facts. THE PRIVACY CORE SURVIVES THE WIRE FOR
+## FREE: the snapshot is BODY-indexed and carries no seat->dancer mapping —
+## every glint (decoy or feather) rides one untagged per-body counter, and
+## seat<->body pairs enter the dict only inside reveal rows minted at the
+## exact frame the couch prints the same badge on screen. The client is
+## booted with rng_seed=0 (the estate's mirror contract), so the seeded deal
+## can never be recomputed remotely. Masked ball has ZERO private sends:
+## the couch's only "secret" is the correlation between your hidden stick
+## and your own mask's glints, which no packet can name.
 
 enum Phase { WAITING, INTRO, WALTZ, REVEAL, DONE }
 
@@ -151,6 +172,35 @@ var _pending_snaps: Array = []      # {tag, at} in game_time
 var _forced_waste_done := false
 var _forced_kill_done := false
 
+# ---- ONLINE PHASE 2 (mirror) ----
+var _mirror := false                # this instance is a client render mirror
+var _netdemo := false               # --mbnetdemo probe rig (host beats / client script)
+var _mir: Dictionary = {}           # client: latest applied snapshot
+var _mir_rev_n := 0                 # client: processed reveal rows
+var _mir_wst_n := 0                 # client: processed waste rows
+var _mir_led_n := 0                 # client: processed ledger rows
+var _mir_champ := -1                # client: confetti latch
+var _mir_snaps: Dictionary = {}     # client: VerifyCapture latches
+# host-side public event ledgers (cumulative — latest-wins snapshots may drop;
+# counters and append-only rows lose nothing but intermediate frames)
+var _net_crt := 0                   # scored curtsies, UNNAMED count only
+var _net_rev: Array = []            # [kind(0 unmask/1 survivor), seat, body, killer]
+var _net_wst: Array = []            # [accuser_seat, accuser_body]
+var _net_led: Array = []            # [text, color_html] as rows are read out
+var _net_gust: Array = [0, 0, 0, 0] # per-seat ghost-gust counters (dead = revealed)
+var _net_champ: Array = [-1, -1]    # [seat, body] once the ball is taken
+var _ban_col := "ffffff"            # last banner/sub colors (ride the wire)
+var _sub_col := "ffffff"
+# --mbnetdemo host beat + client injector state
+var _nd_done := false
+var _demo_feather := false
+var _demo_glint_seen := false
+var _inj_seq := 0
+var _inj_pa := 0
+var _inj_pb := 0
+var _inj_a_prev := false
+var _inj_b_prev := false
+
 # fx
 var _shake := 0.0
 var _time_token := 0
@@ -200,6 +250,8 @@ func _parse_args() -> void:
 		elif arg == "--mbsnaps":
 			_snaps = true
 			_all_bots = true
+		elif arg == "--mbnetdemo":
+			_netdemo = true
 		elif arg.begins_with("--players="):
 			_cli_players = clampi(int(arg.trim_prefix("--players=")), 2, 4)
 		elif arg.begins_with("--seed="):
@@ -231,10 +283,11 @@ func begin(config: Dictionary) -> void:
 	if _started:
 		return
 	_started = true
+	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.get("rng_seed", 1))
 	crowd_rng.seed = int(config.get("rng_seed", 1)) ^ 0xC0DA
 	_practice = bool(config.get("practice", false))
-	_waltz_len = SNAP_WALTZ_TIME if _snaps else WALTZ_TIME
+	_waltz_len = SNAP_WALTZ_TIME if (_snaps or _netdemo) else WALTZ_TIME
 	roster = config.get("roster", [])
 	players.clear()
 	for i in roster.size():
@@ -257,11 +310,24 @@ func begin(config: Dictionary) -> void:
 			"glint_cd": 0.0,
 			"ghost_node": null,
 		})
+	if _mirror:
+		# RENDER MIRROR (spec §4.3): no deal, no bots, no sim. The client's
+		# rng_seed is 0 by the estate's mirror contract, and we never touch it:
+		# _body_of stays EMPTY on this machine — the mirror cannot know (or
+		# leak, or even guess at) which dancer answers which seat until a
+		# reveal row says so. Twenty pawns spawn on a plain ring and the first
+		# snapshot teleports them onto the host's truth.
+		_spawn_crowd_mirror()
+		phase = Phase.INTRO
+		phase_label.text = "MASKED BALL"
+		info_label.text = ""
+		print("MB_MIRROR boot players=%d my_seat=%d" % [players.size(), NetSession.my_seat()])
+		return
 	_spawn_crowd()
 	bots = MBBots.new()
 	bots.setup(int(config.get("rng_seed", 1)) ^ 0x3A5CED, players.size(),
 		CROWD_TOTAL, _waltz_len)
-	bots.photo_mode = _snaps
+	bots.photo_mode = _snaps or _netdemo
 	print("MB_BEGIN players=%d seed=%d practice=%s bots=%s waltz=%.0f" % [
 		players.size(), rng.seed, str(_practice),
 		str(players.map(func(p): return p.is_bot)), _waltz_len])
@@ -307,6 +373,27 @@ func _spawn_crowd() -> void:
 		d.rotation.y = d.facing
 		d.npc_t = rng.randf_range(0.2, 1.6)
 		d.glint_next = rng.randf_range(1.0, 5.0)
+		dancers.append(d)
+
+## ONLINE mirror crowd: the same twenty pawns with NO deal and NO rng — a
+## plain ring the first snapshot immediately overwrites. body_to_seat stays
+## all -1 until reveal rows arrive (the client holds no seat->dancer map).
+func _spawn_crowd_mirror() -> void:
+	var char_scene: PackedScene = load(DANCER_CHAR)
+	body_to_seat.clear()
+	dancers.clear()
+	_body_of.clear()
+	for b in CROWD_TOTAL:
+		body_to_seat.append(-1)
+	for b in CROWD_TOTAL:
+		var d := MBDancer.new()
+		d.name = "Dancer%d" % b
+		spawn_root.add_child(d)
+		d.setup(b, char_scene, true)
+		var a := TAU * float(b) / float(CROWD_TOTAL)
+		d.position = Vector3(cos(a) * AX * 0.6, 0, sin(a) * AZ * 0.6)
+		d.facing = a
+		d.rotation.y = a
 		dancers.append(d)
 
 # ================================================================ world
@@ -545,14 +632,11 @@ func _build_chandeliers() -> void:
 
 # ================================================================ tick
 func _physics_process(delta: float) -> void:
+	if _mirror:
+		_mirror_tick(delta)
+		return
 	game_time += delta
-	if _shake > 0.001:
-		cam.h_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.25
-		cam.v_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.25
-		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
-	else:
-		cam.h_offset = 0.0
-		cam.v_offset = 0.0
+	_tick_shake(delta)
 	match phase:
 		Phase.INTRO:
 			_intro_t += delta
@@ -569,6 +653,17 @@ func _physics_process(delta: float) -> void:
 			_run_pending_snaps()
 		_:
 			pass
+
+## Camera shake decay — shared verbatim by the couch tick and the mirror tick
+## (pure visual; _fx_rng never feeds logic).
+func _tick_shake(delta: float) -> void:
+	if _shake > 0.001:
+		cam.h_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.25
+		cam.v_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.25
+		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
+	else:
+		cam.h_offset = 0.0
+		cam.v_offset = 0.0
 
 func _begin_waltz() -> void:
 	phase = Phase.WALTZ
@@ -699,6 +794,9 @@ func _tick_waltz(delta: float) -> void:
 		_snapped["crowd"] = true
 		_do_snap("crowd")
 		VerifyCapture.snap("crowd")
+	if _netdemo and not _snapped.has("mb_net_waltz") and _waltz_e >= 20.0:
+		_snapped["mb_net_waltz"] = true
+		VerifyCapture.snap("mb_net_waltz")
 	# 5) end checks
 	if _waltz_e >= _waltz_len:
 		_end_waltz("buzzer")
@@ -763,6 +861,8 @@ func _tick_seat(i: int, delta: float) -> void:
 
 ## --mbsnaps only: two scripted beats so every reveal state gets a photo.
 func _forced_override(i: int, d: MBDancer) -> Dictionary:
+	if _netdemo:
+		return _netdemo_override(i, d)
 	if not _snaps:
 		return {}
 	if i == 1 and not _forced_waste_done and _waltz_e >= 26.0 and players[1].mark_left:
@@ -782,6 +882,54 @@ func _forced_override(i: int, d: MBDancer) -> Dictionary:
 			return {"mv": Vector2.ZERO, "mark": true}
 		return {"mv": Vector2(to2.x, to2.z).normalized() * 1.12, "mark": false}
 	return {}
+
+## --mbnetdemo HOST beat: at waltz ~40s the first living bot seat holding a
+## mark guarantees whichever reveal path the remote seat's own mark did NOT
+## already provide — an unmask-HUMAN if none has landed, otherwise a waste.
+## Both two-screen reveal moments get photographed either way.
+func _netdemo_override(i: int, d: MBDancer) -> Dictionary:
+	if _nd_done or _waltz_e < 40.0 or i != _nd_actor():
+		return {}
+	var target := -1
+	if _unmask_count == 0:
+		target = _nearest_human_body(d.position, d.body)
+	else:
+		target = _nearest_npc_body(d.position, d.body)
+	if target < 0:
+		_nd_done = true
+		return {}
+	var to: Vector3 = dancers[target].position - d.position
+	to.y = 0.0
+	if to.length() <= MARK_REACH * 0.8 and nearest_markable(d.body, d.position) == target:
+		_nd_done = true
+		return {"mv": Vector2.ZERO, "mark": true}
+	return {"mv": Vector2(to.x, to.z).normalized() * 1.12, "mark": false}
+
+## First living bot seat that still holds its mark (-1: beat impossible).
+func _nd_actor() -> int:
+	for i in players.size():
+		var p: Dictionary = players[i]
+		if bool(p.is_bot) and not bool(p.eliminated) and bool(p.mark_left):
+			return i
+	return -1
+
+func _nearest_human_body(from: Vector3, exclude: int) -> int:
+	var best := -1
+	var best_d := 1e9
+	for i in players.size():
+		if players[i].eliminated:
+			continue
+		var b: int = _body_of[i]
+		if b == exclude:
+			continue
+		var d2: MBDancer = dancers[b]
+		if d2.revealed or d2.gone:
+			continue
+		var dist := (d2.position - from).length()
+		if dist < best_d:
+			best_d = dist
+			best = b
+	return best
 
 func _nearest_npc_body(from: Vector3, exclude: int) -> int:
 	var best := -1
@@ -807,6 +955,7 @@ func _finish_player_curtsy(i: int, d: MBDancer) -> void:
 	p.pips = int(p.pips) + 1
 	p.last_pip = _waltz_e
 	p.points = int(p.points) + PIP_PTS
+	_net_crt += 1   # wire fact: "somebody bowed for money" — a COUNT, no name
 	info_label.text = _info_line()
 	# the announcement is UNNAMED — the leak is "somebody bowed for money,
 	# just now"; the couch (and the bots) must catch WHO was mid-bow
@@ -886,6 +1035,9 @@ func _unmask_human(killer: int, victim: int, victim_body: int, killer_d: MBDance
 	# the lunge is public: anyone watching (bots included) now suspects the
 	# body that did the tearing — fair-play parity with the couch
 	bots.on_kill_seen(killer_d.body, self)
+	# wire fact: the FIRST time this seat<->body pair exists anywhere the
+	# clients can read, minted at the same frame the couch prints the badge
+	_net_rev.append([0, victim, victim_body, killer])
 	# REVEAL moment: the victim's badge finally exists
 	vd.reveal(vp.color, PlayerBadge.glyph(victim) + " " + vp.name, true)
 	_corpse_fade[victim_body] = _waltz_e + 2.6
@@ -914,6 +1066,9 @@ func _unmask_human(killer: int, victim: int, victim_body: int, killer_d: MBDance
 		VerifyCapture.snap("unmask_human")
 	if _snaps:
 		_forced_kill_done = true
+	if _netdemo and not _snapped.has("mb_net_unmask"):
+		_snapped["mb_net_unmask"] = true
+		VerifyCapture.snap("mb_net_unmask")
 
 func _waste_mark(accuser: int, npc_body: int, accuser_d: MBDancer) -> void:
 	var p: Dictionary = players[accuser]
@@ -923,6 +1078,7 @@ func _waste_mark(accuser: int, npc_body: int, accuser_d: MBDancer) -> void:
 		_currency.append({"type": "grudge", "player": accuser, "amount": GRUDGE_WASTE,
 			"reason": "accused the furniture"})
 	# the position leak — a self-inflicted reveal moment, so the badge shows
+	_net_wst.append([accuser, accuser_d.body])   # wire fact, minted with the flash
 	accuser_d.do_flash(FLASH_TIME, p.color, PlayerBadge.glyph(accuser) + " " + p.name)
 	bots.on_flash(accuser_d.body, self)
 	dancers[npc_body].begin_twirl(1.1)   # the furniture, offended
@@ -944,6 +1100,9 @@ func _waste_mark(accuser: int, npc_body: int, accuser_d: MBDancer) -> void:
 		VerifyCapture.snap("unmask_npc")
 	if _snaps:
 		_forced_waste_done = true
+	if _netdemo and not _snapped.has("mb_net_waste"):
+		_snapped["mb_net_waste"] = true
+		VerifyCapture.snap("mb_net_waste")
 
 # ---------------------------------------------------------------- ghosts
 func _tick_ghost(i: int, delta: float) -> void:
@@ -970,6 +1129,8 @@ func _tick_ghost(i: int, delta: float) -> void:
 	p.ghost_pos = gp
 	if gust and p.gust_cd <= 0.0:
 		p.gust_cd = GUST_CD
+		if i < _net_gust.size():
+			_net_gust[i] = int(_net_gust[i]) + 1   # wire fact: dead = already revealed
 		print("MB_GUST seat=%d t=%.1f" % [i, _waltz_e])
 		for b in CROWD_TOTAL:
 			var d: MBDancer = dancers[b]
@@ -1132,11 +1293,21 @@ func _begin_reveal() -> void:
 			_snapped["verdict"] = true
 			_do_snap("verdict")
 		VerifyCapture.snap("settle"))
+	# ONLINE: pre-announce the champion one beat before finished() — points are
+	# final since survival paid at reveal. report_finished() stops the estate's
+	# 20 Hz pump the same tick it runs, so a champ fact set inside
+	# _finish_match would never reach the mirror (found by the first probe
+	# night: the client missed the confetti). Memory-only on the couch.
+	_seq_add(t_end + 0.4, func():
+		var champ_order := _placement_order()
+		var cw := int(champ_order[0])
+		_net_champ = [cw, int(_body_of[cw])])
 	_seq_add(t_end + 0.8, func(): _finish_match())
 
 func _reveal_survivor(seat: int) -> void:
 	var d: MBDancer = dancers[_body_of[seat]]
 	var p: Dictionary = players[seat]
+	_net_rev.append([1, seat, int(_body_of[seat]), -1])   # public at this beat
 	d.reveal(p.color, PlayerBadge.glyph(seat) + " " + str(p.name), false)
 	_reveal_spot.light_energy = 6.5
 	_reveal_spot.look_at_from_position(Vector3(d.position.x * 0.5, 9.5, d.position.z * 0.5 + 4.0),
@@ -1171,6 +1342,8 @@ func _ledger_rows() -> Array:
 	return rows
 
 func _add_ledger_row(text: String, color: Color) -> void:
+	if not _mirror:
+		_net_led.append([text, color.to_html(false)])   # settle rows, as read out
 	var l := Label.new()
 	l.text = text
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1240,6 +1413,7 @@ func _finish_match() -> void:
 		get_tree().quit()
 		return
 	var w := int(order[0])
+	_net_champ = [w, int(_body_of[w])]   # by now every body is a public fact
 	_flash_banner("%s TAKES THE BALL" % players[w].name, players[w].color, 6.0)
 	_say("%s takes the ball. Do try to look surprised." % players[w].name)
 	if not _tally:
@@ -1429,6 +1603,7 @@ func _time_hit(scale: float, real_duration: float) -> void:
 func _flash_banner(text: String, color: Color, duration: float) -> void:
 	if _tally:
 		return
+	_ban_col = color.to_html(false)
 	banner.text = text
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
@@ -1450,6 +1625,7 @@ func _hide_banner_if(token: int) -> void:
 func _flash_sub(text: String, color: Color, duration: float) -> void:
 	if _tally:
 		return
+	_sub_col = color.to_html(false)
 	sub_banner.text = text
 	sub_banner.add_theme_color_override("font_color", color)
 	sub_banner.visible = true
@@ -1512,6 +1688,386 @@ func _do_snap(tag: String) -> void:
 	var path := "res://docs/verify/shots/maskedball_%s.png" % tag
 	img.save_png(path)
 	print("MB_SNAP ", path)
+
+# ================================================================ ONLINE (phase 2)
+# House pattern (docs/verify/online-seance-VERIFY.md PATTERN NOTES): host sim
+# untouched, _net_state() = one flat dict of PUBLIC facts, _net_apply() diffs
+# and fires ALL juice from deltas, _mirror_tick() interpolates at 60 Hz.
+#
+# THE PRIVACY CORE: the snapshot is BODY-indexed. Twenty dancers stream the
+# same seven quantized fields whether a hand or the crowd's brain drives them;
+# glints ride one untagged per-body counter (feather pulses, NPC decoys and
+# kill lunges are indistinguishable on the wire, exactly as on the couch).
+# seat<->body pairs exist ONLY in the cumulative reveal/waste rows, each
+# minted at the frame the couch prints the same badge. No rng_seed, no
+# _body_of, no per-seat pips/marks/points ever enter this dict. Masked ball
+# sends NOTHING on the private channel — the couch has no private beat: the
+# self-ID "secret" is a correlation with your own hidden stick, which the
+# transport cannot name and therefore cannot leak.
+
+const MIR_D_STRIDE := 7   # per-body ints: x, z, yaw, act, act_t, flags, glints
+const MIR_G_STRIDE := 3   # per-seat ghost ints: on, x, z
+
+## HOST, pumped by the estate at 20 Hz. Ask of every key: is this on every
+## couch player's screen right now? Bodies, ghosts, HUD text, reveal rows —
+## yes. Who owns an unrevealed body — never.
+func _net_state() -> Dictionary:
+	if dancers.size() < CROWD_TOTAL:
+		return {"ph": phase}   # pump beat before begin() — nothing staged yet
+	var dd := PackedInt32Array()
+	for b in CROWD_TOTAL:
+		var d: MBDancer = dancers[b]
+		dd.append(int(roundf(d.position.x * 100.0)))
+		dd.append(int(roundf(d.position.z * 100.0)))
+		dd.append(int(roundf(wrapf(d.facing, 0.0, TAU) * 1000.0)))
+		dd.append(d.act)
+		dd.append(int(roundf(maxf(d.act_t, 0.0) * 100.0)))
+		var fl := 0
+		if d.walking():
+			fl |= 1
+		if d.revealed:
+			fl |= 2
+		if d.gone:
+			fl |= 4
+		if d.dimmed():
+			fl |= 8
+		dd.append(fl)
+		dd.append(d.glints)
+	var gh := PackedInt32Array()
+	for i in players.size():
+		var p: Dictionary = players[i]
+		gh.append(1 if bool(p.eliminated) else 0)
+		gh.append(int(roundf(float(p.ghost_pos.x) * 100.0)))
+		gh.append(int(roundf(float(p.ghost_pos.z) * 100.0)))
+	return {
+		"ph": phase,
+		"wt": snappedf(_waltz_e, 0.1),
+		"wl": snappedf(_waltz_len, 0.1),
+		"d": dd,
+		"gh": gh,
+		"gu": _net_gust.duplicate(),
+		"crt": _net_crt,
+		"rev": _net_rev.duplicate(),
+		"wst": _net_wst.duplicate(),
+		"led": _net_led.duplicate(),
+		"champ": _net_champ.duplicate(),
+		"ban": [banner.text, _ban_col, banner.visible],
+		"sub": [sub_banner.text, _sub_col, sub_banner.visible],
+		"exec": executor_label.text,
+		"pl": phase_label.text,
+		"info": info_label.text,
+		"tmr": timer_label.text,
+	}
+
+## CLIENT. Latest-state-wins; all juice from deltas (counters + cumulative
+## rows, never events — a dropped packet loses nothing but in-between frames).
+func _net_apply(state: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = state
+	var first: bool = (prev.get("d", PackedInt32Array()) as PackedInt32Array).is_empty()
+	var new_ph := int(state.get("ph", phase))
+	if new_ph != phase:
+		phase = new_ph as Phase
+		print("MB_MIRROR phase -> %s" % Phase.keys()[phase])
+		if phase == Phase.WALTZ:
+			# the mirror keeps the generic legend: remote bindings live on the
+			# host's map and this machine's stick is what the words describe
+			hint_label.text = "STICK = DRIFT · FEATHER IT = your mask glints · A = CURTSY · B = UNMASK (one mark)"
+		elif phase == Phase.REVEAL:
+			hint_label.text = ""
+			if not _tally:
+				Sfx.play("round_over")
+	phase_label.text = str(state.get("pl", ""))
+	timer_label.text = str(state.get("tmr", ""))
+	info_label.text = str(state.get("info", ""))
+	executor_label.text = str(state.get("exec", ""))
+	_apply_mir_banner(state.get("ban", []), prev.get("ban", []))
+	_apply_mir_sub(state.get("sub", []), prev.get("sub", []))
+	# --- the twenty bodies: pose facts + glint/fade/dim deltas
+	var dd: PackedInt32Array = state.get("d", PackedInt32Array())
+	var pd: PackedInt32Array = prev.get("d", PackedInt32Array())
+	var n := mini(CROWD_TOTAL, dd.size() / MIR_D_STRIDE)
+	for b in n:
+		var k := b * MIR_D_STRIDE
+		var d: MBDancer = dancers[b]
+		if first:
+			d.position = Vector3(dd[k] / 100.0, 0, dd[k + 1] / 100.0)
+			d.facing = dd[k + 2] / 1000.0
+			d.rotation.y = d.facing
+		d.mirror_act(dd[k + 3], dd[k + 4] / 100.0)
+		var fl := dd[k + 5]
+		var pfl := pd[k + 5] if pd.size() > k + 5 else 0
+		d.set_walking((fl & 1) == 1)
+		if (fl & 4) == 4 and (pfl & 4) == 0 and not d.gone:
+			d.fade_out()
+		if (fl & 8) == 8 and (pfl & 8) == 0:
+			d.dim_npc()   # the hired bodies stop pretending — reveal-beat fact
+		var gl := dd[k + 6]
+		var pgl := gl if pd.size() <= k + 6 else pd[k + 6]
+		if gl > pgl and not first:
+			d.glint()
+			if _demo_feather:
+				# probe receipt: pair these against the host's MB_GLINT lines
+				print("MB_MIRROR_GLINT body=%d wt=%.1f" % [b, float(state.get("wt", 0.0))])
+				_demo_glint_seen = true
+	# --- reveal rows: the ONLY seat<->body pairs on the wire, and each one is
+	# applied here at the same beat the couch stamps the badge
+	var rev: Array = state.get("rev", [])
+	while _mir_rev_n < rev.size():
+		_apply_rev_row(rev[_mir_rev_n])
+		_mir_rev_n += 1
+	var wst: Array = state.get("wst", [])
+	while _mir_wst_n < wst.size():
+		_apply_wst_row(wst[_mir_wst_n])
+		_mir_wst_n += 1
+	# --- unnamed scored-curtsy count: ring pulse + coin clink, no name
+	if int(state.get("crt", 0)) > int(prev.get("crt", 0)) and not first:
+		Sfx.play("sink", -10.0)
+		_pulse_zone_ring()
+	# --- ghost pews: wisps for the unmasked (dead = already revealed)
+	_apply_mir_ghosts(state.get("gh", PackedInt32Array()), state.get("gu", []),
+		prev.get("gu", []), first)
+	# --- the settle ledger, row by row as the host reads it out
+	var led: Array = state.get("led", [])
+	while _mir_led_n < led.size():
+		var row: Array = led[_mir_led_n]
+		_add_ledger_row(str(row[0]), Color.html(str(row[1])))
+		_mir_led_n += 1
+	# --- the ball is taken
+	var champ: Array = state.get("champ", [-1, -1])
+	if champ.size() >= 2 and int(champ[0]) >= 0 and _mir_champ < 0:
+		_mir_champ = int(champ[0])
+		print("MB_MIRROR champ seat=%d body=%d" % [int(champ[0]), int(champ[1])])
+		if not _tally:
+			Sfx.play("match_win")
+			var cb := int(champ[1])
+			if cb >= 0 and cb < dancers.size():
+				_spawn_confetti(dancers[cb].position + Vector3(0, 2.0, 0),
+					players[_mir_champ].color)
+		_mir_snap_later("mb_client_verdict", 0.15)   # the fold follows within ~0.6 s
+	# --- probe photographs (client side). The glint shot waits for wt >= 15.9:
+	# my injected feather glints land at ~13.1 / 14.5 / 15.9 / 17.3 (GLINT_CD
+	# cadence), so the first delta past 15.9 catches my own pulse still bright.
+	if _netdemo and float(state.get("wt", 0.0)) >= 20.0 and phase == Phase.WALTZ:
+		_mir_snap_later("mb_client_waltz", 0.0)
+	if _netdemo and _demo_glint_seen and _demo_feather \
+			and float(state.get("wt", 0.0)) >= 15.9:
+		_mir_snap_later("mb_client_glint", 0.0)
+
+## One reveal row: [kind(0 unmask/1 survivor), seat, body, killer_seat|-1].
+func _apply_rev_row(row: Array) -> void:
+	if row.size() < 4:
+		return
+	var kind := int(row[0])
+	var seat := int(row[1])
+	var body := int(row[2])
+	if seat < 0 or seat >= players.size() or body < 0 or body >= dancers.size():
+		return
+	var p: Dictionary = players[seat]
+	var d: MBDancer = dancers[body]
+	body_to_seat[body] = seat   # public from this frame on, couch and mirror alike
+	d.end_act()
+	if kind == 0:
+		var killer := int(row[3])
+		print("MB_MIRROR unmask victim=%d body=%d killer=%d" % [seat, body, killer])
+		p.eliminated = true
+		p.ghost_pos = d.position + Vector3(0, 2.3, 0)
+		d.reveal(p.color, PlayerBadge.glyph(seat) + " " + str(p.name), true)
+		_play_seat_tick(seat)
+		_shake = maxf(_shake, 0.4)
+		if not _tally:
+			Sfx.play("grudge", -2.0)
+			_time_hit(0.3, 0.4)
+			_spawn_floor_mask(d.position)
+		if _netdemo:
+			_mir_snap_later("mb_client_unmask", 0.9)
+	else:
+		print("MB_MIRROR survivor seat=%d body=%d" % [seat, body])
+		d.reveal(p.color, PlayerBadge.glyph(seat) + " " + str(p.name), false)
+		_reveal_spot.light_energy = 6.5
+		_reveal_spot.look_at_from_position(
+			Vector3(d.position.x * 0.5, 9.5, d.position.z * 0.5 + 4.0),
+			d.position + Vector3(0, 1.2, 0), Vector3.UP)
+		_play_seat_tick(seat)
+		if not _tally:
+			Sfx.play("card", -4.0)
+		if _netdemo:
+			_mir_snap_later("mb_client_lastdance", 0.8)
+
+## One waste row: [accuser_seat, accuser_body] — the self-inflicted flash.
+func _apply_wst_row(row: Array) -> void:
+	if row.size() < 2:
+		return
+	var seat := int(row[0])
+	var body := int(row[1])
+	if seat < 0 or seat >= players.size() or body < 0 or body >= dancers.size():
+		return
+	var p: Dictionary = players[seat]
+	print("MB_MIRROR waste seat=%d body=%d" % [seat, body])
+	dancers[body].do_flash(FLASH_TIME, p.color, PlayerBadge.glyph(seat) + " " + str(p.name))
+	_play_seat_tick(seat)
+	_shake = maxf(_shake, 0.22)
+	if not _tally:
+		Sfx.play("grudge", -6.0)
+	if _netdemo:
+		var tag := "mb_client_ownflash" if seat == NetSession.my_seat() else "mb_client_waste"
+		_mir_snap_later(tag, 0.5)
+
+## Ghost lifecycle + gust one-shots from the per-seat rows.
+func _apply_mir_ghosts(gh: PackedInt32Array, gu: Array, pgu: Array, first: bool) -> void:
+	for i in players.size():
+		var k := i * MIR_G_STRIDE
+		if k + 2 >= gh.size():
+			break
+		var p: Dictionary = players[i]
+		var pos := Vector3(gh[k + 1] / 100.0, 2.3, gh[k + 2] / 100.0)
+		if gh[k] == 1 and p.ghost_node == null:
+			var g := MBGhost.new()
+			g.name = "Ghost%d" % i
+			spawn_root.add_child(g)
+			g.setup(p.color, PlayerBadge.glyph(i) + " " + str(p.name))
+			g.position = pos
+			p.ghost_node = g
+		if p.ghost_node != null:
+			p.ghost_pos = pos   # target; _mirror_tick glides the wisp
+		if i < gu.size() and not first:
+			var pg := int(pgu[i]) if i < pgu.size() else int(gu[i])
+			if int(gu[i]) > pg and p.ghost_node != null:
+				(p.ghost_node as MBGhost).gust_fx()
+				if not _tally:
+					Sfx.play("bounce", -14.0, 0.2)
+				var gp: Vector3 = p.ghost_pos
+				for b in CROWD_TOTAL:
+					var d: MBDancer = dancers[b]
+					if d.gone or d.revealed:
+						continue
+					var flat := d.position - Vector3(gp.x, 0, gp.z)
+					flat.y = 0.0
+					if flat.length() <= GUST_R:
+						d.wobble()
+
+## CLIENT, per physics tick: glide every puppet toward its authoritative spot;
+## everything that must be smoother than 20 Hz lives here.
+func _mirror_tick(delta: float) -> void:
+	game_time += delta
+	_tick_shake(delta)
+	if _mir.is_empty():
+		return
+	var ph := int(_mir.get("ph", Phase.WAITING))
+	if ph == Phase.INTRO or ph == Phase.WALTZ:
+		_tick_music(delta)
+	var w := 1.0 - exp(-14.0 * delta)
+	var dd: PackedInt32Array = _mir.get("d", PackedInt32Array())
+	var n := mini(CROWD_TOTAL, dd.size() / MIR_D_STRIDE)
+	for b in n:
+		var k := b * MIR_D_STRIDE
+		var d: MBDancer = dancers[b]
+		if d.gone:
+			continue
+		d.position = d.position.lerp(Vector3(dd[k] / 100.0, 0, dd[k + 1] / 100.0), w)
+		d.facing = lerp_angle(d.facing, dd[k + 2] / 1000.0, w)
+		d.rotation.y = d.facing
+		if d.act_t > 0.0:
+			d.act_t = maxf(0.0, d.act_t - delta)   # smooth bow/twirl between snaps
+		if d.flash_t > 0.0:
+			d.flash_t = maxf(0.0, d.flash_t - delta)
+	for i in players.size():
+		var p: Dictionary = players[i]
+		if p.ghost_node != null:
+			var g: Node3D = p.ghost_node
+			g.position = g.position.lerp(p.ghost_pos, w)
+	if _netdemo and NetSession.is_client():
+		_demo_tick()
+
+func _apply_mir_banner(arr: Array, parr: Array) -> void:
+	if arr.size() < 3:
+		return
+	banner.text = str(arr[0])
+	banner.add_theme_color_override("font_color", Color.html(str(arr[1])))
+	var was: bool = parr.size() >= 3 and bool(parr[2]) and str(parr[0]) == str(arr[0])
+	banner.visible = bool(arr[2])
+	if banner.visible and not was:
+		banner.pivot_offset = banner.size / 2.0
+		banner.scale = Vector2(0.6, 0.6)
+		var pop := create_tween()
+		pop.tween_property(banner, "scale", Vector2.ONE, 0.26) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+func _apply_mir_sub(arr: Array, _parr: Array) -> void:
+	if arr.size() < 3:
+		return
+	sub_banner.text = str(arr[0])
+	sub_banner.add_theme_color_override("font_color", Color.html(str(arr[1])))
+	sub_banner.visible = bool(arr[2])
+
+func _mir_snap_later(tag: String, wait: float) -> void:
+	if _mir_snaps.has(tag):
+		return
+	_mir_snaps[tag] = true
+	if wait <= 0.0:
+		VerifyCapture.snap(tag)
+	else:
+		get_tree().create_timer(wait).timeout.connect(func(): VerifyCapture.snap(tag))
+
+# ---------------- --mbnetdemo client script: a remote hand on the REAL pipe.
+# The probe join runs WITHOUT --nettape; this drives MY seat through
+# PlayerInput's injection seam (the _dbg_aim pattern, networked — the same
+# seam NetSession itself uses for remote seats), so NetSession's 30 Hz
+# sampler reads it and streams genuine input packets to the host: stroll,
+# FEATHER (the private pulse, sub-threshold at 0.30), the one B mark, a bluff
+# curtsy. Only the hand is synthetic; sampler, wire, host sim are the real
+# thing end to end.
+func _demo_tick() -> void:
+	var my := NetSession.my_seat()
+	if my < 0:
+		return
+	var mv := Vector2.ZERO
+	var a := false
+	var b := false
+	if int(_mir.get("ph", 0)) == Phase.WALTZ:
+		var wt := float(_mir.get("wt", 0.0))
+		_demo_feather = wt >= 13.0 and wt < 21.0
+		if wt < 4.0:
+			pass                                        # arrive; blend in place
+		elif wt < 12.0:
+			mv = Vector2.from_angle(wt * 0.5)           # stroll at crowd pace
+		elif wt < 13.0:
+			pass
+		elif wt < 21.0:
+			mv = Vector2(0.30, 0.0)                     # FEATHER: my mask answers
+		elif wt < 23.0:
+			pass
+		elif wt < 26.0:
+			b = wt - floorf(wt) < 0.4 and int(wt) % 4 == 3   # spend the mark
+		elif wt < 28.0:
+			mv = Vector2.from_angle(wt * 0.5 + 1.0)
+		elif wt < 28.4:
+			a = true                                    # a bluff curtsy
+		elif wt < 36.0:
+			mv = Vector2.from_angle(wt * 0.45)
+			b = wt - floorf(wt) < 0.4 and int(wt) % 4 == 3   # retry if unspent
+		else:
+			mv = Vector2.from_angle(wt * 0.35 + 2.0)    # keep dancing…
+			# …and if the scripted beat unmasked ME, these A presses gust
+			# the crowd from the pews instead (alive: harmless bluff bows)
+			a = wt - floorf(wt) < 0.4 and int(wt) % 6 == 2
+	else:
+		_demo_feather = false
+	_inject(my, mv, a, b)
+
+func _inject(seat: int, mv: Vector2, a: bool, b: bool) -> void:
+	if a and not _inj_a_prev:
+		_inj_pa += 1
+	if b and not _inj_b_prev:
+		_inj_pb += 1
+	_inj_a_prev = a
+	_inj_b_prev = b
+	_inj_seq = (_inj_seq + 1) & 0xFFFF
+	PlayerInput.set_remote_state(seat, {"seq": _inj_seq, "seat": seat, "move": mv,
+		"a": a, "b": b, "presses_a": _inj_pa, "presses_b": _inj_pb,
+		"aim": Vector3.ZERO, "aim_screen": Vector2.ZERO, "stick": Vector2.ZERO})
 
 # ================================================================ verify hooks
 func get_phase_name() -> String:
