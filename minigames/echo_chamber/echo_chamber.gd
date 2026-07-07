@@ -87,6 +87,9 @@ var _currency: Array = []
 var _ghost_kill_notes: Array = []
 var _kill_events: Array = []      # optional contract: {killer,victim,cause} per KO
 var _bounty_counts: Dictionary = {}
+# IRONY PACK (doc 09 §2.1): times each player was killed by their OWN recorded
+# echo. Surfaced to the estate's Will reading via highlights + kill_events cause.
+var _self_haunts: Dictionary = {}
 
 # ---- juice / perf ----
 var _shake := 0.0
@@ -114,6 +117,7 @@ var ui: CanvasLayer
 var round_label: Label
 var timer_label: Label
 var ghost_label: Label
+var controls_label: Label     # persistent real-keys hint bar (realkeys-VERIFY.md)
 var banner: Label
 var credit_banner: Label
 var score_rows: VBoxContainer
@@ -193,6 +197,15 @@ func begin(config: Dictionary) -> void:
 	_build_world()
 	_build_ui()
 	_spawn_fighters()
+	# Personalize the persistent hint bar with each human seat's REAL keys, once
+	# per match now that the roster/bot map is known (docs/verify/realkeys-VERIFY.md).
+	if controls_label != null:
+		controls_label.text = _controls_bar()
+		# show it for the opening seconds, then declutter (real-time timer so the
+		# hit-pause slow-mos never stretch the reveal)
+		get_tree().create_timer(8.5, true, false, true).timeout.connect(func() -> void:
+			if is_instance_valid(controls_label):
+				controls_label.visible = false)
 	print("ECHO_BEGIN players=%d seed=%d bots=%s round_len=%.1f" % [roster.size(), _seed, str(_bots), round_len])
 	_enter_intro(1)
 	if _aim_probe_on:
@@ -437,6 +450,16 @@ func _build_ui() -> void:
 	ghost_label.offset_right = 400
 	ui.add_child(ghost_label)
 
+	# Persistent real-keys hint bar, bottom-center (clear of the bottom-left
+	# GHOSTS count). Text is filled once at match start from _controls_bar().
+	controls_label = _mk_label(_font_baloo, 19, HORIZONTAL_ALIGNMENT_CENTER)
+	controls_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	controls_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	controls_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
+	controls_label.offset_bottom = -10
+	controls_label.add_theme_color_override("font_color", Color(0.9, 0.88, 0.8))
+	ui.add_child(controls_label)
+
 	credit_banner = _mk_label(_font_luckiest, 40, HORIZONTAL_ALIGNMENT_CENTER)
 	credit_banner.anchor_right = 1.0
 	credit_banner.anchor_top = 0.14
@@ -472,6 +495,51 @@ func _mk_label(font: FontFile, size: int, align: int) -> Label:
 	l.add_theme_constant_override("outline_size", 7)
 	l.horizontal_alignment = align
 	return l
+
+
+## ---- live-binding hint bar (real keys, not "A"/"B"; docs/verify/realkeys-VERIFY.md) ----
+## Self-contained per the template; presentation only. Bindings are fixed per
+## match, so the bar is built once at match start (from begin()).
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned). A seat
+## is bot-driven under the same rule _spawn_fighters uses (--echobots OR the
+## roster marks it a bot). The bar personalizes only human seats; an all-bot
+## demo gets an empty list and keeps the generic legend (receipts unchanged).
+func _human_seats() -> Array:
+	var out := []
+	for i in roster.size():
+		var seat_bot: bool = _bots or bool(roster[i].get("bot", false))
+		if not seat_bot and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = STRIKE"), else the per-seat "LABEL: KEY/NAME · KEY/NAME"
+## form (mixed keyboard + pad).
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The main hint bar with real keys, or a generic legend for an all-bot demo.
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return "MOVE   ·   A = STRIKE   ·   B = DASH (hold PARRY)   |   DUEL YOUR OWN ECHO"
+	return "MOVE   ·   %s   ·   %s   |   DUEL YOUR OWN ECHO" % [
+		_btn_hint("a", "STRIKE"), _btn_hint("b", "DASH / hold PARRY")]
 
 
 func _spawn_fighters() -> void:
@@ -692,13 +760,23 @@ func _placements() -> Array:
 
 func _best_highlights() -> Array:
 	var out: Array = []
+	# IRONY PACK (doc 09 §2.1): the self-echo deaths lead the recap. The estate
+	# carves each highlight as graffiti and reads it at the will, so the "killed
+	# by your own echo" moment surfaces in the Reading of the Will. Insertion
+	# order of _self_haunts is deterministic (seed-driven death order).
+	for v in _self_haunts:
+		if out.size() >= 3:
+			break
+		var n: int = int(_self_haunts[v])
+		if n > 0:
+			out.append("%s WAS SLAIN BY THEIR OWN ECHO%s" % [_names[v], (" (x%d)" % n) if n > 1 else ""])
 	var seen := {}
 	for note in _ghost_kill_notes:
+		if out.size() >= 3:
+			break
 		if not seen.has(note):
 			seen[note] = true
 			out.append(note)
-		if out.size() >= 3:
-			break
 	return out
 
 
@@ -915,7 +993,12 @@ func resolve_swing(origin: Vector3, yaw_a: float, owner: int, is_ghost: bool, ex
 		if res == "kill":
 			# killer = attacking OWNER (a player index for BOTH live and ghost
 			# swings — ghosts credit their owner, matching the royalty above).
-			_on_death(f.player_index, false, owner, "crush" if is_heavy else "shatter")
+			# IRONY PACK (doc 09 §2.1): a ghost that kills its OWN owner is the
+			# "killed by your own echo" moment. Tag the cause slug so _on_death
+			# fires the distinct celebration and carries it to the Will reading.
+			var self_echo: bool = is_ghost and owner == int(f.player_index)
+			var kcause: String = "self_echo" if self_echo else ("crush" if is_heavy else "shatter")
+			_on_death(f.player_index, false, owner, kcause)
 
 
 ## A parry landed: the incoming hit is negated. A LIVE attacker staggers
@@ -1010,15 +1093,29 @@ func _on_death(victim: int, is_fall: bool, killer: int = -1, cause: String = "sh
 	_kill_events.append({"killer": killer, "victim": victim, "cause": cause})
 	_deaths_round[victim] = int(_deaths_round.get(victim, 0)) + 1
 	Sfx.play("death")
+	# IRONY PACK (doc 09 §2.1): killed by your OWN recorded echo — the funniest
+	# outcome the ghost engine can produce. Distinct celebration vs a normal kill:
+	# the big center banner (normal kills use the small credit banner), a grudge
+	# sting at 0dB, deeper slow-mo, and a tracked self_haunt stat for the estate's
+	# Will reading (surfaced through highlights + the kill_events cause slug).
+	var self_echo := cause == "self_echo"
+	if self_echo:
+		_self_haunts[victim] = int(_self_haunts.get(victim, 0)) + 1
+		_flash_banner("KILLED BY THEIR OWN ECHO", _colors[victim], 2.2)
+		Sfx.play("grudge", 0.0)
+		print("ECHO_SELF_HAUNT victim=%s round=%d (slain by their own recorded ghost)" % [_names[victim], round_no])
 	var mode := "edge"
 	var hp_amt := HP_MAX
 	if round_no == _rounds and is_fall:
 		mode = "center"
 		hp_amt = 2   # respawn center at half HP
 	_respawns.append({"f": fighters[victim], "t": RESPAWN_TIME, "hp": hp_amt, "mode": mode})
-	_shake = maxf(_shake, 0.55)
+	_shake = maxf(_shake, 0.7 if self_echo else 0.55)
 	_spawn_death_fx(fighters[victim].global_position, _colors[victim])
-	_hitpause()
+	if self_echo:
+		_slowmo(0.3, 0.5)
+	else:
+		_hitpause()
 
 
 # ===========================================================================
@@ -1167,6 +1264,16 @@ func _hitpause() -> void:
 	_last_hitpause = now
 	Engine.time_scale = 0.2
 	get_tree().create_timer(0.05, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
+
+
+## IRONY PACK: a deeper, deliberate slow-mo for the self-echo kill (doc 09 §2.1
+## asks 0.3x/0.5s). Same time_scale-independent restore timer as _hitpause, and
+## it seeds _last_hitpause so an ordinary hit-pause in the same instant can't cut
+## the beat short inside the throttle window.
+func _slowmo(scale: float, dur: float) -> void:
+	_last_hitpause = Time.get_ticks_msec() / 1000.0
+	Engine.time_scale = scale
+	get_tree().create_timer(dur, true, false, true).timeout.connect(func(): Engine.time_scale = 1.0)
 
 
 func _spawn_death_fx(pos: Vector3, color: Color, amount := 24, life := 0.8) -> void:

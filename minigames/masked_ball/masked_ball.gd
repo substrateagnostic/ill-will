@@ -574,7 +574,7 @@ func _begin_waltz() -> void:
 	phase = Phase.WALTZ
 	_waltz_e = 0.0
 	phase_label.text = "MASKED BALL — THE WALTZ"
-	hint_label.text = "STICK = DRIFT · FEATHER IT = your mask glints · A = CURTSY · B = UNMASK (one mark)"
+	hint_label.text = _controls_bar()
 	_flash_banner("THE WALTZ BEGINS", Color(1.0, 0.85, 0.4), 2.0)
 	_say("Dance. Preferably like nobody in particular.")
 	# player bodies leave the crowd's brain; any half-finished bow is abandoned
@@ -585,6 +585,47 @@ func _begin_waltz() -> void:
 	# NOTE: no game_time here — the standalone-start timer adds wall-clock
 	# wobble before begin(); every deterministic print keys off _waltz_e
 	print("MB_WALTZ_START bodies=%s" % str(_body_of))
+
+## ---- live-binding hint bar (real keys, not "A"/"B"; docs/verify/realkeys-VERIFY.md) ----
+## Self-contained per the template; presentation only. Bindings are fixed per
+## match, so the bar is built once when the waltz begins.
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
+## bar personalizes only these; an all-bot demo keeps the generic legend.
+func _human_seats() -> Array:
+	var out := []
+	for i in players.size():
+		if not players[i].is_bot and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = CURTSY"), else the per-seat "LABEL: KEY/NAME · KEY/NAME" form.
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The main waltz bar with real keys, or the original generic legend for an
+## all-bot demo (so bot-only receipts/demos stay byte-identical).
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return "STICK = DRIFT · FEATHER IT = your mask glints · A = CURTSY · B = UNMASK (one mark)"
+	return "STICK = DRIFT · FEATHER IT = your mask glints · %s · %s" % [
+		_btn_hint("a", "CURTSY"), _btn_hint("b", "UNMASK (one mark)")]
 
 # ---------------------------------------------------------------- crowd
 ## NPC brain pass. During INTRO every body is crowd-driven (nobody can

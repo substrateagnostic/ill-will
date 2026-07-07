@@ -309,7 +309,7 @@ func begin(config: Dictionary) -> void:
 		pawns.append(pawn)
 	print("LW_BEGIN players=%d seed=%d races=%d bots=%s" % [players.size(),
 		rng.seed, races_total, str(players.map(func(p): return p.is_bot))])
-	hint_label.text = HINT_LIVING
+	hint_label.text = _controls_bar()
 	hud.build(players)
 	race_index = 0
 	_start_race()
@@ -1557,6 +1557,47 @@ func _set_base_ui(v: bool) -> void:
 
 const HINT_LIVING := "A = SHOVE   B = HOP   ·   DIE, AND CURSE THE ROAD"
 
+## ---- live-binding hint bar (real keys, not "A"/"B"; docs/verify/realkeys-VERIFY.md) ----
+## Self-contained per the template; presentation only. Bindings are fixed per
+## match, so the living bar is built when begin()/_refresh_hint set it.
+
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
+## living bar personalizes only these; an all-bot demo keeps HINT_LIVING.
+func _human_seats() -> Array:
+	var out := []
+	for i in players.size():
+		if not players[i].is_bot and PlayerInput.device_of(i) != -99:
+			out.append(i)
+	return out
+
+## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## (all pads -> "(A) = SHOVE"), else the per-seat "LABEL: KEY/NAME · KEY/NAME" form.
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _human_seats()
+	if seats.is_empty():
+		return ""
+	var keys := []
+	var same := true
+	for i in seats:
+		var k := PlayerInput.describe_binding(int(i), action)
+		if not keys.is_empty() and k != keys[0]:
+			same = false
+		keys.append(k)
+	if same:
+		return "%s = %s" % [keys[0], label]
+	var parts := []
+	for j in seats.size():
+		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
+	return "%s: %s" % [label, " · ".join(parts)]
+
+## The living hint bar with real keys, or HINT_LIVING for an all-bot demo (so
+## bot-only tally receipts stay byte-identical).
+func _controls_bar() -> String:
+	if _human_seats().is_empty():
+		return HINT_LIVING
+	return "%s   ·   %s   ·   DIE, AND CURSE THE ROAD" % [
+		_btn_hint("a", "SHOVE"), _btn_hint("b", "HOP")]
+
 ## Flip the shared hint bar to a dead-state legend when a HUMAN takes a ghost pew,
 ## so the dead know how to gust: aim with the RIGHT channel, A fires. Bots never
 ## trigger this (their seats stay HINT_LIVING), so the tally receipts are
@@ -1569,7 +1610,7 @@ func _refresh_hint() -> void:
 		if not players[i].is_bot and ghosts.has(i):
 			dead_humans.append(i)
 	if dead_humans.is_empty():
-		hint_label.text = HINT_LIVING
+		hint_label.text = _controls_bar()
 	elif dead_humans.size() == 1:
 		hint_label.text = _ghost_hint_line(int(dead_humans[0]))
 	else:
