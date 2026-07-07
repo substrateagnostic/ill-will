@@ -203,6 +203,37 @@ var _cli_players := 4
 var _cli_seed := 1
 var _snap_board_done := false
 var _snap_accuse_done := false
+var _snap_net_sitting := false
+
+# --- ONLINE PHASE 2: the render mirror (docs/design/10 §4.3) ---------------
+# THE HOUSE PATTERN, first cut — every later game mirror copies this shape:
+#   host: runs the WHOLE sim exactly as couch; the estate pumps _net_state()
+#         (compact PUBLIC facts only) to every guest at 20 Hz.
+#   client: SAME scene, begin() with config.net_mirror = true; sim, bots and
+#         input sampling never run — _net_apply() drives the visuals, and all
+#         juice/SFX fire locally from state DELTAS (counters went up -> flare/
+#         tick/shake). Hidden info (cast cards, summons) NEVER rides the
+#         fan-out: it arrives via NetSession.send_module_private -> rpc_id,
+#         this seat's peer and nobody else.
+var _mirror := false
+var _mir := {}                   # last applied snapshot (delta source for juice)
+var _mir_el := 0.0               # smooth local sitting clock (candle pulse @60fps)
+var _mir_beat := -1
+var _mir_pp := Vector3.ZERO      # planchette interp target
+var _mir_have_pp := false
+var _mir_led_n := 0              # ledger rows already mirrored
+var _mir_unmasked := false
+var _mir_roll_t := -999.0        # local unmask drumroll (armed at -ROLL_START)
+var _mir_priv_until := 0         # msec deadline: private cast card owns the overlay
+var _mir_snap_sitting := false
+var _force_char := -1            # --seancechar=N — evidence runs only, logged loud
+# host side of the wire:
+var _unmasked := false           # the rev fact ships only after the unmask hit
+var _surges_total := 0           # anonymous ripple count (never per-seat on the wire)
+var _cast_pub := {}              # public/REDACTED version of the cast overlay
+var _banner_col := "ffffff"
+var _sub_col := "ffffff"
+var _chant_stamps := {}          # seat -> {bt, ms}: remote beat-stamps (spec §4.3)
 
 # fx
 var _shake := 0.0
@@ -254,6 +285,11 @@ func _parse_args() -> void:
 			_cli_players = clampi(int(arg.trim_prefix("--players=")), 2, 4)
 		elif arg.begins_with("--seed="):
 			_cli_seed = int(arg.trim_prefix("--seed="))
+		elif arg.begins_with("--seancechar="):
+			# Evidence-only pin: force the paid seat AFTER the seeded draws (rng
+			# stream untouched). Used by the online probe to prove the private
+			# flash lands on the right client. Never set in real play.
+			_force_char = int(arg.trim_prefix("--seancechar="))
 	if _tally:
 		# faster-than-realtime with dt pinned to exactly 1/60 (house trick)
 		var fast := 8.0
@@ -281,6 +317,7 @@ func begin(config: Dictionary) -> void:
 	if _started:
 		return
 	_started = true
+	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.get("rng_seed", 1))
 	_practice = bool(config.get("practice", false))
 	roster = config.get("roster", [])
@@ -300,16 +337,20 @@ func begin(config: Dictionary) -> void:
 			"device": int(pl.get("device", -99)),
 			"is_bot": is_bot,
 		})
-	# one seeded draw each, fixed order: word, then the paid seat
-	var pickd: Dictionary = SeanceWords.pick(rng)
-	word = str(pickd.word)
-	clue = str(pickd.clue)
-	for ch in word:
-		word_letters[ch] = true
-	charlatan = rng.randi_range(0, players.size() - 1)
-	bots = SeanceBots.new()
-	bots.setup(int(config.get("rng_seed", 1)) ^ 0x5EA0CE,
-		players.size(), -1 if _no_sabo else charlatan)
+	if not _mirror:
+		# one seeded draw each, fixed order: word, then the paid seat
+		var pickd: Dictionary = SeanceWords.pick(rng)
+		word = str(pickd.word)
+		clue = str(pickd.clue)
+		for ch in word:
+			word_letters[ch] = true
+		charlatan = rng.randi_range(0, players.size() - 1)
+		if _force_char >= 0 and _force_char < players.size():
+			charlatan = _force_char
+			print("SEANCE_FORCECHAR idx=%d (evidence pin — never real play)" % charlatan)
+		bots = SeanceBots.new()
+		bots.setup(int(config.get("rng_seed", 1)) ^ 0x5EA0CE,
+			players.size(), -1 if _no_sabo else charlatan)
 	for i in players.size():
 		suspicion[i] = 0.0
 		_contrib.append(Vector3.ZERO)
@@ -324,6 +365,17 @@ func begin(config: Dictionary) -> void:
 		vote_target.append(-1)
 	_spawn_figures()
 	_ui.build_vote_panel(players)
+	if _mirror:
+		# RENDER MIRROR: no word, no charlatan, no fee, no INTRO — the host owns
+		# every fact. The stage stands ready and waits for the first _net_apply.
+		phase = Phase.WAITING
+		phase_label.text = "THE SEANCE"
+		print("SEANCE_MIRROR boot players=%d my_seat=%d" % [players.size(), NetSession.my_seat()])
+		return
+	# ONLINE host: remote sitters' chant presses carry a beat-stamp (spec §4.3)
+	# through the reliable panel-intent pipe; couch/tally nights never see one.
+	if NetSession.is_host() and NetSession.has_guests():
+		NetSession.panel_intent_received.connect(_on_net_intent)
 	_talk_len = TALK_TIME
 	if _all_bots or players.all(func(p): return p.is_bot):
 		_talk_len = 8.0
@@ -681,13 +733,11 @@ func _seat_rim_anchor(az: float) -> Vector3:
 # ================================================================ tick
 func _physics_process(delta: float) -> void:
 	game_time += delta
-	if _shake > 0.001:
-		cam.h_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.25
-		cam.v_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.25
-		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
-	else:
-		cam.h_offset = 0.0
-		cam.v_offset = 0.0
+	_tick_shake(delta)
+	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
+	if _mirror:
+		_mirror_tick(delta)
+		return
 
 	match phase:
 		Phase.INTRO:
@@ -707,6 +757,17 @@ func _physics_process(delta: float) -> void:
 		_:
 			pass
 
+## Camera shake decay — shared verbatim by the sim and the mirror (the mirror
+## sets _shake from wrong-letter deltas; same feel, no sim).
+func _tick_shake(delta: float) -> void:
+	if _shake > 0.001:
+		cam.h_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.25
+		cam.v_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.25
+		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
+	else:
+		cam.h_offset = 0.0
+		cam.v_offset = 0.0
+
 # ================================================================ CAST
 func _begin_cast() -> void:
 	phase = Phase.CAST
@@ -723,7 +784,7 @@ func _begin_cast() -> void:
 	# — eyes OPEN — and learns the sound that will later call it. Same seat pitch
 	# as the chant tick, so it is one house language. ~9s, presentation only.
 	_seq_add(t, func():
-		_ui.cast_show("YOUR COLOUR HAS A VOICE", Color(0.85, 0.8, 1.0),
+		_cast_card("YOUR COLOUR HAS A VOICE", Color(0.85, 0.8, 1.0),
 			"eyes OPEN — learn your sound now",
 			"three ticks in your tone = your turn to look", Color(0.82, 0.86, 1.0), "")
 		_say("Your colour has a voice. Learn it now, while your eyes are open."))
@@ -734,15 +795,20 @@ func _begin_cast() -> void:
 		var rcol: Color = players[i].color
 		var rglyph := PlayerBadge.glyph(i)
 		_seq_add(t, func():
-			_ui.cast_show(rglyph + " " + rnm, rcol, "this is your voice — listen", "", rcol, "")
-			_say("%s — this one is yours." % rnm))
+			_cast_card(rglyph + " " + rnm, rcol, "this is your voice — listen", "", rcol, "")
+			_say("%s — this one is yours." % rnm)
+			# ONLINE: a remote seat learns its voice on ITS machine — nobody
+			# else's mirror ticks (trivially private; couch keeps all ticks,
+			# it is one shared room and the pacing is the point there).
+			if NetSession.is_host() and NetSession.is_seat_remote(ridx):
+				NetSession.send_module_private(ridx, {"kind": "summons"}))
 		_seq_add(t + 0.15, func(): _play_summons_tick(ridx))
 		_seq_add(t + 0.15 + SUMMONS_GAP, func(): _play_summons_tick(ridx))
 		_seq_add(t + 0.15 + 2.0 * SUMMONS_GAP, func(): _play_summons_tick(ridx))
 		t += 1.75
 	# --- now the eyes close --------------------------------------------------
 	_seq_add(t, func():
-		_ui.cast_show("EYES CLOSED", dim, "all of them", "", Color.WHITE, "")
+		_cast_card("EYES CLOSED", dim, "all of them", "", Color.WHITE, "")
 		_say("Now — close your eyes. All of them. I will know."))
 	t += 2.6
 	# --- per-seat private delivery, each summoned by voice -------------------
@@ -753,35 +819,90 @@ func _begin_cast() -> void:
 		var glyph := PlayerBadge.glyph(i)
 		# AUDIO SUMMONS: three ticks in this seat's tone, eyes still closed, BEFORE
 		# any private content appears — the only cue a blind player gets.
-		_seq_add(t, func(): _play_summons_tick(idx))
+		# ONLINE: a REMOTE seat's card leaves for its peer at the window START
+		# (reliable rpc_id); the client runs the same summons+card theater
+		# locally, in its own time. No other machine ever holds the content.
+		_seq_add(t, func():
+			_play_summons_tick(idx)
+			if NetSession.is_host() and NetSession.is_seat_remote(idx):
+				NetSession.send_module_private(idx, _private_cast_payload(idx)))
 		_seq_add(t + SUMMONS_GAP, func(): _play_summons_tick(idx))
 		_seq_add(t + 2.0 * SUMMONS_GAP, func(): _play_summons_tick(idx))
 		# the summoned seat opens their eyes; the card names them HUGE
 		_seq_add(t + 1.2, func():
-			_ui.cast_show(glyph + " " + nm, col, "eyes open — this is for you alone", "", Color.WHITE, foot)
+			_cast_card(glyph + " " + nm, col, "eyes open — this is for you alone", "", Color.WHITE, foot)
 			if not _tally:
 				Sfx.play("card", -8.0))
 		# fourth confirmation tick as the private reveal turns up
 		_seq_add(t + 2.2, func():
 			_play_summons_tick(idx)
-			if idx == charlatan:
-				_ui.cast_show(glyph + " " + nm, col, "the spirits took the liberty of paying you",
-					"YOU WERE PAID — %d GRUDGE, UP FRONT\nTHE WORD IS \"%s\"\nBury it. Do not get caught." % [FEE_GRUDGE, word],
-					Color(1.0, 0.78, 0.35), foot)
-				VerifyCapture.snap("cast")
-			else:
-				_ui.cast_show(glyph + " " + nm, col, "you are",
-					"FAITHFUL\nGuide the spirit true.", Color(0.75, 0.95, 0.8), foot))
+			_cast_private_reveal(idx, foot))
 		# reveal hold +50% (2.6s -> 3.9s), then eyes back down
 		_seq_add(t + 6.1, func():
-			_ui.cast_show("EYES CLOSED", dim, "", "", Color.WHITE, ""))
+			_cast_card("EYES CLOSED", dim, "", "", Color.WHITE, ""))
 		# >= 2.0s of silence before the next seat's summons (t+6.1 down -> t+8.1 up)
 		t += 8.1
 	_seq_add(t, func():
-		_ui.cast_hide()
+		_cast_card_hide()
 		_say("The spirits are willing. One of you, less so.")
 		_flash_banner("ALL EYES OPEN", Color(0.85, 0.8, 1.0), 1.8))
 	_seq_add(t + 2.0, func(): _begin_seance())
+
+## Public cast overlay: one wrapper so the couch UI and the wire fact stay in
+## lockstep. `_cast_pub` is what fans out to EVERY guest — role content never
+## passes through here.
+func _cast_card(title: String, tcol: Color, sub: String, card: String, cardcol: Color, foot := "") -> void:
+	_cast_pub = {"t": title, "tc": tcol.to_html(false), "s": sub, "c": card,
+		"cc": cardcol.to_html(false), "f": foot, "v": true}
+	_ui.cast_show(title, tcol, sub, card, cardcol, foot)
+
+func _cast_card_hide() -> void:
+	_cast_pub = {"v": false}
+	_ui.cast_hide()
+
+## The full private card for seat idx — composed HERE (host authority), sent
+## rpc_id to a remote seat's peer; the mirror only displays it.
+func _private_cast_payload(idx: int) -> Dictionary:
+	var d := {
+		"kind": "cast",
+		"seat": idx,
+		"nm": str(players[idx].name),
+		"col": (players[idx].color as Color).to_html(false),
+	}
+	if idx == charlatan:
+		d["sub"] = "the spirits took the liberty of paying you"
+		d["card"] = "YOU WERE PAID — %d GRUDGE, UP FRONT\nTHE WORD IS \"%s\"\nBury it. Do not get caught." % [FEE_GRUDGE, word]
+		d["cc"] = Color(1.0, 0.78, 0.35).to_html(false)
+	else:
+		d["sub"] = "you are"
+		d["card"] = "FAITHFUL\nGuide the spirit true."
+		d["cc"] = Color(0.75, 0.95, 0.8).to_html(false)
+	return d
+
+## t+2.2 of a seat's window: the content moment. LOCAL seat -> the couch shows
+## the real card (eyes-closed honor system, exactly as couch always was).
+## REMOTE seat -> the card already left via rpc_id; the host screen AND the
+## public fact every other guest mirrors show a REDACTED card. This is the
+## spec's "hidden info gets BETTER online" made real: across the wire there is
+## no honor system — the role flash physically exists only on the owning
+## peer's machine.
+func _cast_private_reveal(idx: int, foot: String) -> void:
+	var nm: String = str(players[idx].name)
+	var col: Color = players[idx].color
+	var glyph := PlayerBadge.glyph(idx)
+	var remote: bool = NetSession.is_host() and NetSession.is_seat_remote(idx)
+	if remote:
+		_cast_card(glyph + " " + nm, col, "summoned across the wire",
+			"THE CARD IS DELIVERED TO THEIR SCREEN ALONE", Color(0.62, 0.58, 0.68), foot)
+	else:
+		var p := _private_cast_payload(idx)
+		# LOCAL: real content on the couch; the WIRE fact stays redacted.
+		_cast_pub = {"t": glyph + " " + nm, "tc": col.to_html(false),
+			"s": "eyes open — this is for you alone",
+			"c": "(the card is theirs alone)", "cc": "9e96a8", "f": foot, "v": true}
+		_ui.cast_show(glyph + " " + nm, col, str(p.sub), str(p.card), Color(str(p.cc)), foot)
+	if idx == charlatan:
+		VerifyCapture.snap("cast")
 
 func _begin_seance() -> void:
 	phase = Phase.SEANCE
@@ -856,6 +977,12 @@ func _tick_seance(delta: float) -> void:
 	if not _snap_board_done and seance_elapsed >= 30.0:
 		_snap_board_done = true
 		VerifyCapture.snap("board")
+	# ONLINE evidence pair: with guests connected, snap the sitting early too
+	# (bot tables can spell the word before the 30 s board snap ever fires);
+	# the mirror snaps its own side at the same elapsed mark.
+	if not _snap_net_sitting and NetSession.has_guests() and seance_elapsed >= 8.0:
+		_snap_net_sitting = true
+		VerifyCapture.snap("net_sitting")
 	if focus <= 0.0:
 		_end_seance(false, "focus")
 	elif seance_elapsed >= SEANCE_TIME:
@@ -874,6 +1001,20 @@ func _do_tap(p: int) -> void:
 	figures[p].flare()
 	var bt := beat_time()
 	var dist := minf(bt, BEAT_PERIOD - bt)
+	# ONLINE (spec §4.3): a remote sitter is judged by the beat phase THEY saw,
+	# not the phase after RTT — their mirror stamps each chant press with its
+	# local beat time (reliable intent). Trusted inside a ±150 ms window; no
+	# stamp (couch, tally, NETPROBE tape) means host timing, exactly as ever.
+	if _chant_stamps.has(p):
+		var stp: Dictionary = _chant_stamps[p]
+		_chant_stamps.erase(p)
+		if Time.get_ticks_msec() - int(stp.ms) <= 350:
+			var sbt := clampf(float(stp.bt), 0.0, BEAT_PERIOD)
+			var sdist := minf(sbt, BEAT_PERIOD - sbt)
+			var used: bool = absf(sdist - dist) <= 0.15
+			print("SEANCE_STAMP p=%d stamp_dist=%.3f host_dist=%.3f used=%s" % [p, sdist, dist, str(used)])
+			if used:
+				dist = sdist
 	var nearest := beat_index() if bt <= BEAT_PERIOD * 0.5 else beat_index() + 1
 	var spam: bool = (int(_last_tap_beat[p]) == nearest)
 	_last_tap_beat[p] = nearest
@@ -891,10 +1032,19 @@ func _do_tap(p: int) -> void:
 func _do_surge(p: int, dir: Vector3) -> void:
 	_surge_cd_p[p] = SURGE_CD
 	_last_surge_t[p] = seance_elapsed
+	_surges_total += 1   # the WIRE carries only this total — surges stay anonymous
 	planchette.apply_impulse(dir, SURGE_IMPULSE)
 	planchette.show_surge_ripple()
 	if not _tally:
 		Sfx.play("bounce", -12.0, 0.15)
+
+## Host, online nights only: remote beat-stamps ride the panel-intent pipe.
+## Unknown kinds fall through — the estate owns those.
+func _on_net_intent(seat: int, intent: Dictionary) -> void:
+	if String(intent.get("kind", "")) != "seance_chant":
+		return
+	if seat >= 0 and seat < players.size() and NetSession.is_seat_remote(seat):
+		_chant_stamps[seat] = {"bt": float(intent.get("bt", -1.0)), "ms": Time.get_ticks_msec()}
 
 # --------------------------------------------------- pitched audio (presentation)
 ## A small AudioStreamPlayer pool so a sound can play at a chosen pitch_scale
@@ -969,21 +1119,25 @@ func _tick_dwell(delta: float) -> void:
 		dwell_t = 0.0
 	elif found != "":
 		dwell_t += delta
-	planchette.set_channel(0.0 if dwell_letter == "" else dwell_t / DWELL_TIME)
-	if dwell_letter == "":
+	_render_dwell(dwell_letter, dwell_t / DWELL_TIME)
+	if dwell_letter != "" and dwell_t >= DWELL_TIME:
+		_commit_letter(dwell_letter)
+
+## Dwell telegraph render (ring + lens glow) — shared by the sim and the
+## mirror, which drives it straight from the snapshot's letter + progress.
+func _render_dwell(letter: String, k_raw: float) -> void:
+	planchette.set_channel(0.0 if letter == "" else k_raw)
+	if letter == "" or not _letters.has(letter):
 		_dwell_ring.visible = false
-	else:
-		var ld2: Dictionary = _letters[dwell_letter]
-		var lp2: Vector3 = ld2.pos
-		_dwell_ring.visible = true
-		_dwell_ring.position = lp2 + Vector3(0, 0.012, 0)
-		var k := clampf(dwell_t / DWELL_TIME, 0.0, 1.0)
-		var s := 1.6 - 0.6 * k
-		_dwell_ring.scale = Vector3(s, 1.0, s)
-		var m: StandardMaterial3D = _dwell_ring.material_override
-		m.albedo_color.a = 0.25 + 0.6 * k
-		if dwell_t >= DWELL_TIME:
-			_commit_letter(dwell_letter)
+		return
+	var lp2: Vector3 = _letters[letter].pos
+	_dwell_ring.visible = true
+	_dwell_ring.position = lp2 + Vector3(0, 0.012, 0)
+	var k := clampf(k_raw, 0.0, 1.0)
+	var s := 1.6 - 0.6 * k
+	_dwell_ring.scale = Vector3(s, 1.0, s)
+	var m: StandardMaterial3D = _dwell_ring.material_override
+	m.albedo_color.a = 0.25 + 0.6 * k
 
 func _commit_letter(l: String) -> void:
 	_dwell_cd = 0.7
@@ -996,7 +1150,6 @@ func _commit_letter(l: String) -> void:
 	if back.length() > 0.05:
 		planchette.apply_impulse(back.normalized(), 0.8)
 	var ld: Dictionary = _letters[l]
-	var lab: Label3D = ld.label
 	var correct := is_letter_in_word(l)
 	# public-evidence attribution: whose recent pull pointed the way the
 	# planchette actually travelled into this letter
@@ -1012,15 +1165,9 @@ func _commit_letter(l: String) -> void:
 			total_w += w
 	if correct:
 		ld.state = 1
-		lab.modulate = Color(1.0, 0.86, 0.4)
-		lab.outline_modulate = Color(0.35, 0.2, 0.02)
+		_paint_letter(l, 1, not _tally)
 		focus = clampf(focus + CORRECT_BONUS, 0.0, 100.0)
 		_commits_right += 1
-		if not _tally:
-			Sfx.play("sink", -4.0)
-			var tw := create_tween()
-			tw.tween_property(lab, "scale", Vector3(1.45, 1.45, 1.45), 0.16)
-			tw.tween_property(lab, "scale", Vector3.ONE, 0.22)
 		_refresh_blanks()
 		_say(_pick_line(["The spirit concedes a letter.",
 			"It moves. It remembers.",
@@ -1031,13 +1178,10 @@ func _commit_letter(l: String) -> void:
 				suspicion[i] = maxf(0.0, float(suspicion[i]) - float(shares[i]) / total_w * 0.35)
 	else:
 		ld.state = 2
-		lab.modulate = Color(0.5, 0.16, 0.13)
-		lab.outline_modulate = Color(0.1, 0.03, 0.03)
+		_paint_letter(l, 2, not _tally)
 		focus = clampf(focus - WRONG_HIT, 0.0, 100.0)
 		_commits_wrong += 1
 		_shake = maxf(_shake, 0.22)
-		if not _tally:
-			Sfx.play("grudge", -6.0)
 		_say(_pick_line(["The spirit recoils. Curious.",
 			"Someone's hand is heavy tonight.",
 			"The dead do not misspell. The living do."]))
@@ -1050,6 +1194,24 @@ func _commit_letter(l: String) -> void:
 	print("SEANCE_COMMIT letter=%s correct=%s focus=%.0f t=%.1f" % [l, str(correct), focus, seance_elapsed])
 	if correct and _word_complete():
 		_end_seance(true, "spelled")
+
+## Letter paint + commit juice — shared by the sim and the mirror (which calls
+## it on 0->1 / 0->2 transitions in the snapshot's letter string).
+func _paint_letter(l: String, lstate: int, animate: bool) -> void:
+	var lab: Label3D = _letters[l].label
+	if lstate == 1:
+		lab.modulate = Color(1.0, 0.86, 0.4)
+		lab.outline_modulate = Color(0.35, 0.2, 0.02)
+		if animate:
+			Sfx.play("sink", -4.0)
+			var tw := create_tween()
+			tw.tween_property(lab, "scale", Vector3(1.45, 1.45, 1.45), 0.16)
+			tw.tween_property(lab, "scale", Vector3.ONE, 0.22)
+	elif lstate == 2:
+		lab.modulate = Color(0.5, 0.16, 0.13)
+		lab.outline_modulate = Color(0.1, 0.03, 0.03)
+		if animate:
+			Sfx.play("grudge", -6.0)
 
 func _word_complete() -> bool:
 	for l in word_letters:
@@ -1232,6 +1394,7 @@ func _begin_reveal() -> void:
 	_seq_add(REVEAL_FINISH_T, func(): _finish_match())
 
 func _unmask_moment() -> void:
+	_unmasked = true   # from here the rev fact is public and may fan out
 	var nm: String = str(players[charlatan].name)
 	var col: Color = players[charlatan].color
 	_flash_banner(PlayerBadge.glyph(charlatan) + " " + nm, col, 999.0)
@@ -1533,6 +1696,7 @@ func _flash_banner(text: String, color: Color, duration: float) -> void:
 	if _tally:
 		return
 	banner.text = text
+	_banner_col = color.to_html(false)   # wire fact for the mirror
 	banner.add_theme_color_override("font_color", color)
 	banner.visible = true
 	banner.pivot_offset = banner.size / 2.0
@@ -1554,6 +1718,7 @@ func _flash_sub(text: String, color: Color, duration: float) -> void:
 	if _tally:
 		return
 	sub_banner.text = text
+	_sub_col = color.to_html(false)   # wire fact for the mirror
 	sub_banner.add_theme_color_override("font_color", color)
 	sub_banner.visible = true
 	_sub_token += 1
@@ -1597,6 +1762,346 @@ func _dedup(arr: Array) -> Array:
 		if not out.has(x):
 			out.append(x)
 	return out
+
+# ================================================================ ONLINE (phase 2)
+# The séance is the FIRST game mirror — this section is the house template.
+# WHAT LATER GAMES COPY VERBATIM: the _mirror guard in _physics_process, the
+# begin() mirror branch, _net_state()/_net_apply() with juice-from-deltas,
+# and (hidden-info games only) send_module_private at the moment the secret
+# is dealt. WHAT IS SÉANCE-SPECIFIC: every key inside the dicts.
+
+## HOST, pumped by the estate at 20 Hz. Compact PUBLIC facts only — the word,
+## the charlatan (pre-unmask) and per-seat surge attribution never enter this
+## dict, because it fans out to every guest.
+func _net_state() -> Dictionary:
+	var taps: Array = []
+	var pull: Array = []
+	for i in players.size():
+		taps.append(int(_taps_on[i]) + int(_taps_off[i]))
+		pull.append(snappedf(_pull[i].x, 0.01))
+		pull.append(snappedf(_pull[i].z, 0.01))
+	var st := {
+		"ph": phase,
+		"el": snappedf(seance_elapsed, 0.01),
+		"foc": snappedf(focus, 0.1),
+		"pp": [snappedf(planchette.position.x, 0.001), snappedf(planchette.position.z, 0.001)],
+		"dw": dwell_letter,
+		"dk": snappedf(dwell_t / DWELL_TIME, 0.01),
+		"lt": _letters_pack(),
+		"taps": taps,
+		"pull": pull,
+		"srg": _surges_total,
+		"phl": phase_label.text,
+		"hint": hint_label.text,
+		"tmr": timer_label.text,
+		"bl": [blanks_label.text, blanks_label.visible],
+		"clu": [clue_label.text, clue_label.visible],
+		"ban": [banner.text, _banner_col, banner.visible],
+		"sub": [sub_banner.text, _sub_col, sub_banner.visible],
+		"say": executor_label.text,
+		"succ": [_seance_success, _seance_over_cause],
+	}
+	if not _cast_pub.is_empty():
+		st["cast"] = _cast_pub
+	if phase >= Phase.TALK:
+		st["vote"] = {"cur": _vote_cursor.duplicate(), "lk": _vote_locked.duplicate()}
+	if _unmasked:
+		st["rev"] = {"c": charlatan, "ct": _caught, "cv": _correct_votes}
+	if _settle_row_i > 0:
+		var led: Array = []
+		for k in mini(_settle_row_i, _ledger_rows.size()):
+			var r: Dictionary = _ledger_rows[k]
+			led.append([str(r.text), (r.color as Color).to_html(false)])
+		st["led"] = led
+	return st
+
+func _letters_pack() -> String:
+	var s := ""
+	for l in _letter_order:
+		s += str(int(_letters[l].state))
+	return s
+
+## CLIENT. Latest-state-wins application; every sfx/flare/shake below fires
+## from a DELTA against the previous snapshot, so dropped packets lose nothing
+## but intermediate frames. Continuous motion is interpolated in _mirror_tick.
+func _net_apply(state: Dictionary) -> void:
+	if not _mirror:
+		return
+	var prev := _mir
+	_mir = state
+	var ph := int(state.get("ph", Phase.WAITING))
+	var prev_ph := int(prev.get("ph", -1))
+	phase = ph   # nothing simulates off this on a mirror; probes read it
+	# --- plain text facts
+	phase_label.text = str(state.get("phl", phase_label.text))
+	hint_label.text = str(state.get("hint", ""))
+	timer_label.text = str(state.get("tmr", ""))
+	var bl: Array = state.get("bl", ["", false])
+	blanks_label.text = str(bl[0])
+	blanks_label.visible = bool(bl[1])
+	var clu: Array = state.get("clu", ["", false])
+	clue_label.text = str(clu[0])
+	clue_label.visible = bool(clu[1])
+	executor_label.text = str(state.get("say", ""))
+	_apply_mir_banner(banner, state.get("ban", []), prev.get("ban", []), true)
+	_apply_mir_banner(sub_banner, state.get("sub", []), prev.get("sub", []), false)
+	_apply_mir_cast(state)
+	# --- sitting clock resync (the smooth pulse lives in _mirror_tick)
+	var el := float(state.get("el", 0.0))
+	if absf(el - _mir_el) > 0.25 or ph != Phase.SEANCE:
+		_mir_el = el
+	# --- focus + diegetic candles
+	focus = float(state.get("foc", focus))
+	_set_focus_ui(focus / 100.0)
+	if ph == Phase.SEANCE:
+		_update_table_candles()
+	# --- planchette target
+	var pp: Array = state.get("pp", [])
+	if pp.size() >= 2:
+		_mir_pp = Vector3(float(pp[0]), planchette.board_center.y, float(pp[1]))
+		if not _mir_have_pp:
+			planchette.position = _mir_pp   # first snapshot: appear, don't swoop
+			_mir_have_pp = true
+	# --- dwell telegraph (shared renderer)
+	_render_dwell(str(state.get("dw", "")), float(state.get("dk", 0.0)))
+	# --- letters: paint 0->1 / 0->2 transitions (pop + sfx from the delta)
+	var lt := str(state.get("lt", ""))
+	var plt := str(prev.get("lt", ""))
+	for k in mini(lt.length(), _letter_order.size()):
+		var s := int(str(lt[k]))
+		var ps := int(str(plt[k])) if plt.length() > k else 0
+		if s != ps:
+			var l: String = _letter_order[k]
+			_letters[l].state = s
+			_paint_letter(l, s, true)
+			if s == 2:
+				_shake = maxf(_shake, 0.22)
+	# --- per-seat chant flares (the public tell: candle + this seat's pitch)
+	var taps: Array = state.get("taps", [])
+	var ptaps: Array = prev.get("taps", [])
+	for i in mini(taps.size(), figures.size()):
+		var d := int(taps[i]) - (int(ptaps[i]) if i < ptaps.size() else 0)
+		if d > 0:
+			figures[i].flare()
+			_play_pitched("place", SEAT_TAP_PITCH[i % SEAT_TAP_PITCH.size()], TAP_TICK_DB)
+	# --- anonymous surges (a count, never a hand)
+	if int(state.get("srg", 0)) > int(prev.get("srg", 0)):
+		planchette.show_surge_ripple()
+		Sfx.play("bounce", -12.0, 0.15)
+	# --- pull arrows feed off the mirrored per-seat pull
+	var pull: Array = state.get("pull", [])
+	for i in _pull.size():
+		if i * 2 + 1 < pull.size():
+			_pull[i] = Vector3(float(pull[i * 2]), 0.0, float(pull[i * 2 + 1]))
+	# --- phase-entry juice
+	if ph != prev_ph:
+		_mir_phase_change(ph, state)
+	# --- vote chips
+	_apply_mir_vote(state, prev)
+	# --- the unmask
+	if state.has("rev") and not _mir_unmasked:
+		_mir_unmasked = true
+		_mir_roll_t = -999.0
+		_mir_unmask(state)
+	# --- settlement rows read out as they land host-side
+	var led: Array = state.get("led", [])
+	while _mir_led_n < led.size():
+		var row: Array = led[_mir_led_n]
+		_ui.add_settle_row(str(row[0]), Color(str(row[1])), true)
+		Sfx.play("card", -8.0)
+		_mir_led_n += 1
+	# --- evidence snap: the sitting 8 s in (pairs with the host's "net_sitting")
+	if ph == Phase.SEANCE and el >= 8.0 and not _mir_snap_sitting:
+		_mir_snap_sitting = true
+		VerifyCapture.snap("mirror_sitting")
+
+## CLIENT, per physics tick: interpolation + everything that must be smooth
+## at 60 fps between 20 Hz snapshots (planchette glide, candle pulse, arrows,
+## drumroll) — and MY chant beat-stamp.
+func _mirror_tick(delta: float) -> void:
+	if _mir.is_empty():
+		return
+	var ph := int(_mir.get("ph", Phase.WAITING))
+	if _mir_have_pp:
+		planchette.position = planchette.position.lerp(_mir_pp, 1.0 - exp(-14.0 * delta))
+		planchette.tick_fx(delta)
+	if ph == Phase.SEANCE:
+		_mir_el += delta
+		var beat := int(_mir_el / BEAT_PERIOD)
+		var bt := fmod(_mir_el, BEAT_PERIOD)
+		if beat != _mir_beat:
+			_mir_beat = beat
+			Sfx.play("card", -18.0, 0.02)
+		var pulse := maxf(0.0, 1.0 - bt * 5.0)
+		_spirit_flame_mat.emission_energy_multiplier = 2.0 + 3.0 * pulse
+		_spirit_light.light_energy = 1.6 + 1.1 * pulse
+		_update_arrows(delta)
+		# MY chant press: stamped with the beat phase I can SEE (spec §4.3).
+		# The press itself still rides the input relay — the stamp only tells
+		# the host which side of the pulse MY screen was on when I tapped.
+		# (NETPROBE: a tape A-edge counts as my press, same path end to end.)
+		var my := NetSession.my_seat()
+		var pressed: bool = (my >= 0 and PlayerInput.just_pressed(my, "a")) \
+			or (NetSession.tape_mode() and NetSession.tape_pressed_a())
+		if pressed:
+			NetSession.send_panel_intent({"kind": "seance_chant", "bt": snappedf(bt, 0.001)})
+	# REVEAL drumroll: armed by the roll banner, runs on the host's schedule
+	# (ROLL_START after the banner), dies the moment the unmask fact lands.
+	if _mir_roll_t > -900.0 and not _mir_unmasked:
+		var pre := _mir_roll_t
+		_mir_roll_t += delta
+		if _mir_roll_t >= 0.0 and _mir_roll_t <= (ROLL_END - ROLL_START):
+			if int(maxf(pre, 0.0) / ROLL_STEP) != int(_mir_roll_t / ROLL_STEP) or pre < 0.0:
+				var frac := clampf(_mir_roll_t / (ROLL_END - ROLL_START), 0.0, 1.0)
+				_play_pitched("bounce", lerpf(0.9, 1.4, frac), lerpf(-15.0, -5.0, frac))
+
+func _apply_mir_banner(lab: Label, arr: Array, parr: Array, pop: bool) -> void:
+	if arr.size() < 3:
+		return
+	lab.text = str(arr[0])
+	lab.add_theme_color_override("font_color", Color(str(arr[1])))
+	var was: bool = parr.size() >= 3 and bool(parr[2]) and str(parr[0]) == str(arr[0])
+	lab.visible = bool(arr[2])
+	if pop and lab.visible and not was:
+		lab.pivot_offset = lab.size / 2.0
+		lab.scale = Vector2(0.6, 0.6)
+		var tw := create_tween()
+		tw.tween_property(lab, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		if str(arr[0]) == "THE CHARLATAN WAS...":
+			_mir_roll_t = -ROLL_START   # arm the local drumroll
+
+## Public cast overlay facts — a private card in flight owns the screen.
+func _apply_mir_cast(state: Dictionary) -> void:
+	if Time.get_ticks_msec() < _mir_priv_until:
+		return
+	var c: Dictionary = state.get("cast", {})
+	if not bool(c.get("v", false)):
+		_ui.cast_hide()
+		return
+	_ui.cast_show(str(c.get("t", "")), Color(str(c.get("tc", "fff"))), str(c.get("s", "")),
+		str(c.get("c", "")), Color(str(c.get("cc", "fff"))), str(c.get("f", "")))
+
+func _mir_phase_change(ph: int, state: Dictionary) -> void:
+	print("SEANCE_MIRROR phase -> %s t=%.1f" % [Phase.keys()[ph], game_time])
+	match ph:
+		Phase.SEANCE:
+			_mir_beat = -1
+		Phase.TALK:
+			var succ: Array = state.get("succ", [false, ""])
+			for a in _arrows:
+				a.snuff()
+			_render_dwell("", 0.0)
+			_ui.show_vote_panel(true)
+			if bool(succ[0]):
+				Sfx.play("round_over")
+				for f in figures:
+					f.play_reaction("Cheer", 2.2)
+			else:
+				Sfx.play("death")
+				for f in _table_flames:
+					f.visible = false
+
+func _apply_mir_vote(state: Dictionary, prev: Dictionary) -> void:
+	var v: Dictionary = state.get("vote", {})
+	if v.is_empty():
+		return
+	var pv: Dictionary = prev.get("vote", {})
+	var cur: Array = v.get("cur", [])
+	var lk: Array = v.get("lk", [])
+	var pcur: Array = pv.get("cur", [])
+	var plk: Array = pv.get("lk", [])
+	for i in cur.size():
+		var c := int(cur[i])
+		if c < 0:
+			continue
+		var locked: bool = i < lk.size() and bool(lk[i])
+		var pc: int = int(pcur[i]) if i < pcur.size() else -2
+		var pl: bool = i < plk.size() and bool(plk[i])
+		if c != pc or locked != pl:
+			_ui.set_vote_chip(i, c, locked)
+			if locked and not pl:
+				Sfx.play("confirm", -3.0)
+			elif c != pc and pc >= -1:
+				Sfx.play("card", -6.0)
+
+## The verdict lands on the mirror: same spotlight, same reactions, fired once
+## from the rev fact. (Host plays its confetti a beat later in _verdict_moment;
+## the mirror celebrates at the unmask — same news, same room, local juice.)
+func _mir_unmask(state: Dictionary) -> void:
+	var rev: Dictionary = state.get("rev", {})
+	var c := int(rev.get("c", -1))
+	if c < 0 or c >= figures.size():
+		return
+	charlatan = c   # public knowledge from this exact moment
+	_caught = bool(rev.get("ct", false))
+	_ui.spotlight_portrait(c)
+	var fig: SeanceFigure = figures[c]
+	_reveal_spot.light_energy = 4.0
+	_reveal_spot.look_at_from_position(Vector3(fig.position.x * 0.5, 8.5, fig.position.z * 0.5 + 3.0),
+		fig.position + Vector3(0, 1.0, 0), Vector3.UP)
+	_shake = maxf(_shake, 0.4)
+	Sfx.play("grudge", 0.0)
+	var v: Dictionary = state.get("vote", {})
+	var cur: Array = v.get("cur", [])
+	var lk: Array = v.get("lk", [])
+	if _caught:
+		fig.react_unmasked_caught()
+		for i in figures.size():
+			if i != c and i < cur.size() and i < lk.size() and bool(lk[i]) and int(cur[i]) == c:
+				figures[i].react_cheer()
+				_spawn_confetti(figures[i].position + Vector3(0, 1.6, 0), players[i].color)
+	else:
+		fig.react_cheer()
+		_spawn_confetti(figures[c].position + Vector3(0, 1.6, 0), players[c].color)
+	print("SEANCE_MIRROR unmask charlatan=%d caught=%s" % [c, str(_caught)])
+	VerifyCapture.snap("mirror_verdict")
+
+## CLIENT: hidden info, delivered rpc_id — it exists on THIS machine only.
+func _net_apply_private(data: Dictionary) -> void:
+	if not _mirror:
+		return
+	match String(data.get("kind", "")):
+		"summons":
+			# roll-call: your colour learns its voice on YOUR machine only
+			var my := NetSession.my_seat()
+			if my >= 0 and my < players.size():
+				_play_summons_tick(my)
+				var tw := create_tween()
+				tw.tween_interval(SUMMONS_GAP)
+				tw.tween_callback(_play_summons_tick.bind(my))
+				tw.tween_interval(SUMMONS_GAP)
+				tw.tween_callback(_play_summons_tick.bind(my))
+		"cast":
+			_mir_private_cast(data)
+
+## The private cast window, run locally with the same offsets the couch uses:
+## three summons ticks -> the name card at 1.2 s -> the CONTENT + fourth tick
+## at 2.2 s -> back to the public facts at 6.1 s (the hold expires).
+func _mir_private_cast(data: Dictionary) -> void:
+	var seat := int(data.get("seat", maxi(NetSession.my_seat(), 0)))
+	var nm := str(data.get("nm", "?"))
+	var col := Color(str(data.get("col", "fff")))
+	var glyph := PlayerBadge.glyph(seat)
+	var foot := "everyone else — eyes down · listen for your voice"
+	_mir_priv_until = Time.get_ticks_msec() + 6100
+	print("SEANCE_PRIV cast card received (seat %d) — content lives on this screen alone" % seat)
+	_play_summons_tick(seat)
+	var tw := create_tween()
+	tw.tween_interval(SUMMONS_GAP)
+	tw.tween_callback(_play_summons_tick.bind(seat))
+	tw.tween_interval(SUMMONS_GAP)
+	tw.tween_callback(_play_summons_tick.bind(seat))
+	var tw2 := create_tween()
+	tw2.tween_interval(1.2)
+	tw2.tween_callback(func():
+		_ui.cast_show(glyph + " " + nm, col, "eyes open — this is for you alone", "", Color.WHITE, foot)
+		Sfx.play("card", -8.0))
+	tw2.tween_interval(1.0)
+	tw2.tween_callback(func():
+		_play_summons_tick(seat)
+		_ui.cast_show(glyph + " " + nm, col, str(data.get("sub", "")),
+			str(data.get("card", "")), Color(str(data.get("cc", "fff"))), foot)
+		VerifyCapture.snap("mirror_cast"))
 
 # ================================================================ verify hooks
 func get_phase_name() -> String:

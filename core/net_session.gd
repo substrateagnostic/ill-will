@@ -34,6 +34,9 @@ signal lobby_state_received(state: Dictionary)   # client: estate mirror facts
 signal walker_state_received(state: Dictionary)  # client: walker snapshot @15Hz
 signal panel_intent_received(seat: int, intent: Dictionary)  # host: semantic UI intent
 signal probe_first_input(seat: int)              # host, NETPROBE only: tape landed
+# --- PHASE 2: game mirrors (docs/design/10 §4.3; first game: THE SÉANCE) ---
+signal module_state_received(state: Dictionary)  # client: running game's _net_state()
+signal module_private_received(data: Dictionary) # client: THIS seat's hidden info only
 
 enum Role { OFFLINE, HOST, CLIENT }
 
@@ -85,7 +88,11 @@ const TAPE := [
 const TAPE_PULSE_FROM := 1200
 const TAPE_PULSE_EVERY := 90
 const TAPE_PULSE_WIDTH := 6
-const TAPE_END := 5400
+## 13500 ticks = 225 s: long enough that the pulses still answer the séance's
+## chant window and VOTE lock (~tick 12700 in the --pool=seance probe night).
+## The phase-1 mock night reaches RECKONING far earlier; later pulses land in
+## phases that ignore a remote A (reckoning/podium are host-authoritative).
+const TAPE_END := 13500
 
 var _tape_requested := false
 var _tape_active := false
@@ -95,6 +102,7 @@ var _tape_tick := -1
 var _tape_prev_a := false
 var _tape_pa := 0
 var _tape_seq := 0
+var _tape_a_edge := false         # one-tick flag: the tape pressed A this tick
 var _trace_tick := -1             # NETPROBE trace clock (estate prints positions)
 
 func _ready() -> void:
@@ -223,6 +231,11 @@ func rtt_of_seat(seat: int) -> int:
 
 func tape_mode() -> bool:
 	return _tape_requested
+
+## NETPROBE: mirrors treat a tape A-edge as a local press (e.g. the séance
+## beat-stamp), so the probe exercises the exact path a human client uses.
+func tape_pressed_a() -> bool:
+	return _tape_a_edge
 
 func trace_tick() -> int:
 	return _trace_tick
@@ -371,9 +384,39 @@ func send_walker_state(state: Dictionary) -> void:
 		_rpc_walker_state.rpc(state)
 
 ## Client -> host semantic UI intent (spec §5.3): {"kind": "ready_toggle"} etc.
+## Games ride this too (séance chant beat-stamps: {"kind":"seance_chant"}).
 func send_panel_intent(intent: Dictionary) -> void:
 	if role == Role.CLIENT and _my_seat >= 0:
 		_rpc_panel_intent.rpc_id(1, intent)
+
+## ----- PHASE 2: the generic module-state pipe (game mirrors) -----
+## THE HOUSE PATTERN: the estate pumps the running module's `_net_state()`
+## dict to every guest at 20 Hz (unreliable_ordered, channel 4, latest wins);
+## each client boots the SAME module scene in mirror mode and feeds the dict
+## to `_net_apply()`. Hidden information NEVER rides this fan-out — it goes
+## through send_module_private (reliable, rpc_id: the seat's peer and nobody
+## else). This is the spec's "hidden info gets BETTER online" claim in code.
+
+func send_module_state(state: Dictionary) -> void:
+	if role == Role.HOST and has_guests():
+		_rpc_module_state.rpc(state)
+
+## Host -> ONE peer: the private card for `seat` (charlatan flash, role card,
+## summons). Peer 0 is the couch-probe tape — local, nothing to deliver.
+func send_module_private(seat: int, data: Dictionary) -> void:
+	if role != Role.HOST:
+		return
+	var pid := int(_peer_by_seat.get(seat, -1))
+	if pid > 0:
+		_rpc_module_private.rpc_id(pid, data)
+
+@rpc("authority", "call_remote", "unreliable_ordered", 4)
+func _rpc_module_state(state: Dictionary) -> void:
+	module_state_received.emit(state)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_module_private(data: Dictionary) -> void:
+	module_private_received.emit(data)
 
 ## Stable digest of a snapshot dict — both ends print NETHASH lines keyed by
 ## seq (spec §7.3: compare by seq, never wall clock).
@@ -471,6 +514,7 @@ func _step_tape() -> void:
 		return
 	var st := _tape_state(_tape_tick)
 	var a := bool(st.a)
+	_tape_a_edge = a and not _tape_prev_a   # game mirrors read this as "my press"
 	if a and not _tape_prev_a:
 		_tape_pa += 1
 	_tape_prev_a = a

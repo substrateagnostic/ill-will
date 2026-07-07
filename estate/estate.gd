@@ -61,6 +61,12 @@ var _net_game_name := ""          # what the spectate card names mid-game
 var _net_state_accum := 0.0       # 5 Hz lobby-fact broadcast
 var _net_walker_accum := 0.0      # 15 Hz walker snapshot broadcast
 var _net_walker_seq := 0
+# ----- ONLINE PHASE 2 (doc 10 §4.3): game mirrors. The shell owns the pump —
+# a contract module exposing _net_state() gets it fanned to guests at 20 Hz;
+# clients boot the SAME scene in mirror mode and feed _net_apply(). -----
+var _net_mirror_id := ""          # module id while a mirrorable game runs
+var _net_module_accum := 0.0      # 20 Hz module-state pump
+var _net_module_seq := 0
 var _client_last_state := {}      # client: last mirrored lobby facts
 var _client_panel_sig := ""       # client: rebuild panel only when facts change
 var _client_walker_targets := {}  # client: p -> {pos, rot, moving} interp targets
@@ -1752,9 +1758,16 @@ func _do_launch_game(id: String, practice := false) -> void:
 			"rng_seed": EstateState.rng.randi(),
 			"practice": _practice,
 		})
+		# ONLINE PHASE 2 seam: a module exposing _net_state() gets mirrored to
+		# guests; the fact rides the 5 Hz lobby state and boots their mirror.
+		if NetSession.is_host() and _module.has_method("_net_state"):
+			_net_mirror_id = id
+			_net_module_seq = 0
+			_net_module_accum = 0.0
 	cam.current = false
 
 func _on_module_finished(results: Dictionary) -> void:
+	_net_mirror_id = ""   # ONLINE PHASE 2: guests' mirrors fold when this fact drops
 	if _module:
 		_module.queue_free()
 		_module = null
@@ -2103,6 +2116,8 @@ func _net_wire_signals() -> void:
 	NetSession.walker_state_received.connect(_on_net_walker_state)
 	NetSession.session_closed.connect(_on_net_session_closed)
 	NetSession.probe_first_input.connect(_on_net_probe_first_input)
+	NetSession.module_state_received.connect(_on_net_module_state)
+	NetSession.module_private_received.connect(_on_net_module_private)
 
 ## ----- host side -----
 
@@ -2191,6 +2206,18 @@ func _net_host_broadcast(delta: float) -> void:
 		NetSession.send_walker_state(ws)
 		if _netprobe != "" and _net_walker_seq % 15 == 0:
 			print("NETHASH side=host seq=%d h=%s" % [_net_walker_seq, NetSession.snapshot_hash(ws)])
+	# ONLINE PHASE 2: the game-mirror pump (20 Hz, unreliable_ordered ch 4).
+	if _module != null and _net_mirror_id != "":
+		_net_module_accum += delta
+		if _net_module_accum >= 1.0 / 20.0:
+			_net_module_accum = 0.0
+			_net_module_seq += 1
+			var ms: Dictionary = _module._net_state()
+			ms["seq"] = _net_module_seq
+			NetSession.send_module_state(ms)
+			if _netprobe != "" and _net_module_seq % 40 == 0:
+				print("NETHASH_MOD side=host seq=%d h=%s bytes=%d" % [
+					_net_module_seq, NetSession.snapshot_hash(ms), var_to_bytes(ms).size()])
 
 func _net_build_lobby_state() -> Dictionary:
 	var seats: Array = []
@@ -2226,6 +2253,8 @@ func _net_build_lobby_state() -> Dictionary:
 		}
 	if phase == Phase.GAME:
 		state["game"] = _net_game_name
+		if _net_mirror_id != "" and _module != null:
+			state["mirror"] = _net_mirror_id   # phase 2: clients boot this scene
 	return state
 
 func _net_build_walker_state(seq: int) -> Dictionary:
@@ -2354,13 +2383,89 @@ func _client_process(delta: float) -> void:
 			if w.anim.current_animation != want and w.anim.has_animation(want):
 				w.anim.play(want)
 
+## ----- PHASE 2: the game mirror (client side of the handoff seam) -----
+
+## Snapshots for the running game -> straight into the mirror's _net_apply.
+func _on_net_module_state(state: Dictionary) -> void:
+	if _module != null and _module.has_method("_net_apply"):
+		_module._net_apply(state)
+		if _netprobe != "" and int(state.get("seq", 0)) % 40 == 0:
+			print("NETHASH_MOD side=client seq=%d h=%s" % [int(state.get("seq", 0)), NetSession.snapshot_hash(state)])
+
+## Hidden info for MY seat (rpc_id said so) -> the mirror's private handler.
+func _on_net_module_private(data: Dictionary) -> void:
+	if _module != null and _module.has_method("_net_apply_private"):
+		_module._net_apply_private(data)
+
+## Boot the same module scene in mirror mode: same roster shape the host
+## builds, no seed, no sim — _net_apply drives everything.
+var _client_mirror_up := false   # guards teardown: never touch a HOST module
+
+func _client_ensure_mirror(id: String) -> void:
+	if _module != null:
+		return
+	if not MODULES.has(id):
+		return
+	_client_mirror_up = true
+	print("NET mirror boot: %s" % id)
+	var info: Dictionary = MODULES[id]
+	phase_panel.visible = false
+	banner.visible = false
+	Music.stop()
+	$Grounds.visible = false
+	$Grounds.process_mode = Node.PROCESS_MODE_DISABLED
+	plinths.visible = false
+	$GraffitiWall.visible = false
+	$Trail.visible = false
+	$Trail.process_mode = Node.PROCESS_MODE_DISABLED
+	$Sun.visible = false
+	$WorldEnvironment.environment = null
+	$UI/TopBar.visible = false
+	var scene: PackedScene = load(info.scene)
+	_module = scene.instantiate()
+	add_child(_module)
+	var roster: Array = []
+	for pl in EstateState.players:
+		roster.append({
+			"index": pl.index, "name": pl.name, "color": pl.color,
+			"char_scene": CHAR_PATHS[pl.index], "device": -99, "bot": false,
+		})
+	_module.begin({"roster": roster, "rounds": 2, "rng_seed": 0,
+		"practice": false, "net_mirror": true})
+	cam.current = false
+
+## The host's module finished (or the night moved on): fold the mirror and
+## give the estate back. Client-only by construction (_client_build_panel).
+func _client_teardown_mirror() -> void:
+	if _module == null or not _client_mirror_up:
+		return
+	_client_mirror_up = false
+	print("NET mirror fold")
+	_module.queue_free()
+	_module = null
+	$Grounds.visible = true
+	$Grounds.process_mode = Node.PROCESS_MODE_INHERIT
+	plinths.visible = true
+	$Trail.visible = true
+	$Trail.process_mode = Node.PROCESS_MODE_INHERIT
+	$Sun.visible = true
+	$GraffitiWall.visible = true
+	$WorldEnvironment.environment = _saved_env
+	cam.current = true
+
 ## The client lobby: rebuilt from mirrored facts, never from local state.
 func _client_build_panel() -> void:
 	var state := _client_last_state
 	var phase_name := String(state.get("phase", "LOBBY"))
 	if phase_name == "GAME":
+		if state.has("mirror"):
+			_client_ensure_mirror(String(state["mirror"]))
+			return
+		# no mirror for this game (or the host is on the podium): spectate card
+		_client_teardown_mirror()
 		_client_build_spectate_panel(state)
 		return
+	_client_teardown_mirror()
 	_clear_panel("AN ONLINE NIGHT — hosted across the wire", Color(0.9, 0.95, 0.9))
 	var seats: Array = state.get("seats", [])
 	if seats.is_empty():
@@ -2457,7 +2562,7 @@ func _client_build_panel() -> void:
 func _client_build_spectate_panel(state: Dictionary) -> void:
 	_clear_panel("NIGHT %d — %s" % [int(state.get("night", 1)), String(state.get("game", "A GAME"))], Color(1, 0.9, 0.5))
 	var body := Label.new()
-	body.text = "The game is on the host's screen — your inputs still reach your pawn.\nFull remote mirrors arrive in phase 2; the estate keeps your seat warm."
+	body.text = "This one plays on the host's screen — your inputs still reach your pawn.\nGames with remote mirrors play right here; the estate keeps your seat warm."
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.custom_minimum_size = Vector2(660, 0)
@@ -2477,6 +2582,7 @@ func _client_build_spectate_panel(state: Dictionary) -> void:
 			phase_box.add_child(l)
 
 func _on_net_session_closed(reason: String) -> void:
+	_client_teardown_mirror()   # no-op unless a mirror is actually up
 	_client_last_state = {}
 	_client_walker_targets.clear()
 	_client_panel_sig = ""
@@ -2547,7 +2653,9 @@ func _np_wait(cond: Callable, timeout_s: float) -> bool:
 	return true
 
 func _netprobe_host_flow(ps: String, pf: String) -> void:
-	mockonly = true
+	# Phase-2 séance probe rides the REAL selector: --pool=seance keeps the
+	# auction honest and the mock game out. Without a pool, phase-1 mock night.
+	mockonly = pool_override.is_empty()
 	_hide_title()
 	PlayerInput.assign(0, -1)
 	PlayerInput.set_bot(0, false)
@@ -2595,7 +2703,8 @@ func _netprobe_host_flow(ps: String, pf: String) -> void:
 	await get_tree().create_timer(1.2).timeout
 	await _np_snap("online_host_game")
 	var reckoned := func() -> bool: return phase == Phase.RECKONING
-	if await _np_wait(reckoned, 40.0):
+	# a real séance night runs ~4 min; the mock night is done inside 40 s
+	if await _np_wait(reckoned, 40.0 if mockonly else 420.0):
 		await get_tree().create_timer(1.2).timeout
 		await _np_snap("online_host_reckoning")
 	var parts := "NETPROBE_RESULTS"
@@ -2638,9 +2747,11 @@ func _netprobe_join_flow() -> void:
 	var game_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "GAME"
 	if await _np_wait(game_seen, 40.0):
 		await get_tree().create_timer(1.2).timeout
-		await _np_snap("online_client_spectate")
+		# phase 1 this was the spectate card; with a mirrorable game it is the
+		# booted mirror itself (the séance stage, INTRO/CAST)
+		await _np_snap("online_client_game")
 	var reck_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "RECKONING"
-	if await _np_wait(reck_seen, 40.0):
+	if await _np_wait(reck_seen, 420.0):
 		await get_tree().create_timer(1.0).timeout
 		await _np_snap("online_client_reckoning")
 	print("NETPROBE_CLIENT_DONE")
