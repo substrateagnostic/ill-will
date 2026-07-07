@@ -54,6 +54,12 @@ var _round_resolving := false
 var _decider := "none"                # what ended the round (balance metric)
 var _house_awake := false             # final-stretch ghost buff live this round
 var _awaken_override := -1.0          # --dwawaken=S (verify): film the moment early
+var _evict_pin := -1                  # --dwevict=N (evidence pin, --seancechar
+                                      # precedent): fell seat N through the REAL
+                                      # _fall() path 1 s into round 1 so a probe
+                                      # night is GUARANTEED a poltergeist + a
+                                      # furniture assault on film. Logged loud;
+                                      # never set in real play.
 var _env: Environment = null          # stage refs for the candlelight dim (fx)
 var _sun: DirectionalLight3D = null
 var _dim_tw: Tween = null
@@ -288,6 +294,8 @@ func _parse_args() -> void:
 			_awaken_override = maxf(0.5, float(arg.trim_prefix("--dwawaken=")))
 		elif arg == "--hitkitcap":
 			_hitkit_cap = true
+		elif arg.begins_with("--dwevict="):
+			_evict_pin = int(arg.trim_prefix("--dwevict="))
 		elif arg.begins_with("--outdir="):
 			_cap_dir = arg.trim_prefix("--outdir=")
 	if _aim_probe_on:
@@ -518,6 +526,16 @@ func _start_round() -> void:
 	_refresh_hint()
 	if _balance_rounds == 0:
 		_flash_banner("ROUND %d\nFIGHT!" % (round_index + 1), Color(1, 0.85, 0.2), 1.6)
+	# --dwevict evidence pin (probe nights only; --seancechar precedent): fell
+	# the pinned seat through the REAL _fall() path 1 s into round 1, so the
+	# poltergeist-and-furniture arc is guaranteed on film. Loud, never real play.
+	if _evict_pin >= 0 and round_index == 0 and _balance_rounds == 0 and not _mirror:
+		var pin := _evict_pin
+		get_tree().create_timer(1.0).timeout.connect(func() -> void:
+			if phase == Phase.ROUND and pin < _fighters.size() \
+					and _fighters[pin] != null and _fighters[pin].alive:
+				print("DW_FORCEEVICT seat=%d (evidence pin — never real play)" % pin)
+				_fighters[pin]._fall())
 
 func _living_count() -> int:
 	var n := 0
