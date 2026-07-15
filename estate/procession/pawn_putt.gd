@@ -69,10 +69,11 @@ class PuttMeter:
 		draw_line(Vector2(needle_x, bar.position.y - 4),
 			Vector2(needle_x, bar.end.y + 4), Color.WHITE, 4.0)
 		draw_rect(bar, Color(0.83, 0.8, 0.9), false, 2.0)
-		var foot := "HOLD A · RELEASE IN A NUMBERED BAND"
+		var foot := "HOLD A · RELEASE ON A BAND"
 		if released:
 			foot = "SEALED — %d SPACE%s" % [result_spaces, "" if result_spaces == 1 else "S"]
-		draw_string(font, Vector2(16, 94), foot, HORIZONTAL_ALIGNMENT_LEFT, -1, 20,
+		# Clip to the meter width so the corner meters never bleed off-screen.
+		draw_string(font, Vector2(16, 94), foot, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 20,
 			Color(0.88, 0.86, 0.93))
 
 	func _panel(color: Color) -> StyleBoxFlat:
