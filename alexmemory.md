@@ -51,6 +51,19 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     rides the kit via a signal seam (its turf saturation still animates in
     lockstep). Nits queued for wave 2: card/hint-bar notation consistency,
     a banner-stacking beat, always list all 4 seats.
+  - ✅ **THE PROCESSION GOT ITS FACE** (merge e6afe0b): the board is now a
+    moonlit funeral drive — carnival tents and pink kart RETIRED; green-man
+    waypoint lanterns, wrought tollgate arch, codicil pedestal in the one
+    warm pool of light, five gravestone styles by space, hearse + grim
+    signpost at the start, crypt door/angel/well/dead trees on the
+    perimeter. Space discs are dark stone with emissive color rims +
+    engraved runes (never color alone). Executor reveals ride a broadcast
+    lower-third with the player's badge. Meters unclipped + parchment-
+    framed. Three real bugs fixed en route (a %s leaking into banners,
+    !is_inside_tree spam ×17→0, a camera-snap race). Seed-7 receipt
+    re-verified post-merge: heir BLUE, 17 rounds — byte-identical.
+    One follow-up noted: repo has no gothic serif font (Baloo2 used);
+    adding one is a taste call for you.
   - ✅ **SFX AAA PASS** (merge 7e122ce): 40 keys / 105 variants, all CC0
     (6 Kenney packs + OpenGameArt; license ledger in assets/audio/), all
     processed to the house declick bar (44.1k/16-bit, razor onsets on
