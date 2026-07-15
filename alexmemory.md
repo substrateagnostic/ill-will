@@ -51,6 +51,24 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     rides the kit via a signal seam (its turf saturation still animates in
     lockstep). Nits queued for wave 2: card/hint-bar notation consistency,
     a banner-stacking beat, always list all 4 seats.
+  - ✅ **THE PROCESSION — THE BOARD IS REAL** (merge 43bcee0): the Mario
+    Party loop, playable end to end tonight. ~24 spaces looping the manor
+    drive; every round all four putt their pawns AT ONCE (corner meters,
+    sweet-spot bands = exact space targeting, frozen golf physics as the
+    dice), pawns move at once, then the Executor reveals landings one by
+    one ("GOLD gains at the shrine. Piety pays, this once, under
+    protest."). Roving CODICIL sells DEEDS (10 grudge +2/held); shrines,
+    weeping graves (player monuments collect tolls!), stalls, tollgates,
+    séance wheel, nemesis vendetta wagers; minigame block every 2nd round,
+    HOUSE AWAKENS every 3rd; will-reading clauses announced up front; most
+    Deeds INHERITS. Presets: Quick Wake ~20min / Short ~25 / Full / Vigil.
+    Deterministic: seed 7 twice → identical tally (verified again post-
+    merge: heir BLUE, 17 rounds). **Try it now:**
+    `godot --path . -- --procession --seed=7 --deedgoal=4` (bots), or
+    without --autoplay for a human seat. Known polish queue (task 16):
+    board dressing is placeholder-cheerful (carnival tents, pink kart
+    hearse — Meshy props + MOONLIT pass incoming), reveal banner needs a
+    scrim, PLAY-menu entry lands with the estate split merge.
   - ✅ **GAME #14: THE WIDOW'S GAZE** (merge 8d621b0): red-light-green-light
     at the wake — creep up the parlor, rob relics from beside the coffin,
     FREEZE when she turns. The ILL WILL twist: shove someone as the sting
