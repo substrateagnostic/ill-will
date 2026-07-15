@@ -357,10 +357,16 @@ func _build_world() -> void:
 	ring.outer_radius = ARENA_R * SHRINK + 0.05
 	_inner_ring.mesh = ring
 	var ringmat := StandardMaterial3D.new()
-	ringmat.albedo_color = Color(1.0, 0.85, 0.3)
+	ringmat.albedo_color = Color(1.0, 0.80, 0.24)
 	ringmat.emission_enabled = true
-	ringmat.emission = Color(1.0, 0.7, 0.2)
-	ringmat.emission_energy_multiplier = 0.6
+	# THE RING DEMANDS. The ring-out boundary must be the HOTTEST thing on screen.
+	# AGX crushes saturated yellows toward pale cream, so we compensate two ways:
+	# an orange-shifted gold emission (survives AGX far better than pure yellow) and
+	# an energy well ABOVE the STAGELIT glow HDR threshold (1.0) so the whole ring
+	# crosses into bloom and out-glows the ghost trails / parry flashes. (Pre-lookdev
+	# this sat at 0.6 — under the threshold — which is why it read as cold cream.)
+	ringmat.emission = Color(1.0, 0.56, 0.10)
+	ringmat.emission_energy_multiplier = 4.5
 	_inner_ring.material_override = ringmat
 	_inner_ring.position.y = 0.02
 	add_child(_inner_ring)
