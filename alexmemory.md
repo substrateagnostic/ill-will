@@ -521,6 +521,28 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-15 — MESHY FORGE: 32 new props (graves / awards / board / estate) on meshy-6 (agent worktree)
+The prop library for the estate's next dressing pass exists. A new
+manifest-driven batch tool (`tools/meshy_forge.ps1` + `tools/meshy_manifest.json`)
+generated **32 props, 32/32 KEEP**: 8 gravestones, 8 will-reading superlative
+trophies (WORKHORSE ox → RECKONER tipped scales), 8 funeral-procession board
+furniture pieces (tollgate arch, codicil pedestal, hearse cart, planchette,
+crypt door...), 8 estate dressing pieces (dead tree, raven fountain, lit
+lamppost, broken angel...). First batch on **meshy-6** (priors were meshy-5);
+same proven house-style suffix, PBR off, low-poly 8k. Pilot of 3 confirmed
+30 credits/prop before the full spend. 4 props re-rolled once after I read
+the contact sheet (nemesis daggers, deed token, cherub, codicil scroll — all
+v2s landed clean). **Spend: 1080 credits total** (960 shipped + 120 retired
+v1s; task IDs all in `tools/meshy_forge_report.json`). YOUR REVIEW:
+`docs/verify/shots/meshy_forge_*.png` (9 sheets) + verdict table in
+`docs/verify/meshy-forge-VERIFY.md`. Note for the sheet read: the DOORMAT
+trophy says "WELCOME MUT" (AI typo — I kept it, it's funnier; re-roll if it
+grates) and the waypoint stone grew a hollow-eyed green-man face (creepier
+than briefed, kept). NOT integrated — GLBs live in
+`assets/models/meshy/generated/`, monuments/board wiring is another lane's.
+`tools/asset_probe.gd` gained additive `--dir=`/`--groups=` flags (defaults
+unchanged).
+
 ### 2026-07-07 — ONLINE PHASE 3: remote guests get THE DRAMA (podiums + night ceremonies + auction card) (estate-online agent worktree)
 The biggest online gap is closed: guests no longer stare at the spectate
 card while the couch gets the fireworks. A remote friend now sees, on their

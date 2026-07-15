@@ -4,12 +4,33 @@ extends Node3D
 ## capsule. Prints each model's bounding-box size to stdout for scale judgement.
 ## Run: godot --path . tools/asset_probe.tscn -- --shots=90 --outdir=verify_out
 ## (VerifyCapture autoload handles the screenshot + quit.)
+##
+## --dir=res://some/other/dir/   scan a different directory instead of the
+##                                default flat assets/models/meshy/ (e.g. the
+##                                meshy_forge generated/ subfolder). Additive,
+##                                default behavior is unchanged when omitted.
+## --groups=N                    number of close-up camera passes swept across
+##                                the row (default 4, matching every prior
+##                                batch's fixed frames 70/130/190/250). Bigger
+##                                batches (e.g. 32 props) want more, tighter
+##                                groups so nothing sits off-camera.
 
 const MESHY_DIR := "res://assets/models/meshy/"
 const PED_TOP := 0.5
 const SPACING := 2.8
+const GROUP_FIRST_FRAME := 70
+const GROUP_FRAME_STEP := 60
+
+var _n_groups := 4
+var _probe_dir := MESHY_DIR
 
 func _ready() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--dir="):
+			_probe_dir = arg.trim_prefix("--dir=")
+		elif arg.begins_with("--groups="):
+			_n_groups = maxi(1, int(arg.trim_prefix("--groups=")))
+
 	_build_env()
 	var cam := Camera3D.new()
 	add_child(cam)
@@ -17,13 +38,13 @@ func _ready() -> void:
 	# reference capsule: 1.8 m tall (radius 0.35 -> capsule total height 1.8)
 	_ref_capsule(Vector3(0, 0, 0))
 
-	var names := _glb_names()
-	print("PROBE: found %d GLBs: %s" % [names.size(), str(names)])
+	var names := _glb_names(_probe_dir)
+	print("PROBE: found %d GLBs in %s: %s" % [names.size(), _probe_dir, str(names)])
 
 	var x := SPACING
 	for n in names:
 		_pedestal(x)
-		var path := MESHY_DIR + n
+		var path := _probe_dir + n
 		var res := load(path)
 		if res == null:
 			print("PROBE_LOAD_FAIL ", n)
@@ -59,24 +80,27 @@ func _process(_dt: float) -> void:
 	if _cam == null:
 		return
 	_frame += 1
-	# camera passes for close-up shots
-	if _frame == 70:
-		_frame_group(0.25)
-	elif _frame == 130:
-		_frame_group(0.75)
-	elif _frame == 190:
-		_frame_group(0.5)
-	elif _frame == 250:
-		_frame_group(1.0)
+	# camera passes for close-up shots, swept left-to-right across the row in
+	# even midpoint fractions of the row width. Default _n_groups=4 still
+	# triggers at the same frames (70/130/190/250) prior batches used, just
+	# with an ascending left-to-right sweep instead of the old fixed zigzag
+	# order. Bigger batches pass --groups=N for tighter, more numerous
+	# close-ups so nothing sits off-camera on a long row.
+	var idx := _frame - GROUP_FIRST_FRAME
+	if idx >= 0 and idx % GROUP_FRAME_STEP == 0:
+		var gi := idx / GROUP_FRAME_STEP
+		if gi < _n_groups:
+			var t := (float(gi) + 0.5) / float(_n_groups)
+			_frame_group(t)
 
 func _frame_group(t: float) -> void:
 	var cx := _row_end * t
 	_cam.global_position = Vector3(cx, 1.8, 8.0)
 	_cam.look_at(Vector3(cx, 1.1, 0), Vector3.UP)
 
-func _glb_names() -> Array[String]:
+func _glb_names(dir: String) -> Array[String]:
 	var out: Array[String] = []
-	var d := DirAccess.open(MESHY_DIR)
+	var d := DirAccess.open(dir)
 	if d == null:
 		return out
 	d.list_dir_begin()
