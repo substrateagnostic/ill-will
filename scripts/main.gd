@@ -1036,8 +1036,8 @@ func debug_place_auto() -> void:
 func _is_bot(i: int) -> bool:
 	# ONLINE PHASE 3: a seat granted to a remote guest is neither bot nor local —
 	# it plays through intents, so it drops out of BOTH the bot driver and the
-	# local mouse. Offline _remote_seats is empty, so this is a no-op (byte-ident).
-	if _remote_seats.has(i):
+	# local mouse. Offline this is a no-op (no remote seats), so byte-identical.
+	if _is_remote(i):
 		return false
 	return _par_bot_all or (i >= 0 and PlayerInput.is_bot(i))
 
@@ -1303,12 +1303,21 @@ func _stage_kill(mode: String) -> void:
 # pass-through to debug_putt on the exact numbers).
 # ============================================================================
 
-## Decide the online posture from the --net flag par parsed in _ready. Returns
-## true ONLY for a joined guest (a render mirror), so _ready skips _start_round
-## and the sim never runs on the client. Host + offline return false (normal sim).
+## Decide the online posture. Standalone (--skipmenu) reads the --net flag par
+## parsed in _ready; embedded in the estate (no --net flag) it falls back to the
+## live NetSession role the shell already opened. Returns true ONLY for a guest
+## (a render mirror) so _ready skips _start_round and the sim never runs there.
+## Host + offline return false (normal sim). Offline NetSession reports neither
+## host nor client, so a couch run takes the normal path untouched.
 func _online_init() -> bool:
 	_self_net = get_tree().current_scene == self   # standalone (--skipmenu): par owns the pump
-	if _net_role == "host":
+	var role := _net_role
+	if role == "":
+		if NetSession.is_client():
+			role = "join"
+		elif NetSession.is_host():
+			role = "host"
+	if role == "host":
 		_enter_online_host()
 		# Standalone host holds in a short lobby so a guest can claim its chair
 		# before play — then the round starts on the first grant (or a timeout so a
@@ -1318,7 +1327,7 @@ func _online_init() -> bool:
 			_online_lobby_hold()
 			return true
 		return false
-	if _net_role == "join":
+	if role == "join":
 		_enter_mirror()
 		return true
 	return false
@@ -1483,7 +1492,9 @@ func _apply_putt_intent(seat: int, power: float, angle: float) -> void:
 	putt_controller.debug_putt(power, angle)
 
 func _is_remote(i: int) -> bool:
-	return _remote_seats.has(i)
+	# Standalone par tracks its own grants in _remote_seats; inside the estate the
+	# shell owns seat policy, so honor its NetSession map too. Offline: both empty.
+	return _remote_seats.has(i) or NetSession.is_seat_remote(i)
 
 func _is_local_human(i: int) -> bool:
 	return not _is_bot(i) and not _remote_seats.has(i)
