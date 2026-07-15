@@ -23,9 +23,28 @@ const STUN_TIME := 1.0                 # stunned 1s after being dropped (spec)
 const KNOCK_DECAY := 26.0
 const MODEL_YAW_OFFSET := 0.0          # KayKit adventurers face +Z; atan2(x,z) needs no flip
 
+# ---- EXPRESSIVE HOP (director's ruling, docs/design/16-jump-and-visibility.md) ----
+# Cosmetic-only bunny-hop, self-contained (reads PlayerInput "jump" directly,
+# like this file already reads nothing else — all its other input rides
+# greed.gd's _input_for() dict; jump is the one exception, kept local since it
+# doesn't touch any shared gameplay state). Refused while is_carrier (THIS is
+# the anthology's "while-carrying" game the ruling calls out by name), mid-
+# tackle-swing, mid-dash, mid-stun, or mid one-shot anim (cheer/etc). The
+# tackle range check is Y-ignorant by construction (_flat_dist, greed.gd:882-
+# 883, only ever reads x/z) so a hop can neither dodge nor land a tackle any
+# differently than being grounded — this refusal is about animation
+# cleanliness, not balance.
+const HOP_VY := 3.0
+const HOP_GRAVITY := 15.0              # softer than combat GRAVITY (24.0): a floaty arc
+const HOP_CD := 0.5
+const HOP_START_ANIM_T := 0.12
+const HOP_LAND_HOLD_T := 0.15
+const HOP_SQUASH_T := 0.1
+
 var player_index := 0
 var color := Color.WHITE
 var char_path := ""
+var is_bot := false
 
 var is_carrier := false
 var yaw := 0.0
@@ -39,6 +58,15 @@ var tackle_lock := 0.0
 var grab_hold := 0.0                   # progress toward a 0.6s grab
 var _move_intent := Vector2.ZERO
 var _knock := Vector3.ZERO
+
+# EXPRESSIVE HOP state (cosmetic only — never read by tackle/grab resolution)
+var _hopping := false
+var _hop_cd := 0.0
+var _hop_anim_t := 0.0
+var _hop_land_hold := 0.0
+var _hop_intro_t := -1000.0            # bots: one hop shortly after round start
+var _hop_after_win_t := -1000.0        # bots: one hop shortly after a bank (cheer())
+var _hop_rng := RandomNumberGenerator.new()
 
 var _pivot: Node3D
 var _anim: AnimationPlayer
@@ -82,7 +110,7 @@ func setup(index: int, col: Color, char_scene: String) -> void:
 		inst.scale = Vector3(_base_scale, _base_scale, _base_scale)
 		_pivot.add_child(inst)
 		_anim = inst.find_child("AnimationPlayer", true, false)
-		for a in ["Idle", "Running_A"]:
+		for a in ["Idle", "Running_A", "Jump_Idle"]:
 			if _anim and _anim.has_animation(a):
 				_anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
 
@@ -199,6 +227,7 @@ func setup(index: int, col: Color, char_scene: String) -> void:
 	add_child(_dash_ring)
 	_dash_ring.setup(color, 0.70, 0.60, 0.05, 0.9)
 
+	_hop_rng.seed = player_index * 977 + 269
 	_play("Idle")
 
 
@@ -217,6 +246,12 @@ func reset_for_round(pos: Vector3, face_yaw: float) -> void:
 	_knock = Vector3.ZERO
 	velocity = Vector3.ZERO
 	_anim_hold = 0.0
+	_hopping = false
+	_hop_cd = 0.0
+	_hop_anim_t = 0.0
+	_hop_land_hold = 0.0
+	_hop_after_win_t = -1000.0
+	_hop_intro_t = _hop_rng.randf_range(2.0, 6.0) if is_bot else -1000.0
 	set_carrier(false)
 	_grab_ring.visible = false
 	_stun_stars.emitting = false
@@ -346,6 +381,8 @@ func show_grab_progress(frac: float) -> void:
 
 func cheer() -> void:
 	_one_shot("Cheer", 3.0)
+	if is_bot:
+		_hop_after_win_t = _hop_rng.randf_range(3.2, 3.6)   # queued to fire after the Cheer hold clears
 
 
 ## Main per-physics-tick movement. Controller sets intents/actions first.
@@ -356,6 +393,39 @@ func tick_movement(delta: float) -> void:
 	dash_cd = maxf(0.0, dash_cd - delta)
 	tackle_lock = maxf(0.0, tackle_lock - delta)
 	_anim_hold = maxf(0.0, _anim_hold - delta)
+	_hop_cd = maxf(0.0, _hop_cd - delta)
+	_hop_land_hold = maxf(0.0, _hop_land_hold - delta)
+
+	# ---- EXPRESSIVE HOP trigger (see the const-block comment for the refusal
+	# rationale). Bots get a round-start hop and one shortly after cheer(); the
+	# intent latches (doesn't consume) once a timer crosses zero, so a bot that
+	# happens to be refused right then (e.g. mid-tackle-lock) still hops the
+	# moment it's free instead of silently losing the beat. -1000.0 is the
+	# "inactive/consumed" sentinel — only values above -900.0 are live timers.
+	var want_hop := false
+	if is_bot:
+		if _hop_intro_t > -900.0:
+			_hop_intro_t -= delta
+			if _hop_intro_t <= 0.0:
+				want_hop = true
+		if _hop_after_win_t > -900.0:
+			_hop_after_win_t -= delta
+			if _hop_after_win_t <= 0.0:
+				want_hop = true
+	else:
+		want_hop = PlayerInput.just_pressed(player_index, "jump")
+	if want_hop and not _hopping and _hop_cd <= 0.0 and not is_carrier \
+			and stun_t <= 0.0 and tackle_lock <= 0.0 and dash_t < 0.0 and _anim_hold <= 0.0:
+		_hopping = true
+		_hop_anim_t = HOP_START_ANIM_T
+		_hop_cd = HOP_CD
+		velocity.y = HOP_VY
+		Sfx.play("putt", -8.0)
+		if _hop_intro_t <= 0.0:
+			_hop_intro_t = -1000.0
+		if _hop_after_win_t <= 0.0:
+			_hop_after_win_t = -1000.0
+		print("GREED_HOP p=%d bot=%s frame=%d" % [player_index, str(is_bot), Engine.get_physics_frames()])
 
 	var horiz := Vector3.ZERO
 	var moving := false
@@ -382,14 +452,76 @@ func tick_movement(delta: float) -> void:
 
 	velocity.x = horiz.x
 	velocity.z = horiz.z
-	if is_on_floor():
+	if _hopping:
+		velocity.y -= HOP_GRAVITY * delta        # floaty bunny-hop arc, not combat GRAVITY
+	elif is_on_floor():
 		velocity.y = -1.0
 	else:
 		velocity.y -= GRAVITY * delta
 	move_and_slide()
 
+	if _hopping and is_on_floor() and velocity.y <= 0.0:
+		_hopping = false
+		_hop_land_hold = HOP_LAND_HOLD_T
+		_hop_land_fx()
+
 	_pivot.rotation.y = yaw + MODEL_YAW_OFFSET
-	_update_locomotion_anim(moving)
+	if _hopping:
+		if _hop_anim_t > 0.0:
+			_hop_anim_t -= delta
+			_play("Jump_Start")
+		else:
+			_play("Jump_Idle")
+	elif _hop_land_hold > 0.0:
+		_play("Jump_Land")
+	else:
+		_update_locomotion_anim(moving)
+
+
+## EXPRESSIVE HOP landing beat: squash-stretch (1.08 wide / 0.92 tall, 0.1s —
+## smaller than the HIT KIT's flash_pop above) + a tiny dust puff.
+func _hop_land_fx() -> void:
+	if _pivot == null:
+		return
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	_pivot.scale = Vector3(_base_scale * 1.08, _base_scale * 0.92, _base_scale * 1.08)
+	_squash_tw = create_tween()
+	_squash_tw.tween_property(_pivot, "scale", Vector3(_base_scale, _base_scale, _base_scale), HOP_SQUASH_T) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_spawn_hop_dust()
+
+
+func _spawn_hop_dust() -> void:
+	var p := CPUParticles3D.new()
+	p.emitting = false
+	p.one_shot = true
+	p.amount = 8
+	p.lifetime = 0.35
+	p.explosiveness = 0.9
+	p.direction = Vector3(0, 1, 0)
+	p.spread = 50.0
+	p.gravity = Vector3(0, -4.0, 0)
+	p.initial_velocity_min = 0.6
+	p.initial_velocity_max = 1.4
+	p.scale_amount_min = 0.06
+	p.scale_amount_max = 0.12
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.05
+	mesh.height = 0.1
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.75, 0.68, 0.55, 0.55)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	p.mesh.surface_set_material(0, mat)
+	add_child(p)
+	p.top_level = true         # decouple from the (possibly still-moving) body
+	p.global_position = global_position + Vector3(0, 0.05, 0)
+	p.emitting = true
+	get_tree().create_timer(p.lifetime + 0.3).timeout.connect(func():
+		if is_instance_valid(p):
+			p.queue_free())
 
 
 func apply_knock(dir: Vector3, power: float) -> void:
