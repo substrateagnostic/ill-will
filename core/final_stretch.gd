@@ -101,8 +101,17 @@ func tick(seconds_left: float) -> void:
 ## THE DECIDING MOMENT camera language (doc 09 §Q2): a fov punch-in synced to
 ## the game's own deep-freeze window. Real-time (ignores the freeze's
 ## time_scale) so the punch and the slow-mo resolve together. Reduced-motion
-## skips it entirely — the freeze depth is the caller's concern.
-static func fov_punch(cam: Camera3D, base_fov: float, depth := 6.0, dur := 0.8) -> void:
+## skips the PUNCH — the freeze depth is the caller's concern.
+##
+## THE ESTATE'S MEMORY: this is every game's shared deciding-moment chokepoint,
+## so it is also where the estate takes its picture. MomentScribe.capture is
+## fire-and-forget, throttled, real-time, and a no-op under headless — it grabs
+## the frame without touching the sim, so receipts stay byte-identical. It runs
+## BEFORE the reduced-motion gate: the moment is worth remembering even for a
+## player who has asked the camera to hold still. `context` names the still
+## (default THE DECIDING MOMENT) and rides into the newsreel's intertitle card.
+static func fov_punch(cam: Camera3D, base_fov: float, depth := 6.0, dur := 0.8, context := "") -> void:
+	MomentScribe.capture("deciding", context if context != "" else "THE DECIDING MOMENT", 3)
 	if cam == null or not motion_ok():
 		return
 	var tw := cam.create_tween()
