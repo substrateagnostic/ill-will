@@ -218,6 +218,41 @@ func _ready() -> void:
 						DirAccess.remove_absolute(ps + ".rrbak")
 					print("READYLOBBYTEST saves restored")
 					get_tree().quit()))
+		elif arg == "--playmenutest":
+			# Windowed proof: PLAY offers THE PROCESSION (featured) + the Deed-goal
+			# dial + CLASSIC NIGHTS.
+			get_tree().create_timer(1.2).timeout.connect(func():
+				_build_play_panel()
+				get_tree().create_timer(0.4).timeout.connect(func():
+					VerifyCapture.snap("play_menu")))
+		elif arg == "--proctest":
+			# Windowed proof: launch THE PROCESSION from the menu path with an
+			# all-bot table. Pair with --shots= to catch the board + a REVEAL.
+			get_tree().create_timer(1.0).timeout.connect(func():
+				for i in 4:
+					PlayerInput.set_bot(i, true)
+				_enter_procession())
+		elif arg == "--albumtest":
+			# Windowed proof: the FAMILY ALBUM gallery + its walk-up hotspot on the
+			# grounds. Self-contained backup/restore of the seats.
+			get_tree().create_timer(1.4).timeout.connect(func():
+				var ps := ProjectSettings.globalize_path("user://party_setup.json")
+				if FileAccess.file_exists(ps):
+					DirAccess.copy_absolute(ps, ps + ".albak")
+				_enter_lobby()
+				_enter_stroll()
+				if not walkers.is_empty():
+					walkers[0].global_position = Vector3(-6.6, 0.1, 2.2)
+				get_tree().create_timer(1.0).timeout.connect(func():
+					VerifyCapture.snap("album_hotspot")
+					get_tree().create_timer(0.6).timeout.connect(func():
+						_exit_stroll("album")
+						get_tree().create_timer(0.5).timeout.connect(func():
+							VerifyCapture.snap("album_panel")
+							if FileAccess.file_exists(ps + ".albak"):
+								DirAccess.copy_absolute(ps + ".albak", ps)
+								DirAccess.remove_absolute(ps + ".albak")
+							print("ALBUMTEST saves restored")))))
 	if "--skipmenu" in args:
 		Transition.change_scene("res://scenes/main.tscn")
 		return
@@ -272,6 +307,127 @@ func _play_pressed() -> void:
 	if EstateState.nights_played > 0:
 		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.2)
 	_enter_auction()
+
+## PLAY: the estate offers THE PROCESSION as tonight's featured rite (with the
+## Deed-goal dial), and the classic auctioned-minigame run as the alternative.
+func _build_play_panel() -> void:
+	phase = Phase.LOBBY
+	_hide_title()
+	Sfx.play("card")
+	_clear_panel("PLAY — how does the estate settle its debts tonight?", Color(1, 0.9, 0.5))
+	# --- THE PROCESSION: the featured night mode ---
+	var proc_btn := Button.new()
+	proc_btn.custom_minimum_size = Vector2(460, 78)
+	proc_btn.text = "THE PROCESSION"
+	proc_btn.add_theme_font_size_override("font_size", 30)
+	proc_btn.pressed.connect(_enter_procession)
+	var pc := CenterContainer.new()
+	pc.add_child(proc_btn)
+	phase_box.add_child(pc)
+	var proc_desc := Label.new()
+	proc_desc.text = "The funeral board: pawns putt the loop, the Codicil pays out Deeds, and the first to the goal inherits the manor."
+	proc_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	proc_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	proc_desc.custom_minimum_size = Vector2(660, 0)
+	proc_desc.add_theme_font_size_override("font_size", 15)
+	proc_desc.modulate.a = 0.8
+	phase_box.add_child(proc_desc)
+	# The Deed-goal dial (Short 4 / Full 6 / Vigil 9) — persisted like mg_rounds.
+	var dial_row := HBoxContainer.new()
+	dial_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	dial_row.add_theme_constant_override("separation", 10)
+	var dial_lbl := Label.new()
+	dial_lbl.text = "NIGHT LENGTH:"
+	dial_lbl.add_theme_font_size_override("font_size", 15)
+	dial_lbl.modulate.a = 0.85
+	dial_row.add_child(dial_lbl)
+	var dial := Button.new()
+	dial.custom_minimum_size = Vector2(220, 44)
+	dial.text = _deed_goal_label()
+	dial.pressed.connect(func():
+		Sfx.play("card")
+		_cycle_deed_goal()
+		dial.text = _deed_goal_label())
+	dial_row.add_child(dial)
+	phase_box.add_child(dial_row)
+	var spacer := Control.new()
+	spacer.custom_minimum_size = Vector2(0, 14)
+	phase_box.add_child(spacer)
+	# --- CLASSIC NIGHTS: the auctioned-minigame run, still selectable ---
+	var classic_btn := Button.new()
+	classic_btn.custom_minimum_size = Vector2(360, 52)
+	classic_btn.text = "CLASSIC NIGHTS"
+	classic_btn.pressed.connect(_play_pressed)
+	var cc := CenterContainer.new()
+	cc.add_child(classic_btn)
+	phase_box.add_child(cc)
+	var classic_desc := Label.new()
+	classic_desc.text = "Auctioned minigames, night after night, until someone climbs the trail and takes the manor."
+	classic_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	classic_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	classic_desc.custom_minimum_size = Vector2(660, 0)
+	classic_desc.add_theme_font_size_override("font_size", 14)
+	classic_desc.modulate.a = 0.65
+	phase_box.add_child(classic_desc)
+	var back := Button.new()
+	back.text = "BACK TO TITLE"
+	back.pressed.connect(_enter_title)
+	phase_box.add_child(back)
+
+## The Deed-goal dial: 4/6/9 = Short/Full/Vigil (doc 18/19), persisted in prefs.
+const DEED_GOALS := [4, 6, 9]
+
+func _deed_goal_label() -> String:
+	var g := clampi(int(PartySetup.pref("deed_goal", 4)), 4, 9)
+	var tier := "SHORT" if g <= 4 else ("FULL" if g <= 6 else "VIGIL")
+	return "%s  ·  %d deeds" % [tier, g]
+
+func _cycle_deed_goal() -> void:
+	var g := clampi(int(PartySetup.pref("deed_goal", 4)), 4, 9)
+	var idx: int = DEED_GOALS.find(g)
+	if idx < 0:
+		idx = 0
+	PartySetup.set_pref("deed_goal", DEED_GOALS[(idx + 1) % DEED_GOALS.size()])
+
+## Launch THE PROCESSION board mode (doc 19). The scene lives at the tree root
+## like a gamestate module (zombie-swept); it supplies its own camera, HUD and
+## environment, so the shell only hides its own overlays and folds home after.
+func _enter_procession() -> void:
+	phase = Phase.GAME
+	_net_set_ceremony({})
+	Music.stop()
+	_hide_title()
+	banner.visible = false
+	phase_panel.visible = false
+	$UI/TopBar.visible = false
+	_fill_empty_seats_with_bots()
+	PlayerInput.save_setup()
+	var proc: Node = load("res://estate/procession/procession.tscn").instantiate()
+	get_tree().root.add_child(proc)   # root, like a gamestate module (zombie-swept)
+	# Track it as the live module so the estate's bot-wander stays parked and the
+	# 20 Hz host mirror pump has a target (procession exposes _net_state()).
+	_module = proc
+	_net_game_name = "THE PROCESSION"
+	var roster: Array = []
+	for pl in EstateState.players:
+		roster.append({"index": pl.index, "name": pl.name, "color": pl.color,
+			"char_scene": CHAR_PATHS[pl.index], "device": PlayerInput.device_of(pl.index),
+			"bot": _is_bot(pl.index)})
+	proc.night_over.connect(func(_tally):
+		_module = null
+		_net_mirror_id = ""
+		if is_instance_valid(proc):
+			proc.queue_free()
+		cam.current = true
+		_enter_title(), CONNECT_ONE_SHOT)
+	proc.begin({"roster": roster, "seed": EstateState.rng.randi(),
+		"deed_goal": clampi(int(PartySetup.pref("deed_goal", 4)), 4, 9)})
+	# ONLINE PHASE 2: fan the board to guests through the existing 20 Hz module
+	# pump exactly as for a contract minigame (procession exposes _net_state).
+	if NetSession.is_host() and proc.has_method("_net_state"):
+		_net_mirror_id = "procession"
+		_net_module_seq = 0
+		_net_module_accum = 0.0
 
 ## NEW GAME / slot management: each slot is a whole estate universe.
 func _build_slot_panel() -> void:
@@ -381,7 +537,7 @@ func _enter_title() -> void:
 	play.text = "PLAY"
 	play.custom_minimum_size = Vector2(360, 92)
 	play.add_theme_font_size_override("font_size", 40)
-	play.pressed.connect(_play_pressed)
+	play.pressed.connect(_build_play_panel)
 	var pc := CenterContainer.new()
 	pc.add_child(play)
 	box.add_child(pc)
@@ -432,7 +588,7 @@ func _enter_title() -> void:
 	net_row.add_child(join_btn)
 	box.add_child(net_row)
 	var hint := Label.new()
-	hint.text = "PLAY = the full game — nights of minigames until someone takes the manor"
+	hint.text = "PLAY = tonight's rite — THE PROCESSION board, or classic auctioned minigame nights"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.modulate.a = 0.6
@@ -886,6 +1042,7 @@ const THEATER_GLB := "res://assets/models/meshy/theater_stage.glb"
 ## cleanup hides Grounds, so props must live there or they leak into
 ## minigame frames (Alex caught the Theater photobombing a game).
 func _spawn_executor() -> void:
+	_refresh_album_wall()               # the family album gallery is part of the grounds
 	if ResourceLoader.exists(THEATER_GLB):
 		var th := MeshyProp.instance(THEATER_GLB, 3.2, 205.0)
 		$Grounds.add_child(th)
@@ -913,6 +1070,21 @@ func _spawn_executor() -> void:
 	tag.outline_size = 10
 	$Grounds.add_child(tag)
 	tag.global_position = ex.global_position + Vector3(0, 2.15, 0)
+
+## THE ESTATE'S MEMORY: the walk-up family album gallery. Rebuilt each time the
+## grounds are set up (and after each night's newsreel) so freshly-archived
+## nights appear on the salon wall.
+var _album_wall: FamilyAlbumWall = null
+
+func _refresh_album_wall() -> void:
+	if _album_wall != null and is_instance_valid(_album_wall):
+		_album_wall.queue_free()
+	_album_wall = FamilyAlbumWall.new()
+	_album_wall.slot = EstateState.current_slot
+	$Grounds.add_child(_album_wall)
+	# A quiet corner of the grounds, angled toward the lawn.
+	_album_wall.global_position = Vector3(-6.6, 1.7, 2.2)
+	_album_wall.rotation.y = deg_to_rad(22)
 
 ## One Saki-voiced line for the lobby, drawn from the ledger's memory.
 func _executor_greeting() -> String:
@@ -1001,6 +1173,7 @@ func _select_walker(idx: int) -> void:
 const STROLL_SPOTS := [
 	{"name": "THE THEATER", "pos": Vector3(6.4, 0, -5.6), "r": 2.6, "act": "selector"},
 	{"name": "THE WARDROBE", "pos": Vector3(-3.0, 0, -2.2), "r": 2.2, "act": "wardrobe"},
+	{"name": "THE FAMILY ALBUM", "pos": Vector3(-6.6, 0, 2.2), "r": 2.4, "act": "album"},
 ]
 var _strolling := false
 
@@ -1020,6 +1193,8 @@ func _exit_stroll(open_act := "") -> void:
 			_enter_selector()
 		"wardrobe":
 			_build_wardrobe_panel()
+		"album":
+			_build_album_panel()
 		_:
 			if phase == Phase.GROUNDS:
 				_build_freeroam_panel()
@@ -1055,6 +1230,28 @@ func _poll_stroll() -> void:
 			Sfx.play("card")
 			_exit_stroll()
 			return
+
+## THE FAMILY ALBUM desk: the salon wall is the real exhibit; this panel is the
+## Executor's caption for it.
+func _build_album_panel() -> void:
+	_clear_panel("THE FAMILY ALBUM", Color(0.9, 0.85, 0.7))
+	var n := FamilyAlbumWall.entries(EstateState.current_slot).size()
+	var l := Label.new()
+	if n == 0:
+		l.text = "The estate has taken no portraits yet. Give it a night; it is patient, and it is watching."
+	else:
+		l.text = "%s hang in the salon. The estate remembers every face it has framed, and forgives none of them." % _plural_nights(n)
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.custom_minimum_size = Vector2(640, 0)
+	phase_box.add_child(l)
+	var btn := Button.new()
+	btn.text = "BACK TO THE GROUNDS"
+	btn.pressed.connect(_build_freeroam_panel)
+	phase_box.add_child(btn)
+
+func _plural_nights(n: int) -> String:
+	return "%d portrait%s" % [n, "" if n == 1 else "s"]
 
 var _join_held := {}
 
@@ -1538,6 +1735,7 @@ func _do_launch_game(id: String, practice := false) -> void:
 	Sfx.play("confirm")
 	var info: Dictionary = MODULES[id]
 	_net_game_name = String(info.name)
+	MomentScribe.note_game(id)          # label captures with the game id
 	var scene: PackedScene = load(info.scene)
 	_module = scene.instantiate()
 	$Grounds.visible = false
@@ -1582,6 +1780,7 @@ func _do_launch_game(id: String, practice := false) -> void:
 
 func _on_module_finished(results: Dictionary) -> void:
 	_net_mirror_id = ""   # ONLINE PHASE 2: guests' mirrors fold when this fact drops
+	MomentScribe.clear_game()           # back on the grounds
 	if _module:
 		_module.queue_free()
 		_module = null
@@ -1751,6 +1950,14 @@ func _night_ceremonies() -> void:
 	podium.queue_free()
 	cam.current = true
 	banner.visible = false
+	# THE ESTATE'S MEMORY: the night's newsreel plays before the will is read,
+	# then its stills are archived into the family album and the reel is reset.
+	var reel_moments := MomentScribe.night_moments()
+	if not reel_moments.is_empty():
+		await _play_newsreel(reel_moments)
+	FamilyAlbumWall.archive(reel_moments, EstateState.current_slot)
+	MomentScribe.clear_night()
+	_refresh_album_wall()               # rebuild the grounds gallery with tonight's frames
 	_enter_will_reading(champ)
 
 ## After the podium: the night's superlatives, read aloud like an
@@ -1787,6 +1994,19 @@ func _enter_will_reading(champ) -> void:
 		open_l.modulate.a = 0.0
 		open_l.self_modulate.a = 0.7
 		phase_box.add_child(open_l)
+	# THE GRUDGE LEDGER: the estate recalls a pattern or two from across the
+	# nights, in the same dry register as the will. These fade in with the
+	# award stagger below (they start at modulate.a == 0, like the award rows).
+	for cl in EstateState.chronicle_lines(2):
+		var chl := Label.new()
+		chl.text = String(cl)
+		chl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		chl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		chl.custom_minimum_size = Vector2(680, 0)
+		chl.add_theme_font_size_override("font_size", 15)
+		chl.add_theme_color_override("font_color", Color(0.75, 0.72, 0.85))
+		chl.modulate.a = 0.0
+		phase_box.add_child(chl)
 	# The superlative cards travel as composed lines — the guest's reading is
 	# word-for-word the couch's, sequenced by the same stagger.
 	_net_set_ceremony({"stage": "will", "champ": champ.index, "head": head.text,
@@ -1809,6 +2029,15 @@ func _enter_will_reading(champ) -> void:
 	phase_box.add_child(btn)
 	if _all_bots():
 		get_tree().create_timer(2.5).timeout.connect(_night_parade)
+
+## Host-side silent-film ceremony (net mirrors stay on the night_podium facts
+## until the will facts arrive — the newsreel is host-screen only this phase,
+## exactly like the minigames). Blocks until the reel finishes or is skipped.
+func _play_newsreel(moments: Array) -> void:
+	var done := [false]
+	Newsreel.play(moments, func(): done[0] = true)
+	while not done[0]:
+		await get_tree().process_frame
 
 var _parade_running := false
 
