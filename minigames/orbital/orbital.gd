@@ -366,10 +366,18 @@ func _build_static() -> void:
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.ambient_light_color = Color(0.30, 0.36, 0.50)
 	env.ambient_light_energy = 0.55
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# THE HOUSE LOOK -- light touch (core/env_kit.gd rationale): orbital keeps its
+	# bespoke starfield + planet-atmosphere space env, but adopts the house AGX
+	# tonemap so bright ball trails, ghost orbits and atmosphere shells roll off to
+	# COLOURED glow instead of clipping to a white smear (FILMIC's harsher
+	# shoulder). A hair of exposure compensates AGX's gentler curve; glow nudged up
+	# so the trails bloom a touch prouder. No preset swap -- the x-ray silhouettes
+	# and threat-ladder reads must stay exactly as approved.
+	env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	env.tonemap_exposure = 1.06
 	env.glow_enabled = true
-	env.glow_intensity = 0.9
-	env.glow_bloom = 0.12
+	env.glow_intensity = 1.0
+	env.glow_bloom = 0.15
 	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
 	wenv.environment = env
 	add_child(wenv)
