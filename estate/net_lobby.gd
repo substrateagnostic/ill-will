@@ -90,6 +90,13 @@ static func on_panel_intent(estate, seat: int, intent: Dictionary) -> void:
 				Sfx.play("card")
 				if estate.get_phase_name() == "LOBBY":
 					estate._build_lobby_panel()
+		"bid":
+			# A remote guest raises their own paddle at the auction (fix-list item
+			# 3): the SAME seat-parameterized handler the couch's buttons call,
+			# guarded to the live auction so a stray intent can't phantom-bid.
+			# _on_bid already refuses a raise the seat's grudge can't cover.
+			if estate.get_phase_name() == "AUCTION":
+				estate._on_bid(seat)
 
 ## 5 Hz lobby facts (reliable) + 15 Hz walker snapshots (unreliable_ordered).
 static func host_broadcast(estate, delta: float) -> void:
@@ -532,9 +539,24 @@ static func client_build_auction_rows(estate, auc: Dictionary) -> void:
 		if leader >= 0:
 			bid_l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[leader])
 		estate.phase_box.add_child(bid_l)
-		var note := Label.new()
-		note.text = "the couch holds the paddles tonight — your grudge is safe from your own thumb"
-		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		note.add_theme_font_size_override("font_size", 13)
-		note.modulate.a = 0.55
-		estate.phase_box.add_child(note)
+		# The guest's own paddle (fix-list item 3): a remote seat can now spend its
+		# grudge to steer which game the night picks, just like a couch seat. The
+		# raise rides the SAME panel-intent pipe as READY; the host runs _on_bid
+		# for this seat and the new high bid mirrors back on the next fact push.
+		var me := NetSession.my_seat()
+		if me >= 0:
+			var bid_btn := Button.new()
+			bid_btn.text = "RAISE TO %d♠" % (int(auc.get("high_bid", 0)) + 1)
+			bid_btn.custom_minimum_size = Vector2(260, 48)
+			bid_btn.pressed.connect(func():
+				Sfx.play("card")
+				NetSession.send_panel_intent({"kind": "bid"}))
+			var bc := CenterContainer.new()
+			bc.add_child(bid_btn)
+			estate.phase_box.add_child(bc)
+			var note := Label.new()
+			note.text = "raise the vendetta — your grudge steers which game the night picks"
+			note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			note.add_theme_font_size_override("font_size", 13)
+			note.modulate.a = 0.6
+			estate.phase_box.add_child(note)
