@@ -1012,35 +1012,21 @@ func _set_gold_stream(on: bool) -> void:
 # stage
 # =====================================================================
 func _build_stage() -> void:
-	var we: WorldEnvironment = $WorldEnvironment
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.06, 0.04, 0.05)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.62, 0.5, 0.42)
-	env.ambient_light_energy = 0.7
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
-	env.glow_intensity = 0.8
-	env.glow_bloom = 0.22
-	env.glow_hdr_threshold = 0.85
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.12, 0.07, 0.06)
-	env.fog_density = 0.012
-	env.fog_sky_affect = 0.0
-	we.environment = env
+	# THE HOUSE LOOK — CANDLELIT great-hall (core/env_kit.gd). One soft amber key
+	# rakes the dais for deep, moody shadow falloff; the four corner torches (built
+	# below, kept + flickered in _process) do the warm pool work. Near-black
+	# surround + high-threshold glow bloom the torch flames and gold-decree fx, not
+	# the walls. Replaces the old flat filmic env + hand-rolled sun.
+	EnvKit.apply(self, EnvKit.CANDLELIT, {
+		"key_energy": 0.72,
+		"key_angle": Vector3(-52.0, -28.0, 0.0),   # keep the old sun's shadow direction
+		"ambient_energy": 0.40,       # corners fall darker so the 4 torches pool
+		"glow_intensity": 0.80,       # let the torch flames bloom prouder
+	})
 
 	cam.global_position = Vector3(0, 10.6, 11.3)
 	cam.look_at(Vector3(0, 1.15, -0.35), Vector3.UP)
 	cam.fov = 49.0
-
-	var sun := DirectionalLight3D.new()
-	sun.name = "Sun"
-	add_child(sun)
-	sun.rotation_degrees = Vector3(-52.0, -28.0, 0.0)
-	sun.light_energy = 0.9
-	sun.light_color = Color(1.0, 0.86, 0.66)
-	sun.shadow_enabled = true
 
 	_build_floor()
 	_build_carpet()

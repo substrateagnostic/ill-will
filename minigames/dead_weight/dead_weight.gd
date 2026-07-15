@@ -67,6 +67,8 @@ var _evict_pin := -1                  # --dwevict=N (evidence pin, --seancechar
                                       # never set in real play.
 var _env: Environment = null          # stage refs for the candlelight dim (fx)
 var _sun: DirectionalLight3D = null
+var _base_ambient := 0.44             # EnvKit CANDLELIT base — THE HOUSE AWAKENS
+var _base_sun := 1.05                 # dims RELATIVE to these, restores TO them
 var _dim_tw: Tween = null
 var _candle_root: Node3D = null
 var _candle_lights: Array = []
@@ -126,56 +128,26 @@ func _ready() -> void:
 
 # ---------------------------------------------------------------- stage
 func _build_stage() -> void:
-	# House diorama look (matches mower/greed): warm dim "attic room" surround,
-	# soft warm ambient, filmic tonemap, gentle glow. No void-black, no cold fog.
-	var we: WorldEnvironment = $WorldEnvironment
-	var env := Environment.new()
-	# dark warm room (like greed's vault): the surround recedes so the lit arena
-	# is the hero, not a flat brown flood.
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.09, 0.07, 0.07)
-	sky_mat.sky_horizon_color = Color(0.17, 0.12, 0.09)
-	sky_mat.ground_horizon_color = Color(0.13, 0.09, 0.07)
-	sky_mat.ground_bottom_color = Color(0.08, 0.06, 0.05)
-	sky_mat.sun_angle_max = 30.0
-	sky_mat.energy_multiplier = 1.0
-	var sky := Sky.new()
-	sky.sky_material = sky_mat
-	env.background_mode = Environment.BG_SKY
-	env.sky = sky
-	# soft warm ambient (was cool purple); COLOR source keeps it controllable
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.55, 0.47, 0.40)
-	env.ambient_light_energy = 0.62
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
-	env.glow_intensity = 0.55
-	env.glow_bloom = 0.12
-	env.glow_hdr_threshold = 0.95
-	we.environment = env
-	_env = env
+	# THE HOUSE LOOK — CANDLELIT attic (core/env_kit.gd). A warm amber key rakes
+	# the diorama for deep shadow falloff, strong SSAO grounds the furniture, and
+	# dust motes drift in the still air. The base state is already candlelit; THE
+	# HOUSE AWAKENS (_dim_to_candlelight) drops it FURTHER and guts four corner
+	# candles to life. Keep refs to the env + key so that dim can tween them.
+	var rig := EnvKit.apply(self, EnvKit.CANDLELIT, {
+		"key_angle": Vector3(-56.0, -34.0, 0.0),   # keep the old sun's shadow direction
+		"key_energy": 1.05,
+		"ambient_energy": 0.44,
+	})
+	_env = rig["environment"]
+	_sun = rig["key"]
+	_base_ambient = _env.ambient_light_energy
+	_base_sun = _sun.light_energy
+	# slow dust motes over the play slab (fx-cheap; ~46 additive particles)
+	EnvKit.add_dust_motes(self, Vector3(12, 5, 12), Vector3(0, 4.4, 0))
 
 	cam.global_position = Vector3(0, 13.5, 11.5)
 	cam.look_at(Vector3(0, 0.3, -0.4), Vector3.UP)
 	cam.fov = 52.0
-
-	# warm directional sun with shadows (house key light)
-	var sun := DirectionalLight3D.new()
-	sun.name = "Sun"
-	add_child(sun)
-	sun.rotation_degrees = Vector3(-56.0, -34.0, 0.0)
-	sun.light_energy = 1.25
-	sun.light_color = Color(1.0, 0.93, 0.8)
-	sun.shadow_enabled = true
-	_sun = sun
-
-	# warm bounce fill (was cool blue — the last cold accent)
-	var fill := DirectionalLight3D.new()
-	fill.name = "Fill"
-	add_child(fill)
-	fill.rotation_degrees = Vector3(-24.0, 140.0, 0.0)
-	fill.light_energy = 0.35
-	fill.light_color = Color(0.92, 0.76, 0.58)
 
 	# floor: 12x12 platform with nothing beyond the lip — walk off, you fall
 	var floor_body := StaticBody3D.new()
@@ -968,9 +940,10 @@ func _dim_to_candlelight() -> void:
 			_dim_tw.kill()
 		_dim_tw = create_tween()
 		_dim_tw.set_parallel(true)
-		_dim_tw.tween_property(_env, "ambient_light_energy", 0.40, 1.4)
+		# drop RELATIVE to the EnvKit base so the mood deepens regardless of preset tuning
+		_dim_tw.tween_property(_env, "ambient_light_energy", _base_ambient * 0.65, 1.4)
 		if _sun != null:
-			_dim_tw.tween_property(_sun, "light_energy", 0.85, 1.4)
+			_dim_tw.tween_property(_sun, "light_energy", _base_sun * 0.68, 1.4)
 	_candle_root = Node3D.new()
 	_candle_root.name = "Candles"
 	add_child(_candle_root)
@@ -1021,9 +994,9 @@ func _house_asleep() -> void:
 	_candle_root = null
 	_candle_lights.clear()
 	if fx_on() and _env != null:
-		_env.ambient_light_energy = 0.62
+		_env.ambient_light_energy = _base_ambient
 		if _sun != null:
-			_sun.light_energy = 1.25
+			_sun.light_energy = _base_sun
 
 ## Candle gutter — visual only, fx-gated, global randf (never the seeded rng).
 func _process(_delta: float) -> void:
