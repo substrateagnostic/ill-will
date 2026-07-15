@@ -51,6 +51,23 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     rides the kit via a signal seam (its turf saturation still animates in
     lockstep). Nits queued for wave 2: card/hint-bar notation consistency,
     a banner-stacking beat, always list all 4 seats.
+  - ✅ **HOST-PAUSE BUG DEAD + GUEST BIDDING** (merge f6b4b35): root cause
+    was NOT a dropped connection — the 20Hz pump rode the estate's pausable
+    _process. Now: pause is announced over the always-polled socket; guests
+    get a curtain ("THE HOST HAS PAUSED — the estate holds its breath —
+    your seat is held"); resume is digest-verified in sync; guest ESC no
+    longer streams raw input while in their own settings. BONUS: remote
+    guests can now BID in the auction (RAISE paddle — "The Executor accepts
+    grudge, resentment, and exact change."). A long-standing known-open
+    (remote bidding) is closed.
+  - ✅ **PAR IS ONLINE — 14/14 ACROSS THE WIRE** (merge f6b4b35): the crown
+    jewel crossed last. All putts/trap-builds now flow through seat-
+    attributed intents into the frozen debug_putt entry point; couch
+    receipts byte-identical (fairway5 168 lines, widows13 231 lines,
+    diffed line-for-line); a remote guest placed a trap, putted 7 strokes,
+    and watched GOLD'S THE CRUSHER — SIGNED WORK killcam mirrored on their
+    screen. Two small estate-side snippets remain (doc 22 §7) — director
+    applies them after the last UI lane merges.
   - ✅ **THE CRITICAL PATH: SPLIT + INPUT 2.0 + INTEGRATIONS** (merge
     76dde67): estate.gd 3375→2702 lines (monuments/wardrobe/howto/net-lobby
     extracted to modules). **INPUT 2.0 live:** press-A-to-join + READY
