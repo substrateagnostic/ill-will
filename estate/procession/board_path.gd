@@ -11,7 +11,7 @@ extends Node3D
 ## prop or a trail-stone primitive, so the drive always renders.
 
 const SPACES := 24
-const S := ProcessionBoardSpaces
+const S := preload("res://estate/procession/board_spaces.gd")
 
 ## Fixed base layout — 24 stones, effects all visible (board_spaces.TABLE).
 ## Counts: 6 SHRINE · 5 WEEPING GRAVE · 3 STALL · 1 CODICIL(home) · 2 SÉANCE ·

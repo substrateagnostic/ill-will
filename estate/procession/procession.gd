@@ -19,8 +19,8 @@ const BoardPath := preload("res://estate/procession/board_path.gd")
 const PawnPutt := preload("res://estate/procession/pawn_putt.gd")
 const Codicil := preload("res://estate/procession/codicil.gd")
 const Executor := preload("res://estate/procession/executor_host.gd")
-const Spaces := ProcessionBoardSpaces
-const Presets := ProcessionPresets
+const Spaces := preload("res://estate/procession/board_spaces.gd")
+const Presets := preload("res://estate/procession/presets.gd")
 
 const CHAR_SCENES := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -68,16 +68,20 @@ var _fast := false
 var _minisim := true
 var _mirror := false
 var _preset_explicit := false
+var _capture := false            # windowed: pose beats + snap for screenshots
 var _phase := "boot"
+var _round_codicil_seat := -1   # who claims the Codicil this round (pass-or-land)
 
-# ---- nodes ----
-var board: Node3D
-var putt: Node
-var codicil: Node
-var executor: Node
+# ---- nodes ---- (concrete types so method returns infer without annotation)
+var board: ProcessionBoardPath
+var putt: ProcessionPawnPutt
+var codicil: ProcessionCodicil
+var executor: ProcessionExecutor
 var cam: Camera3D
 var final_kit: Node
 var _ui: CanvasLayer
+var _topbar: Control
+var _chiprow: Control
 var _reveal: RichTextLabel
 var _announce: Label
 var _round_lbl: Label
@@ -111,6 +115,7 @@ func _autostart() -> void:
 func _boot(config: Dictionary) -> void:
 	_parse_cli()
 	_mirror = NetSession.is_client()
+	_capture = _autoplay and DisplayServer.get_name() != "headless"
 	if config.has("seed"):
 		seed_value = int(config.seed)
 	if config.has("deed_goal"):
@@ -130,6 +135,11 @@ func _boot(config: Dictionary) -> void:
 	_build_world()
 	_build_hud()
 	_choose_clauses()
+	# The soak compresses real time: pawn_putt is frame/tick-based, so a higher
+	# time_scale changes only how fast the same ticks elapse — the tally stays
+	# byte-identical. Interactive/windowed play runs at 1.0.
+	if _autoplay and _fast:
+		Engine.time_scale = 8.0
 	print("PROCESSION boot seed=%d preset=%s deed_goal=%d players=%d autoplay=%s minisim=%s" % [
 		seed_value, preset_id, deed_goal, roster.size(), str(_autoplay), str(_minisim)])
 	_run_night()
@@ -206,7 +216,9 @@ func _build_world() -> void:
 
 	board = BoardPath.new()
 	add_child(board)
-	board.build(roster, EstateState.monuments)
+	# The soak ignores the persistent monument set so the receipt is independent
+	# of whatever the user's save happens to hold; real play reads the estate.
+	board.build(roster, [] if _autoplay else EstateState.monuments)
 
 	codicil = Codicil.new()
 	add_child(codicil)
@@ -236,6 +248,7 @@ func _build_hud() -> void:
 	top.offset_left = 18
 	top.offset_right = -18
 	_ui.add_child(top)
+	_topbar = top
 
 	_round_lbl = _chip_label("ROUND 0", 30, Color(0.92, 0.9, 0.98))
 	top.add_child(_round_lbl)
@@ -251,6 +264,7 @@ func _build_hud() -> void:
 	chiprow.add_theme_constant_override("separation", 22)
 	chiprow.offset_bottom = -14
 	_ui.add_child(chiprow)
+	_chiprow = chiprow
 	_chips.clear()
 	for i in roster.size():
 		var panel := PanelContainer.new()
@@ -391,26 +405,36 @@ func _run_night() -> void:
 
 func _intro() -> void:
 	Music.play_slot("grounds")
-	_announce_text("THE PROCESSION\n%s" % Presets.get_preset(preset_id).get("label", "SHORT PROCESSION"),
-		Color(1, 0.9, 0.5))
+	# --- Establishing flyover: a wide raked view of the whole drive, greeting
+	# in the executor banner, no clause text yet (they don't overlap). ---
+	var establish := Vector3(0, 27, 31)
+	cam.global_position = establish
+	cam.look_at(board.CENTER, Vector3.UP)
 	executor.say(Executor.pick(Executor.GREETING, rng), Color(0.9, 0.88, 0.98))
-	# A slow orbit of the whole drive so the table reads the board once.
 	if not _fast:
 		var tw := cam.create_tween()
 		for a in range(0, 5):
 			var ang := TAU * float(a) / 5.0
-			var p := board.CENTER + Vector3(cos(ang) * 26.0, 22.0, sin(ang) * 26.0)
+			var p := board.CENTER + Vector3(cos(ang) * 27.0, 23.0, sin(ang) * 27.0)
 			tw.tween_property(cam, "global_position", p, 0.7)
 		await tw.finished
-		cam.global_position = _cam_home
-		cam.look_at(board.CENTER, Vector3.UP)
-	VerifyCapture.snap("flyover")
-	# The clauses are read BEFORE a single putt — nothing hidden decides.
+	if _capture:
+		await _cap_snap("flyover")
+	else:
+		VerifyCapture.snap("flyover")
+	await _beat(1.6)
+	# --- The will clauses, read BEFORE a single putt — nothing hidden decides. ---
+	executor.clear_banner()
+	cam.global_position = _cam_home
+	cam.look_at(board.CENTER, Vector3.UP)
 	var lines: Array[String] = []
 	for c in clauses:
 		lines.append("◆ %s — +1 Deed to whoever %s" % [c.title, c.desc])
 	_announce_text("TONIGHT'S WILL CLAUSES\n\n" + "\n".join(lines), Color(0.85, 0.78, 1.0))
-	VerifyCapture.snap("will_clause")
+	if _capture:
+		await _cap_snap("will_clause")
+	else:
+		VerifyCapture.snap("will_clause")
 	await _beat(3.0)
 	_hide_announce()
 	executor.clear_banner()
@@ -419,9 +443,16 @@ func _round() -> void:
 	_phase = "roll"
 	_hide_announce()
 	# --- ROLL: all live pawns putt at once (own corner meter). ---
+	# Windowed capture: pose the four corner meters mid-charge for a clean shot
+	# before the live roll (the fast soak resolves a real roll in a few frames).
+	if _capture and round_num == 1:
+		putt.stage_midcharge([0.42, 0.58, 0.50, 0.64])
+		await _cap_snap("putt_meters")
+		putt.end_roll_visuals()
 	var targets := _bot_targets()
 	putt.begin_roll(targets, rng)
-	VerifyCapture.snap("putt_meters")
+	if not _capture:
+		VerifyCapture.snap("putt_meters")
 	var results: Array = await putt.all_released
 	putt.end_roll_visuals()
 	# spaces per seat, adjusted by held items (announced when spent).
@@ -437,6 +468,15 @@ func _round() -> void:
 	# --- MOVE: every pawn travels at once; whole-board camera. ---
 	_phase = "move"
 	executor.reset_camera(_cam_home, board.CENTER, 0.35 if not _fast else 0.0)
+	# The Codicil is a moving target you REACH: the first pawn (by seat) whose
+	# hop passes OR lands on the beacon this round, and can afford it, claims it.
+	# Resolved as that seat's REVEAL beat; relocation happens on the claim.
+	_round_codicil_seat = -1
+	for i in roster.size():
+		if _path_crosses(positions[i], moved[i], board.beacon_index) \
+				and grudge[i] >= codicil.price_for(deeds[i]):
+			_round_codicil_seat = i
+			break
 	var tweens: Array = []
 	for i in roster.size():
 		_pay_passthrough_tolls(i, positions[i], moved[i])
@@ -477,7 +517,7 @@ func _bot_targets() -> Array[int]:
 		for n in range(1, 7):
 			var idx := posmod(positions[i] + n, BoardPath.SPACES)
 			var v: float = Spaces.bot_value(board.type_at(idx))
-			if board.is_codicil_here(idx) and grudge[i] >= codicil.price_for(deeds[i]):
+			if _path_crosses(positions[i], n, board.beacon_index) and grudge[i] >= codicil.price_for(deeds[i]):
 				v = Spaces.bot_value(Spaces.CODICIL)
 			v += rng.randf_range(-0.6, 0.6)
 			if v > best_v:
@@ -524,7 +564,7 @@ func _reveal_landing(seat: int) -> void:
 		executor.push_to(board.reveal_anchor(idx), board.pawns[seat].global_position)
 	var col: Color = roster[seat].color
 	var name := String(roster[seat].name)
-	if board.is_codicil_here(idx):
+	if seat == _round_codicil_seat:
 		_resolve_codicil(seat)
 	else:
 		match board.type_at(idx):
@@ -537,7 +577,13 @@ func _reveal_landing(seat: int) -> void:
 			_: executor.say(Executor.pick(Executor.BLANK, rng, [name]), col)
 	_refresh_hud()
 	_push_net()
-	VerifyCapture.snap("reveal")
+	if seat == _round_codicil_seat:
+		if _capture:
+			await _cap_snap("codicil")
+		else:
+			VerifyCapture.snap("codicil")
+	else:
+		VerifyCapture.snap("reveal")
 	await _beat(REVEAL_BEAT)
 
 # ---- per-space resolutions ----
@@ -673,6 +719,14 @@ func _ring_dist(a: int, b: int) -> int:
 	var raw: int = abs(a - b)
 	return mini(raw, BoardPath.SPACES - raw)
 
+## Does a hop of `moved` from `from_idx` pass over OR land on `target` (the
+## Codicil beacon)? A move of 0 never reaches anything.
+func _path_crosses(from_idx: int, moved: int, target: int) -> bool:
+	for step in range(1, moved + 1):
+		if posmod(from_idx + step, BoardPath.SPACES) == target:
+			return true
+	return false
+
 func _stake_for(seat: int) -> int:
 	if bool(roster[seat].bot):
 		return clampi(rng.randi_range(0, 3), 0, grudge[seat])
@@ -706,7 +760,7 @@ func _minigame_block() -> void:
 			"black_ribbon":
 				var lead := _deed_leader(i)
 				if lead >= 0: items[lead].ribbon += 1
-	var mid := CONTRACT_POOL[rng.randi_range(0, CONTRACT_POOL.size() - 1)]
+	var mid: String = CONTRACT_POOL[rng.randi_range(0, CONTRACT_POOL.size() - 1)]
 	_announce_text("THE WAKE PAUSES FOR A GAME\n%s" % mid.to_upper(), Color(0.8, 0.9, 1.0))
 	await _beat(1.6)
 	_hide_announce()
@@ -716,10 +770,10 @@ func _minigame_block() -> void:
 	var lines: Array[String] = []
 	for rank in placements.size():
 		var p := int(placements[rank])
-		var pay := POINTS[rank] if rank < POINTS.size() else 0
+		var pay: int = POINTS[rank] if rank < POINTS.size() else 0
 		grudge[p] += pay
 		if not decision_layer:
-			var adv := POINTS[rank] if rank < POINTS.size() else 0
+			var adv: int = POINTS[rank] if rank < POINTS.size() else 0
 			moved_total[p] += adv
 			positions[p] = posmod(positions[p] + adv, BoardPath.SPACES)
 			board.seat_pawn(p, positions[p])
@@ -845,9 +899,14 @@ func _will_reading() -> void:
 				c.title, roster[winner_seat].name, c.desc, deeds[winner_seat]])
 		else:
 			lines.append("%s — unclaimed. The estate keeps the Deed." % c.title)
+	# Clear the executor's opening line so it does not sit behind the card.
+	executor.clear_banner()
 	_announce_text("THE READING OF THE WILL\n\n" + "\n".join(lines), Color(0.85, 0.78, 1.0))
 	_refresh_hud()
-	VerifyCapture.snap("will_reading")
+	if _capture:
+		await _cap_snap("will_reading")
+	else:
+		VerifyCapture.snap("will_reading")
 	await _beat(3.4)
 	_hide_announce()
 
@@ -863,16 +922,19 @@ func _heir_crowned() -> void:
 	_phase = "heir"
 	winner = _final_winner()
 	# The heir is written to the estate as a permanent monument (kind="heir").
+	# Skipped under the autoplay SOAK so the verification stays save-independent
+	# and byte-identical run to run (real play / the estate merge always writes).
 	var pl: Dictionary = roster[winner]
-	EstateState.monuments.append({
-		"owner": String(pl.name),
-		"color": Color(pl.color).to_html(),
-		"label": "%s — HEIR OF THE PROCESSION (◆%d, seed %d)" % [pl.name, deeds[winner], seed_value],
-		"night": EstateState.nights_played,
-		"kind": "heir",
-	})
-	EstateState.add_graffiti("%s inherited the manor at the procession" % pl.name)
-	EstateState.save_estate()
+	if not _autoplay:
+		EstateState.monuments.append({
+			"owner": String(pl.name),
+			"color": Color(pl.color).to_html(),
+			"label": "%s — HEIR OF THE PROCESSION (◆%d, seed %d)" % [pl.name, deeds[winner], seed_value],
+			"night": EstateState.nights_played,
+			"kind": "heir",
+		})
+		EstateState.add_graffiti("%s inherited the manor at the procession" % pl.name)
+		EstateState.save_estate()
 	Music.play_slot("ceremony")
 	var podium := Podium.new()
 	add_child(podium)
@@ -882,16 +944,24 @@ func _heir_crowned() -> void:
 		var p := int(order[rank])
 		entries.append({"name": roster[p].name, "color": roster[p].color, "rank": rank,
 			"char_scene": load(CHAR_SCENES[p % CHAR_SCENES.size()]), "player": p})
-	_ui.visible = false
+	# Hide the board HUD (chips/top bar/reveal) but KEEP the announce layer so the
+	# crown banner reads over the podium.
+	_topbar.visible = false
+	_chiprow.visible = false
+	_reveal.visible = false
 	podium.stage_entries(entries)
 	_announce_text("%s IS CROWNED HEIR\n◆%d DEEDS · SEED %d" % [pl.name, deeds[winner], seed_value],
 		Color(pl.color))
 	_announce.visible = true
-	VerifyCapture.snap("heir_crowned")
-	await _beat(4.0 if not _fast else 0.2)
+	if _capture:
+		await _cap_snap("heir_crowned")
+	else:
+		VerifyCapture.snap("heir_crowned")
+	await _beat(6.0 if not _fast else 0.2)
 	if is_instance_valid(podium):
 		podium.queue_free()
-	_ui.visible = true
+	_topbar.visible = true
+	_chiprow.visible = true
 
 func _final_winner() -> int:
 	return int(_final_order()[0])
@@ -942,6 +1012,13 @@ func _beat(seconds: float) -> void:
 			return
 		await get_tree().process_frame
 		t += get_process_delta_time()
+
+## Windowed capture: let a couple of frames render so tweens/labels settle,
+## then snap. Inert in headless (VerifyCapture.snap no-ops without a viewport).
+func _cap_snap(tag: String) -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	VerifyCapture.snap(tag)
 
 func _all_press_skip() -> bool:
 	var humans := 0

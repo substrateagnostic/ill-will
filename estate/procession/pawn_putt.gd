@@ -261,20 +261,28 @@ func _clear_meters() -> void:
 	meters.clear()
 
 func _place_meter(m: Control, i: int) -> void:
+	# Anchor each meter to its own screen corner and pin its box with explicit
+	# offsets. (set_anchors_and_offsets_preset + position fought each other and
+	# threw seats 1–3 off-screen — only seat 0 rendered.)
+	var w := 302.0
+	var h := 102.0
+	var mx := 26.0
+	var my := 118.0
 	match i:
-		0:
-			m.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
-			m.position = Vector2(26, 126)
-		1:
-			m.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-			m.position = Vector2(-328, 126)
-		2:
-			m.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_LEFT)
-			m.position = Vector2(26, -146)
-		_:
-			m.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT)
-			m.position = Vector2(-328, -146)
-	m.size = Vector2(302, 102)
+		0:  # top-left
+			m.anchor_left = 0.0; m.anchor_right = 0.0; m.anchor_top = 0.0; m.anchor_bottom = 0.0
+			m.offset_left = mx; m.offset_top = my
+		1:  # top-right
+			m.anchor_left = 1.0; m.anchor_right = 1.0; m.anchor_top = 0.0; m.anchor_bottom = 0.0
+			m.offset_left = -mx - w; m.offset_top = my
+		2:  # bottom-left
+			m.anchor_left = 0.0; m.anchor_right = 0.0; m.anchor_top = 1.0; m.anchor_bottom = 1.0
+			m.offset_left = mx; m.offset_top = -my - h
+		_:  # bottom-right
+			m.anchor_left = 1.0; m.anchor_right = 1.0; m.anchor_top = 1.0; m.anchor_bottom = 1.0
+			m.offset_left = -mx - w; m.offset_top = -my - h
+	m.offset_right = m.offset_left + w
+	m.offset_bottom = m.offset_top + h
 
 func _net_state() -> Dictionary:
 	return {"active": active, "tick": roll_tick, "ratios": ratios.duplicate(),
