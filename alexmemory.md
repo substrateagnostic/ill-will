@@ -39,7 +39,33 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     code), plus occluded-ball ghost dots. Camera/minimap/transparency
     approaches ruled out for control-frame and clutter reasons (doc 16).
   - **CODEX NOTE:** account rejected model 'codex-5.6-sol'; lanes rerun on
-    the CLI default model.
+    the CLI default model (your correction to gpt-5.6-sol applied for later
+    lanes).
+
+  **MERGED (night 4):**
+  - ✅ **AAA UI KIT (results half)** (merge b1cbeab): core/ui_kit/ —
+    ResultsBoard (freeze → count-up rows → protected winner beat, hold-A
+    skip), IntroCard (Mario Party-style load card w/ real bindings + READY
+    ring), TransitionWipe (iris/curtain), HudStrip (player chips, lead
+    pulse). Mower + tilt adopted as exemplars; mower's Splatoon tally now
+    rides the kit via a signal seam (its turf saturation still animates in
+    lockstep). Nits queued for wave 2: card/hint-bar notation consistency,
+    a banner-stacking beat, always list all 4 seats.
+  - ✅ **LOOK-DEV: EnvKit house look** (merge 75a2c40): core/env_kit.gd —
+    AGX tonemap + MOONLIT/CANDLELIT/STAGELIT presets (one shadowed key
+    light, glow-on-emissives, SSAO, fog; 60fps held). Applied: echo
+    (STAGELIT — the ghosts perform in a dark theater), throne + dead_weight
+    (CANDLELIT, dust motes in the attic; HOUSE AWAKENS dim survives).
+    Before/afters in the worktree verify_out/lookdev/. Director's nit sent
+    back: echo's gold ring lost heat under AGX — fix in flight with the
+    sweep to the remaining 9 games.
+  - ✅ **ORBITAL FAIRNESS FIX** (merge 7c8c4c1): occluded pawns now show
+    identity-colored x-ray silhouettes through planets (skinned-mesh
+    duplicates, occlusion-gated by an analytic ray-vs-sphere test — no
+    always-on tint wash); occluded balls get a pale ghost dot (suppressed
+    while held). Sim untouched: seed-7 bot receipt byte-identical to
+    baseline. Try it: humans and bots finally see the same game. Demo:
+    `godot --path . res://minigames/orbital/orbital.tscn -- --orbtest=xray`
 
 - **☀️☀️☀️ MORNING MENU #3 — THE FINAL FABLE MORNING. Read this one.**
   The overnight run delivered EVERYTHING on the board. Headlines:
