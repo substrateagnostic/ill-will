@@ -237,6 +237,33 @@ func _default_config() -> Dictionary:
 		})
 	return {"roster": roster, "rounds": 1, "rng_seed": _seed_from_args(), "practice": false}
 
+# ui_kit intro card (doc 14 nit 7): shown at load, real key fallback, auto-starts
+# after 6s so bot soaks flow through.
+const GAME_INTRO := {
+	"name": "THE THRONE",
+	"goal": "Whoever SITS scores every second but can't move. Gang up, drain their GRIP, fling them off.",
+	"accent": Color(0.9, 0.75, 0.3),
+	"controls": [
+		{"action": "move", "label": "MOVE"},
+		{"action": "a", "label": "SHOVE / DECREE"},
+		{"action": "b", "label": "DASH / GUARD"},
+	],
+	"tips": [
+		"On the throne: DECREE blasts the room and SUMMON a guard — but you're rooted.",
+		"Off the throne: dash in, shove the king off, and take the seat.",
+		"Longest total reign wins, not whoever sits last.",
+	],
+}
+
+## ui_kit intro card, then the callback. Feature-detected; ≤5-line hook (nit 7).
+func _intro_then(cb: Callable) -> void:
+	var card := IntroCard.new()
+	add_child(card)
+	card.started.connect(cb)
+	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	spec["seats"] = _human_seats()
+	card.present(spec)
+
 func begin(config: Dictionary) -> void:
 	_begin(config)
 
@@ -312,9 +339,13 @@ func _begin(config: Dictionary) -> void:
 		return
 	print("THRONE_BEGIN players=%d seed=%d bots=%s balance=%s" % [
 		players.size(), int(config.get("rng_seed", 1)), str(bot_enabled), str(_balance)])
-	_start_match()
-	if _hitkit_cap:
-		_run_hitkit_cap()
+	# NIT 7: intro card at load; headless balance/capture keep the sync start.
+	if _balance or _hitkit_cap:
+		_start_match()
+		if _hitkit_cap:
+			_run_hitkit_cap()
+	else:
+		_intro_then(_start_match)
 
 ## ---- live-binding hint bar (real keys, not "A"/"B"; see docs/verify/realkeys-VERIFY.md) ----
 
