@@ -65,10 +65,10 @@ const SHOVE_RANGE := 1.7
 
 # ---- the gaze (all times seconds) ----
 const STING_TIME := 0.5             # the warning IS the skill window (spec)
-const GREEN_EARLY := Vector2(3.6, 6.0)
-const GREEN_LATE := Vector2(2.2, 3.8)      # after escalation
-const WATCH_EARLY := Vector2(1.5, 2.3)
-const WATCH_LATE := Vector2(1.7, 2.6)
+const GREEN_EARLY := Vector2(2.6, 4.4)     # tuned: ~12 stings/round keeps hauls contested
+const GREEN_LATE := Vector2(1.8, 3.0)      # after escalation
+const WATCH_EARLY := Vector2(1.8, 2.6)
+const WATCH_LATE := Vector2(2.0, 2.8)
 const FAKE_CHANCE := 0.45           # escalated: odds a scheduled turn is a fake
 const FAKE_REARM := Vector2(0.35, 0.8)     # weep gap between fake and the REAL sting
 const SOB_PERIOD := 1.4
@@ -246,6 +246,11 @@ func begin(config: Dictionary) -> void:
 		return
 	bots = WGBots.new()
 	bots.setup(int(config.rng_seed) ^ 0x71D0, roster.size())
+	if _cap_on:
+		# verify-only capture rig: hungrier shovers so the murder beat lands on
+		# film inside one round. Never active in normal play or --wgtally runs.
+		for i in bots.malice.size():
+			bots.malice[i] = maxf(float(bots.malice[i]), 0.7)
 	_log("begin players=%d seed=%d bots=%s" % [
 		roster.size(), int(config.rng_seed), str(bot_enabled)])
 	_start_round()
@@ -308,6 +313,8 @@ func _physics_process(delta: float) -> void:
 		Phase.MATCH_END:
 			for p in players:
 				(p as WGPawn).tick_movement(delta)
+			if _cap_on:
+				_capture_beats()
 			if phase_t >= MATCH_END_HOLD and not _reported:
 				_reported = true
 				report_finished(_results)
@@ -1687,7 +1694,9 @@ func _cap_event(tag: String) -> void:
 		return
 	_cap_done[tag] = true
 	# hold the shot a beat so lightning/sparks/banners are on screen
-	get_tree().create_timer(0.12, true, false, true).timeout.connect(
+	# (results waits for the banner pop to finish its back-ease)
+	var delay := 0.6 if tag == "results" else 0.12
+	get_tree().create_timer(delay, true, false, true).timeout.connect(
 		func() -> void: _grab_shot(tag))
 
 
@@ -1799,6 +1808,14 @@ func _net_apply(state: Dictionary) -> void:
 					widow.fakeout_turn(STING_TIME)
 				else:
 					widow.whip_turn(STING_TIME)
+				# the remote seat NEEDS the warning: play the same 3-note ladder
+				# locally (fake's falling third note included — same tell)
+				var lt := create_tween()
+				lt.tween_callback(_play_pitched.bind(0.9, -4.0))
+				lt.tween_interval(0.18)
+				lt.tween_callback(_play_pitched.bind(1.15, -4.0))
+				lt.tween_interval(0.18)
+				lt.tween_callback(_play_pitched.bind(0.72 if fake else 1.45, -4.0))
 			Gaze.WATCHING:
 				widow.set_gaze(true)
 				_set_lights(true)
@@ -1935,9 +1952,15 @@ func _mir_event_juice(state: Dictionary, prev: Dictionary) -> void:
 
 
 ## CLIENT, per physics tick: pawn glide + grab-ring fill + relic transforms.
+## The weeping sobs play locally off the mirrored gaze fact (GREEN is heard).
 func _mirror_tick(delta: float) -> void:
 	if _mir.is_empty():
 		return
+	if gaze == Gaze.WEEPING and phase == Phase.PLAY:
+		_sob_t -= delta
+		if _sob_t <= 0.0:
+			_sob_t = SOB_PERIOD
+			_play_pitched(0.5, -20.0, true)
 	var pp: Array = _mir.get("p", [])
 	for i in players.size():
 		var b := i * 8
@@ -1949,7 +1972,7 @@ func _mirror_tick(delta: float) -> void:
 			int(pp[b + 7]) >= 0)
 		if float(pp[b + 6]) > 0.0:
 			_mir_gh[i] = minf(_mir_gh[i] + delta, 1.0)
-			pl.show_grab_progress(_mir_gh[i] / 0.72)
+			pl.show_grab_progress(_mir_gh[i] / 0.85)
 		else:
 			pl.show_grab_progress(0.0)
 	_update_relic_transforms()

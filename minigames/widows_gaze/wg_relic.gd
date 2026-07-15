@@ -11,7 +11,7 @@ extends Node3D
 
 const TIER_NAMES := ["locket", "urn", "portrait"]
 const TIER_VALUE := [1, 2, 3]
-const TIER_GRAB := [0.18, 0.42, 0.72]     # channel seconds to lift it
+const TIER_GRAB := [0.2, 0.5, 0.85]       # channel seconds to lift it (deep dwell = exposure)
 const TIER_CARRY := [0.86, 0.78, 0.66]    # movement multiplier while carrying it
 const TIER_COLOR := [
 	Color(0.86, 0.72, 0.30),              # locket — tarnished gold

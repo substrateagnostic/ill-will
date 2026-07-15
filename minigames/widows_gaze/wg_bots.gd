@@ -22,6 +22,8 @@ var _target: Array = []       # per-bot chosen relic index (-1 = none / re-pick)
 var _wander_t: Array = []
 var _react_now: Array = []    # per-sting effective reaction (jittered per sting)
 var _seq_seen: Array = []     # last sting_seq this bot rerolled for
+var _rest_t: Array = []       # post-bank mourning pause (paces the wake-stripping)
+var _banked_seen: Array = []  # per-bot bank count last tick (detects a fresh bank)
 
 
 func setup(seed_value: int, n: int) -> void:
@@ -37,6 +39,8 @@ func setup(seed_value: int, n: int) -> void:
 		_wander_t.append(0.0)
 		_react_now.append(react[i])
 		_seq_seen.append(-1)
+		_rest_t.append(rng.randf_range(0.0, 1.2))
+		_banked_seen.append(0)
 	# one seeded GREEDY mourner: over-runs the greens, hunts the deep relics.
 	# It is the pace-setter and the reliable casualty (spec: beatable + killable).
 	if n >= 1:
@@ -55,6 +59,15 @@ func decide(p: int, g, delta: float) -> Dictionary:
 		_target[p] = -1
 		return out
 	var my_pos := Vector2(me.global_position.x, me.global_position.z)
+	# post-bank mourning rest: paces the wake-stripping so the round's endgame
+	# (T-25 fake-outs guarding the last relics) actually happens, and leaves a
+	# hustling human a real edge over the bots. Points delta covers banks AND
+	# murders (a menacing pause after feeding someone to the Widow reads right).
+	_rest_t[p] = maxf(0.0, _rest_t[p] - delta)
+	if int(g.points[p]) > int(_banked_seen[p]):
+		_banked_seen[p] = int(g.points[p])
+		if g.phase != g.Phase.TIEBREAK:
+			_rest_t[p] = rng.randf_range(1.0, 2.2) if p == 0 else rng.randf_range(2.6, 5.6)
 
 	# Should I be frozen right now? (the whip is coming / gaze is on)
 	var must_stop := _should_stop(p, g)
@@ -95,7 +108,12 @@ func decide(p: int, g, delta: float) -> Dictionary:
 			out["move"] = to_chest.normalized()
 		return out
 
-	# --- empty-handed: pick a relic and go get it ---
+	# --- empty-handed: mourn a beat after scoring, else pick a relic ---
+	if _rest_t[p] > 0.0 and g.phase != g.Phase.TIEBREAK:
+		var home := Vector2(g.chest_pos(p).x * 0.7, 4.5)
+		var to_h := home - my_pos
+		out["move"] = to_h.normalized() if to_h.length() > 0.8 else Vector2.ZERO
+		return out
 	var idx := _pick_relic(p, g, my_pos)
 	if idx < 0:
 		# nothing to grab: loiter mid-parlor, poised
