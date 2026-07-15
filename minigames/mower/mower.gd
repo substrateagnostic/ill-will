@@ -110,14 +110,15 @@ var _meter_bar: HBoxContainer
 var _meter_segs: Array = []       # {rect: ColorRect, label: Label} per player
 var _uncut_seg: ColorRect
 
-# tally ceremony (Splatoon-style turf reveal at time-up)
+# tally ceremony (Splatoon-style turf reveal at time-up) — the count-up rows +
+# winner beat now live in the shared ui_kit ResultsBoard; mower keeps the turf
+# saturation + camera pull + 3D cheer and drives them off the board's signals.
 var _tally_done := false
-var _tally_root: Control
-var _tally_badge: PlayerBadge
-var _tally_name: Label
-var _tally_pct: Label
-var _tally_last_int := -1
-var _tally_last_tick_ms := 0
+var _results_board: ResultsBoard = null
+var _intro_card: IntroCard = null
+var _tally_reveal_n := 0
+var _tally_mid_snapped := false
+var _tally_mid2_snapped := false
 
 @onready var cam: Camera3D = $Camera3D
 @onready var sun: DirectionalLight3D = $Sun
@@ -190,7 +191,6 @@ func begin(config: Dictionary) -> void:
 		mu.reset(sp, (-sp).normalized())
 		mowers.append(mu)
 	_build_meter()
-	_build_tally_ui()
 	_rebuild_scoreboard()
 	if _mirror:
 		# RENDER MIRROR: lawn, obstacles, mowers, meter and tally UI all stand
@@ -205,7 +205,39 @@ func begin(config: Dictionary) -> void:
 		return
 	_log("begin players=%d seed=%d roundtime=%.0f bots=%s covtest=%s" % [
 		roster.size(), int(config.rng_seed), round_time, str(bot_enabled), _covtest])
-	_start_round()
+	_kickoff()
+
+## Intro card (ui_kit) at load, then the round. --covtest skips the ceremony
+## entirely (headless math assert stays byte-identical). Card auto-starts after
+## 6s if no human presses A, so bot-only runs flow through untouched.
+func _kickoff() -> void:
+	if _covtest:
+		_start_round()
+		return
+	_present_intro_card()
+
+func _present_intro_card() -> void:
+	_intro_card = IntroCard.new()
+	add_child(_intro_card)
+	_intro_card.started.connect(_start_round)
+	_intro_card.present({
+		"name": "MOWER MAYHEM",
+		"goal": "Mow stripes in your color — coverage IS score.",
+		"accent": Color(0.42, 0.82, 0.34),
+		"seats": _human_seats(),
+		"controls": [
+			{"action": "move", "label": "STEER"},
+			{"action": "a", "label": "RAM HORN"},
+			{"action": "b", "label": "BOOST"},
+		],
+		"tips": [
+			"Ram a rival head-on to steal a burst of their turf.",
+			"OVERTIME widens every deck — double-wide cuts.",
+			"Beds and the birdbath can't be mowed — steer around them.",
+		],
+	})
+	if _vc != null:
+		get_tree().create_timer(1.0).timeout.connect(func() -> void: _vc.snap("mower_intro"))
 
 # -- world --------------------------------------------------------------------
 
@@ -806,53 +838,12 @@ func _flash_banner(text: String, color: Color, duration: float) -> void:
 # The winner is stamped last with a flourish. Presentation only: _results is
 # already committed in _end_round and nothing here touches coverage/scoring.
 
-func _build_tally_ui() -> void:
-	_tally_root = Control.new()
-	_tally_root.name = "TallyRoot"
-	_tally_root.anchor_right = 1.0
-	_tally_root.anchor_bottom = 1.0
-	_tally_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_tally_root.visible = false
-	$UI.add_child(_tally_root)
-	# park the count-up in the lower third so it never collides with the
-	# upper-center banner ("TALLYING…" / "X TAKES THE LAWN!").
-	var cc := CenterContainer.new()
-	cc.anchor_left = 0.0
-	cc.anchor_top = 0.42
-	cc.anchor_right = 1.0
-	cc.anchor_bottom = 1.0
-	cc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_tally_root.add_child(cc)
-	var vb := VBoxContainer.new()
-	vb.alignment = BoxContainer.ALIGNMENT_CENTER
-	vb.add_theme_constant_override("separation", 4)
-	cc.add_child(vb)
-	# badge + name row
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 12)
-	vb.add_child(row)
-	_tally_badge = PlayerBadge.make(0, 40)
-	row.add_child(_tally_badge)
-	_tally_name = Label.new()
-	_tally_name.add_theme_font_override("font", load("res://assets/fonts/LuckiestGuy-Regular.ttf"))
-	_tally_name.add_theme_font_size_override("font_size", 40)
-	_tally_name.add_theme_color_override("font_outline_color", Color(0.07, 0.07, 0.1))
-	_tally_name.add_theme_constant_override("outline_size", 8)
-	_tally_name.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	row.add_child(_tally_name)
-	# big count-up digits (fixed footprint so the pop scales from center)
-	_tally_pct = Label.new()
-	_tally_pct.add_theme_font_override("font", load("res://assets/fonts/LuckiestGuy-Regular.ttf"))
-	_tally_pct.add_theme_font_size_override("font_size", 72)
-	_tally_pct.add_theme_color_override("font_outline_color", Color(0.05, 0.05, 0.08))
-	_tally_pct.add_theme_constant_override("outline_size", 12)
-	_tally_pct.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_tally_pct.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_tally_pct.custom_minimum_size = Vector2(360, 100)
-	_tally_pct.pivot_offset = Vector2(180, 50)
-	vb.add_child(_tally_pct)
-
+## THE TALLY, expressed through the shared ui_kit ResultsBoard. mower keeps what
+## is uniquely its own — the Splatoon turf saturation, the overhead camera pull,
+## the winning mower's 3D cheer/confetti — and drives them off the board's beat
+## signals. The count-up rows + winner hero beat are the kit's. Both the host
+## (_end_round) and the net mirror (_net_apply) call this, so couch and client
+## run the identical ceremony from the same placements + (mirrored) grid.
 func _run_tally() -> void:
 	# withhold the live standings — Splatoon hides the result and "calculates"
 	if _meter_bar:
@@ -861,71 +852,61 @@ func _run_tally() -> void:
 	if panel:
 		panel.visible = false
 	lawn.set_tally(0, 0.0)
-	_flash_banner("TALLYING…", Color(1, 0.95, 0.55), 9999.0)
-	_tally_camera_pull()
-	await get_tree().create_timer(0.8).timeout
-	# ascending drama: worst coverage first, the winner (best) revealed last
-	var asc: Array = _results.placements.duplicate()
-	asc.reverse()
-	_tally_root.visible = true
-	banner.visible = false   # the "TALLYING…" beat is over; center digits lead now
-	for i in asc.size():
-		var p: int = asc[i]
-		var final_pct: float = lawn.coverage_pct(p)
-		_tally_set_player(p)
-		lawn.set_tally(p + 1, 0.0)
-		_tally_pct.scale = Vector2(0.7, 0.7)
-		var tw := create_tween()
-		tw.set_parallel(true)
-		tw.tween_method(_on_tally_value.bind(p), 0.0, final_pct, 0.5) \
-			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-		tw.tween_method(func(g: float) -> void: lawn.set_tally(p + 1, g), 0.0, 1.0, 0.45)
-		tw.tween_property(_tally_pct, "scale", Vector2.ONE, 0.24) \
-			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		await tw.finished
-		_on_tally_value(final_pct, p)   # land exactly on the final number
-		# mid-count screenshot: after the 2nd player lands (one turf lit, digits up)
-		if i == 1 and _vc != null:
-			await _vc.snap("tally_mid")
-		await get_tree().create_timer(0.08).timeout
-	# winner stamp — the flourish
-	var winner: int = _results.placements[0]
-	var wpl: Dictionary = roster[winner]
+	banner.visible = false   # the board owns the title/winner banner now
+	_tally_reveal_n = 0
+	_tally_mid_snapped = false
+	_tally_mid2_snapped = false
+	var rows: Array = []
+	for p in _results.placements:
+		rows.append({
+			"player": int(p),
+			"score": lawn.coverage_pct(int(p)),
+			"color": roster[int(p)].color,
+			"name": str(roster[int(p)].name),
+		})
+	var board := ResultsBoard.new()
+	add_child(board)
+	_results_board = board
+	board.freeze_beat.connect(_tally_camera_pull)
+	board.row_started.connect(_on_tally_row_started)
+	board.row_tick.connect(_on_tally_row_tick)
+	board.winner_beat.connect(_on_tally_winner)
+	board.done.connect(func() -> void: _tally_done = true)
+	board.present(rows, {
+		"title": "TALLYING...",
+		"subtitle": "COVERAGE IS SCORE",
+		"score_type": ResultsBoard.ScoreType.PERCENT,
+		"win_title": "{name} TAKES THE LAWN!",
+		"accent": Color(1, 0.95, 0.55),
+	})
+
+## Each row reveal makes THAT player the spotlit owner (turf saturates, the rest
+## recede); the mid-count evidence snap fires on the 2nd reveal.
+func _on_tally_row_started(p: int) -> void:
+	lawn.set_tally(p + 1, 0.0)
+	_tally_reveal_n += 1
+
+func _on_tally_row_tick(p: int, _shown: float, t: float) -> void:
+	lawn.set_tally(p + 1, t)
+	# two snaps a few frames apart on the SAME reveal, so the count-up is provably
+	# animating (the digits differ between the pair).
+	if _tally_reveal_n == 2 and _vc != null:
+		if t >= 0.35 and not _tally_mid_snapped:
+			_tally_mid_snapped = true
+			_vc.snap("mower_midcount_a")
+		elif t >= 0.78 and not _tally_mid2_snapped:
+			_tally_mid2_snapped = true
+			_vc.snap("mower_midcount_b")
+
+## The protected winner beat: keep their turf lit + the 3D flourish mower always
+## did (the banner + stamp pop are the board's).
+func _on_tally_winner(winner: int) -> void:
 	lawn.set_tally(winner + 1, 1.0)
-	_tally_set_player(winner)
-	_tally_pct.text = "%d%%" % int(round(lawn.coverage_pct(winner)))
-	_tally_pct.scale = Vector2.ONE
-	banner.text = "%s TAKES THE LAWN!" % wpl.name
-	banner.add_theme_color_override("font_color", wpl.color)
-	banner.visible = true
-	_stamp_pop()
-	Sfx.play("match_win")
 	_shake = maxf(_shake, 0.4)
 	mowers[winner].cheer()
-	_confetti(Vector3(mowers[winner].pos.x, 1.4, mowers[winner].pos.y), wpl.color)
+	_confetti(Vector3(mowers[winner].pos.x, 1.4, mowers[winner].pos.y), roster[winner].color)
 	if _vc != null:
-		await _vc.snap("winner_stamp")
-	await get_tree().create_timer(1.0).timeout
-	_tally_done = true
-
-func _tally_set_player(p: int) -> void:
-	_tally_badge.player_index = p
-	_tally_badge.color = roster[p].color
-	_tally_name.text = str(roster[p].name)
-	_tally_name.add_theme_color_override("font_color", roster[p].color)
-	_tally_pct.add_theme_color_override("font_color", roster[p].color)
-	_tally_pct.text = "0%"
-	_tally_last_int = -1
-
-func _on_tally_value(v: float, _p: int) -> void:
-	var iv := int(round(v))
-	_tally_pct.text = "%d%%" % iv
-	if iv != _tally_last_int:
-		_tally_last_int = iv
-		var now := Time.get_ticks_msec()
-		if now - _tally_last_tick_ms >= 32:   # ~30Hz roll, never a machine-gun
-			_tally_last_tick_ms = now
-			Sfx.play("card", -7.0)
+		_vc.snap("mower_winner")
 
 func _set_cam_pos(pos: Vector3) -> void:
 	cam.position = pos
@@ -938,12 +919,6 @@ func _tally_camera_pull() -> void:
 	tw.tween_method(_set_cam_pos, cam.position, Vector3(0.0, 20.0, 6.5), 0.7) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tw.tween_property(cam, "fov", 54.0, 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-
-func _stamp_pop() -> void:
-	banner.pivot_offset = banner.size / 2.0
-	banner.scale = Vector2(1.7, 1.7)
-	var tw := create_tween()
-	tw.tween_property(banner, "scale", Vector2.ONE, 0.32).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 # -- meter (Splatoon-style top bar) -------------------------------------------
 
