@@ -1,0 +1,194 @@
+[
+  {
+    "id": "grave_headstone_plain",
+    "category": "GRAVES",
+    "prompt": "A plain rounded-top stone headstone grave marker, simple and weathered, standing upright, blank face",
+    "target_height_hint": 1.1
+  },
+  {
+    "id": "grave_headstone_cracked",
+    "category": "GRAVES",
+    "prompt": "A cracked broken stone headstone grave marker with a jagged crack down the middle, weathered and mossy, standing upright",
+    "target_height_hint": 1.0
+  },
+  {
+    "id": "grave_celtic_cross",
+    "category": "GRAVES",
+    "prompt": "A tall stone Celtic cross grave marker, a ringed cross on a stepped stone base, weathered grey stone",
+    "target_height_hint": 1.6
+  },
+  {
+    "id": "grave_small_obelisk",
+    "category": "GRAVES",
+    "prompt": "A small four-sided stone obelisk grave marker, tapering to a pyramid point, weathered grey stone, standing on a square base",
+    "target_height_hint": 1.7
+  },
+  {
+    "id": "grave_tilted_slab",
+    "category": "GRAVES",
+    "prompt": "An old flat stone grave slab tilted and sinking into the ground at an angle, cracked and mossy surface",
+    "target_height_hint": 0.8
+  },
+  {
+    "id": "grave_mausoleum_front",
+    "category": "GRAVES",
+    "prompt": "A small stone mausoleum front facade with a peaked roof, two flanking columns and a sealed stone door, grand and weathered",
+    "target_height_hint": 2.4
+  },
+  {
+    "id": "grave_cherub_stone",
+    "category": "GRAVES",
+    "prompt": "A gravestone with a large chubby winged cherub angel statue kneeling and weeping on top of the rounded headstone, the cherub is big and prominent, weathered grey stone",
+    "target_height_hint": 1.3
+  },
+  {
+    "id": "grave_iron_fence_plot",
+    "category": "GRAVES",
+    "prompt": "A small grave plot marker stone surrounded on three sides by a low wrought iron fence, weathered stone and rusted iron",
+    "target_height_hint": 0.9
+  },
+  {
+    "id": "award_workhorse",
+    "category": "AWARDS",
+    "prompt": "A small trophy statuette of an ox pulling a plow, mounted on a chunky wooden trophy base",
+    "target_height_hint": 0.45
+  },
+  {
+    "id": "award_architect",
+    "category": "AWARDS",
+    "prompt": "A small trophy statuette of a drafting compass crossed over a classical column, mounted on a chunky wooden trophy base",
+    "target_height_hint": 0.42
+  },
+  {
+    "id": "award_snake",
+    "category": "AWARDS",
+    "prompt": "A small trophy statuette of a coiled serpent rearing up ready to strike, mounted on a round trophy base",
+    "target_height_hint": 0.4
+  },
+  {
+    "id": "award_landlord",
+    "category": "AWARDS",
+    "prompt": "A small trophy statuette of an ornate gold key crossed over a tiny door, mounted on a chunky wooden trophy base",
+    "target_height_hint": 0.4
+  },
+  {
+    "id": "award_doormat",
+    "category": "AWARDS",
+    "prompt": "A small ornate doormat trophy, a welcome mat set flat inside a gold trophy frame border, mounted on a low base",
+    "target_height_hint": 0.35
+  },
+  {
+    "id": "award_hoarder",
+    "category": "AWARDS",
+    "prompt": "A small trophy statuette of an overflowing treasure chest spilling gold coins and jewels, mounted on a chunky wooden trophy base",
+    "target_height_hint": 0.48
+  },
+  {
+    "id": "award_nemesis",
+    "category": "AWARDS",
+    "prompt": "A small trophy of two crossed dagger blades forming an X shape, blades only, no figure, no face, no person, mounted on a round wooden trophy base",
+    "target_height_hint": 0.4
+  },
+  {
+    "id": "award_reckoner",
+    "category": "AWARDS",
+    "prompt": "A small trophy statuette of a tipped unbalanced set of scales of justice, one side hanging low, mounted on a chunky trophy base",
+    "target_height_hint": 0.45
+  },
+  {
+    "id": "board_waypoint_lantern",
+    "category": "BOARD",
+    "prompt": "A carved stone waypoint marker post with a small lantern mounted on top, weathered grey stone, game board furniture scale",
+    "target_height_hint": 1.0
+  },
+  {
+    "id": "board_tollgate_arch",
+    "category": "BOARD",
+    "prompt": "A small wrought iron tollgate archway, two thin ornate posts joined by a curved iron gate on top, game board furniture scale",
+    "target_height_hint": 1.3
+  },
+  {
+    "id": "board_codicil_pedestal",
+    "category": "BOARD",
+    "prompt": "A single tall ornate stone pedestal column with a rolled parchment scroll resting on its flat top, one pedestal only, nothing else around it",
+    "target_height_hint": 1.1
+  },
+  {
+    "id": "board_deed_token",
+    "category": "BOARD",
+    "prompt": "A neat stack of three rectangular parchment paper documents tied with a red ribbon bow and one big round red wax seal on top, property deed game token",
+    "target_height_hint": 0.25
+  },
+  {
+    "id": "board_hearse_cart",
+    "category": "BOARD",
+    "prompt": "A small old-fashioned funeral hearse cart with wooden spoked wheels and black draped curtains, no horse, chunky toy proportions",
+    "target_height_hint": 1.5
+  },
+  {
+    "id": "board_planchette",
+    "category": "BOARD",
+    "prompt": "A large wooden ouija planchette pointer, triangular with a round glass eye lens in the center, game piece scale",
+    "target_height_hint": 0.5
+  },
+  {
+    "id": "board_grim_signpost",
+    "category": "BOARD",
+    "prompt": "A weathered wooden signpost with several crooked arrow signs pointing in different directions, single post",
+    "target_height_hint": 2.0
+  },
+  {
+    "id": "board_crypt_door",
+    "category": "BOARD",
+    "prompt": "A small stone crypt doorway frame with a heavy closed iron-banded wooden door, weathered grey stone",
+    "target_height_hint": 2.3
+  },
+  {
+    "id": "estate_dead_tree",
+    "category": "ESTATE_DRESSING",
+    "prompt": "A dead gnarled leafless tree with twisted bare branches, spooky silhouette, dark grey-brown bark",
+    "target_height_hint": 3.2
+  },
+  {
+    "id": "estate_dry_fountain",
+    "category": "ESTATE_DRESSING",
+    "prompt": "A dry cracked stone garden fountain basin with a raven perched on the rim, weathered and empty of water",
+    "target_height_hint": 1.5
+  },
+  {
+    "id": "estate_lamppost",
+    "category": "ESTATE_DRESSING",
+    "prompt": "A wrought iron street lamppost with a warm glowing lantern light on top, ornate curved black iron post",
+    "target_height_hint": 2.8
+  },
+  {
+    "id": "estate_hedge_topiary",
+    "category": "ESTATE_DRESSING",
+    "prompt": "A rectangular gothic garden hedge topiary block, neatly trimmed dark green foliage, chunky toy proportions",
+    "target_height_hint": 1.4
+  },
+  {
+    "id": "estate_broken_angel",
+    "category": "ESTATE_DRESSING",
+    "prompt": "A broken stone angel statue missing one wing, weathered grey stone, mournful bowed pose, standing on a small plinth",
+    "target_height_hint": 1.9
+  },
+  {
+    "id": "estate_wheelbarrow",
+    "category": "ESTATE_DRESSING",
+    "prompt": "An old wooden wheelbarrow filled with a heap of dark dirt, single front wheel, rustic and weathered",
+    "target_height_hint": 0.8
+  },
+  {
+    "id": "estate_iron_gate",
+    "category": "ESTATE_DRESSING",
+    "prompt": "A single section of a tall wrought iron fence gate with ornate spikes on top, weathered black iron",
+    "target_height_hint": 2.0
+  },
+  {
+    "id": "estate_covered_well",
+    "category": "ESTATE_DRESSING",
+    "prompt": "A small stone garden well with a peaked wooden shingled roof and a hand crank, weathered grey stone",
+    "target_height_hint": 1.3
+  }
+]
