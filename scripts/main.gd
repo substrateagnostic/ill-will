@@ -169,6 +169,8 @@ func _ready() -> void:
 			_net_role = "host"
 		elif arg.begins_with("--net=join"):
 			_net_role = "join"
+		elif arg == "--netauto":
+			_net_auto = true   # verify: a mirror auto-drives MY seat through intents
 	if _embodied:
 		_embodied = bool(PartySetup.pref("par_embodied", true))
 	# Seed the bot rng FROM GameState.rng without consuming its stream (read the
@@ -467,6 +469,17 @@ func _physics_process(delta: float) -> void:
 	# the sim exactly as couch and pumps the snapshot at 20 Hz.
 	if _online_client:
 		return
+	# Standalone host lobby hold: pump the snapshot so the guest's mirror settles,
+	# then open the match a beat after the first chair is claimed (or a 90 s
+	# fallback so a guestless soak never hangs).
+	if _await_guest:
+		_await_frames += 1
+		var seated_ready := _guest_seated_frame >= 0 and _await_frames - _guest_seated_frame >= 40
+		if seated_ready or _await_frames > 5400:
+			_par_begin_online_match()
+		else:
+			_net_pump(delta)
+			return
 	_bot_tick(delta)
 	if _online_host:
 		_net_pump(delta)
@@ -764,6 +777,8 @@ func _start_killcam(victim: int, death_pos: Vector3, border_color: Color, show_b
 			"x": death_pos.x, "y": death_pos.y, "z": death_pos.z,
 			"col": border_color.to_html(false), "border": show_border, "text": banner_text}
 	get_tree().paused = true
+	if _online_host:
+		get_tree().create_timer(0.9, true, false, true).timeout.connect(func(): VerifyCapture.snap("paronline_host_killcam"))
 	_killcam_t0 = Time.get_ticks_msec()
 	print("KILLCAM play victim=%d samples=%d dur=%.2f botonly=%s" % [victim, samples.size(), KILLCAM_DURATION, str(_is_bot_only_match())])
 	_killcam.play(samples, death_pos, approach, ball_color, border_color, show_border, banner_text, KILLCAM_DURATION, _is_bot_only_match(), restore_cam)
@@ -1310,13 +1325,14 @@ func _online_init() -> bool:
 
 var _par_started := false
 var _await_guest := false
+var _await_frames := 0
+var _guest_seated_frame := -1     # physics frame the first guest claimed a chair
 
 func _online_lobby_hold() -> void:
 	_await_guest = true
 	turn_label.text = "WAITING FOR A GUEST…"
 	round_label.text = "PAR ONLINE"
 	print("PAR_ONLINE lobby: code=%s addr=%s" % [NetSession.invite_code(), NetSession.listen_addr()])
-	get_tree().create_timer(45.0).timeout.connect(_par_begin_online_match)
 
 ## Start the match once (first guest seated, or the lobby timeout). Late joiners
 ## still get a chair and play their next turn.
@@ -1381,9 +1397,10 @@ func _on_par_seat_requested(peer_id: int) -> void:
 	_remote_seats[seat] = true
 	NetSession.grant_seat(peer_id, seat, "seat %d" % seat)
 	print("PAR_ONLINE granted seat=%d peer=%d" % [seat, peer_id])
-	# First guest seated → open the match (a short beat lets the mirror settle).
-	if _await_guest and not _par_started:
-		get_tree().create_timer(1.0).timeout.connect(_par_begin_online_match)
+	# Mark the first grant; the physics loop opens the match a beat later so the
+	# guest's mirror has settled and received a few snapshots first.
+	if _await_guest and _guest_seated_frame < 0:
+		_guest_seated_frame = _await_frames
 
 func _on_par_seat_left(seat: int, _peer_id: int) -> void:
 	_remote_seats.erase(seat)   # the seat falls back to a bot for the rest of the night
@@ -1402,7 +1419,9 @@ func _on_par_panel_intent(seat: int, intent: Dictionary) -> void:
 	match String(intent.get("kind", "")):
 		"par_putt":
 			if phase == Phase.PUTT and round_manager.current_player() == seat:
+				print("PAR_ONLINE recv par_putt seat=%d power=%.1f angle=%.1f" % [seat, float(intent.get("power", 0.0)), float(intent.get("angle", 0.0))])
 				submit_putt_intent(seat, float(intent.get("power", 2.0)), float(intent.get("angle", 0.0)))
+				get_tree().create_timer(0.5).timeout.connect(func(): VerifyCapture.snap("paronline_host_putt"))
 		"par_aim":
 			_remote_aim(seat, float(intent.get("ax", 0.0)), float(intent.get("az", -1.0)), float(intent.get("power", 1.2)))
 		"par_build_pick":
@@ -1413,6 +1432,7 @@ func _on_par_panel_intent(seat: int, intent: Dictionary) -> void:
 				placement.remote_move(Vector3(float(intent.get("x", 0.0)), 0.0, float(intent.get("z", 0.0))), float(intent.get("rot", 0.0)))
 		"par_build_confirm":
 			if phase == Phase.BUILD and placement.active and _building_seat() == seat:
+				print("PAR_ONLINE recv par_build_confirm seat=%d" % seat)
 				_remote_confirm_build(Vector3(float(intent.get("x", 0.0)), 0.0, float(intent.get("z", 0.0))), float(intent.get("rot", 0.0)))
 
 func _building_seat() -> int:
@@ -1485,7 +1505,10 @@ func _net_pump(delta: float) -> void:
 ## HOST snapshot: everything on a couch player's screen right now, nothing else.
 ## Read by the estate's pump too (the gamestate mirror seam), so it stays PUBLIC.
 func _net_state() -> Dictionary:
-	var bl: Array = []
+	# Compact packed encoding keeps the 20 Hz snapshot under the ENet MTU even at
+	# a full board of traps: balls/avatars as float32, scores as int32, traps as
+	# one flat float row + a parallel id list (color comes from the author seat).
+	var bl := PackedFloat32Array()
 	for b in balls:
 		var flags := 0
 		if b.is_sunk: flags |= 1
@@ -1493,24 +1516,22 @@ func _net_state() -> Dictionary:
 		if b.is_petrified: flags |= 4
 		if b.in_transit: flags |= 8
 		if b.visible: flags |= 16
-		bl.append([snappedf(b.global_position.x, 0.01), snappedf(b.global_position.y, 0.01),
-			snappedf(b.global_position.z, 0.01), flags])
-	var av: Array = []
+		bl.append_array([b.global_position.x, b.global_position.y, b.global_position.z, float(flags)])
+	var av := PackedFloat32Array()
 	for a in avatars:
-		var yaw: float = atan2(a.facing.x, a.facing.z)
-		av.append([snappedf(a.global_position.x, 0.01), snappedf(a.global_position.y, 0.01),
-			snappedf(a.global_position.z, 0.01), snappedf(yaw, 0.01), _avatar_anim_code(a)])
-	var sc: Array = []
+		av.append_array([a.global_position.x, a.global_position.y, a.global_position.z,
+			atan2(a.facing.x, a.facing.z), float(_avatar_anim_code(a))])
+	var sc := PackedInt32Array()
 	for p in GameState.players:
-		sc.append([int(p.score), int(p.grudge), int(p.royalties)])
-	var traps: Array = []
+		sc.append_array([int(p.score), int(p.grudge), int(p.royalties)])
+	var tp := PackedFloat32Array()   # [netid, x, z, roty, author] per trap
+	var tid := PackedStringArray()   # trap_id slug per trap (for load_scene)
 	for t in course.get_node("TrapContainer").get_children():
 		if t is Trap and not (t as Trap).is_ghost:
 			var tr: Trap = t
-			traps.append([tr.get_instance_id(), tr.trap_id,
-				snappedf(tr.global_position.x, 0.02), snappedf(tr.global_position.y, 0.02),
-				snappedf(tr.global_position.z, 0.02), snappedf(tr.rotation.y, 0.02),
-				tr.author_index, tr.author_color.to_html(false)])
+			tp.append_array([float(_trap_netid(tr)), tr.global_position.x, tr.global_position.z,
+				tr.rotation.y, float(tr.author_index)])
+			tid.append(tr.trap_id)
 	var st := {
 		"ph": phase,
 		"rn": GameState.round_num, "rt": GameState.rounds_total,
@@ -1520,7 +1541,7 @@ func _net_state() -> Dictionary:
 		"sl": stroke_label.text,
 		"ban": [banner.text, banner.get_theme_color("font_color").to_html(false), banner.visible],
 		"cur": round_manager.current_player(),
-		"bl": bl, "av": av, "sc": sc, "traps": traps,
+		"b": bl, "av": av, "sc": sc, "tp": tp, "tid": tid,
 		"kc": _net_killcam, "champ": _net_champ,
 	}
 	# Draft hand + placement ghost are public (they are on the couch screen).
@@ -1531,9 +1552,18 @@ func _net_state() -> Dictionary:
 		var g: Trap = placement.ghost
 		st["ghost"] = {"id": g.trap_id, "seat": _building_seat(),
 			"x": snappedf(g.global_position.x, 0.02), "z": snappedf(g.global_position.z, 0.02),
-			"rot": snappedf(g.rotation.y, 0.02), "valid": placement._valid,
-			"color": g.author_color.to_html(false)}
+			"rot": snappedf(g.rotation.y, 0.02), "valid": placement._valid}
 	return st
+
+## Small stable per-trap net id (float32-safe), assigned on first sight.
+var _trap_ids := {}
+var _trap_id_next := 0
+func _trap_netid(t: Trap) -> int:
+	var k := t.get_instance_id()
+	if not _trap_ids.has(k):
+		_trap_id_next += 1
+		_trap_ids[k] = _trap_id_next
+	return int(_trap_ids[k])
 
 func _avatar_anim_code(a: PlayerAvatar) -> int:
 	if a.anim == null:
@@ -1559,11 +1589,17 @@ var _net_kc_seq := 0
 
 ## Latest-state-wins. Positions the frozen bodies, restages labels/scores/traps,
 ## and fires killcam + ceremonies from deltas.
+var _mir_apply_count := 0
 func _net_apply(state: Dictionary) -> void:
 	if not _online_client:
 		return
 	var prev := _mir
 	_mir = state
+	_mir_apply_count += 1
+	if _mir_apply_count % 40 == 1:
+		print("PAR_MIRROR apply #%d seq=%d ph=%d my_seat=%d cur=%d" % [
+			_mir_apply_count, int(state.get("seq", 0)), int(state.get("ph", -1)),
+			NetSession.my_seat(), int(state.get("cur", -1))])
 	phase = int(state.get("ph", phase)) as Phase
 	GameState.round_num = int(state.get("rn", GameState.round_num))
 	round_label.text = str(state.get("rl", ""))
@@ -1571,36 +1607,36 @@ func _net_apply(state: Dictionary) -> void:
 	turn_label.add_theme_color_override("font_color", Color.html(str(state.get("tlc", "ffffff"))))
 	stroke_label.text = str(state.get("sl", ""))
 	_mir_apply_banner(state.get("ban", []), prev.get("ban", []))
-	# balls
-	var bl: Array = state.get("bl", [])
-	for i in mini(bl.size(), balls.size()):
-		var e: Array = bl[i]
+	# balls (float32: x,y,z,flags per ball)
+	var bl: PackedFloat32Array = state.get("b", PackedFloat32Array())
+	for i in mini(int(bl.size() / 4), balls.size()):
+		var o := i * 4
 		var b: Ball = balls[i]
-		b.global_position = Vector3(float(e[0]), float(e[1]), float(e[2]))
-		var flags := int(e[3])
+		b.global_position = Vector3(bl[o], bl[o + 1], bl[o + 2])
+		var flags := int(bl[o + 3])
 		b.is_sunk = bool(flags & 1)
 		b.is_dead = bool(flags & 2)
 		b.is_petrified = bool(flags & 4)
 		b.in_transit = bool(flags & 8)
 		b.visible = bool(flags & 16)
-		_mir_trail(i, b.global_position, flags)
-	# avatars
-	var av: Array = state.get("av", [])
-	for i in mini(av.size(), avatars.size()):
-		var e: Array = av[i]
+	# avatars (float32: x,y,z,yaw,anim per avatar)
+	var av: PackedFloat32Array = state.get("av", PackedFloat32Array())
+	for i in mini(int(av.size() / 5), avatars.size()):
+		var o := i * 5
 		var a: PlayerAvatar = avatars[i]
-		a.global_position = Vector3(float(e[0]), float(e[1]), float(e[2]))
-		var yaw := float(e[3])
+		a.global_position = Vector3(av[o], av[o + 1], av[o + 2])
+		var yaw := av[o + 3]
 		a.face_dir(Vector3(sin(yaw), 0.0, cos(yaw)))
-		_mir_avatar_anim(a, int(e[4]))
-	# scores
-	var sc: Array = state.get("sc", [])
-	for i in mini(sc.size(), GameState.players.size()):
-		GameState.players[i].score = int(sc[i][0])
-		GameState.players[i].grudge = int(sc[i][1])
-		GameState.players[i].royalties = int(sc[i][2])
+		_mir_avatar_anim(a, int(av[o + 4]))
+	# scores (int32: score,grudge,royalties per player)
+	var sc: PackedInt32Array = state.get("sc", PackedInt32Array())
+	for i in mini(int(sc.size() / 3), GameState.players.size()):
+		var o := i * 3
+		GameState.players[i].score = sc[o]
+		GameState.players[i].grudge = sc[o + 1]
+		GameState.players[i].royalties = sc[o + 2]
 	_rebuild_scoreboard()
-	_mir_sync_traps(state.get("traps", []))
+	_mir_sync_traps(state.get("tp", PackedFloat32Array()), state.get("tid", PackedStringArray()))
 	_mir_sync_draft(state.get("draft", {}))
 	_mir_sync_ghost(state.get("ghost", {}))
 	_mir_killcam(state.get("kc", {}))
@@ -1621,17 +1657,6 @@ func _mir_apply_banner(cur: Array, prev: Array) -> void:
 	elif not vis:
 		banner.visible = false
 
-## Mirror-side ball trail: emit when the tracked position jumps between snapshots.
-var _mir_ball_prev := {}
-func _mir_trail(i: int, pos: Vector3, flags: int) -> void:
-	var moved := 0.0
-	if _mir_ball_prev.has(i):
-		moved = (_mir_ball_prev[i] as Vector3).distance_to(pos)
-	_mir_ball_prev[i] = pos
-	# feed the ball's own replay buffer so a mirror killcam has recent motion
-	if (flags & 2) == 0 and (flags & 1) == 0 and moved > 0.001:
-		pass   # position already set; ball._physics_process is off on the mirror
-
 var _mir_anim_prev := {}
 func _mir_avatar_anim(a: PlayerAvatar, code: int) -> void:
 	var prev := int(_mir_anim_prev.get(a.get_instance_id(), -1))
@@ -1651,26 +1676,34 @@ func _mir_avatar_anim(a: PlayerAvatar, code: int) -> void:
 			if a._dead: a.revive()
 			a.play_loop("Idle")
 
-## Spawn/track/free mirror trap nodes to match the host's TrapContainer.
-func _mir_sync_traps(traps: Array) -> void:
+## Spawn/track/free mirror trap nodes to match the host's TrapContainer. tp is a
+## flat float row [netid,x,z,roty,author]*n; tid the parallel trap_id slugs. Trap
+## color comes from the author seat (no color bytes on the wire).
+func _mir_sync_traps(tp: PackedFloat32Array, tid: PackedStringArray) -> void:
 	var seen := {}
-	for e in traps:
-		var netid := int(e[0])
+	var n := mini(int(tp.size() / 5), tid.size())
+	for i in n:
+		var o := i * 5
+		var netid := int(tp[o])
+		var x := tp[o + 1]
+		var z := tp[o + 2]
+		var roty := tp[o + 3]
+		var author := int(tp[o + 4])
 		seen[netid] = true
 		if _mir_traps.has(netid):
 			var tn: Trap = _mir_traps[netid]
 			if is_instance_valid(tn):
-				tn.global_position = Vector3(float(e[2]), float(e[3]), float(e[4]))
-				tn.rotation.y = float(e[5])
+				tn.global_position = Vector3(x, tn.global_position.y, z)
+				tn.rotation.y = roty
 			continue
-		var scene: PackedScene = TrapCatalog.load_scene(str(e[1]))
+		var scene: PackedScene = TrapCatalog.load_scene(tid[i])
 		if scene == null:
 			continue
 		var t: Trap = scene.instantiate()
 		course.get_node("TrapContainer").add_child(t)
-		t.global_position = Vector3(float(e[2]), float(e[3]), float(e[4]))
-		t.rotation.y = float(e[5])
-		t.set_author(int(e[6]), Color.html(str(e[7])))
+		t.global_position = Vector3(x, 0.0, z)
+		t.rotation.y = roty
+		t.set_author(author, _seat_color(author))
 		if t.has_method("solidify"):
 			t.solidify()
 		_mir_traps[netid] = t
@@ -1680,6 +1713,11 @@ func _mir_sync_traps(traps: Array) -> void:
 			if is_instance_valid(tn):
 				tn.queue_free()
 			_mir_traps.erase(netid)
+
+func _seat_color(seat: int) -> Color:
+	if seat >= 0 and seat < GameState.players.size():
+		return GameState.players[seat].color
+	return Color(0.8, 0.8, 0.8)
 
 ## Mirror draft panel: everyone sees the hand; only MY seat's cards are live.
 func _mir_sync_draft(d: Dictionary) -> void:
@@ -1724,7 +1762,7 @@ func _mir_sync_ghost(g: Dictionary) -> void:
 			return
 		_mir_ghost = scene.instantiate()
 		course.get_node("TrapContainer").add_child(_mir_ghost)
-		_mir_ghost.set_author(int(g.get("seat", -1)), Color.html(str(g.get("color", "ffffff"))))
+		_mir_ghost.set_author(int(g.get("seat", -1)), _seat_color(int(g.get("seat", -1))))
 		_mir_ghost.ghostify()
 	_mir_ghost.global_position = Vector3(float(g.get("x", 0.0)), 0.0, float(g.get("z", 0.0)))
 	_mir_ghost.rotation.y = float(g.get("rot", 0.0))
@@ -1749,6 +1787,7 @@ func _mir_killcam(kc: Dictionary) -> void:
 	get_tree().paused = true
 	_killcam.play(samples, death_pos, Vector3(0, 0, -1), GameState.players[victim].color,
 		col, bool(kc.get("border", true)), str(kc.get("text", "")), KILLCAM_DURATION, false, restore_cam)
+	get_tree().create_timer(0.9, true, false, true).timeout.connect(func(): VerifyCapture.snap("paronline_client_killcam"))
 	print("PAR_MIRROR killcam seq=%d victim=%d" % [seq, victim])
 
 ## Pre-announced ending: the winner banner + confetti, once.
@@ -1772,6 +1811,9 @@ func _client_input(state: Dictionary) -> void:
 	var my := NetSession.my_seat()
 	if my < 0:
 		return
+	if _net_auto:
+		_client_auto(state, my)
+		return
 	if phase == Phase.PUTT and int(state.get("cur", -1)) == my and not bool(state.get("chaos", false)):
 		_client_putt_input()
 	else:
@@ -1779,6 +1821,50 @@ func _client_input(state: Dictionary) -> void:
 			putt_controller.hide_preview()
 		_cin_active = false
 		_cin_charging = false
+
+## Verify-only mirror auto-driver: on MY actionable turn, produce the intent a
+## human would — draft pick, place a trap, aim at the cup and putt — all through
+## the SAME intent channel a real guest uses (proves the wire, not a shortcut).
+var _net_auto := false
+var _auto_ctx := ""
+var _auto_wait := 0
+func _client_auto(state: Dictionary, my: int) -> void:
+	var ctx := ""
+	if phase == Phase.DRAFT and int(state.get("draft", {}).get("seat", -1)) == my:
+		ctx = "draft"
+	elif phase == Phase.BUILD and int(state.get("ghost", {}).get("seat", -1)) == my:
+		ctx = "build"
+	elif phase == Phase.PUTT and int(state.get("cur", -1)) == my:
+		ctx = "putt:%s" % str(state.get("sl", ""))
+	if ctx == "":
+		_auto_ctx = ""
+		return
+	if ctx != _auto_ctx:
+		_auto_ctx = ctx
+		_auto_wait = 16   # ~0.8s of snapshots before acting (human-ish beat)
+		return
+	if _auto_wait > 0:
+		_auto_wait -= 1
+		return
+	_auto_wait = 24       # don't re-fire until the turn's context changes
+	if ctx == "draft":
+		_client_send_build_pick(0)
+	elif ctx == "build":
+		var c: Vector3 = course.course_center
+		NetSession.send_panel_intent({"kind": "par_build_confirm", "seat": my,
+			"x": c.x, "z": c.z + 1.5, "rot": 0.0})
+	elif ctx.begins_with("putt"):
+		var b: Ball = balls[my]
+		var cup: Vector3 = course.cup_position()
+		var to := cup - b.global_position
+		to.y = 0.0
+		var dist := to.length()
+		var dir := to.normalized() if dist > 0.01 else Vector3(0, 0, -1)
+		var angle := rad_to_deg(atan2(-dir.x, -dir.z))
+		var power: float = clampf(dist * 0.55 + 1.5, 2.0, 13.0)
+		submit_putt_intent(my, power, angle)
+		print("PAR_MIRROR auto-putt seat=%d power=%.1f angle=%.1f" % [my, power, angle])
+		get_tree().create_timer(0.5).timeout.connect(func(): VerifyCapture.snap("paronline_client_putt"))
 
 func _client_putt_input() -> void:
 	var my := NetSession.my_seat()
