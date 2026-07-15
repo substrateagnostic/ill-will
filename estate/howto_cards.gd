@@ -26,10 +26,27 @@ const HOWTO := {
 }
 
 static func schedule_howto_test(estate) -> void:
+	# Seat two keyboard humans + two bots so the CONTROLS TONIGHT rows render
+	# real brand glyphs (keyboard here) with text fallback. Self-contained:
+	# backs up/restores party_setup.json (assign/set_bot persist seat choices).
 	estate.get_tree().create_timer(1.2).timeout.connect(func():
+		var ps := ProjectSettings.globalize_path("user://party_setup.json")
+		if FileAccess.file_exists(ps):
+			DirAccess.copy_absolute(ps, ps + ".htbak")
+		PlayerInput.assign(0, -1)
+		PlayerInput.set_bot(0, false)
+		PlayerInput.assign(1, -2)
+		PlayerInput.set_bot(1, false)
+		PlayerInput.set_bot(2, true)
+		PlayerInput.set_bot(3, true)
 		estate._hide_title()
 		estate._show_howto("orbital")
-		VerifyCapture.snap("howto"))
+		VerifyCapture.snap("howto")
+		estate.get_tree().create_timer(1.0).timeout.connect(func():
+			if FileAccess.file_exists(ps + ".htbak"):
+				DirAccess.copy_absolute(ps + ".htbak", ps)
+				DirAccess.remove_absolute(ps + ".htbak")
+			print("HOWTOTEST saves restored")))
 
 static func schedule_ready_test(estate) -> void:
 	# Windowed GET READY card proof. Self-contained: backs up/restores
@@ -130,6 +147,36 @@ static func enter_selector(estate, modules: Dictionary) -> void:
 	back.pressed.connect(Callable(estate, "_enter_title"))
 	estate.phase_box.add_child(back)
 
+## One live control chip: brand glyph via Input.get_joy_name (InputGlyphs), with
+## an always-correct text fallback (describe_binding) when no glyph fits the
+## device / remap. Optional leading caption and trailing meaning label.
+static func _add_control_segment(row: HBoxContainer, player_idx: int, action: String, caption: String, meaning: String) -> void:
+	if caption != "":
+		var caption_l: Label = Label.new()
+		caption_l.text = caption
+		caption_l.add_theme_font_size_override("font_size", 14)
+		caption_l.modulate.a = 0.72
+		row.add_child(caption_l)
+	var glyph: Texture2D = InputGlyphs.texture_for(player_idx, action)
+	if glyph != null:
+		var icon: TextureRect = TextureRect.new()
+		icon.texture = glyph
+		icon.custom_minimum_size = Vector2(30, 30)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(icon)
+	else:
+		var fallback: Label = Label.new()
+		fallback.text = InputGlyphs.text_for(player_idx, action)
+		fallback.add_theme_font_size_override("font_size", 16)
+		fallback.add_theme_color_override("font_color", Color(0.92, 0.88, 1.0))
+		row.add_child(fallback)
+	if meaning != "":
+		var meaning_l: Label = Label.new()
+		meaning_l.text = ": %s" % meaning
+		meaning_l.add_theme_font_size_override("font_size", 15)
+		row.add_child(meaning_l)
+
 static func show_howto(estate, modules: Dictionary, id: String) -> void:
 	Sfx.play("card")
 	var info: Dictionary = modules[id]
@@ -152,6 +199,10 @@ static func show_howto(estate, modules: Dictionary, id: String) -> void:
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 8)
 		row.add_child(PlayerBadge.make(i, 16))
+		if not PlayerInput.is_bot(i) and not NetSession.is_seat_remote(i) and id != "par":
+			_add_control_segment(row, i, "move", "", "")
+			_add_control_segment(row, i, "a", "", "")
+			_add_control_segment(row, i, "b", "", "")
 		var l := Label.new()
 		if PlayerInput.is_bot(i):
 			l.text = "%s — bot, needs no manual" % GameState.PLAYER_NAMES[i]
@@ -369,6 +420,10 @@ static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, 
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 8)
 		row.add_child(PlayerBadge.make(i, 16))
+		if not PlayerInput.is_bot(i) and not NetSession.is_seat_remote(i) and id != "par":
+			_add_control_segment(row, i, "move", "", "")
+			_add_control_segment(row, i, "a", "", "")
+			_add_control_segment(row, i, "b", "", "")
 		var l := Label.new()
 		if PlayerInput.is_bot(i):
 			l.text = "%s — bot, needs no manual" % GameState.PLAYER_NAMES[i]

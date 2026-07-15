@@ -91,6 +91,8 @@ var _lobby_ready_edge := {}       # seat -> physics frame of last READY toggle
 var _kb_join_held := {}           # keyboard device (-1/-2) -> bool: A-key edge
 var _join_ready_lock := {}        # seat -> bool: swallow the join press so it
                                   # does not also flip READY until A releases
+var _start_button_held: bool = false
+var _start_force_hold: HoldConfirm = null
 var _ready_gate_active := false   # the pre-game GET READY card is up
 var _ready_gate_id := ""
 var _ready_gate_practice := false
@@ -178,6 +180,14 @@ func _ready() -> void:
 							VerifyCapture.snap("stroll_selector")))))
 		elif arg == "--howtotest":
 			HowtoCards.schedule_howto_test(self)
+		elif arg == "--input2holdtest":
+			get_tree().create_timer(1.2).timeout.connect(func():
+				_build_slot_panel()
+				var hold: Node = phase_box.find_child("SlotHold1", true, false)
+				if hold != null and hold is HoldConfirm:
+					var hold_ring: HoldConfirm = hold as HoldConfirm
+					hold_ring.set_progress(0.48)
+				VerifyCapture.snap("input2_hold_confirm"))
 		elif arg == "--wardrobetest":
 			WardrobePanel.schedule_wardrobe_test(self)
 		elif arg == "--readytest":
@@ -292,17 +302,13 @@ func _build_slot_panel() -> void:
 		row.add_child(load_btn)
 		var wipe_btn := Button.new()
 		wipe_btn.custom_minimum_size = Vector2(190, 46)
-		wipe_btn.text = "START FRESH" if summary == "" else "WIPE & START FRESH"
-		wipe_btn.pressed.connect(func():
-			if summary != "" and not wipe_btn.text.begins_with("REALLY"):
-				wipe_btn.text = "REALLY? CLICK AGAIN"
-				Sfx.play("invalid")
-				return
-			Sfx.play("grudge")
-			EstateState.new_game(n)
-			EstateState.pending_play = true
-			get_tree().reload_current_scene())
+		wipe_btn.text = "HOLD: START FRESH" if summary == "" else "HOLD: WIPE FRESH"
 		row.add_child(wipe_btn)
+		var wipe_hold: HoldConfirm = HoldConfirm.new()
+		wipe_hold.name = "SlotHold%d" % n
+		wipe_hold.bind_button(wipe_btn, 5.0)
+		wipe_hold.completed.connect(_start_fresh_slot.bind(n))
+		row.add_child(wipe_hold)
 		phase_box.add_child(row)
 	var hint := Label.new()
 	hint.text = "Wiping a slot erases that estate's monuments, ledger, and wardrobe. The Executor will pretend not to notice."
@@ -314,6 +320,12 @@ func _build_slot_panel() -> void:
 	back.text = "BACK TO TITLE"
 	back.pressed.connect(_enter_title)
 	phase_box.add_child(back)
+
+func _start_fresh_slot(slot_idx: int) -> void:
+	Sfx.play("grudge")
+	EstateState.new_game(slot_idx)
+	EstateState.pending_play = true
+	get_tree().reload_current_scene()
 
 func _enter_title() -> void:
 	phase = Phase.TITLE
@@ -517,8 +529,16 @@ func _build_lobby_panel() -> void:
 	start_btn.name = "StartBtn"
 	start_btn.custom_minimum_size = Vector2(300, 56)
 	start_btn.text = _start_btn_text()
-	start_btn.pressed.connect(_start_night_from_lobby)
+	start_btn.pressed.connect(_try_start_night_from_lobby)
+	start_btn.button_down.connect(func(): _start_button_held = true)
+	start_btn.button_up.connect(func(): _start_button_held = false)
 	btn_row.add_child(start_btn)
+	_start_force_hold = HoldConfirm.new()
+	_start_force_hold.name = "ForceStartHold"
+	_start_force_hold.configure(1.5)
+	_start_force_hold.visible = not _waiting_seats().is_empty()
+	_start_force_hold.completed.connect(_force_start_night_from_lobby)
+	btn_row.add_child(_start_force_hold)
 	phase_box.add_child(btn_row)
 	var btn_row2 := HBoxContainer.new()
 	btn_row2.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -567,6 +587,9 @@ func _build_lobby_panel() -> void:
 	phase_box.add_child(hint)
 
 func _start_night_from_lobby() -> void:
+	_start_button_held = false
+	if _start_force_hold != null:
+		_start_force_hold.cancel()
 	_fill_empty_seats_with_bots()
 	PlayerInput.save_setup()
 	GameState.reset_match()
@@ -657,6 +680,28 @@ func _start_btn_text() -> String:
 		names.append(GameState.PLAYER_NAMES[i])
 	return "START THE NIGHT  (waiting: %s)" % ", ".join(names)
 
+func _try_start_night_from_lobby() -> void:
+	if phase != Phase.LOBBY:
+		return
+	var waiting: Array = _waiting_seats()
+	if waiting.is_empty():
+		_start_night_from_lobby()
+		return
+	Sfx.play("invalid")
+	_flash("WAITING ON %s - HOST MAY HOLD START" % ", ".join(_seat_names(waiting)), Color(1.0, 0.72, 0.35), 2.0)
+
+func _force_start_night_from_lobby() -> void:
+	if phase != Phase.LOBBY:
+		return
+	Sfx.play("confirm")
+	_start_night_from_lobby()
+
+func _seat_names(seats: Array) -> Array:
+	var names: Array = []
+	for seat in seats:
+		names.append(GameState.PLAYER_NAMES[int(seat)])
+	return names
+
 ## Unseated keyboard half (Space = -1, Enter = -2) joins the first open seat,
 ## mirroring press-A pad join. Default keys only (a fresh device has no remap
 ## yet); KB+MOUSE stays button-driven since its A is the left mouse button.
@@ -694,8 +739,41 @@ func _claim_seat_for_device(dev: int) -> int:
 					_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0))
 			if phase == Phase.LOBBY:
 				_build_lobby_panel()
+				call_deferred("_flash_lobby_seat", i)
 			return i
 	return -1
+
+func _flash_lobby_seat(seat: int) -> void:
+	var row: Node = phase_box.get_node_or_null("SeatRow%d" % seat)
+	if row == null or not row is Control:
+		return
+	var control: Control = row as Control
+	control.modulate = Color(1.45, 1.35, 0.85, 1.0)
+	control.scale = Vector2(1.04, 1.04)
+	var tween: Tween = create_tween()
+	tween.tween_property(control, "modulate", Color.WHITE, 0.22)
+	tween.parallel().tween_property(control, "scale", Vector2.ONE, 0.22)
+
+func _poll_lobby_release() -> void:
+	for i: int in range(4):
+		if _seat_status(i) != "HUMAN":
+			continue
+		var device: int = PlayerInput.device_of(i)
+		if device != -1 and device != -2 and device < 0:
+			continue
+		if PlayerInput.just_pressed(i, "b"):
+			_release_lobby_seat(i)
+
+func _release_lobby_seat(seat: int) -> void:
+	PlayerInput.set_bot(seat, false)
+	PlayerInput.assign(seat, -99)
+	_lobby_ready.erase(seat)
+	_join_ready_lock.erase(seat)
+	PlayerInput.save_setup()
+	Sfx.play("card")
+	_flash("%s LEAVES THE COUCH" % GameState.PLAYER_NAMES[seat], GameState.PLAYER_COLORS[seat], 1.8)
+	if phase == Phase.LOBBY:
+		_build_lobby_panel()
 
 ## Seated humans toggle their READY chip with A. Pads and keyboard halves only
 ## (KB+MOUSE / SHARED A collides with clicking the lobby's own buttons).
@@ -738,6 +816,26 @@ func _update_lobby_start_btn() -> void:
 	var btn := phase_box.find_child("StartBtn", true, false)
 	if btn and btn is Button:
 		btn.text = _start_btn_text()
+	if _start_force_hold != null:
+		_start_force_hold.visible = not _waiting_seats().is_empty()
+
+func _poll_lobby_force_start(delta: float) -> void:
+	if _start_force_hold == null:
+		return
+	if _waiting_seats().is_empty():
+		_start_button_held = false
+		_start_force_hold.cancel()
+		return
+	var held: bool = _start_button_held or _host_start_held()
+	_start_force_hold.tick(held, delta)
+
+func _host_start_held() -> bool:
+	if PlayerInput.is_bot(0) or PlayerInput.is_remote(0) or NetSession.is_seat_remote(0):
+		return false
+	var device: int = PlayerInput.device_of(0)
+	if device < 0:
+		return false
+	return Input.is_joy_button_pressed(device, JOY_BUTTON_START)
 
 func _enter_selector() -> void:
 	phase = Phase.SELECTOR
@@ -748,6 +846,9 @@ func _show_howto(id: String) -> void:
 
 func get_phase_name() -> String:
 	return Phase.keys()[phase]
+
+func _input2_gameplay_running() -> bool:
+	return phase == Phase.GAME
 
 func _is_bot(p: int) -> bool:
 	return bots or PlayerInput.is_bot(p)
@@ -1018,8 +1119,10 @@ func _process(delta: float) -> void:
 		else:
 			_poll_pad_join()
 			_poll_kb_join()
+			_poll_lobby_release()
 			_poll_lobby_ready()
 			_update_lobby_start_btn()
+			_poll_lobby_force_start(delta)
 	# NETPROBE holds bot wander still: its rng draws are wall-clock-timed, which
 	# would desync the seeded draw order between couch and relay proof runs.
 	if _module == null and not walkers.is_empty() and _netprobe == "":

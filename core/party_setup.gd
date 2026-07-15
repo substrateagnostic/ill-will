@@ -26,10 +26,25 @@ var _controls_box: VBoxContainer
 var _bind_device := -1
 var _listen_action := ""
 var _listen_btn: Button = null
+var _quit_hold: HoldConfirm = null
+var _quit_button_held: bool = false
+
+var _disconnect_panel: PanelContainer = null
+var _disconnect_title: Label = null
+var _disconnect_body: Label = null
+var _disconnect_host_hold: HoldConfirm = null
+var _disconnect_active: bool = false
+var _disconnect_seat: int = -1
+var _disconnect_device: int = -99
+var _disconnect_prev_paused: bool = false
+var _disconnect_claim_held: Dictionary = {}
 
 func _ready() -> void:
 	layer = 90
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	var joy_cb: Callable = Callable(self, "_on_joy_connection_changed")
+	if not Input.joy_connection_changed.is_connected(joy_cb):
+		Input.joy_connection_changed.connect(joy_cb)
 	PlayerInput.load_setup()
 	_load_prefs()
 	_apply_audio_prefs()
@@ -66,11 +81,21 @@ func _ready() -> void:
 	tabs.add_child(_build_video_tab())
 	tabs.add_child(_build_access_tab())
 	# Playtest (Andrew): no way to leave a game — escape hatch from anywhere.
-	var quit_btn := Button.new()
+	var quit_row: HBoxContainer = HBoxContainer.new()
+	quit_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	quit_row.add_theme_constant_override("separation", 12)
+	var quit_btn: Button = Button.new()
 	quit_btn.text = "QUIT TO TITLE  (forfeits the current game)"
 	quit_btn.custom_minimum_size = Vector2(0, 44)
-	quit_btn.pressed.connect(quit_to_title)
-	box.add_child(quit_btn)
+	quit_btn.button_down.connect(func(): _quit_button_held = true)
+	quit_btn.button_up.connect(func(): _quit_button_held = false)
+	quit_row.add_child(quit_btn)
+	_quit_hold = HoldConfirm.new()
+	_quit_hold.configure(3.0)
+	_quit_hold.completed.connect(quit_to_title)
+	quit_row.add_child(_quit_hold)
+	box.add_child(quit_row)
+	_build_disconnect_overlay()
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--opensettings="):
 			var t := int(arg.trim_prefix("--opensettings="))
@@ -78,6 +103,17 @@ func _ready() -> void:
 				if not open:
 					toggle()
 				tabs.current_tab = clampi(t, 0, tabs.get_tab_count() - 1))
+		elif arg.begins_with("--fake-disconnect="):
+			# Dev-only: a real pad-unplug can't be simulated headlessly, so this
+			# seats a local human on a phantom gamepad and fires the SAME overlay
+			# path after 2s so the reclaim/bot card can be captured windowed.
+			var seat := clampi(int(arg.trim_prefix("--fake-disconnect=")), 0, 3)
+			get_tree().create_timer(2.0).timeout.connect(func():
+				GameState.player_count = maxi(GameState.player_count, seat + 1)
+				PlayerInput.assign(seat, 0)
+				PlayerInput.set_bot(seat, false)
+				_begin_disconnect_overlay(seat, 0)
+				VerifyCapture.snap("input2_disconnect"))
 
 ## Forfeit whatever is running and return to the title, leaving NOTHING behind.
 ## Playtest bug (Andrew, round 2): modules launch parented at the TREE ROOT, so
@@ -86,6 +122,12 @@ func _ready() -> void:
 ## is now on top" of golf). free_stray_root_nodes() is the root fix; the time
 ## scale reset covers quitting mid-hitstop (HIT KIT runs at 0.15 for 45ms).
 func quit_to_title() -> void:
+	_disconnect_active = false
+	_quit_button_held = false
+	if _quit_hold != null:
+		_quit_hold.cancel()
+	if _disconnect_panel != null:
+		_disconnect_panel.visible = false
 	open = false
 	panel.visible = false
 	get_tree().paused = false
@@ -120,6 +162,10 @@ func free_stray_root_nodes() -> int:
 	return freed
 
 func _input(event: InputEvent) -> void:
+	if _disconnect_active:
+		if event is InputEventKey and event.pressed:
+			get_viewport().set_input_as_handled()
+		return
 	if _listen_action != "" and event is InputEventKey and event.pressed:
 		get_viewport().set_input_as_handled()
 		if event.physical_keycode == KEY_ESCAPE:
@@ -135,6 +181,8 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func toggle() -> void:
+	if _disconnect_active:
+		return
 	open = not open
 	panel.visible = open
 	get_tree().paused = open
@@ -145,6 +193,149 @@ func toggle() -> void:
 		_stop_listen()
 		PlayerInput.save_setup()
 		_save_prefs()
+
+func _process(delta: float) -> void:
+	if _disconnect_active:
+		_poll_disconnect_overlay(delta)
+	if _quit_hold != null:
+		var quit_held: bool = open and not _disconnect_active and _quit_button_held
+		_quit_hold.tick(quit_held, delta)
+
+## ----- controller disconnect safety (global couch overlay) -----
+
+func _build_disconnect_overlay() -> void:
+	_disconnect_panel = PanelContainer.new()
+	_disconnect_panel.visible = false
+	_disconnect_panel.process_mode = Node.PROCESS_MODE_ALWAYS
+	_disconnect_panel.set_anchors_preset(Control.PRESET_CENTER)
+	_disconnect_panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	_disconnect_panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	_disconnect_panel.custom_minimum_size = Vector2(760, 320)
+	add_child(_disconnect_panel)
+	var box: VBoxContainer = VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	_disconnect_panel.add_child(box)
+	_disconnect_title = Label.new()
+	_disconnect_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_disconnect_title.add_theme_font_size_override("font_size", 30)
+	_disconnect_title.add_theme_color_override("font_color", Color(1.0, 0.82, 0.25))
+	box.add_child(_disconnect_title)
+	_disconnect_body = Label.new()
+	_disconnect_body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_disconnect_body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_disconnect_body.custom_minimum_size = Vector2(680, 0)
+	_disconnect_body.add_theme_font_size_override("font_size", 19)
+	box.add_child(_disconnect_body)
+	var host_row: HBoxContainer = HBoxContainer.new()
+	host_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	host_row.add_theme_constant_override("separation", 12)
+	var hold_label: Label = Label.new()
+	hold_label.text = "HOST HOLDS B TO LET A BOT CONTINUE"
+	hold_label.add_theme_font_size_override("font_size", 18)
+	host_row.add_child(hold_label)
+	_disconnect_host_hold = HoldConfirm.new()
+	_disconnect_host_hold.configure(2.0)
+	_disconnect_host_hold.completed.connect(_convert_disconnected_seat_to_bot)
+	host_row.add_child(_disconnect_host_hold)
+	box.add_child(host_row)
+
+func _on_joy_connection_changed(device: int, connected: bool) -> void:
+	if connected:
+		if _disconnect_active and device == _disconnect_device:
+			_reclaim_disconnected_seat(device)
+		return
+	if _disconnect_active or not _gameplay_running():
+		return
+	var seat: int = _local_human_seat_for_device(device)
+	if seat < 0:
+		return
+	_begin_disconnect_overlay(seat, device)
+
+func _gameplay_running() -> bool:
+	var current: Node = get_tree().current_scene
+	if current == null:
+		return false
+	if current.has_method("_input2_gameplay_running"):
+		return bool(current.call("_input2_gameplay_running"))
+	var scene_path: String = current.scene_file_path
+	return scene_path == "res://scenes/main.tscn" or scene_path.begins_with("res://minigames/")
+
+func _local_human_seat_for_device(device: int) -> int:
+	for i: int in range(GameState.player_count):
+		if PlayerInput.device_of(i) != device:
+			continue
+		if PlayerInput.is_bot(i) or PlayerInput.is_remote(i) or NetSession.is_seat_remote(i):
+			continue
+		return i
+	return -1
+
+func _begin_disconnect_overlay(seat: int, device: int) -> void:
+	_disconnect_active = true
+	_disconnect_seat = seat
+	_disconnect_device = device
+	_disconnect_prev_paused = get_tree().paused
+	_disconnect_claim_held.clear()
+	_disconnect_host_hold.cancel()
+	_disconnect_title.text = "%s'S CONTROLLER DISCONNECTED" % GameState.PLAYER_NAMES[seat]
+	_disconnect_title.add_theme_color_override("font_color", GameState.PLAYER_COLORS[seat])
+	_disconnect_body.text = "Reconnect gamepad %d to resume automatically. Press A on any unclaimed gamepad to reclaim this seat. The host may hold B to convert the seat to BOT and continue." % (device + 1)
+	_disconnect_panel.visible = true
+	get_tree().paused = true
+	Sfx.play("grudge", -4.0)
+
+func _poll_disconnect_overlay(delta: float) -> void:
+	if Input.get_connected_joypads().has(_disconnect_device):
+		_reclaim_disconnected_seat(_disconnect_device)
+		return
+	for pad: int in Input.get_connected_joypads():
+		var down: bool = Input.is_joy_button_pressed(pad, JOY_BUTTON_A)
+		if not down:
+			_disconnect_claim_held.erase(pad)
+			continue
+		if bool(_disconnect_claim_held.get(pad, false)):
+			continue
+		_disconnect_claim_held[pad] = true
+		if _pad_available_for_reclaim(pad):
+			_reclaim_disconnected_seat(pad)
+			return
+	var host_held: bool = _host_b_held()
+	_disconnect_host_hold.tick(host_held, delta)
+
+func _pad_available_for_reclaim(pad: int) -> bool:
+	for i: int in range(GameState.player_count):
+		if i == _disconnect_seat:
+			continue
+		if PlayerInput.device_of(i) == pad and not PlayerInput.is_bot(i) and not PlayerInput.is_remote(i):
+			return false
+	return true
+
+func _host_b_held() -> bool:
+	if GameState.player_count <= 0:
+		return false
+	if PlayerInput.is_bot(0) or PlayerInput.is_remote(0) or NetSession.is_seat_remote(0):
+		return false
+	return PlayerInput.is_down(0, "b")
+
+func _reclaim_disconnected_seat(device: int) -> void:
+	PlayerInput.assign(_disconnect_seat, device)
+	PlayerInput.set_bot(_disconnect_seat, false)
+	PlayerInput.save_setup()
+	Sfx.play("confirm")
+	_end_disconnect_overlay()
+
+func _convert_disconnected_seat_to_bot() -> void:
+	PlayerInput.set_bot(_disconnect_seat, true)
+	PlayerInput.assign(_disconnect_seat, -99)
+	PlayerInput.save_setup()
+	Sfx.play("card")
+	_end_disconnect_overlay()
+
+func _end_disconnect_overlay() -> void:
+	_disconnect_panel.visible = false
+	_disconnect_active = false
+	_disconnect_claim_held.clear()
+	_disconnect_host_hold.cancel()
+	get_tree().paused = _disconnect_prev_paused
 
 ## ----- prefs (audio/video/access) -----
 
