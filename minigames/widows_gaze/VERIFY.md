@@ -47,12 +47,22 @@ godot --path . res://minigames/widows_gaze/widows_gaze.tscn -- `
 godot --headless --path . -- --quitafter=300
 ```
 
-## Tally excerpts
+## Tally excerpts (seed 11, shipping code, 0 SCRIPT ERRORs)
 
-See the run log lines `WG_EVT` (grabs / stings / catches / murders / banks /
-fakeouts, all timestamped) and the final `WG_TALLY` line. Both catches with
-`killer=-1` (the Widow took an over-runner) and `killer>=0` (a shove-murder)
-occur; `KILL_EVENTS` carries `cause:"gazed"` per the module contract.
+```
+WG_EVT t=51.69 | escalate t=50.0
+WG_EVT t=61.16 | fakeout resolved -> real sting in 0.36
+WG_EVT t=64.43 | round_end kind=clean
+WG_TALLY seed=11 banks=10 catches=10 murders=6 shoves=7 hits=7 stings=11
+  fakeouts=1 points={"0":6,"1":6,"2":5,"3":8} placements=[3, 0, 1, 2]
+KILL_EVENTS n=10 [{"cause":"gazed","killer":1,"victim":0},
+  {"cause":"gazed","killer":-1,"victim":0}, ...]
+```
+
+Both catch flavors occur: `killer=-1` (the Widow took an over-runner) and
+`killer>=0` (a shove-murder, royalty paid); `KILL_EVENTS` carries
+`cause:"gazed"` per the module contract. Every `WG_EVT` line (grabs / stings /
+catches / murders / banks / fakeouts) is timestamped for replay.
 
 ## Screenshots (verify_out/widows_gaze/)
 
