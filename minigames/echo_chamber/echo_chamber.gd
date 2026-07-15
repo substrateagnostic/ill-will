@@ -575,9 +575,9 @@ func _btn_hint(action: String, label: String) -> String:
 ## The main hint bar with real keys, or a generic legend for an all-bot demo.
 func _controls_bar() -> String:
 	if _human_seats().is_empty():
-		return "MOVE   ·   A = STRIKE   ·   B = DASH (hold PARRY)   |   DUEL YOUR OWN ECHO"
-	return "MOVE   ·   %s   ·   %s   |   DUEL YOUR OWN ECHO" % [
-		_btn_hint("a", "STRIKE"), _btn_hint("b", "DASH / hold PARRY")]
+		return "MOVE   ·   A = STRIKE   ·   B = DASH (hold PARRY)   ·   JUMP = HOP   |   DUEL YOUR OWN ECHO"
+	return "MOVE   ·   %s   ·   %s   ·   %s   |   DUEL YOUR OWN ECHO" % [
+		_btn_hint("a", "STRIKE"), _btn_hint("b", "DASH / hold PARRY"), _btn_hint("jump", "HOP")]
 
 
 func _spawn_fighters() -> void:

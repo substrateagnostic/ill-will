@@ -62,6 +62,20 @@ const PARRY_CD := 1.0                 # anti-turtle: cooldown after release
 const RIPOSTE_WINDOW := 0.8           # after a parry, your next light bonuses
 const CHARGE_SCALE := 1.06
 
+# ---- EXPRESSIVE HOP (director's ruling, docs/design/16-jump-and-visibility.md) ----
+# Cosmetic-only bunny-hop on the new PlayerInput "jump" action. Refused while
+# _busy() (swing/heavy/dash/charge/parry/stagger) so it never visually clashes
+# with a committed action; combat resolution (resolve_swing, echo_chamber.gd:1050,
+# `to.y = 0.0` before the range/arc test) already flattens Y unconditionally, so
+# hop cannot grant evasion regardless — this refusal is about animation
+# cleanliness, not balance (belt-and-suspenders).
+const HOP_VY := 3.0                   # bunny-hop impulse (m/s) — NOT a platform jump
+const HOP_GRAVITY := 15.0             # softer than combat GRAVITY (24.0): a floaty arc
+const HOP_CD := 0.5
+const HOP_START_ANIM_T := 0.12
+const HOP_LAND_HOLD_T := 0.15
+const HOP_SQUASH_T := 0.1
+
 var player_index := 0
 var color := Color.WHITE
 var char_path := ""
@@ -97,7 +111,16 @@ var _riposte_swing := false           # this light is a riposte (bonus dmg+pt)
 var _ev_light := false
 var _ev_heavy := false
 var _ev_dash := false
+var _ev_hop := false
 var _want_parry := false
+
+# EXPRESSIVE HOP state (cosmetic only — never read by combat resolution)
+var _hop_cd := 0.0
+var _hopping := false
+var _hop_anim_t := 0.0
+var _hop_land_hold := 0.0
+var _hop_intro_t := -1.0              # bots: one hop shortly after round start
+var _hop_rng := RandomNumberGenerator.new()
 
 # player button hold tracking
 var _a_prev := false
@@ -150,7 +173,7 @@ func setup(seed_base: int) -> void:
 	inst.scale = Vector3(_base_scale, _base_scale, _base_scale)
 	_pivot.add_child(inst)
 	_anim = inst.find_child("AnimationPlayer", true, false)
-	for a in ["Idle", "Running_A", "Blocking"]:
+	for a in ["Idle", "Running_A", "Blocking", "Jump_Idle"]:
 		if _anim and _anim.has_animation(a):
 			_anim.get_animation(a).loop_mode = Animation.LOOP_LINEAR
 	_collect_meshes(inst)
@@ -196,6 +219,8 @@ func setup(seed_base: int) -> void:
 	add_child(_warn_label)
 
 	_bot_rng.seed = seed_base * 131 + player_index * 977 + 7
+	_hop_rng.seed = seed_base * 331 + player_index * 613 + 11
+	_hop_intro_t = _hop_rng.randf_range(2.0, 6.0)
 	_play("Idle")
 
 
@@ -223,6 +248,8 @@ func tick(delta: float) -> void:
 	_parry_cd = maxf(0.0, _parry_cd - delta)
 	_iframe = maxf(0.0, _iframe - delta)
 	_riposte_t = maxf(0.0, _riposte_t - delta)
+	_hop_cd = maxf(0.0, _hop_cd - delta)
+	_hop_land_hold = maxf(0.0, _hop_land_hold - delta)
 	if _stagger > 0.0:
 		_stagger -= delta
 
@@ -230,6 +257,7 @@ func tick(delta: float) -> void:
 	_ev_light = false
 	_ev_heavy = false
 	_ev_dash = false
+	_ev_hop = false
 	_want_parry = false
 	var mv := Vector2.ZERO
 	if is_bot:
@@ -238,6 +266,7 @@ func tick(delta: float) -> void:
 	else:
 		mv = PlayerInput.get_move(player_index)
 		_resolve_player_buttons(delta)
+		_ev_hop = PlayerInput.just_pressed(player_index, "jump")
 
 	# 2. parry stance start/stop
 	if _parrying:
@@ -255,6 +284,26 @@ func tick(delta: float) -> void:
 			_start_heavy()
 		elif _ev_light and _swing_cd <= 0.0 and not _busy():
 			_start_light()
+
+	# 3b. EXPRESSIVE HOP — cosmetic bunny-hop, refused while _busy() (see the
+	# const-block comment above for why that's a cleanliness guard, not a
+	# balance one). Bots get a one-off personality hop shortly after spawn —
+	# the intent latches (doesn't consume) until it actually fires, so a bot
+	# that happens to be _busy() when its timer expires still hops the moment
+	# it's free instead of silently losing the beat.
+	if is_bot and _hop_intro_t > -900.0:
+		_hop_intro_t -= delta
+		if _hop_intro_t <= 0.0:
+			_ev_hop = true
+	if _ev_hop and _hop_cd <= 0.0 and not _hopping and not _busy() and is_on_floor():
+		_hop_cd = HOP_CD
+		_hopping = true
+		_hop_anim_t = HOP_START_ANIM_T
+		velocity.y = HOP_VY
+		Sfx.play("putt", -8.0)
+		if is_bot:
+			_hop_intro_t = -1000.0   # consumed; never re-fires from the intro timer
+		print("ECHO_HOP p=%d bot=%s frame=%d" % [player_index, str(is_bot), Engine.get_physics_frames()])
 
 	# 4. advance an active LIGHT; fire its arc once, early
 	if _swing_t >= 0.0:
@@ -307,15 +356,31 @@ func tick(delta: float) -> void:
 
 	velocity.x = horiz.x
 	velocity.z = horiz.z
-	if is_on_floor():
+	if _hopping:
+		velocity.y -= HOP_GRAVITY * delta        # floaty bunny-hop arc, not combat GRAVITY
+	elif is_on_floor():
 		velocity.y = -0.5
 	else:
 		velocity.y -= GRAVITY * delta
 	move_and_slide()
 
+	if _hopping and is_on_floor() and velocity.y <= 0.0:
+		_hopping = false
+		_hop_land_hold = HOP_LAND_HOLD_T
+		_hop_land_fx()
+
 	_pivot.rotation.y = yaw + MODEL_YAW_OFFSET
 	_set_charge_visual(_charging)
-	_apply_locomotion_anim()
+	if _hopping:
+		if _hop_anim_t > 0.0:
+			_hop_anim_t -= delta
+			_play("Jump_Start", false)
+		else:
+			_play("Jump_Idle")
+	elif _hop_land_hold > 0.0:
+		_play("Jump_Land", false)
+	else:
+		_apply_locomotion_anim()
 
 	if global_position.y < -3.0 and alive and main:
 		main.on_fall_death(player_index)
@@ -533,6 +598,10 @@ func respawn(pos: Vector3, hp_amount: int) -> void:
 	_bot_riposte_pending = false
 	_bot_parry_hold = 0.0
 	_bot_charge_hold = 0.0
+	_hopping = false
+	_hop_cd = 0.0
+	_hop_anim_t = 0.0
+	_hop_land_hold = 0.0
 	_set_charge_visual(false)
 	state = ST_IDLE
 	_play("Idle")
@@ -628,6 +697,50 @@ func _flash_pop() -> void:
 	var tw := create_tween()
 	_pivot.scale = Vector3(_base_scale * 1.22, _base_scale * 0.85, _base_scale * 1.22)
 	tw.tween_property(_pivot, "scale", Vector3(_base_scale, _base_scale, _base_scale), 0.16)
+
+
+## EXPRESSIVE HOP landing beat: squash-stretch (1.08 wide / 0.92 tall, 0.1s —
+## smaller than the hit-reaction flash_pop above) + a tiny dust puff.
+func _hop_land_fx() -> void:
+	if _pivot == null:
+		return
+	var tw := create_tween()
+	_pivot.scale = Vector3(_base_scale * 1.08, _base_scale * 0.92, _base_scale * 1.08)
+	tw.tween_property(_pivot, "scale", Vector3(_base_scale, _base_scale, _base_scale), HOP_SQUASH_T) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_spawn_hop_dust()
+
+
+func _spawn_hop_dust() -> void:
+	var p := CPUParticles3D.new()
+	p.emitting = false
+	p.one_shot = true
+	p.amount = 8
+	p.lifetime = 0.35
+	p.explosiveness = 0.9
+	p.direction = Vector3(0, 1, 0)
+	p.spread = 50.0
+	p.gravity = Vector3(0, -4.0, 0)
+	p.initial_velocity_min = 0.6
+	p.initial_velocity_max = 1.4
+	p.scale_amount_min = 0.06
+	p.scale_amount_max = 0.12
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.05
+	mesh.height = 0.1
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.75, 0.68, 0.55, 0.55)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	p.mesh.surface_set_material(0, mat)
+	add_child(p)
+	p.top_level = true         # decouple from the (possibly still-moving) body
+	p.global_position = global_position + Vector3(0, 0.05, 0)
+	p.emitting = true
+	get_tree().create_timer(p.lifetime + 0.3).timeout.connect(func():
+		if is_instance_valid(p):
+			p.queue_free())
 
 
 # ---------------------------------------------------------------------------
