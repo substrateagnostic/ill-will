@@ -341,34 +341,25 @@ func begin(config: Dictionary) -> void:
 
 # ============================================================== world
 func _build_world() -> void:
-	var we: WorldEnvironment = $WorldEnvironment
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.03, 0.02, 0.04)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.5, 0.4, 0.42)
-	env.ambient_light_energy = 0.35
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
-	env.glow_intensity = 0.5
-	env.glow_bloom = 0.12
-	env.glow_hdr_threshold = 0.95
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.15, 0.06, 0.08)
-	env.fog_density = 0.012
-	we.environment = env
+	# THE HOUSE LOOK -- STAGELIT theater (core/env_kit.gd). Understudy is a stage:
+	# a hard key rakes the boards so the four actors' FACES read from the audience
+	# view (overridden to a frontal angle, not the top-down arena default), a cool
+	# rim peels them off the near-black curtain, and the additive high-threshold
+	# glow blooms the footlights + mask/costume glints. The warm-red house haze is
+	# kept. Replaces the old flat FILMIC env + a too-weak (0.35) KeyWash that left
+	# the cast in mud. The reveal (us_reveal) still dims via its own UI overlay.
+	EnvKit.apply(self, EnvKit.STAGELIT, {
+		"key_angle": Vector3(-42.0, 8.0, 0.0),   # frontal rake -- audience view, faces read
+		"key_energy": 1.4,
+		"ambient_energy": 0.40,                  # lift the house so seated actors never mud out
+		"fog": true,                             # keep understudy's warm-red house haze
+		"fog_color": Color(0.15, 0.06, 0.08),
+		"fog_density": 0.010,
+	})
 
 	cam.global_position = Vector3(0, 3.55, 8.7)
 	cam.look_at(Vector3(0, 1.35, 0), Vector3.UP)
 	cam.fov = 52.0
-
-	# key wash from the front-top so faces read; warm
-	var key := DirectionalLight3D.new()
-	key.name = "KeyWash"
-	add_child(key)
-	key.rotation_degrees = Vector3(-42.0, 8.0, 0.0)
-	key.light_energy = 0.35
-	key.light_color = Color(1.0, 0.88, 0.72)
 
 	_build_stage()
 	_build_curtains()

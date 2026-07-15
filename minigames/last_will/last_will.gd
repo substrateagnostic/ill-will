@@ -380,31 +380,17 @@ func begin(config: Dictionary) -> void:
 
 # ================================================================ world
 func _build_world() -> void:
-	var we: WorldEnvironment = $WorldEnvironment
-	var env := Environment.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.13, 0.08, 0.24)
-	sky_mat.sky_horizon_color = Color(0.72, 0.34, 0.22)
-	sky_mat.sky_curve = 0.18
-	sky_mat.ground_bottom_color = Color(0.04, 0.03, 0.09)
-	sky_mat.ground_horizon_color = Color(0.45, 0.2, 0.2)
-	sky_mat.sun_angle_max = 40.0
-	var sky := Sky.new()
-	sky.sky_material = sky_mat
-	env.background_mode = Environment.BG_SKY
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.55
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
-	env.glow_intensity = 0.55
-	env.glow_bloom = 0.1
-	env.glow_hdr_threshold = 1.0
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.2, 0.1, 0.2)
-	env.fog_density = 0.008
-	env.fog_sky_affect = 0.0
-	we.environment = env
+	# THE HOUSE LOOK -- MOONLIT funeral procession (core/env_kit.gd). The gauntlet
+	# runs at night: a cool moon key rakes the pier, a warm fill stands in for the
+	# lantern-lit cortege, ground fog hangs over the void, and the high-threshold
+	# glow blooms the rail lanterns + the gold curse-stretch plaques (the hazards
+	# that MUST pop) without touching the UI. Replaces the old FILMIC dusk-sky env
+	# + hand-rolled DuskSun/MoonFill.
+	var rig := EnvKit.apply(self, EnvKit.MOONLIT, {
+		"fill_energy": 0.30,     # warmer pier fill -- the lantern-lit procession
+		"fog_density": 0.008,    # thinner than base so hazard plaques read down-course
+	})
+	var env: Environment = rig["environment"]
 
 	cam.position = Vector3(0, 13.9, 11.8)
 	cam.fov = _cam_base_fov
@@ -412,20 +398,7 @@ func _build_world() -> void:
 	cam.look_at_from_position(cam_rig.position + cam.position,
 		cam_rig.position + Vector3(0, 0.2, -0.7), Vector3.UP)
 
-	var sun := DirectionalLight3D.new()
-	sun.name = "DuskSun"
-	add_child(sun)
-	sun.rotation_degrees = Vector3(-32.0, 118.0, 0.0)
-	sun.light_energy = 0.95
-	sun.light_color = Color(1.0, 0.62, 0.38)
-	sun.shadow_enabled = true
-
-	var moon := DirectionalLight3D.new()
-	moon.name = "MoonFill"
-	add_child(moon)
-	moon.rotation_degrees = Vector3(-48.0, -50.0, 0.0)
-	moon.light_energy = 0.28
-	moon.light_color = Color(0.5, 0.58, 0.95)
+	# (key + warm fill are the EnvKit MOONLIT rig, applied above)
 
 	# the void has a floor of dusk, not pure black: a deep-purple sea far
 	# below that silhouettes falling bodies, running the length of the course

@@ -395,22 +395,28 @@ func begin(config: Dictionary) -> void:
 
 # ================================================================ world
 func _build_world() -> void:
-	var we: WorldEnvironment = $WorldEnvironment
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.012, 0.008, 0.02)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.5, 0.38, 0.32)
-	env.ambient_light_energy = 0.42
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
-	env.glow_intensity = 0.7
-	env.glow_bloom = 0.12
-	env.glow_hdr_threshold = 0.95
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.1, 0.07, 0.12)
-	env.fog_density = 0.012
-	we.environment = env
+	# THE HOUSE LOOK -- CANDLELIT/STAGELIT hybrid (core/env_kit.gd). Seance is
+	# candle-heavy and its DARK is a mechanic (the eyes-closed "listen" beats), so
+	# we keep its bespoke, choreographed rig -- the TableSpot candle pool, the cool
+	# MoonFill, the spirit flame and the reveal spot -- and use EnvKit only to own
+	# the ENVIRONMENT: the house AGX tonemap (candle flames roll to COLOURED glow
+	# instead of clipping white) over seance's exact warm ambient + cool-purple
+	# haze, with an ADDITIVE glow lean (the STAGELIT half of the hybrid) so the
+	# flames, the spirit flare and the verdict reveal bloom with stage punch.
+	# EnvKit's own key/fill/rim are zeroed -- the bespoke lights stay the rig.
+	EnvKit.apply(self, EnvKit.CANDLELIT, {
+		"key_energy": 0.0, "key_shadow": false,          # keep the bespoke TableSpot as key
+		"fill_energy": 0.0, "rim_energy": 0.0,           # keep the bespoke MoonFill
+		"bg_color": Color(0.012, 0.008, 0.02),
+		"ambient_color": Color(0.5, 0.38, 0.32),
+		"ambient_energy": 0.42,
+		"fog_color": Color(0.1, 0.07, 0.12),
+		"fog_density": 0.012,
+		"glow_intensity": 0.75,
+		"glow_bloom": 0.12,
+		"glow_threshold": 0.95,
+		"glow_blend": Environment.GLOW_BLEND_MODE_ADDITIVE,
+	})
 
 	cam.global_position = Vector3(0, 7.35, 8.9)
 	cam.look_at(Vector3(0, 0.72, -0.4), Vector3.UP)
