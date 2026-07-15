@@ -83,11 +83,21 @@ var _ui: CanvasLayer
 var _topbar: Control
 var _chiprow: Control
 var _reveal: RichTextLabel
+var _lowerthird: PanelContainer         # dark scrim housing the reveal line
+var _reveal_badge: PlayerBadge          # affected-player portrait in the lower-third
+var _reveal_seat := -1                  # seat the current reveal line is about (-1 = none)
 var _announce: Label
+var _announce_scrim: Control            # dark band behind the centre ceremony cards
 var _round_lbl: Label
 var _codicil_lbl: Label
 var _chips: Array = []               # per seat: {badge, grudge_lbl, deeds_lbl}
 var _cam_home := Vector3(0, 23, 23)
+
+# Lower-third geometry (anchored bottom-centre; slides up on show).
+const LT_HALF_W := 620.0
+const LT_REST_TOP := -338.0
+const LT_REST_BOTTOM := -196.0
+const LT_SLIDE := 34.0
 
 # ---- will clauses (announced at night start, paid at the reading) ----
 var clauses: Array = []
@@ -193,26 +203,18 @@ func _init_arrays() -> void:
 # WORLD + HUD
 # --------------------------------------------------------------------------
 func _build_world() -> void:
-	var we := WorldEnvironment.new()
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.04, 0.04, 0.07)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.35, 0.34, 0.42)
-	env.ambient_light_energy = 1.1
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.08, 0.07, 0.11)
-	env.fog_density = 0.008
-	env.glow_enabled = true
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	we.environment = env
-	add_child(we)
-	var moon := DirectionalLight3D.new()
-	moon.rotation_degrees = Vector3(-52, -38, 0)
-	moon.light_energy = 0.85
-	moon.light_color = Color(0.75, 0.8, 1.0)
-	moon.shadow_enabled = true
-	add_child(moon)
+	# THE HOUSE LOOK, as code — the shared MOONLIT rig (cool night key, warm fill,
+	# ground fog, AGX tonemap, bloom-on-emissives). Overrides lift the ambient a
+	# touch and add a faint cool rim so four pawn colours + eight space types all
+	# parse at couch distance under the dark. (core/env_kit.gd owns the preset.)
+	EnvKit.apply(self, EnvKit.MOONLIT, {
+		"ambient_energy": 0.52,
+		"key_energy": 1.15,
+		"rim_energy": 0.32,
+		"rim_color": Color(0.55, 0.68, 1.0),
+		"fog_density": 0.010,
+		"glow_intensity": 0.85,
+	})
 
 	board = BoardPath.new()
 	add_child(board)
@@ -226,8 +228,8 @@ func _build_world() -> void:
 
 	cam = Camera3D.new()
 	cam.fov = 52.0
-	cam.global_position = _cam_home
 	add_child(cam)
+	cam.global_position = _cam_home
 	cam.look_at(board.CENTER, Vector3.UP)
 	cam.current = true
 
@@ -241,14 +243,22 @@ func _build_hud() -> void:
 	_ui = CanvasLayer.new()
 	add_child(_ui)
 
+	# Top status bar rides on a dark scrim so ROUND / CODICIL read over any
+	# scenery (≥30px @1080p, well over the 26px floor).
+	var top_panel := PanelContainer.new()
+	top_panel.name = "TopBar"
+	top_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	top_panel.offset_top = 10
+	top_panel.offset_left = 14
+	top_panel.offset_right = -14
+	top_panel.add_theme_stylebox_override("panel", _scrim_box(Color(0.04, 0.045, 0.07, 0.82)))
+	top_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ui.add_child(top_panel)
+	_topbar = top_panel
+
 	var top := HBoxContainer.new()
-	top.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	top.add_theme_constant_override("separation", 18)
-	top.offset_top = 12
-	top.offset_left = 18
-	top.offset_right = -18
-	_ui.add_child(top)
-	_topbar = top
+	top_panel.add_child(top)
 
 	_round_lbl = _chip_label("ROUND 0", 30, Color(0.92, 0.9, 0.98))
 	top.add_child(_round_lbl)
@@ -291,19 +301,69 @@ func _build_hud() -> void:
 		chiprow.add_child(panel)
 		_chips.append({"grudge": stat_l})
 
+	# ---- REVEAL lower-third: a broadcast-style band pinned bottom-centre, with a
+	# dark translucent scrim + gold rule, the affected player's PlayerBadge, and
+	# the Executor's line set in the anthology's heaviest face. Slides up 0.25s.
+	_lowerthird = PanelContainer.new()
+	_lowerthird.name = "LowerThird"
+	_lowerthird.anchor_left = 0.5; _lowerthird.anchor_right = 0.5
+	_lowerthird.anchor_top = 1.0; _lowerthird.anchor_bottom = 1.0
+	_lowerthird.offset_left = -LT_HALF_W; _lowerthird.offset_right = LT_HALF_W
+	_lowerthird.offset_top = LT_REST_TOP; _lowerthird.offset_bottom = LT_REST_BOTTOM
+	_lowerthird.add_theme_stylebox_override("panel", _lowerthird_box())
+	_lowerthird.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lowerthird.modulate.a = 0.0
+	_lowerthird.visible = false
+	_ui.add_child(_lowerthird)
+	var lt_margin := MarginContainer.new()
+	lt_margin.add_theme_constant_override("margin_left", 26)
+	lt_margin.add_theme_constant_override("margin_right", 26)
+	lt_margin.add_theme_constant_override("margin_top", 14)
+	lt_margin.add_theme_constant_override("margin_bottom", 14)
+	_lowerthird.add_child(lt_margin)
+	var lt_row := HBoxContainer.new()
+	lt_row.add_theme_constant_override("separation", 20)
+	lt_row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	lt_margin.add_child(lt_row)
+	_reveal_badge = PlayerBadge.make(0, 62)
+	_reveal_badge.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_reveal_badge.visible = false
+	lt_row.add_child(_reveal_badge)
+
 	_reveal = RichTextLabel.new()
 	_reveal.bbcode_enabled = true
 	_reveal.fit_content = true
 	_reveal.scroll_active = false
 	_reveal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_reveal.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-	_reveal.custom_minimum_size = Vector2(1000, 120)
-	_reveal.offset_left = -500; _reveal.offset_right = 500
-	_reveal.offset_top = 150; _reveal.offset_bottom = 270
-	_reveal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_reveal.add_theme_font_size_override("normal_font_size", 40)
+	_reveal.custom_minimum_size = Vector2(LT_HALF_W * 2.0 - 150.0, 96)
+	_reveal.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_reveal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_reveal.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_reveal.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	# No serif ships in the project; Baloo2 is its heaviest, most formal face —
+	# the closest to a will-reading register available. (Follow-up: add a gothic
+	# serif TTF for the Executor's proclamations.)
+	var serif: FontFile = load("res://assets/fonts/Baloo2.ttf")
+	if serif != null:
+		_reveal.add_theme_font_override("normal_font", serif)
+		_reveal.add_theme_font_override("bold_font", serif)
+	_reveal.add_theme_font_size_override("normal_font_size", 34)
+	_reveal.add_theme_color_override("default_color", Color(0.96, 0.94, 0.88))
 	_reveal.visible = false
-	_ui.add_child(_reveal)
+	lt_row.add_child(_reveal)
+	_reveal.visibility_changed.connect(_on_reveal_vis_changed)
+
+	# A soft dark band behind the centre ceremony cards (clauses, reckoning, house,
+	# crown) so their text never fights bright scenery. Toggled with _announce.
+	_announce_scrim = PanelContainer.new()
+	_announce_scrim.name = "AnnounceScrim"
+	_announce_scrim.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	_announce_scrim.offset_left = -620; _announce_scrim.offset_right = 620
+	_announce_scrim.offset_top = -180; _announce_scrim.offset_bottom = 180
+	_announce_scrim.add_theme_stylebox_override("panel", _scrim_box(Color(0.03, 0.03, 0.05, 0.72)))
+	_announce_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_announce_scrim.visible = false
+	_ui.add_child(_announce_scrim)
 
 	_announce = Label.new()
 	_announce.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
@@ -357,10 +417,86 @@ func _announce_text(text: String, color := Color(0.95, 0.95, 1.0), hold := 2.0) 
 	_announce.text = text
 	_announce.add_theme_color_override("font_color", color)
 	_announce.visible = true
+	if _announce_scrim:
+		_announce_scrim.visible = true
 
 func _hide_announce() -> void:
 	if _announce:
 		_announce.visible = false
+	if _announce_scrim:
+		_announce_scrim.visible = false
+
+# --------------------------------------------------------------------------
+# HUD styling + the reveal lower-third (presentation only)
+# --------------------------------------------------------------------------
+## A dark translucent scrim panel with a thin gold rule — the house chrome.
+func _scrim_box(bg: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(10)
+	sb.set_border_width_all(2)
+	sb.border_color = Color(0.62, 0.52, 0.30, 0.75)
+	sb.content_margin_left = 16; sb.content_margin_right = 16
+	sb.content_margin_top = 6; sb.content_margin_bottom = 6
+	return sb
+
+## The reveal band: deeper scrim, heavier ornate gold frame.
+func _lowerthird_box() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.045, 0.04, 0.06, 0.90)
+	sb.set_corner_radius_all(12)
+	sb.set_border_width_all(3)
+	sb.border_color = Color(0.78, 0.66, 0.36)
+	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 10
+	sb.content_margin_left = 6; sb.content_margin_right = 6
+	sb.content_margin_top = 4; sb.content_margin_bottom = 4
+	return sb
+
+## Point the lower-third badge at the seat the current line concerns (-1 hides it).
+func _apply_reveal_badge(seat: int) -> void:
+	if _reveal_badge == null:
+		return
+	if seat >= 0 and seat < roster.size():
+		_reveal_badge.player_index = seat
+		_reveal_badge.color = roster[seat].color
+		_reveal_badge.visible = true
+	else:
+		_reveal_badge.visible = false
+
+## The Executor's banner toggles the inner RichTextLabel's visibility; the panel
+## follows it — sliding up on show, vanishing on clear_banner().
+func _on_reveal_vis_changed() -> void:
+	if _lowerthird == null or _reveal == null:
+		return
+	if _reveal.visible:
+		_apply_reveal_badge(_reveal_seat)
+		if not _lowerthird.visible:
+			_lowerthird.visible = true
+			_slide_in_lowerthird()
+	else:
+		_lowerthird.visible = false
+		_lowerthird.modulate.a = 0.0
+
+## 0.25s slide-up + fade for the reveal band (skipped under the fast soak).
+func _slide_in_lowerthird() -> void:
+	if _lowerthird == null:
+		return
+	_lowerthird.offset_top = LT_REST_TOP + LT_SLIDE
+	_lowerthird.offset_bottom = LT_REST_BOTTOM + LT_SLIDE
+	if _fast:
+		_lowerthird.offset_top = LT_REST_TOP
+		_lowerthird.offset_bottom = LT_REST_BOTTOM
+		_lowerthird.modulate.a = 1.0
+		return
+	_lowerthird.modulate.a = 0.0
+	var tw := _lowerthird.create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(_lowerthird, "offset_top", LT_REST_TOP, 0.25) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_lowerthird, "offset_bottom", LT_REST_BOTTOM, 0.25) \
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(_lowerthird, "modulate:a", 1.0, 0.22)
 
 # --------------------------------------------------------------------------
 # WILL CLAUSES (announced up front, paid at the reading — Pro Rules transparency)
@@ -407,19 +543,18 @@ func _intro() -> void:
 	Music.play_slot("grounds")
 	# --- Establishing flyover: a wide raked view of the whole drive, greeting
 	# in the executor banner, no clause text yet (they don't overlap). ---
-	var establish := Vector3(0, 27, 31)
-	cam.global_position = establish
-	cam.look_at(board.CENTER, Vector3.UP)
+	_reveal_seat = -1
 	executor.say(Executor.pick(Executor.GREETING, rng), Color(0.9, 0.88, 0.98))
+	# --- Establishing camera at the gate, then a cinematic flyover: a tour of the
+	# drive, the manor gate + hearse, and the roving Codicil — the opening of a
+	# Mario-Party board, re-staged around the new gothic dressing. ---
+	cam.global_position = Vector3(0.0, 6.5, 6.0)
+	cam.look_at(board.CENTER + Vector3(0, 1.6, -11.0), Vector3.UP)
 	if not _fast:
-		var tw := cam.create_tween()
-		for a in range(0, 5):
-			var ang := TAU * float(a) / 5.0
-			var p := board.CENTER + Vector3(cos(ang) * 27.0, 23.0, sin(ang) * 27.0)
-			tw.tween_property(cam, "global_position", p, 0.7)
-		await tw.finished
+		await _flyover()
 	if _capture:
 		await _cap_snap("flyover")
+		await _capture_showcase()
 	else:
 		VerifyCapture.snap("flyover")
 	await _beat(1.6)
@@ -438,6 +573,60 @@ func _intro() -> void:
 	await _beat(3.0)
 	_hide_announce()
 	executor.clear_banner()
+
+## The opening flyover: a smooth multi-key camera tour (position AND look-at
+## interpolated together) that shows off the gate, sweeps the drive, passes the
+## Codicil beacon, and settles to the whole-board overview. Presentation only —
+## gated behind `not _fast`, so the headless receipt never runs it.
+func _flyover() -> void:
+	var bpos := board.space_pos(board.beacon_index)
+	var keys: Array = [
+		{"p": Vector3(0.0, 6.5, 6.0), "l": board.CENTER + Vector3(0, 1.6, -11.0)},   # the gate, low
+		{"p": Vector3(-24.0, 13.0, 9.0), "l": board.CENTER + Vector3(-4, 0.6, 2)},    # rise along the drive
+		{"p": Vector3(-9.0, 20.0, -28.0), "l": board.CENTER + Vector3(0, 1.0, -2)},   # sweep the far side
+		{"p": bpos + Vector3(6.0, 8.0, 7.0), "l": bpos + Vector3(0, 1.6, 0)},         # glide past the Codicil
+		{"p": _cam_home, "l": board.CENTER},                                          # settle to overview
+	]
+	cam.global_position = keys[0]["p"]
+	cam.look_at(keys[0]["l"], Vector3.UP)
+	var tw := cam.create_tween()
+	for i in range(1, keys.size()):
+		var a: Dictionary = keys[i - 1]
+		var b: Dictionary = keys[i]
+		var ap: Vector3 = a["p"]
+		var al: Vector3 = a["l"]
+		var bp: Vector3 = b["p"]
+		var bl: Vector3 = b["l"]
+		tw.tween_method(func(t: float) -> void:
+				cam.global_position = ap.lerp(bp, t)
+				cam.look_at(al.lerp(bl, t), Vector3.UP),
+			0.0, 1.0, 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await tw.finished
+
+## Windowed capture only: pose two hero shots for the Steam-page verification —
+## the dressed board wide, and a weeping grave in close with its headstone. Never
+## runs headless (gated by _capture) so it can't perturb the receipt.
+func _capture_showcase() -> void:
+	executor.clear_banner()   # hero shots stand clean, no greeting banner
+	# A clean, head-on elevated hero of the whole dressed drive (nothing blocks
+	# centre; the Codicil glow anchors the far arc).
+	cam.global_position = Vector3(0.0, 17.5, 28.0)
+	cam.look_at(board.CENTER + Vector3(0, 1.4, 0), Vector3.UP)
+	print("SHOWCASE board_wide cam=", cam.global_position)
+	await _cap_snap("board_wide")
+	# A weeping grave in close: a headstone with its lit pink rim, board dark
+	# behind. Index 16 -> grave_headstone_plain (a clean upright stone).
+	var gi := 16
+	var gp := board.space_pos(gi)
+	var outward := gp - board.CENTER
+	outward.y = 0.0
+	outward = outward.normalized() if outward.length() > 0.01 else Vector3.BACK
+	cam.global_position = gp + outward * 2.9 + Vector3(0.0, 1.3, 0.0)
+	cam.look_at(gp + outward * 0.9 + Vector3(0, 0.85, 0), Vector3.UP)
+	print("SHOWCASE grave_detail cam=", cam.global_position)
+	await _cap_snap("grave_detail")
+	cam.global_position = _cam_home
+	cam.look_at(board.CENTER, Vector3.UP)
 
 func _round() -> void:
 	_phase = "roll"
@@ -531,11 +720,11 @@ func _apply_item_movement(moved: Array[int]) -> void:
 		if items[i].pin > 0:
 			items[i].pin -= 1
 			moved[i] += 1
-			_flash_line("%s spends a MOURNING PIN (+1 space)" % roster[i].name, roster[i].color)
+			_flash_line("%s spends a MOURNING PIN (+1 space)" % roster[i].name, roster[i].color, i)
 		if items[i].ribbon > 0:
 			items[i].ribbon -= 1
 			moved[i] = maxi(1, moved[i] - 1)
-			_flash_line("%s is dragged by a BLACK RIBBON (−1 space)" % roster[i].name, roster[i].color)
+			_flash_line("%s is dragged by a BLACK RIBBON (−1 space)" % roster[i].name, roster[i].color, i)
 
 func _pay_passthrough_tolls(seat: int, from_idx: int, moved: int) -> void:
 	for step in range(1, moved):   # intermediate spaces only; landing handled in reveal
@@ -560,6 +749,9 @@ func _reveal_order(moved: Array[int]) -> Array:
 
 func _reveal_landing(seat: int) -> void:
 	var idx := positions[seat]
+	# The affected player's badge rides the lower-third for this landing's line.
+	_reveal_seat = seat
+	_apply_reveal_badge(seat)
 	if not _fast:
 		executor.push_to(board.reveal_anchor(idx), board.pawns[seat].global_position)
 	var col: Color = roster[seat].color
@@ -741,8 +933,10 @@ func _deed_leader(exclude: int) -> int:
 			lead = i
 	return lead
 
-func _flash_line(text: String, col: Color) -> void:
+func _flash_line(text: String, col: Color, seat := -1) -> void:
 	if _reveal:
+		_reveal_seat = seat
+		_apply_reveal_badge(seat)
 		executor.say(text, col)
 
 # --------------------------------------------------------------------------
@@ -1016,9 +1210,12 @@ func _beat(seconds: float) -> void:
 ## Windowed capture: let a couple of frames render so tweens/labels settle,
 ## then snap. Inert in headless (VerifyCapture.snap no-ops without a viewport).
 func _cap_snap(tag: String) -> void:
-	await get_tree().process_frame
-	await get_tree().process_frame
-	VerifyCapture.snap(tag)
+	# Let the camera settle, THEN await the snap coroutine to completion — snap()
+	# awaits frame_post_draw internally, so if we don't await it here the capture
+	# fires a frame later and lands on the NEXT camera cut (swapped hero shots).
+	for _i in 3:
+		await get_tree().process_frame
+	await VerifyCapture.snap(tag)
 
 func _all_press_skip() -> bool:
 	var humans := 0

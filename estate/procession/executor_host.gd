@@ -22,7 +22,7 @@ const SHRINE := [
 	"%s kneels at the shrine and is rewarded. The shrine will want that back.",
 	"The shrine blesses %s (+3♠). It has low standards and a long memory.",
 	"%s gains at the shrine. Piety pays, this once, under protest.",
-	"The saints smile on %s. The saints have never met %s.",
+	"The saints smile on %s. The saints have never met them.",
 	"%s is favoured. The estate has logged the anomaly for review.",
 ]
 const GRAVE := [
