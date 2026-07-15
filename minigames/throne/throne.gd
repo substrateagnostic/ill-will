@@ -286,6 +286,7 @@ func _begin(config: Dictionary) -> void:
 		royal.name = "Royal%d" % i
 		spawn_root.add_child(royal)
 		royal.setup(i, col, char_scene, self)
+		royal.is_bot = is_bot   # gates the EXPRESSIVE HOP personality timers (doc 16)
 		royal.global_position = _spawn_pos(i, roster.size())
 		if _mirror:
 			# RENDER MIRROR: the body never simulates — the host owns physics.
@@ -353,9 +354,9 @@ func _btn_hint(action: String, label: String) -> String:
 ## The main bar with real keys, or the generic text for an all-bot demo.
 func _controls_bar() -> String:
 	if _human_seats().is_empty():
-		return "MOVE   ·   A = SHOVE / DECREE   ·   B = DASH / GUARD   |   SIT THE THRONE TO REIGN"
-	return "MOVE   ·   %s   ·   %s   |   SIT THE THRONE TO REIGN" % [
-		_btn_hint("a", "SHOVE / DECREE"), _btn_hint("b", "DASH / GUARD")]
+		return "MOVE   ·   A = SHOVE / DECREE   ·   B = DASH / GUARD   ·   JUMP = HOP   |   SIT THE THRONE TO REIGN"
+	return "MOVE   ·   %s   ·   %s   ·   %s   |   SIT THE THRONE TO REIGN" % [
+		_btn_hint("a", "SHOVE / DECREE"), _btn_hint("b", "DASH / GUARD"), _btn_hint("jump", "HOP")]
 
 func _spawn_pos(i: int, n: int) -> Vector3:
 	# ring the challengers around the dais, evenly spread

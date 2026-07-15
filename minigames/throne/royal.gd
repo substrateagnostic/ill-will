@@ -23,11 +23,29 @@ const DASH_IMPULSE := 7.5
 const DASH_CD := 1.4
 const STUN_TIME := 0.30
 
+# ---- EXPRESSIVE HOP (director's ruling, docs/design/16-jump-and-visibility.md) ----
+# Cosmetic-only bunny-hop, self-contained (this file reads PlayerInput directly
+# for "jump" — the existing move/shove/dash fields stay externally driven by
+# throne.gd, untouched). Refused while seated (is_king — frozen/can't move,
+# the throne's "carrying"-equivalent commitment), mid-tumble (post-dethrone
+# ragdoll) or mid-stun. _do_shove()'s range check flattens Y unconditionally
+# (royal.gd:350, `to.y = 0.0` before SHOVE_RANGE/SHOVE_ARC) regardless of
+# either party's height, so a hop cannot grant or deny a shove either way —
+# this refusal is about animation cleanliness, not balance.
+const HOP_VY := 3.0
+const HOP_GRAVITY := 15.0        # softer than the RigidBody's own gravity: a floaty arc
+const HOP_AIRTIME := 0.4         # 2*HOP_VY/HOP_GRAVITY — exact analytic hang time
+const HOP_CD := 0.5
+const HOP_START_ANIM_T := 0.12
+const HOP_LAND_HOLD_T := 0.15
+const HOP_SQUASH_T := 0.1
+
 signal king_shoved(attacker: int, dir: Vector3)   # a shove connected with the seated king
 
 var index := 0
 var color := Color.WHITE
 var owner_game: Node = null
+var is_bot := false
 
 var is_king := false
 var seat_pos := Vector3.ZERO
@@ -43,6 +61,15 @@ var _dash_cd := 0.0
 var _face := Vector3(0, 0, 1)     # face the camera by default (camera is at +Z)
 var _grounded := false
 var _tumble_t := 0.0             # >0 while ragdoll-tumbling after a launch
+
+# EXPRESSIVE HOP state (cosmetic only — never read by combat resolution)
+var _hop_t := -1.0                # >=0 while airborne from a hop, counts up to HOP_AIRTIME
+var _hop_cd := 0.0
+var _hop_anim_t := 0.0
+var _hop_land_hold := 0.0
+var _hop_intro_t := -1.0          # bots: one hop shortly after match start
+var _hop_after_recover_t := -1.0  # bots: one hop shortly after recovering from a dethrone tumble
+var _hop_rng := RandomNumberGenerator.new()
 
 var model_pivot: Node3D
 var anim: AnimationPlayer
@@ -110,7 +137,11 @@ func setup(p_index: int, p_color: Color, char_scene: PackedScene, p_owner: Node)
 		_tint_model(body)
 		_loop("Idle")
 		_loop("Running_A")
+		_loop("Jump_Idle")
 		_set_anim("Idle")
+
+	_hop_rng.seed = p_index * 977 + 401
+	_hop_intro_t = _hop_rng.randf_range(2.0, 6.0)
 
 	# a socket above the head where the crown rides while this royal reigns
 	crown_anchor = Node3D.new()
@@ -168,6 +199,8 @@ func become_king(p_seat: Vector3) -> void:
 	want_dash = false
 	_stun = 0.0
 	_tumble_t = 0.0
+	_hop_t = -1.0            # a coronation mid-hop lands instantly, not on delay
+	_hop_land_hold = 0.0
 	_lock_upright()
 	linear_velocity = Vector3.ZERO
 	global_position = seat_pos
@@ -213,6 +246,8 @@ func _physics_process(delta: float) -> void:
 	if _shove_cd > 0.0: _shove_cd -= delta
 	if _dash_cd > 0.0: _dash_cd -= delta
 	if re_sit_cd > 0.0: re_sit_cd -= delta
+	if _hop_cd > 0.0: _hop_cd -= delta
+	if _hop_land_hold > 0.0: _hop_land_hold -= delta
 
 	if is_king:
 		# hard-pin to the seat every tick (frozen static, but be defensive)
@@ -225,6 +260,8 @@ func _physics_process(delta: float) -> void:
 		if _tumble_t <= 0.0:
 			_lock_upright()
 			rotation = Vector3.ZERO
+			if is_bot:
+				_hop_after_recover_t = _hop_rng.randf_range(0.3, 0.9)
 
 	_grounded = linear_velocity.y > -2.5 and linear_velocity.y < 2.0
 
@@ -248,6 +285,40 @@ func _physics_process(delta: float) -> void:
 	if want_dash:
 		want_dash = false
 		_do_dash()
+
+	# ---- EXPRESSIVE HOP: fixed-arc vertical pop, driven by a timer (not
+	# is_on_floor(), which RigidBody3D doesn't offer) — analytically returns to
+	# ground exactly at HOP_AIRTIME given HOP_VY/HOP_GRAVITY, so it self-lands
+	# without fighting the body's own gravity_scale integration.
+	if _hop_t >= 0.0:
+		_hop_t += delta
+		_hop_anim_t = maxf(0.0, _hop_anim_t - delta)
+		var lv := linear_velocity
+		lv.y = HOP_VY - HOP_GRAVITY * _hop_t
+		linear_velocity = lv
+		if _hop_t >= HOP_AIRTIME:
+			_hop_t = -1.0
+			_hop_land_hold = HOP_LAND_HOLD_T
+			_hop_land_fx()
+	elif _tumble_t <= 0.0 and _stun <= 0.0 and _hop_cd <= 0.0:
+		var want_hop := false
+		if is_bot:
+			_hop_intro_t -= delta
+			if _hop_intro_t <= 0.0 and _hop_intro_t > -900.0:
+				want_hop = true
+				_hop_intro_t = -1000.0   # consumed; never re-fires from the intro timer
+			if _hop_after_recover_t > 0.0:
+				_hop_after_recover_t -= delta
+				if _hop_after_recover_t <= 0.0:
+					want_hop = true
+		else:
+			want_hop = PlayerInput.just_pressed(index, "jump")
+		if want_hop:
+			_hop_t = 0.0
+			_hop_anim_t = HOP_START_ANIM_T
+			_hop_cd = HOP_CD
+			Sfx.play("putt", -8.0)
+			print("THRONE_HOP idx=%d bot=%s frame=%d" % [index, str(is_bot), Engine.get_physics_frames()])
 
 	# safety net: a hard dethrone launch must never lose a body over the wall
 	# or under the floor. Catch any escapee and set it back inside the arena.
@@ -288,6 +359,17 @@ func net_render(pos: Vector3, yaw: float, tag: String, king_now: bool) -> void:
 
 func _update_anim(delta: float) -> void:
 	if anim == null:
+		return
+	# EXPRESSIVE HOP anim triptych takes priority over everything but the
+	# seated pose — hop is refused while is_king (see royal.gd's hop trigger),
+	# so this never actually races the seat. _hop_t/_hop_anim_t/_hop_land_hold
+	# are decremented in _physics_process; read-only here (see the _stun/
+	# _tumble_t pattern just below for the same read/decrement split).
+	if _hop_t >= 0.0:
+		_set_anim("Jump_Start" if _hop_anim_t > 0.0 else "Jump_Idle")
+		return
+	if _hop_land_hold > 0.0:
+		_set_anim("Jump_Land")
 		return
 	if _anim_lock > 0.0:
 		_anim_lock -= delta
@@ -330,6 +412,54 @@ func flash_pop() -> void:
 	_squash_tw = create_tween()
 	_squash_tw.tween_property(model_pivot, "scale", Vector3.ONE, 0.16) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## EXPRESSIVE HOP landing beat: squash-stretch (1.08 wide / 0.92 tall, 0.1s —
+## smaller than the HIT KIT's flash_pop above) + a tiny dust puff. Gated behind
+## _visuals_on() like the rest of the HIT KIT so --thronebalancefast stays a
+## reproducible no-FX sim.
+func _hop_land_fx() -> void:
+	if model_pivot == null or not _visuals_on():
+		return
+	if _squash_tw and _squash_tw.is_valid():
+		_squash_tw.kill()
+	_squash_tw = create_tween()
+	model_pivot.scale = Vector3(1.08, 0.92, 1.08)
+	_squash_tw.tween_property(model_pivot, "scale", Vector3.ONE, HOP_SQUASH_T) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	_spawn_hop_dust()
+
+
+func _spawn_hop_dust() -> void:
+	var p := CPUParticles3D.new()
+	p.emitting = false
+	p.one_shot = true
+	p.amount = 8
+	p.lifetime = 0.35
+	p.explosiveness = 0.9
+	p.direction = Vector3(0, 1, 0)
+	p.spread = 50.0
+	p.gravity = Vector3(0, -4.0, 0)
+	p.initial_velocity_min = 0.6
+	p.initial_velocity_max = 1.4
+	p.scale_amount_min = 0.06
+	p.scale_amount_max = 0.12
+	var mesh := SphereMesh.new()
+	mesh.radius = 0.05
+	mesh.height = 0.1
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.75, 0.68, 0.55, 0.55)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	p.mesh.surface_set_material(0, mat)
+	add_child(p)
+	p.top_level = true         # decouple from the (possibly still-moving) body
+	p.global_position = global_position + Vector3(0, 0.05, 0)
+	p.emitting = true
+	get_tree().create_timer(p.lifetime + 0.3).timeout.connect(func():
+		if is_instance_valid(p):
+			p.queue_free())
 
 
 func _do_shove() -> void:
