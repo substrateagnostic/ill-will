@@ -242,25 +242,19 @@ func _present_intro_card() -> void:
 # -- world --------------------------------------------------------------------
 
 func _build_environment() -> void:
-	var env := Environment.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.30, 0.55, 0.85)
-	sky_mat.sky_horizon_color = Color(0.86, 0.90, 0.82)
-	sky_mat.ground_bottom_color = Color(0.20, 0.30, 0.16)
-	sky_mat.ground_horizon_color = Color(0.55, 0.66, 0.5)
-	var sky := Sky.new()
-	sky.sky_material = sky_mat
-	env.background_mode = Environment.BG_SKY
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.6
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-	sun.rotation_degrees = Vector3(-58, 40, 0)
-	sun.light_energy = 1.25
-	sun.shadow_enabled = true
+	# THE HOUSE LOOK -- MOONLIT night lawn (core/env_kit.gd). Mowing happens under
+	# the moon: a cool moon key rakes the grass, a warm fill keeps it from going
+	# blue-dead, and the high-threshold glow blooms the bright cut stripes (the
+	# live Splatoon coverage meter -- the score) HARDEST against the dark uncut
+	# lawn. The UI-kit intro/results ride a CanvasLayer, untouched by the glow.
+	# Replaces the old flat FILMIC day-sky env. ($Sun angle already matched MOONLIT.)
+	EnvKit.apply(self, EnvKit.MOONLIT, {
+		"key_energy": 1.15,
+		"ambient_energy": 0.5,   # lawn reads moonlit; the cut stripes still pop hardest
+	})
+	# the scene's static $Sun is superseded by EnvKit's key rig
+	sun.visible = false
+	sun.light_energy = 0.0
 	# camera: high 3/4, whole 16x12 lawn filling the frame
 	cam.position = Vector3(0, 15.0, 10.2)
 	cam.look_at(Vector3(0, 0, -0.2))
