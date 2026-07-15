@@ -152,9 +152,11 @@ var _sob_stream: AudioStream = null
 var _last_status := 0.0
 
 # lighting rig (the lights drop when she watches)
-var _sun_warm := 1.1
-var _amb_warm := 0.5
+var _sun_warm := 1.35
+var _amb_warm := 0.6
 var _env: Environment = null
+var _warm_lights: Array = []        # candles + lamps: THE room light; dies on RED
+var _warm_energies: Array = []
 
 # tally
 var _ev_catches := 0
@@ -292,6 +294,12 @@ func _physics_process(delta: float) -> void:
 		return
 	game_t += delta
 	phase_t += delta
+	# keep every body inside the parlor, whatever the phase (belt-and-braces:
+	# a yeet arc, a stale intent, or a wall seam can never strand a pawn out)
+	for p in players:
+		var gp: WGPawn = p
+		gp.global_position.x = clampf(gp.global_position.x, -ROOM_HALF_X + 0.4, ROOM_HALF_X - 0.4)
+		gp.global_position.z = clampf(gp.global_position.z, ROOM_MIN_Z + 0.6, ROOM_MAX_Z - 0.4)
 	match phase:
 		Phase.INTRO:
 			for p in players:
@@ -312,6 +320,7 @@ func _physics_process(delta: float) -> void:
 			_tick_play(delta, true)
 		Phase.MATCH_END:
 			for p in players:
+				(p as WGPawn).set_move_intent(Vector2.ZERO)   # kill stale bot intents
 				(p as WGPawn).tick_movement(delta)
 			if _cap_on:
 				_capture_beats()
@@ -342,12 +351,6 @@ func _tick_play(delta: float, tiebreak := false) -> void:
 			_attempt_shove(p)
 		_handle_grab(p, me, inp, delta)
 		me.tick_movement(delta)
-
-	# 3. keep everyone inside the parlor
-	for p in players:
-		var gp: WGPawn = p
-		gp.global_position.x = clampf(gp.global_position.x, -ROOM_HALF_X + 0.4, ROOM_HALF_X - 0.4)
-		gp.global_position.z = clampf(gp.global_position.z, ROOM_MIN_Z + 0.6, ROOM_MAX_Z - 0.4)
 
 	# 4. THE GAZE TAKES: any moving body under the lamped eyes
 	if gaze == Gaze.WATCHING:
@@ -1269,11 +1272,15 @@ func _set_lights(watching: bool, instant := false) -> void:
 	var dur := 0.01 if instant else (0.14 if watching else 0.6)
 	var tw := create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(sun, "light_energy", 0.28 if watching else _sun_warm, dur)
+	tw.tween_property(sun, "light_energy", 0.22 if watching else _sun_warm, dur)
 	if _env:
-		tw.tween_property(_env, "ambient_light_energy", 0.22 if watching else _amb_warm, dur)
+		tw.tween_property(_env, "ambient_light_energy", 0.12 if watching else _amb_warm, dur)
 		tw.tween_property(_env, "ambient_light_color",
-			Color(0.45, 0.55, 0.85) if watching else Color(1.0, 0.88, 0.72), dur)
+			Color(0.55, 0.22, 0.28) if watching else Color(1.0, 0.88, 0.72), dur)
+	# the candles and lamps ARE the parlor's light — they gutter when she turns
+	for i in _warm_lights.size():
+		tw.tween_property(_warm_lights[i], "light_energy",
+			float(_warm_energies[i]) * (0.22 if watching else 1.0), dur)
 
 
 # ===========================================================================
@@ -1469,6 +1476,8 @@ func _build_wake_end() -> void:
 		candle.omni_range = 5.0
 		candle.position = Vector3(sx, 1.8, COFFIN_POS.z + 0.4)
 		add_child(candle)
+		_warm_lights.append(candle)
+		_warm_energies.append(candle.light_energy)
 		var stick := MeshInstance3D.new()
 		var sm := CylinderMesh.new()
 		sm.top_radius = 0.05
@@ -1635,6 +1644,8 @@ func _build_furniture() -> void:
 		gl.omni_range = 3.5
 		gl.position = lp + Vector3(0, 1.5, 0)
 		add_child(gl)
+		_warm_lights.append(gl)
+		_warm_energies.append(gl.light_energy)
 
 
 func _build_relics() -> void:

@@ -38,18 +38,26 @@ func build() -> void:
 	_model_root.name = "WidowModel"
 	add_child(_model_root)
 	if ResourceLoader.exists(WIDOW_GLB):
-		var m := MeshyProp.instance(WIDOW_GLB, 1.9)
+		var m := MeshyProp.instance(WIDOW_GLB, 2.4)
 		_model_root.add_child(m)
 	else:
 		_build_primitive_body()
+		_model_root.scale = Vector3(1.25, 1.25, 1.25)   # presence at camera distance
 	_build_eyes()
-	# cold underlight, lit only while the gaze is on
+	# cold underlight, lit only while the gaze is on — washes the deep field red
 	_gaze_light = OmniLight3D.new()
 	_gaze_light.light_color = EYE_HOT
 	_gaze_light.light_energy = 0.0
-	_gaze_light.omni_range = 9.0
-	_gaze_light.position = Vector3(0, 1.2, 1.4)
+	_gaze_light.omni_range = 15.0
+	_gaze_light.position = Vector3(0, 1.6, 1.6)
 	add_child(_gaze_light)
+	# a faint violet mourning aura so her silhouette reads against the dark wall
+	var rim := OmniLight3D.new()
+	rim.light_color = Color(0.65, 0.5, 0.95)
+	rim.light_energy = 1.1
+	rim.omni_range = 4.0
+	rim.position = Vector3(0, 2.6, 0)
+	add_child(rim)
 
 
 func _cloth(col: Color, rough := 0.95) -> StandardMaterial3D:
@@ -201,7 +209,7 @@ func _set_gaze_internal(on: bool) -> void:
 		tw.tween_property(_eye_mat, "emission_energy_multiplier", 6.0 if on else 0.0, 0.12)
 	if _gaze_light:
 		var lt := create_tween()
-		lt.tween_property(_gaze_light, "light_energy", 3.2 if on else 0.0, 0.14)
+		lt.tween_property(_gaze_light, "light_energy", 5.5 if on else 0.0, 0.14)
 
 
 func facing_players_frac() -> float:

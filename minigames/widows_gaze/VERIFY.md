@@ -18,6 +18,17 @@ Red light / green light at a wake, with sabotage. Single 75s round, 4 players
 - Shoved pawns stumble `0.4s` (knock 8.5, decay 22/s) — a shove landing in the
   sting's back half or under the gaze is a murder (attributed via `shove_by`).
 
+## Pacing (3-seed bot soak receipts)
+
+Bots stride at 0.87x and take a 2.6-5.6s mourning rest after scoring (greedy
+pace-setter: 1.0-2.2s) — without this, four optimal bots strip all 10 relics by
+t=47 and the T-25 escalation act never plays. With it (seeds 7/11/42):
+- clean-out at t=57.7-64.5 of the 75s clock (escalation fires at ~50s);
+- 7-10 catches, 3-6 shove-murders, 7-11 stings per round;
+- seed 11 shows the full fake-out chain resolving into its real sting;
+- seed 42 ends in a TIE CEREMONY (banks=11: the sudden-death relic).
+Humans move at full 5.0 m/s — a hustling human out-paces every bot.
+
 ## Commands run
 
 ```powershell
