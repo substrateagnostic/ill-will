@@ -29,6 +29,11 @@ const CATCH_WINDOW := 0.2
 const CATCH_LOCKOUT := 0.5
 const CATCH_RADIUS := 1.15
 const CHAR_SCALE := 0.55
+## PROBLEM 2 (docs/design/16-jump-and-visibility.md): full-body x-ray
+## silhouette so a human can see a player hidden behind a planet, same as a
+## bot reading raw position data already can. Alpha/priority match the spec.
+const XRAY_ALPHA := 0.45
+const XRAY_RENDER_PRIORITY := 11
 
 var world = null              # Orbital root (untyped: cyclic reference)
 var index := 0
@@ -60,6 +65,8 @@ var _anim: AnimationPlayer = null
 var _visual: Node3D = null
 var _marker: MeshInstance3D = null
 var _cur_anim := ""
+var _xray_meshes: Array[MeshInstance3D] = []
+var _xray_mat: StandardMaterial3D = null
 
 const LOOPED_ANIMS := ["Idle", "Running_A", "Jump_Idle", "1H_Ranged_Aiming"]
 
@@ -103,7 +110,71 @@ func setup(char_scene: PackedScene, col: Color) -> void:
 	_marker.material_override = mmat
 	_marker.position = Vector3(0, 1.18, 0)
 	_visual.add_child(_marker)
+	_build_xray_silhouette(col, inst)
 	_play("Idle")
+
+## Full-body x-ray silhouette (docs/design/16-jump-and-visibility.md PROBLEM
+## 2). Duplicates every SKINNED body-part MeshInstance3D as an extra sibling
+## under the SAME Skeleton3D the KayKit rig already uses (confirmed identical
+## across all 4 characters: Skeleton3D's direct children include
+## <Char>_Body/Head/ArmLeft/ArmRight/LegLeft/LegRight with skin != null and
+## skeleton == NodePath(".."); weapon/hat/cape are unskinned BoneAttachment3D
+## props, skipped - they vary per character and aren't needed for a readable
+## humanoid outline). Because the duplicate shares the exact same skeleton
+## node, it tracks every animation for free: no manual transform copying, no
+## second AnimationPlayer, nothing to keep in sync. Falls back to a capsule
+## proxy (matching BODY_R/CENTER_H) if a rig doesn't expose that shape.
+func _build_xray_silhouette(col: Color, model: Node) -> void:
+	_xray_mat = StandardMaterial3D.new()
+	_xray_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_xray_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_xray_mat.albedo_color = Color(col.r, col.g, col.b, XRAY_ALPHA)
+	_xray_mat.no_depth_test = true
+	_xray_mat.render_priority = XRAY_RENDER_PRIORITY
+	_xray_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var skel: Skeleton3D = model.find_child("Skeleton3D", true, false)
+	if skel != null:
+		for c in skel.get_children():
+			if c is MeshInstance3D and (c as MeshInstance3D).skin != null:
+				var dup := (c as MeshInstance3D).duplicate() as MeshInstance3D
+				dup.name = "XRay_" + c.name
+				dup.material_override = _xray_mat
+				dup.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				dup.visible = false   # per-frame occlusion gate, see _update_xray()
+				skel.add_child(dup)
+				_xray_meshes.append(dup)
+	if _xray_meshes.is_empty():
+		var cap_mi := MeshInstance3D.new()
+		var cap := CapsuleMesh.new()
+		cap.radius = BODY_R
+		cap.height = CENTER_H * 2.0 + BODY_R
+		cap_mi.mesh = cap
+		cap_mi.material_override = _xray_mat
+		cap_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		cap_mi.position = Vector3(0, CENTER_H, 0)
+		cap_mi.visible = false
+		_visual.add_child(cap_mi)
+		_xray_meshes.append(cap_mi)
+
+## Occlusion-gated (see docs/design/16-jump-and-visibility.md PROBLEM 2 §
+## CRITICAL POLISH): shown ONLY when a real planet sits between the camera and
+## the body, never double-drawn as a tint over the already-visible character.
+## An always-on build was screenshot-compared first (verify_out/orbital_sil) -
+## because the silhouette duplicates the EXACT visible geometry, it lines up
+## pixel-for-pixel with the opaque render, so the no_depth_test pass blends
+## its flat color over the ENTIRE visible body every frame, not just the
+## edges - a constant, obvious wash, not the mild edge artifact the doc
+## flagged as the acceptable-if-it-happens case. Gating removes it entirely
+## while costing one analytic ray-vs-3-spheres test per pawn per frame
+## (world.point_occluded) - this game has no physics bodies to raycast
+## against (orb_pawn.gd is "fully kinematic"), so it reuses the same
+## hand-integrated-sphere math gravity_at()/nearest_planet() already use.
+func _update_xray() -> void:
+	if _xray_meshes.is_empty() or world == null:
+		return
+	var vis: bool = visible and bool(world.point_occluded(body_center()))
+	for m in _xray_meshes:
+		(m as MeshInstance3D).visible = vis
 
 func body_center() -> Vector3:
 	return global_position + up_dir() * CENTER_H
@@ -403,3 +474,4 @@ func _process(_dt: float) -> void:
 	# marker bob
 	if _marker != null:
 		_marker.position.y = 1.18 + 0.06 * sin(world.now * 3.0 + float(index))
+	_update_xray()
