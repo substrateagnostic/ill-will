@@ -136,6 +136,14 @@ var _vc: Node = null
 # so the idle/edge/gull receipts stay byte-identical.
 var _stretch: FinalStretch = null
 
+# ui_kit adoption (doc 14): intro card at load, HudStrip player-order strip for
+# live standings, ResultsBoard staged match-end reveal.
+var _intro_card: IntroCard = null
+var _results_board: ResultsBoard = null
+var _hud: HudStrip = null
+var _board_running := false
+var _snap_hud_done := false      # windowed-verify latch: one HudStrip play snap
+
 # --- ONLINE PHASE 2: the render mirror (docs/design/10 §4.3; house pattern
 # copied from minigames/seance/seance.gd). Host runs the WHOLE sim exactly as
 # couch; the estate pumps _net_state() (compact public facts) to guests at
@@ -229,6 +237,7 @@ func begin(config: Dictionary) -> void:
 		round_wins[i] = 0
 		_shove_n.append(0)
 		_knock_n.append(0)
+	_build_hud()
 	if _mirror:
 		# RENDER MIRROR: world + pawns stand ready; the first _net_apply drives
 		# everything. No bots, no round kick, no self-tests. Hint bar is built
@@ -248,7 +257,47 @@ func begin(config: Dictionary) -> void:
 	if _test_mode != "":
 		_setup_test()
 	else:
-		_start_round()
+		_kickoff()
+
+## ui_kit HudStrip: the shared-camera player-order strip (doc 14 item 9). Built
+## for host AND mirror; replaces the bespoke top-right ScorePanel rows. Anchored
+## just under the top-center timer so the two never collide.
+func _build_hud() -> void:
+	var entries: Array = []
+	for i in roster.size():
+		entries.append({"player": i, "name": str((roster[i] as Dictionary).name),
+			"color": (roster[i] as Dictionary).color})
+	_hud = HudStrip.make(entries, {"anchor": "top", "y": 72.0,
+		"score_type": HudStrip.ScoreType.POINTS, "font_size": 26})
+	$UI.add_child(_hud)
+	var panel := get_node_or_null("UI/ScorePanel")
+	if panel:
+		panel.visible = false
+
+## Intro card (ui_kit) at load, then the first round. Test modes never reach
+## here (they _setup_test); the card auto-starts after 6s so bot runs flow through.
+func _kickoff() -> void:
+	_intro_card = IntroCard.new()
+	add_child(_intro_card)
+	_intro_card.started.connect(_start_round)
+	_intro_card.present({
+		"name": "TILT",
+		"goal": "One platter, one pin. Last one aboard wins the round.",
+		"accent": Color(1, 0.82, 0.3),
+		"seats": _human_seats(),
+		"controls": [
+			{"action": "move", "label": "LEAN"},
+			{"action": "a", "label": "SHOVE"},
+			{"action": "b", "label": "BRACE"},
+		],
+		"tips": [
+			"Answer a shove with a shove to CLASH — no one falls.",
+			"Coins make you heavier: more sway, worse footing.",
+			"Fall in and you return as a guano-bombing seagull.",
+		],
+	})
+	if _vc != null:
+		get_tree().create_timer(1.0).timeout.connect(func() -> void: _vc.snap("tilt_intro"))
 
 # -- per-tick orchestration --------------------------------------------------
 
@@ -292,7 +341,9 @@ func _physics_process(delta: float) -> void:
 			_tick_pawns_idle(delta)
 			platter.update_tilt(delta, _mass_points())
 			_tick_falling(delta)
-			if phase_t >= 2.5 and not _reported:
+			# The ResultsBoard owns the finish when present; it reports on `done`.
+			# The 2.5s gate is the fallback for the no-ceremony path only.
+			if not _board_running and phase_t >= 2.5 and not _reported:
 				_reported = true
 				report_finished(_results)
 	if _test_mode != "":
@@ -365,6 +416,10 @@ func _tick_play(delta: float) -> void:
 	if not _snap_net_tilt and NetSession.has_guests() and platter.tilt_deg() >= 8.0:
 		_snap_net_tilt = true
 		VerifyCapture.snap("net_tilting")
+	# windowed-verify: one snap mid-round-1 showing the live HudStrip
+	if _vc != null and not _snap_hud_done and round_num == 1 and round_t >= 4.0:
+		_snap_hud_done = true
+		_vc.snap("tilt_hud")
 	# periodic status for verification logs
 	if round_t - _last_status >= 5.0:
 		_last_status = round_t
@@ -1000,16 +1055,11 @@ func _finish_match() -> void:
 	_match_winner = champ
 	if _stretch != null:
 		_stretch.match_ended()
-	_flash_banner("%s WINS TILT!" % champ_pl.name, champ_pl.color, 9999.0)
-	Sfx.play("match_win")
+	# The winner banner + match_win sting + 3D cheer/confetti are now the
+	# ResultsBoard's winner beat (see the tail of this function). Keep only the
+	# online evidence snap here, on the authoritative match-end frame.
 	if NetSession.has_guests():
 		VerifyCapture.snap("net_matchend")
-	var champ_pawn: TiltPawn = pawns[champ]
-	if champ_pawn.state == TiltPawn.PState.STANDING:
-		champ_pawn.cheer()
-		_confetti(champ_pawn.global_position + Vector3(0, 1.6, 0), champ_pl.color)
-	else:
-		_confetti(Vector3(0, 3, 0), champ_pl.color)
 	_highlights.clear()
 	var hv := _dict_max(max_carried)
 	if int(max_carried[hv]) >= 3:
@@ -1037,6 +1087,58 @@ func _finish_match() -> void:
 	}
 	print("KILL_EVENTS n=", _kill_events.size(), " ", _kill_events)
 	_log("match_end " + JSON.stringify(_results))
+	_present_results_board()
+
+## The staged match-end reveal (doc 14 §3), via the shared ui_kit ResultsBoard:
+## the old banner + static hold becomes freeze -> per-player count-up (points,
+## with round wins as the per-row callout) -> protected winner hero beat. tilt
+## keeps the champion's 3D cheer + confetti and hangs them off the winner beat.
+func _present_results_board() -> void:
+	banner.visible = false
+	if _hud != null:
+		_hud.visible = false      # the board IS the standings now — no double board
+	var rows: Array = []
+	for p in _results.placements:
+		var pidx := int(p)
+		var rw := int(round_wins.get(pidx, 0))
+		var callout := ""
+		if rw > 0:
+			callout = "%d round win%s" % [rw, "" if rw == 1 else "s"]
+		rows.append({
+			"player": pidx,
+			"score": int(points.get(pidx, 0)),
+			"color": (roster[pidx] as Dictionary).color,
+			"name": str((roster[pidx] as Dictionary).name),
+			"callout": callout,
+		})
+	var board := ResultsBoard.new()
+	add_child(board)
+	_results_board = board
+	_board_running = true
+	board.winner_beat.connect(_on_match_winner)
+	board.done.connect(func() -> void:
+		if not _reported:
+			_reported = true
+			report_finished(_results))
+	if _vc != null:
+		get_tree().create_timer(2.4).timeout.connect(func() -> void: _vc.snap("tilt_results"))
+	board.present(rows, {
+		"title": "FINAL STANDINGS",
+		"subtitle": "BEST OF %d" % rounds_total,
+		"score_type": ResultsBoard.ScoreType.POINTS,
+		"win_title": "{name} WINS TILT!",
+		"accent": Color(1, 0.82, 0.3),
+	})
+
+func _on_match_winner(champ: int) -> void:
+	var champ_pl: Dictionary = roster[champ]
+	var champ_pawn: TiltPawn = pawns[champ]
+	if champ_pawn.state == TiltPawn.PState.STANDING:
+		champ_pawn.cheer()
+		_confetti(champ_pawn.global_position + Vector3(0, 1.6, 0), champ_pl.color)
+	else:
+		_confetti(Vector3(0, 3, 0), champ_pl.color)
+	_shake = maxf(_shake, 0.3)
 
 func _dict_max(d: Dictionary) -> int:
 	var best := 0
@@ -1399,34 +1501,29 @@ func _flash_banner(text: String, color: Color, duration: float) -> void:
 		tw.tween_interval(duration)
 		tw.tween_callback(func() -> void: banner.visible = false)
 
+## Live standings now ride the ui_kit HudStrip (doc 14 item 9): points as the
+## chip score, carried coins / GULL as the status tag, dead seats dimmed, and a
+## leader marker + pulse on lead changes.
 func _rebuild_scoreboard() -> void:
-	for c in score_rows.get_children():
-		c.queue_free()
+	if _hud == null:
+		return
+	var leader := -1
+	var best := -2147483648
 	for i in roster.size():
-		var pl: Dictionary = roster[i]
 		var pawn: TiltPawn = pawns[i]
 		var standing: bool = pawn.state == TiltPawn.PState.STANDING
-		var hb := HBoxContainer.new()
-		hb.add_theme_constant_override("separation", 6)
-		var badge := PlayerBadge.make(i, 24)
-		badge.color = pl.color
-		if not standing:
-			badge.dim = 0.45
-		hb.add_child(badge)
-		var row := Label.new()
-		var extras := ""
+		var status := ""
 		if standing:
 			if pawn.coins > 0:
-				extras = "  x%d coins" % pawn.coins
+				status = "x%d" % pawn.coins
 		else:
-			extras = "  GULL"
-		row.text = "%s  %d%s" % [pl.name, int(points.get(i, 0)), extras]
-		row.add_theme_font_size_override("font_size", 24)
-		row.add_theme_color_override("font_color", pl.color)
-		row.add_theme_color_override("font_outline_color", Color(0.1, 0.1, 0.12))
-		row.add_theme_constant_override("outline_size", 5)
-		hb.add_child(row)
-		score_rows.add_child(hb)
+			status = "GULL"
+		_hud.set_score(i, int(points.get(i, 0)), status, not standing)
+		if int(points.get(i, 0)) > best:
+			best = int(points.get(i, 0))
+			leader = i
+	if leader >= 0:
+		_hud.set_lead(leader)
 
 func _log(msg: String) -> void:
 	var f := -1
