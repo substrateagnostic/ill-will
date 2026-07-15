@@ -49,8 +49,23 @@ func _ready() -> void:
 
 func present(entries: Array, ceremony_time := CEREMONY_TIME) -> void:
 	stage_entries(entries)
+	_scribe_victor(entries)
 	await get_tree().create_timer(ceremony_time).timeout
 	done.emit()
+
+## THE ESTATE'S MEMORY: the winner tableau is a picture worth keeping. Wait a
+## beat so the champion has struck their cheer and the confetti is falling, then
+## let MomentScribe grab THE VICTOR (priority 2 — below a deciding-moment freeze,
+## above ordinary colour). Host-path only: present() rides the host clock, while
+## net mirrors call stage_entries() directly and never reach here.
+func _scribe_victor(entries: Array) -> void:
+	var champ := ""
+	for e in entries:
+		if int(e.get("rank", -1)) == 0:
+			champ = String(e.get("name", ""))
+			break
+	await get_tree().create_timer(1.3).timeout
+	MomentScribe.capture("victor", "THE VICTOR", 2, [champ] if champ != "" else [])
 
 ## Build the tableau without the timer. present() rides it on the host; net
 ## mirrors call it directly — the HOST decides when a mirrored ceremony ends,
