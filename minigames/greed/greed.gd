@@ -1580,38 +1580,20 @@ func _confetti(pos: Vector3, color: Color) -> void:
 # World build
 # ===========================================================================
 func _build_world() -> void:
-	# environment: warm vault, gentle glow so gold blooms
-	var env := Environment.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.10, 0.09, 0.13)
-	sky_mat.sky_horizon_color = Color(0.28, 0.22, 0.18)
-	sky_mat.ground_bottom_color = Color(0.06, 0.05, 0.05)
-	sky_mat.ground_horizon_color = Color(0.20, 0.16, 0.13)
-	var sky := Sky.new()
-	sky.sky_material = sky_mat
-	env.background_mode = Environment.BG_SKY
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.55
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
-	env.glow_intensity = 0.55
-	env.glow_bloom = 0.15
-	env.glow_hdr_threshold = 0.95
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-
-	sun.rotation_degrees = Vector3(-55, 32, 0)
-	sun.light_energy = 1.25
-	sun.light_color = Color(1.0, 0.94, 0.82)
-	sun.shadow_enabled = true
-
-	var fill := DirectionalLight3D.new()
-	fill.rotation_degrees = Vector3(-25, -135, 0)
-	fill.light_energy = 0.3
-	fill.light_color = Color(0.8, 0.7, 0.9)
-	add_child(fill)
+	# THE HOUSE LOOK -- CANDLELIT vault (core/env_kit.gd). Greed is a warm heist
+	# interior: an amber key rakes the felt table for deep shadow falloff, strong
+	# SSAO grounds the crates + pot, and the high-threshold glow blooms the gilded
+	# pot and the four carrier-chute pads (the heroes) without touching the UI.
+	# Replaces the old flat FILMIC sky-env + hand-rolled sun/fill.
+	EnvKit.apply(self, EnvKit.CANDLELIT, {
+		"key_angle": Vector3(-55.0, 32.0, 0.0),   # keep the old vault-sun rake
+		"key_energy": 1.1,
+		"ambient_energy": 0.5,       # a hair over base so all four pawns read on the felt
+		"glow_intensity": 0.78,      # let the gilded pot + chute glows bloom prouder
+	})
+	# the scene's static $Sun is superseded by EnvKit's key rig
+	sun.visible = false
+	sun.light_energy = 0.0
 
 	# vault floor (warm wood)
 	var floor_body := StaticBody3D.new()
