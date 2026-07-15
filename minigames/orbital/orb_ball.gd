@@ -37,7 +37,20 @@ var trail: OrbTrail = null
 ## deterministic sim never touches it, so KILL_EVENTS stay byte-identical.
 var _threat_phase := 0.0
 
+## PROBLEM 2 (docs/design/16-jump-and-visibility.md): a ball hidden behind a
+## planet is invisible danger too. A small no_depth_test x-ray dot, same house
+## pattern as the pawn x-ray silhouette (and the original marker orb it was
+## extended from) - named _xray, not _ghost, so it doesn't collide with this
+## file's existing "ghost orbit" (old-flight-age) vocabulary. Deliberately
+## subtler than the pawn silhouette (small, dim) since a ball is a secondary
+## threat read, not an identity read, and the anthology's clutter budget
+## already caps at "up to 8 balls in flight."
+const XRAY_ALPHA := 0.4
+const XRAY_RENDER_PRIORITY := 11
+
 var _mat: StandardMaterial3D
+var _xray: MeshInstance3D
+var _xray_mat: StandardMaterial3D
 
 func _ready() -> void:
 	var mi := MeshInstance3D.new()
@@ -54,6 +67,22 @@ func _ready() -> void:
 	_mat.emission = NEUTRAL * 0.2
 	mi.material_override = _mat
 	add_child(mi)
+	_xray = MeshInstance3D.new()
+	var gm := SphereMesh.new()
+	gm.radius = RADIUS * 0.55
+	gm.height = RADIUS * 1.1
+	gm.radial_segments = 12
+	gm.rings = 6
+	_xray.mesh = gm
+	_xray_mat = StandardMaterial3D.new()
+	_xray_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_xray_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_xray_mat.albedo_color = Color(NEUTRAL.r, NEUTRAL.g, NEUTRAL.b, XRAY_ALPHA)
+	_xray_mat.no_depth_test = true
+	_xray_mat.render_priority = XRAY_RENDER_PRIORITY
+	_xray.material_override = _xray_mat
+	_xray.visible = false
+	add_child(_xray)
 
 func display_color() -> Color:
 	if holder_idx >= 0:
@@ -175,5 +204,11 @@ func _process(_dt: float) -> void:
 	var hot := c.lerp(Color(1.0, 0.55, 0.2), 0.6 * hf).lerp(Color(1.0, 0.88, 0.62), 0.3 * hf * hf)
 	_mat.emission = hot * glow
 	_mat.albedo_color = c.lightened(0.06 + 0.18 * hf)
+	# PROBLEM 2: occlusion-gated x-ray dot, same analytic sphere test the pawn
+	# silhouette uses (world.point_occluded). Skipped while HELD - the
+	# holder's own pawn silhouette already covers that case, and a second
+	# dot right next to it would just be noise.
+	_xray_mat.albedo_color = Color(c.r, c.g, c.b, XRAY_ALPHA)
+	_xray.visible = state != S.HELD and world.point_occluded(global_position)
 	if trail != null:
 		trail.heat = hf

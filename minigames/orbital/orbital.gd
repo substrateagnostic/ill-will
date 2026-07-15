@@ -22,6 +22,9 @@ extends Minigame
 ##   --orbtest=circ bot circumnavigates each planet on constant stick input,
 ##                  logs heading continuity (control-flip evidence), quits
 ##   --orbtest=aim  player 0 holds a full-power aim forever (preview shots)
+##   --orbtest=xray occluded-visibility tableau: 2 pawns planted far-side of a
+##                  planet (occluded) + 2 near-side (visible) + 1 ball parked
+##                  far-side; logs point_occluded() facts, quits
 ##   --shots=N,...  (VerifyCapture autoload) capture PNGs at those frames
 ## All gameplay randomness comes from config.rng_seed. No physics bodies are
 ## used at all - balls, pawns and collisions are hand-integrated in
@@ -296,6 +299,8 @@ func begin(cfg: Dictionary) -> void:
 		_run_orb_probe()
 	elif _test_mode == "threat":
 		_run_threat_demo()
+	elif _test_mode == "xray":
+		_run_xray_demo()
 	else:
 		_flash_banner("ORBITAL DODGEBALL", Color(1.0, 0.85, 0.25), 2.2)
 		_flash_event("BALLS NEVER DESPAWN. OLD ORBITS STILL KILL.", Color(0.85, 0.88, 1.0))
@@ -526,6 +531,38 @@ func cam_up() -> Vector3:
 
 func cam_axis() -> Vector3:
 	return _cam.global_basis.z
+
+func cam_pos() -> Vector3:
+	return _cam.global_position
+
+## PROBLEM 2 (docs/design/16-jump-and-visibility.md): analytic ray-vs-sphere
+## occlusion test from the fixed camera to a world point, used to gate the
+## pawn/ball x-ray silhouettes. This game has no physics bodies at all
+## ("Fully kinematic" - orb_pawn.gd header), so there is no collision layer
+## to raycast against; this reuses the same hand-integrated-sphere approach
+## gravity_at()/nearest_planet() already use. True if the camera->p segment
+## crosses a planet's sphere strictly before reaching p (the margin excludes
+## self-grazing where p sits right on the near hemisphere of its own planet).
+func point_occluded(p: Vector3) -> bool:
+	var cp := cam_pos()
+	var to_p := p - cp
+	var dist := to_p.length()
+	if dist < 0.001:
+		return false
+	var dir := to_p / dist
+	for pl in planets:
+		var c: Vector3 = pl.center
+		var r: float = pl.radius
+		var oc := cp - c
+		var b := oc.dot(dir)
+		var cterm := oc.dot(oc) - r * r
+		var disc := b * b - cterm
+		if disc <= 0.0:
+			continue
+		var t := -b - sqrt(disc)
+		if t > 0.2 and t < dist - 0.2:
+			return true
+	return false
 
 func pawn_color(i: int) -> Color:
 	return _colors[i]
@@ -1364,6 +1401,76 @@ func _threat_grab(tag: String) -> void:
 	var path := "res://verify_out/orbital_threat_%s.png" % tag
 	img.save_png(path)
 	print("THREAT_CAP ", path)
+
+
+## --- occluded-player/ball visibility verification (--orbtest=xray) ----------
+## Stages a deterministic tableau for PROBLEM 2 (docs/design/
+## 16-jump-and-visibility.md). Dead-center near/far points along the SAME
+## camera axis project to the SAME screen position (one just closer than the
+## other) - so occluded and visible pawns on one planet are staged at
+## DIFFERENT clock positions (rotated off the camera axis around a tangent),
+## not diametrically opposite, or they'd stack on screen and the screenshot
+## couldn't tell them apart:
+##   planet 0: pawn 0 dead-center far side (OCCLUDED, silhouette read) +
+##             pawn 1 near side offset 65 deg off-front (VISIBLE, offset so
+##             it doesn't stack on pawn 0 - checks no-double-draw-tint AND
+##             that an occluded/visible pair reads correctly side by side)
+##   planet 1: pawn 2 dead-center far side (OCCLUDED, second color) + a ball
+##             offset 25 deg off pawn 2's line (also OCCLUDED - ball x-ray dot)
+##   planet 2: pawn 3 dead-center near side, alone on its planet (VISIBLE,
+##             isolated no-double-draw check)
+## Isolated test path - never runs during a real match.
+func _run_xray_demo() -> void:
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out/orbital_sil"))
+	_hint_label.visible = false
+	for p in pawns:
+		(p as OrbPawn).invuln = 0.0
+	var u0 := (Vector3(planets[0].center) - cam_pos()).normalized()
+	var u1 := (Vector3(planets[1].center) - cam_pos()).normalized()
+	var u2 := (Vector3(planets[2].center) - cam_pos()).normalized()
+	var axis0 := _tangent_axis(u0)
+	var axis1 := _tangent_axis(u1)
+	(pawns[0] as OrbPawn).place_on(0, u0)                              # far side: OCCLUDED
+	(pawns[1] as OrbPawn).place_on(0, (-u0).rotated(axis0, deg_to_rad(65.0)))  # near side, offset: VISIBLE
+	if pawns.size() > 2:
+		(pawns[2] as OrbPawn).place_on(1, u1)                            # far side: OCCLUDED
+	if pawns.size() > 3:
+		(pawns[3] as OrbPawn).place_on(2, -u2)                           # near side, alone: VISIBLE
+	var ball_dir := u1.rotated(axis1, deg_to_rad(25.0))
+	var b: OrbBall = balls[0] if balls.size() > 0 else _spawn_ball_at(1, ball_dir, false)
+	b.global_position = Vector3(planets[1].center) + ball_dir * (float(planets[1].radius) + OrbBall.RADIUS)
+	b.vel = Vector3.ZERO
+	b.state = OrbBall.S.REST
+	b.rest_planet = 1
+	b.refresh_color()
+	print("XRAY_DEMO staged occluded_pawns=[0,2] visible_pawns=[1,3] ball_at=%s" % [str(b.global_position)])
+	await get_tree().create_timer(0.4).timeout
+	print("XRAY_STATE p0_occluded=%s p1_occluded=%s ball_occluded=%s"
+		% [str(point_occluded((pawns[0] as OrbPawn).body_center())),
+			str(point_occluded((pawns[1] as OrbPawn).body_center())),
+			str(point_occluded(b.global_position))])
+	await _xray_grab("wide")
+	print("XRAY_DEMO_DONE")
+	if _autoquit:
+		get_tree().quit()
+
+## A unit axis perpendicular to u, used to rotate a near/far-side direction
+## off the dead-center camera line onto a different clock position.
+func _tangent_axis(u: Vector3) -> Vector3:
+	var t := u.cross(Vector3.UP)
+	if t.length() < 0.1:
+		t = u.cross(Vector3.RIGHT)
+	return t.normalized()
+
+func _xray_grab(tag: String) -> void:
+	if DisplayServer.get_name() == "headless":
+		print("XRAY_SKIP_HEADLESS ", tag)
+		return
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	var path := "res://verify_out/orbital_sil/xray_%s.png" % tag
+	img.save_png(path)
+	print("XRAY_CAP ", path)
 
 
 ## --- ONLINE (phase 2): the mirror ---------------------------------------------
