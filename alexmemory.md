@@ -51,6 +51,24 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     rides the kit via a signal seam (its turf saturation still animates in
     lockstep). Nits queued for wave 2: card/hint-bar notation consistency,
     a banner-stacking beat, always list all 4 seats.
+  - ✅ **THE WHOLE ANTHOLOGY HAS THE HOUSE LOOK** (merge d9bbe0a): EnvKit
+    applied to all 12 original games (echo ring now blooms hot gold —
+    root cause was emission 0.6 below the 1.0 glow threshold), with real
+    per-game judgment: séance kept its candle intimacy (eyes-closed dark
+    IS a mechanic), masked ball kept the warm ballroom + cool rim for
+    crowd separation, tilt chose MOONLIT so the tilt-shadow on the sea
+    still reads, orbital got AGX+glow only (x-ray silhouettes verified
+    intact). Net −65 lines. All receipts pass. Before/afters:
+    worktree verify_out/lookdev2/.
+  - ✅ **MESHY FORGE + 32 PROPS** (merge 4bef01f): manifest-driven
+    pipeline (tools/meshy_forge.ps1, key never committed), 32/32 props
+    landed for 1080 credits (~$22): 8 gravestone styles, all 8 will-
+    reading award statuettes (the tipped scales, the cobra, the crossed
+    daggers...), 8 board-furniture pieces, 8 estate dressings. Contact
+    sheets: docs/verify/shots/meshy_forge_group*.png. Two kept quirks
+    for your veto: the DOORMAT trophy reads "WELCOME MUT", and the
+    waypoint stone grew a green-man face. Procession dressing swap is
+    in flight now.
   - ✅ **THE PROCESSION — THE BOARD IS REAL** (merge 43bcee0): the Mario
     Party loop, playable end to end tonight. ~24 spaces looping the manor
     drive; every round all four putt their pawns AT ONCE (corner meters,
