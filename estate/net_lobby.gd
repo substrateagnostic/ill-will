@@ -150,6 +150,8 @@ static func build_lobby_state(estate, modules: Dictionary) -> Dictionary:
 		"trail": EstateState.trail_pos.duplicate(),
 		"hats": estate._net_hats(),
 	}
+	if estate._house_rules_active:
+		state["house_rules"] = true   # guests see a waiting card, not a silent stall
 	if estate.get_phase_name() == "RECKONING" and not estate._net_ticker.is_empty():
 		state["ticker"] = estate._net_ticker
 	if estate.get_phase_name() == "AUCTION" or estate.get_phase_name() == "CHOOSING":
@@ -370,6 +372,13 @@ static func client_build_panel(estate, client_last_state: Dictionary) -> void:
 		return
 	estate._client_teardown_mirror()
 	estate._clear_panel("AN ONLINE NIGHT — hosted across the wire", Color(0.9, 0.95, 0.9))
+	if state.get("house_rules", false):
+		var hr := Label.new()
+		hr.text = "the host is reading the house rules — the night begins in a moment"
+		hr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		hr.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		hr.modulate.a = 0.85
+		estate.phase_box.add_child(hr)
 	var seats: Array = state.get("seats", [])
 	if seats.is_empty():
 		var wait := Label.new()

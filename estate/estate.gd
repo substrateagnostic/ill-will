@@ -1834,6 +1834,12 @@ func _launch_game_swap(id: String, practice := false) -> void:
 		get_tree().root.add_child(_module)
 		if _module.has_signal("finished"):
 			_module.finished.connect(_on_module_finished, CONNECT_ONE_SHOT)
+		# PAR ONLINE (doc 22 §7a): gamestate modules with _net_state ride the
+		# same 20 Hz pump as minigames; par self-detects host role in _ready.
+		if NetSession.is_host() and _module.has_method("_net_state"):
+			_net_mirror_id = id
+			_net_module_seq = 0
+			_net_module_accum = 0.0
 	else:
 		add_child(_module)
 		_module.finished.connect(_on_module_finished, CONNECT_ONE_SHOT)
@@ -2305,6 +2311,12 @@ func _client_ensure_mirror(id: String) -> void:
 	$UI/TopBar.visible = false
 	var scene: PackedScene = load(info.scene)
 	_module = scene.instantiate()
+	# PAR ONLINE (doc 22 §7b): gamestate modules mirror themselves — par
+	# self-detects the client role in _ready; no begin() contract to call.
+	if String(info.get("mode", "")) == "gamestate":
+		get_tree().root.add_child(_module)
+		cam.current = false
+		return
 	add_child(_module)
 	var roster: Array = []
 	for pl in EstateState.players:

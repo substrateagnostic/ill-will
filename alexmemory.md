@@ -6,6 +6,69 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **☀️☀️☀️☀️ MORNING MENU #4 — THE FOURTH WATCH (2026-07-15). The night
+  you asked for a board game, and the estate grew one.**
+
+  **THE HEADLINES (16 merges, all pushed, all receipts green):**
+  1. **THE PROCESSION IS PLAYABLE.** Press PLAY → "how does the estate
+     settle its debts tonight?" → THE PROCESSION. Everyone putts their
+     pawn at once (frozen golf physics ARE the dice — sweet-spot bands
+     for exact space targeting), pawns move together, then the Executor
+     reveals landings one by one. Roving CODICIL sells DEEDS; shrines,
+     weeping graves that pay their monument owners, tollgates, séance
+     wheel, nemesis vendetta wagers; minigame every 2nd round; HOUSE
+     AWAKENS every 3rd; will clauses announced up front; most Deeds
+     inherits. ~25 min default, Deed-goal dial in the menu. It's dressed
+     as a moonlit funeral drive (Meshy props, MOONLIT light, broadcast
+     lower-thirds). Quick CLI taste: `godot --path . -- --procession
+     --seed=7 --deedgoal=4`
+  2. **GAME #14: THE WIDOW'S GAZE** — red-light-green-light at the wake.
+     Rob relics beside the coffin, FREEZE when she turns, and (the twist)
+     shove someone as the sting plays — the Widow takes them, attributed.
+     Tuned to the razor: 0.5s sting window vs 0.465s best human stop.
+  3. **EVERY PLAYER HAS A CONTROLLER NOW (INPUT 2.0):** press-A-to-join
+     + READY badges, pad-disconnect → pause + 3 recovery paths (cert-
+     grade), real brand glyphs on cards, hold-to-confirm on QUIT/wipe.
+  4. **14/14 ONLINE + the worst online bug dead:** Par crossed the wire
+     (byte-identical receipts; guests see killcams). Host-pause no longer
+     strands guests — they get "the estate holds its breath" and resume
+     digest-verified. Remote guests can now BID in the auction.
+  5. **THE ESTATE REMEMBERS OUT LOUD:** deciding moments auto-captured →
+     THE NEWSREEL plays them as decayed 1920s film before the will;
+     THE FAMILY ALBUM hangs each night's stills on the grounds;
+     THE CHRONICLE gossips in the lobby and the will-reading ("GOLD has
+     erected 4 monuments. None mention kindness.")
+  6. **The whole anthology got the house look** (AGX + three light
+     presets, per-game judgment), **32 Meshy props** (~$22 of credits),
+     **AAA SFX bank** (40 keys/105 variants, CC0), **jump/hop** (real
+     jump on the grounds walker — go feel it), **UI kit** (intro cards,
+     staged results, transition wipes, all four seats always listed).
+
+  **YOUR PLAYTEST LIST (in order of joy):** (a) a full PROCESSION night
+  with pads on the couch; (b) THE WIDOW'S GAZE with humans — try the
+  sting-shove murder; (c) walk the grounds: jump around, find THE FAMILY
+  ALBUM wall, let a night end and watch THE NEWSREEL; (d) yank a
+  controller mid-game (the overlay should catch it); (e) online: host +
+  join on the LAN, open ESC as host (guests should see the curtain, not
+  freeze), bid from the guest seat, and if you can — a par round across
+  the wire; (f) SFX veto pass: `godot --path .
+  res://tools/sfx_audition.tscn` then answer the 9 MORNING CALLS in
+  docs/design/21-sfx-overhaul.md.
+
+  **DECISION CARDS (batched, multiple-choice):** doc 21 §MORNING CALLS
+  (SFX, 9 items) · doc 18's eight board calls (all made by me — override
+  any) · Meshy quirks kept for your veto: the DOORMAT trophy reads
+  "WELCOME MUT", the waypoint stone grew a green-man face · gothic serif
+  font for the Executor's lower-thirds (repo has none — want to pick one?).
+
+  **KNOWN-OPEN (small, listed honestly):** hop doesn't ride the remote
+  input packet yet (couch-only, ~10-line stitch); some non-swept games'
+  hint bars still show abstract "A =" in all-bot fallback (greed/
+  last_will/throne fixed; others listed in UI lane report); estate GET
+  READY gate + game intro card double-gate (pre-existing); newsreel is
+  host-screen-only online (doc 20 flags the parity field); echo bot
+  matches still not byte-reproducible (pre-existing, chaotic).
+
 - **🌒 NIGHT 4 UNDERWAY (2026-07-15, the fourth watch).** New director seated;
   full-autonomy mandate received. The month-scale plan is written and committed:
   `docs/design/17-directors-plan-2026-07-15.md` — Input 2.0 (pad per player),
