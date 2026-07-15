@@ -398,22 +398,26 @@ func _spawn_crowd_mirror() -> void:
 
 # ================================================================ world
 func _build_world() -> void:
-	var we: WorldEnvironment = $WorldEnvironment
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.014, 0.009, 0.02)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.52, 0.4, 0.34)
-	env.ambient_light_energy = 0.5
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
-	env.glow_intensity = 0.65
-	env.glow_bloom = 0.1
-	env.glow_hdr_threshold = 0.95
-	env.fog_enabled = true
-	env.fog_light_color = Color(0.1, 0.07, 0.12)
-	env.fog_density = 0.01
-	we.environment = env
+	# THE HOUSE LOOK -- STAGELIT ballroom (core/env_kit.gd). The game IS finding a
+	# body in a crowd, so ALL 20 dancers must read: we keep the bespoke warm rig
+	# (the BallSpot candle pool, the MoonFill, the chandeliers, the reveal spot)
+	# and use EnvKit to own the ENVIRONMENT with the house AGX tonemap + an ADDITIVE
+	# high-threshold glow (the mask glints bloom), RAISE ambient so edge dancers
+	# outside the centre pool still read, and add a cool STAGELIT rim that peels the
+	# brown-hooded crowd off the checkered floor. EnvKit's key/fill are zeroed --
+	# the bespoke BallSpot stays the key. Replaces the old flat FILMIC env.
+	EnvKit.apply(self, EnvKit.STAGELIT, {
+		"key_energy": 0.0, "key_shadow": false,          # keep the bespoke BallSpot candle pool
+		"fill_energy": 0.0,                              # keep the bespoke MoonFill
+		"rim_energy": 0.85,                              # cool rim -- separate the 20 dancers
+		"rim_color": Color(0.55, 0.62, 0.98),
+		"bg_color": Color(0.014, 0.009, 0.02),
+		"ambient_color": Color(0.52, 0.42, 0.40),        # warm-neutral crowd fill
+		"ambient_energy": 0.60,                          # UP from 0.5 so all 20 dancers read
+		"fog": true, "fog_color": Color(0.1, 0.07, 0.12), "fog_density": 0.01,
+		"glow_intensity": 0.75, "glow_bloom": 0.1, "glow_threshold": 0.95,
+		"glow_blend": Environment.GLOW_BLEND_MODE_ADDITIVE,
+	})
 
 	cam.global_position = Vector3(0, 11.6, 12.2)
 	cam.look_at(Vector3(0, 0.3, -1.5), Vector3.UP)
