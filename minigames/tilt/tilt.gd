@@ -1271,41 +1271,20 @@ func _tick_test(delta: float) -> void:
 # -- world & juice -------------------------------------------------------------
 
 func _build_world() -> void:
-	# sky + ambient — warm golden-hour diorama (greed/mower family): warm sun
-	# with shadows, warm peach sky + soft ambient, filmic, gentle glow so the
-	# platter's bright target rings and gold coins bloom. The ocean stays the
-	# sea it always was, just warmed by the low sun.
-	var env := Environment.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.36, 0.30, 0.38)
-	sky_mat.sky_horizon_color = Color(0.98, 0.74, 0.48)
-	sky_mat.ground_bottom_color = Color(0.15, 0.17, 0.18)
-	sky_mat.ground_horizon_color = Color(0.66, 0.48, 0.34)
-	var sky := Sky.new()
-	sky.sky_material = sky_mat
-	env.background_mode = Environment.BG_SKY
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.55
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
-	env.glow_intensity = 0.45
-	env.glow_bloom = 0.1
-	env.glow_hdr_threshold = 0.95
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-	# sun (casts the platter's tilt shadow on the ocean) — warm, low, golden
-	sun.rotation_degrees = Vector3(-40, 40, 0)
-	sun.shadow_enabled = true
-	sun.light_energy = 1.45
-	sun.light_color = Color(1.0, 0.84, 0.60)
-	# a soft cool bounce from the sea keeps warm shadows from going flat
-	var fill := DirectionalLight3D.new()
-	fill.rotation_degrees = Vector3(-24, -132, 0)
-	fill.light_energy = 0.26
-	fill.light_color = Color(0.64, 0.72, 0.80)
-	add_child(fill)
+	# THE HOUSE LOOK -- MOONLIT platter over a night sea (core/env_kit.gd). One
+	# platter in the void: a cool moon key rakes it LOW so the tilt throws a long
+	# shadow across the dark water (the tilt read IS the game), a warm fill keeps
+	# the platter + pawns warm against the cool surround, and the high-threshold
+	# glow blooms the bright target rings + gold coins. Replaces the old FILMIC
+	# golden-hour sky-env + hand-rolled sun/fill.
+	EnvKit.apply(self, EnvKit.MOONLIT, {
+		"key_energy": 1.2,                        # crisp tilt-shadow on the night sea
+		"key_angle": Vector3(-40.0, 40.0, 0.0),   # keep the old low rake -- long shadow
+		"fill_energy": 0.30,                      # warm bounce; platter never goes blue-dead
+	})
+	# the scene's static $Sun is superseded by EnvKit's key rig
+	sun.visible = false
+	sun.light_energy = 0.0
 	# ocean — deepened a touch so it reads as evening sea under the warm sun
 	var ocean := MeshInstance3D.new()
 	var om := CylinderMesh.new()
