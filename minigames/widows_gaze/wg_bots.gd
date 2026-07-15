@@ -20,12 +20,14 @@ var malice: Array = []
 var poise: Array = []
 var _target: Array = []       # per-bot chosen relic index (-1 = none / re-pick)
 var _wander_t: Array = []
+var _react_now: Array = []    # per-sting effective reaction (jittered per sting)
+var _seq_seen: Array = []     # last sting_seq this bot rerolled for
 
 
 func setup(seed_value: int, n: int) -> void:
 	rng.seed = seed_value
 	react.clear(); greed.clear(); malice.clear(); poise.clear()
-	_target.clear(); _wander_t.clear()
+	_target.clear(); _wander_t.clear(); _react_now.clear(); _seq_seen.clear()
 	for i in n:
 		react.append(rng.randf_range(0.15, 0.29))     # careful default: stops in time
 		greed.append(rng.randf_range(0.2, 0.7))
@@ -33,12 +35,15 @@ func setup(seed_value: int, n: int) -> void:
 		poise.append(rng.randf_range(0.0, 0.5))
 		_target.append(-1)
 		_wander_t.append(0.0)
+		_react_now.append(react[i])
+		_seq_seen.append(-1)
 	# one seeded GREEDY mourner: over-runs the greens, hunts the deep relics.
 	# It is the pace-setter and the reliable casualty (spec: beatable + killable).
 	if n >= 1:
 		react[0] = rng.randf_range(0.40, 0.62)
 		greed[0] = 0.95
 		malice[0] = 0.5
+		_react_now[0] = react[0]
 
 
 ## Returns {move: Vector2, grab: bool, shove: bool, pose: bool}. The controller
@@ -110,11 +115,18 @@ func decide(p: int, g, delta: float) -> Dictionary:
 ## True when the bot ought to be at a dead stop for the gaze. Careful bots reach
 ## this early in the STING (with decel time to spare); the greedy bot reaches it
 ## late — sometimes only after the gaze is already ON, so it gets taken.
+## Reaction is JITTERED per sting (rerolled on sting_seq change) so the same bot
+## sometimes squeaks through and sometimes over-runs — catches feel earned, not
+## scripted. Friction needs ~0.21s to bleed under the stop epsilon; a stop that
+## starts after ~0.29s into the 0.5s sting is already doomed.
 func _should_stop(p: int, g) -> bool:
+	if int(g.sting_seq) != int(_seq_seen[p]):
+		_seq_seen[p] = int(g.sting_seq)
+		_react_now[p] = react[p] * rng.randf_range(0.5, 1.15)
 	if g.gaze == g.Gaze.STING:
-		return g.gaze_t >= react[p]
+		return g.gaze_t >= _react_now[p]
 	if g.gaze == g.Gaze.WATCHING:
-		return g.gaze_t >= maxf(0.0, react[p] - g.STING_TIME)
+		return g.gaze_t >= maxf(0.0, _react_now[p] - g.STING_TIME)
 	return false
 
 
@@ -132,7 +144,7 @@ func _pick_relic(p: int, g, my_pos: Vector2) -> int:
 		var val: float = float(g.relics[i].value)
 		# greedy bots weight value (the deep, fat relics); careful bots weight
 		# proximity (grab the near one, get out).
-		var score := val * (0.4 + greed[p] * 1.6) - dist * (0.35 - greed[p] * 0.18)
+		var score: float = val * (0.4 + float(greed[p]) * 1.6) - dist * (0.35 - float(greed[p]) * 0.18)
 		if score > best_score:
 			best_score = score
 			best = i
@@ -142,7 +154,7 @@ func _pick_relic(p: int, g, my_pos: Vector2) -> int:
 
 func _shove_target(p: int, g, my_pos: Vector2) -> int:
 	var best := -1
-	var best_d := g.SHOVE_RANGE
+	var best_d: float = g.SHOVE_RANGE
 	for q in g.players.size():
 		if q == p:
 			continue
