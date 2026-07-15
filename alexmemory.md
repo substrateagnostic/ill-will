@@ -51,6 +51,22 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     rides the kit via a signal seam (its turf saturation still animates in
     lockstep). Nits queued for wave 2: card/hint-bar notation consistency,
     a banner-stacking beat, always list all 4 seats.
+  - ✅ **THE ESTATE'S MEMORY** (merge 0948268): the night's biggest surprise,
+    shipped in three parts. **THE NEWSREEL** — deciding moments and victors
+    are captured automatically (MomentScribe hooks the shared fov_punch/
+    podium chokepoints, zero game edits) and replayed before the will as
+    decayed 1920s silent film: intertitle cards ('ACT I — "THE DECIDING
+    MOMENT" — as it happened in ECHO CHAMBER'), sepia/grain/scratch/gate-
+    flicker shader, in-shader Ken Burns. **THE FAMILY ALBUM** — each night's
+    stills archived + hung as gilt-framed photos on a salon wall in free
+    roam ("...and N more nights remembered"). **THE GRUDGE LEDGER** — cross-
+    night chronicle in the save; the Executor now says things like "GOLD
+    has erected 4 monuments. None mention kindness." Test: --newsreel-test
+    / --album-test / --chronicle-test. estate.gd wiring lands with the
+    split merge (snippet in docs/design/20).
+    ⚠️ Housekeeping: your saves were additively backed up (*.bak-night4);
+    a Procession bot-night wrote an heir into slot_1 via shared user:// —
+    the clean copy will be restored at verification night.
   - ✅ **LOOK-DEV: EnvKit house look** (merge 75a2c40): core/env_kit.gd —
     AGX tonemap + MOONLIT/CANDLELIT/STAGELIT presets (one shadowed key
     light, glow-on-emissives, SSAO, fog; 60fps held). Applied: echo
