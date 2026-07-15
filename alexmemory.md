@@ -51,6 +51,18 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     rides the kit via a signal seam (its turf saturation still animates in
     lockstep). Nits queued for wave 2: card/hint-bar notation consistency,
     a banner-stacking beat, always list all 4 seats.
+  - ✅ **THE CRITICAL PATH: SPLIT + INPUT 2.0 + INTEGRATIONS** (merge
+    76dde67): estate.gd 3375→2702 lines (monuments/wardrobe/howto/net-lobby
+    extracted to modules). **INPUT 2.0 live:** press-A-to-join + READY
+    badges in the lobby, pad-disconnect → pause overlay with three recovery
+    paths (reconnect / A on another pad / host holds B for bot), real
+    brand glyphs on the HOWTO cards, hold-to-confirm on QUIT (3s) and slot
+    wipe (5s). **PLAY is now a rite chooser:** THE PROCESSION featured with
+    the Deed-goal dial; CLASSIC NIGHTS beneath. **The estate remembers out
+    loud:** newsreel plays before the will, album wall hangs on the
+    grounds (walk-up hotspot), chronicle lines in the will-reading AND the
+    lobby greets you with ledger gossip. (Codex built much of INPUT 2.0
+    before wedging — the takeover verified and finished it.)
   - ✅ **THE PROCESSION GOT ITS FACE** (merge e6afe0b): the board is now a
     moonlit funeral drive — carnival tents and pink kart RETIRED; green-man
     waypoint lanterns, wrought tollgate arch, codicil pedestal in the one
