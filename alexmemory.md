@@ -51,6 +51,16 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     rides the kit via a signal seam (its turf saturation still animates in
     lockstep). Nits queued for wave 2: card/hint-bar notation consistency,
     a banner-stacking beat, always list all 4 seats.
+  - ✅ **JUMP LANDED** (merge d9b7ca2): new third input "jump" (pad X /
+    Q / R-Ctrl / Space-on-mouse) — expressive hop in echo/throne/greed
+    (apex 0.30m, airtime 0.40s, squash + dust + 0.5s cd; provably
+    cosmetic — every shove/range check Y-flattens, receipts unchanged:
+    echo determinism 0.000000, greed intercept 0.80, throne balance
+    pass), REAL jump for your estate walker (1.1m, coyote 0.10s, buffer
+    0.15s, jump-cut — tuned for your hands, go feel it on the grounds).
+    Bots hop at spawn/triumphs for personality. Known-open: hop doesn't
+    ride the remote input packet yet (couch-only; ten-line stitch listed
+    for a future pass). DW/LW/orbital/par hops untouched.
   - ✅ **HOST-PAUSE BUG DEAD + GUEST BIDDING** (merge f6b4b35): root cause
     was NOT a dropped connection — the 20Hz pump rode the estate's pausable
     _process. Now: pause is announced over the always-polled socket; guests
