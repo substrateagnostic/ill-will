@@ -39,6 +39,12 @@ var _disconnect_device: int = -99
 var _disconnect_prev_paused: bool = false
 var _disconnect_claim_held: Dictionary = {}
 
+# The guest-side "THE HOST HAS PAUSED" overlay. PartySetup is the shell's global
+# overlay owner (settings + controller-disconnect already live here), so the
+# host-pause curtain rides the same PROCESS_MODE_ALWAYS CanvasLayer. It is driven
+# purely by NetSession.host_pause_changed and only ever shows on a client.
+var _hostpause_root: Control = null
+
 func _ready() -> void:
 	layer = 90
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -96,6 +102,10 @@ func _ready() -> void:
 	quit_row.add_child(_quit_hold)
 	box.add_child(quit_row)
 	_build_disconnect_overlay()
+	_build_hostpause_overlay()
+	# NetSession autoloads AFTER PartySetup (project.godot order), so its node is
+	# not in the tree yet — wire the guest-pause signals on the next idle frame.
+	call_deferred("_wire_net_pause_signals")
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--opensettings="):
 			var t := int(arg.trim_prefix("--opensettings="))
@@ -186,6 +196,9 @@ func toggle() -> void:
 	open = not open
 	panel.visible = open
 	get_tree().paused = open
+	# Tell the guests the estate held its breath (host only — a guest's own ESC
+	# pauses just its local tree and must never freeze the shared table).
+	_net_reflect_host_pause(open)
 	if open:
 		_rebuild_seats()
 		_rebuild_controls()
@@ -281,6 +294,7 @@ func _begin_disconnect_overlay(seat: int, device: int) -> void:
 	_disconnect_body.text = "Reconnect gamepad %d to resume automatically. Press A on any unclaimed gamepad to reclaim this seat. The host may hold B to convert the seat to BOT and continue." % (device + 1)
 	_disconnect_panel.visible = true
 	get_tree().paused = true
+	_net_reflect_host_pause(true)
 	Sfx.play("grudge", -4.0)
 
 func _poll_disconnect_overlay(delta: float) -> void:
@@ -336,6 +350,81 @@ func _end_disconnect_overlay() -> void:
 	_disconnect_claim_held.clear()
 	_disconnect_host_hold.cancel()
 	get_tree().paused = _disconnect_prev_paused
+	# Reflect the resolved pause state (the settings overlay may still hold it).
+	_net_reflect_host_pause(get_tree().paused)
+
+## ----- host pause across the wire (the estate holds its breath) -----
+
+## Push the host's own pause to every guest. HOST-ONLY by design: a guest's ESC
+## pauses only its local tree, so gating on is_host() guarantees a guest can
+## never freeze the shared simulation for everyone else (fix-list item 4).
+func _net_reflect_host_pause(paused: bool) -> void:
+	if NetSession.is_host():
+		NetSession.set_host_paused(paused)
+
+## The guest-side curtain: a full-screen dim + a centered card in the house
+## voice. Built once, hidden; NetSession.host_pause_changed toggles it.
+func _build_hostpause_overlay() -> void:
+	_hostpause_root = Control.new()
+	_hostpause_root.name = "HostPauseOverlay"
+	_hostpause_root.visible = false
+	_hostpause_root.process_mode = Node.PROCESS_MODE_ALWAYS
+	_hostpause_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Eat the clicks/keys that fall on the curtain so a guest cannot poke the
+	# frozen game underneath; ESC still reaches _input (settings stay reachable).
+	_hostpause_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_hostpause_root)
+	var dim := ColorRect.new()
+	dim.color = Color(0.02, 0.02, 0.04, 0.72)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_hostpause_root.add_child(dim)
+	var card := PanelContainer.new()
+	card.set_anchors_preset(Control.PRESET_CENTER)
+	card.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	card.grow_vertical = Control.GROW_DIRECTION_BOTH
+	card.custom_minimum_size = Vector2(720, 240)
+	_hostpause_root.add_child(card)
+	var box := VBoxContainer.new()
+	box.alignment = BoxContainer.ALIGNMENT_CENTER
+	box.add_theme_constant_override("separation", 14)
+	card.add_child(box)
+	var title := Label.new()
+	title.text = "THE HOST HAS PAUSED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 34)
+	title.add_theme_color_override("font_color", Color(1.0, 0.85, 0.2))
+	box.add_child(title)
+	var body := Label.new()
+	body.text = "the estate holds its breath"
+	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	body.add_theme_font_size_override("font_size", 22)
+	body.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
+	box.add_child(body)
+	var foot := Label.new()
+	foot.text = "your seat is held — the night resumes the moment the host returns"
+	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	foot.add_theme_font_size_override("font_size", 15)
+	foot.modulate.a = 0.7
+	box.add_child(foot)
+
+func _wire_net_pause_signals() -> void:
+	if not NetSession.host_pause_changed.is_connected(_on_net_host_pause):
+		NetSession.host_pause_changed.connect(_on_net_host_pause)
+	if not NetSession.session_closed.is_connected(_on_net_session_closed_hostpause):
+		NetSession.session_closed.connect(_on_net_session_closed_hostpause)
+
+func _on_net_host_pause(paused: bool) -> void:
+	if _hostpause_root == null:
+		return
+	_hostpause_root.visible = paused
+	Sfx.play("card", -6.0)
+
+## The wire went dark while the curtain was up — drop it so a guest is not left
+## staring at "held breath" after it has already been kicked back to the title.
+func _on_net_session_closed_hostpause(_reason: String) -> void:
+	if _hostpause_root != null:
+		_hostpause_root.visible = false
 
 ## ----- prefs (audio/video/access) -----
 

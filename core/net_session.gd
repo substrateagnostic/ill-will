@@ -44,6 +44,13 @@ signal probe_first_input(seat: int)              # host, NETPROBE only: tape lan
 # --- PHASE 2: game mirrors (docs/design/10 §4.3; first game: THE SÉANCE) ---
 signal module_state_received(state: Dictionary)  # client: running game's _net_state()
 signal module_private_received(data: Dictionary) # client: THIS seat's hidden info only
+## The host stepped into its ESC/settings overlay (or lost a local controller):
+## the whole shared simulation is frozen on the host until it resumes. The 20 Hz
+## state pump lives in the estate's (pausable) _process, so it stops the instant
+## the host pauses — but THIS autoload is PROCESS_MODE_ALWAYS and the ENet socket
+## keeps being serviced, so this one fact still crosses the wire. The guest shows
+## "the estate holds its breath" instead of freezing with no explanation.
+signal host_pause_changed(paused: bool)          # client: host paused / resumed
 
 enum Role { OFFLINE, HOST, CLIENT }
 
@@ -67,6 +74,11 @@ var _my_seat := -1        # client: seat granted by the host
 var _last_seq := {}       # host: seat -> last accepted packet seq
 var _rtt_ms := {}         # host: peer_id -> measured round trip
 var _ping_accum := 0.0
+## True while the shared sim is frozen by the host's pause. On the HOST this is
+## set from PartySetup when the settings/disconnect overlay opens; on a CLIENT it
+## mirrors the host's state via _rpc_host_pause. Guests stop streaming input and
+## raise the "held breath" overlay while it is true.
+var _host_paused := false
 
 # --- client input sampling state
 var _send_gap := 0
@@ -230,6 +242,7 @@ func leave(reason := "left the night") -> void:
 	_my_seat = -1
 	_tape_active = false
 	_trace_tick = -1
+	_clear_host_pause()
 	role = Role.OFFLINE
 	_steam_pending = ""
 	_steam_drop_lobby()
@@ -465,6 +478,7 @@ func _on_connected_to_server() -> void:
 	_rpc_request_seat.rpc_id(1)
 
 func _on_connection_failed() -> void:
+	_clear_host_pause()
 	role = Role.OFFLINE
 	_steam_drop_lobby()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
@@ -478,6 +492,7 @@ func _on_server_disconnected() -> void:
 	var was_seated := _my_seat >= 0
 	_my_seat = -1
 	_tape_active = false
+	_clear_host_pause()
 	role = Role.OFFLINE
 	_steam_drop_lobby()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
@@ -495,6 +510,11 @@ func _steam_drop_lobby() -> void:
 func _on_peer_connected(peer_id: int) -> void:
 	if role == Role.HOST:
 		print("NET peer %d connected" % peer_id)
+		# A guest that knocks while the host is already in its settings would
+		# otherwise land on a live-looking-but-frozen estate: hand it the pause
+		# fact immediately so it opens straight into the "held breath" overlay.
+		if _host_paused:
+			_rpc_host_pause.rpc_id(peer_id, true)
 
 func _on_peer_disconnected(peer_id: int) -> void:
 	if role != Role.HOST:
@@ -620,6 +640,43 @@ func _rpc_module_state(state: Dictionary) -> void:
 func _rpc_module_private(data: Dictionary) -> void:
 	module_private_received.emit(data)
 
+## ----- host pause (the estate holds its breath) -----
+## The estate's state pump rides the host's (pausable) _process, so it stops the
+## instant the host opens settings — but the ENet socket keeps being serviced
+## (this autoload is PROCESS_MODE_ALWAYS and MultiplayerAPI.poll() is not gated
+## by SceneTree.paused), so a guest stays CONNECTED, it just stops hearing the
+## world. Rather than let it freeze with no explanation, the host announces the
+## pause as one reliable fact; the guest renders an overlay and resumes cleanly
+## when the matching resume fact arrives. Host-only: a guest's own ESC pauses
+## only its local tree and never reaches here, so it can never freeze the table.
+
+func is_host_paused() -> bool:
+	return _host_paused
+
+## HOST -> every guest: the shared sim just froze / resumed. Safe to call while
+## get_tree().paused is true — the reliable RPC flushes on the next poll, which
+## keeps running through the pause.
+func set_host_paused(paused: bool) -> void:
+	if role != Role.HOST or _host_paused == paused:
+		return
+	_host_paused = paused
+	if has_guests():
+		_rpc_host_pause.rpc(paused)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_host_pause(paused: bool) -> void:
+	if _host_paused == paused:
+		return
+	_host_paused = paused
+	host_pause_changed.emit(paused)
+
+## Session teardown from any side: drop the flag and make sure a guest's "held
+## breath" overlay clears rather than sticking after the wire goes dark.
+func _clear_host_pause() -> void:
+	if _host_paused:
+		_host_paused = false
+		host_pause_changed.emit(false)
+
 ## Stable digest of a snapshot dict — both ends print NETHASH lines keyed by
 ## seq (spec §7.3: compare by seq, never wall clock).
 static func snapshot_hash(state: Dictionary) -> String:
@@ -633,7 +690,13 @@ func _physics_process(_delta: float) -> void:
 	if _tape_active:
 		_step_tape()
 	elif role == Role.CLIENT and _my_seat >= 0:
-		_sample_and_send()
+		# Swallow this guest's input while it sits in its OWN settings overlay
+		# (get_tree().paused — local to this client) or while the HOST has the
+		# whole table paused (_host_paused): either way the pawn must not creep
+		# on the host's or anyone else's screen. Raw device reads (PlayerInput)
+		# are not gated by SceneTree.paused, so this is the seam that stops them.
+		if not get_tree().paused and not _host_paused:
+			_sample_and_send()
 
 var _trace_armed := false
 
