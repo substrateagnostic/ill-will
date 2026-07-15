@@ -293,43 +293,21 @@ func _parse_args() -> void:
 # World / UI construction
 # ===========================================================================
 func _build_world() -> void:
-	# Warm diorama house style (matches greed/mower): warm-dark vault surround,
-	# warm sun + shadows, soft ambient, filmic, gentle glow so the neon ghosts /
-	# gold ring / parry flashes bloom BETTER against the warmth.
-	var env := WorldEnvironment.new()
-	var e := Environment.new()
-	var sky := Sky.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.11, 0.10, 0.13)
-	sky_mat.sky_horizon_color = Color(0.30, 0.22, 0.17)
-	sky_mat.ground_bottom_color = Color(0.06, 0.05, 0.05)
-	sky_mat.ground_horizon_color = Color(0.22, 0.17, 0.13)
-	sky.sky_material = sky_mat
-	e.background_mode = Environment.BG_SKY
-	e.sky = sky
-	e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	e.ambient_light_energy = 0.55
-	e.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	e.glow_enabled = true
-	e.glow_intensity = 0.55
-	e.glow_bloom = 0.12
-	e.glow_hdr_threshold = 0.95
-	env.environment = e
-	add_child(env)
-
-	var sun := DirectionalLight3D.new()
-	sun.transform = Transform3D(Basis.from_euler(Vector3(deg_to_rad(-58.0), deg_to_rad(35.0), 0.0)), Vector3(0, 12, 0))
-	sun.light_energy = 1.25
-	sun.light_color = Color(1.0, 0.92, 0.78)
-	sun.shadow_enabled = true
-	add_child(sun)
-
-	# soft warm bounce so shadows stay warm, not cold-blue
-	var fill := DirectionalLight3D.new()
-	fill.transform = Transform3D(Basis.from_euler(Vector3(deg_to_rad(-30.0), deg_to_rad(-140.0), 0.0)), Vector3(0, 8, 0))
-	fill.light_energy = 0.30
-	fill.light_color = Color(0.96, 0.82, 0.64)
-	add_child(fill)
+	# THE HOUSE LOOK — STAGELIT (core/env_kit.gd). Echo Chamber is an arena where
+	# the ghosts of past rounds perform for the couch: a hard overhead key spot
+	# pools light on the shrinking ring, a cool rim peels the four fighters off a
+	# near-black surround, and the high-threshold glow makes the neon ghost trails,
+	# gold boundary ring and parry flashes bloom hardest. The black beyond the pool
+	# also sells the round-5 ring-out — light is safe, the void is death.
+	# Hard directional key over a near-black surround (readability first: all four
+	# KayKit bodies must always read on the couch, so ambient never bottoms out).
+	EnvKit.apply(self, EnvKit.STAGELIT, {
+		"key_energy": 1.7,
+		"key_angle": Vector3(-64.0, 22.0, 0.0),
+		"ambient_energy": 0.5,
+		"fill_energy": 0.24,
+		"rim_energy": 1.0,
+	})
 
 	_build_surround()
 
