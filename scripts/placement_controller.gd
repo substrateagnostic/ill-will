@@ -183,6 +183,32 @@ func debug_place_scan(rot_deg: float, rng: RandomNumberGenerator) -> bool:
 		Sfx.play("place")
 	return false
 
+## ONLINE PHASE 3: a remote builder drives the ghost by intent, not the local
+## mouse. remote_move streams the ghost pose (preview that fans out to every
+## screen); remote_place commits when the point is legal (returns false so the
+## host can fall back to a scan). Both reuse the EXACT mouse path (move_placement
+## + _refresh + the same validity gate), so a placed trap is identical to hotseat.
+func remote_move(pos: Vector3, rot_deg: float) -> void:
+	if not active or ghost == null:
+		return
+	_rot = rot_deg
+	ghost.rotation_degrees.y = rot_deg
+	ghost.move_placement(pos)
+	_refresh()
+
+func remote_place(pos: Vector3, rot_deg: float) -> bool:
+	if not active or ghost == null:
+		return false
+	remote_move(pos, rot_deg)
+	if not _valid:
+		return false
+	if ghost.advance_placement():
+		_confirm()
+	else:
+		Sfx.play("place")
+		_refresh()
+	return true
+
 func _mouse_on_ground(screen_pos: Vector2) -> Vector3:
 	var cam := get_viewport().get_camera_3d()
 	if cam == null:
