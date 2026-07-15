@@ -233,6 +233,7 @@ func begin(config: Dictionary) -> void:
 		player.name = "Player%d" % i
 		add_child(player)
 		player.setup(i, pl.color, str(pl.char_scene))
+		player.is_bot = bot_enabled[i]   # gates the EXPRESSIVE HOP personality timers (doc 16)
 		players.append(player)
 		points[i] = 0
 		round_bank_count[i] = 0
@@ -1075,7 +1076,7 @@ func _bell_tick(pitch: float, db: float) -> void:
 # ===========================================================================
 # Live-binding hint bar (real keys, not "A"/"B" — docs/verify/realkeys-VERIFY.md)
 # ===========================================================================
-const HINT_GENERIC := "MOVE   -   A = GRAB / TACKLE   -   B = DASH   |   CARRY THE POT TO YOUR CHUTE TO BANK IT"
+const HINT_GENERIC := "MOVE   -   A = GRAB / TACKLE   -   B = DASH   -   JUMP = HOP   |   CARRY THE POT TO YOUR CHUTE TO BANK IT"
 
 ## Seats driven by a HUMAN with a real local device (not a bot, not unassigned,
 ## not a remote guest — their keys live on THEIR screen, mirrored there).
@@ -1113,8 +1114,8 @@ func _btn_hint(action: String, label: String) -> String:
 func _controls_bar() -> String:
 	if _human_seats().is_empty():
 		return HINT_GENERIC
-	return "MOVE   ·   %s   ·   %s   |   CARRY THE POT TO YOUR CHUTE TO BANK IT" % [
-		_btn_hint("a", "GRAB (hold) / TACKLE"), _btn_hint("b", "DASH")]
+	return "MOVE   ·   %s   ·   %s   ·   %s   |   CARRY THE POT TO YOUR CHUTE TO BANK IT" % [
+		_btn_hint("a", "GRAB (hold) / TACKLE"), _btn_hint("b", "DASH"), _btn_hint("jump", "HOP")]
 
 
 # ===========================================================================

@@ -10,14 +10,14 @@ const HOUSE_RULES_TIME := 5.0
 ## PlayerInput.describe_binding — the card can't lie about bindings.
 const HOWTO := {
 	"par": {"goal": "Sabotage golf. Draft a trap, place it on the SHARED hole, then putt it yourself. Your trap's kills pay YOU royalties. Last round is CHAOS: everyone putts at once.", "a": "", "b": ""},
-	"echo": {"goal": "Duel beside your own GHOST — it replays your previous round. Shatter the others before the past catches up.", "a": "STRIKE", "b": "DASH (hold: PARRY)"},
+	"echo": {"goal": "Duel beside your own GHOST — it replays your previous round. Shatter the others before the past catches up.", "a": "STRIKE", "b": "DASH (hold: PARRY)", "jump": "HOP (cosmetic — just for kicks)"},
 	"tilt": {"goal": "The floor is one platter and everyone's weight tilts it. Fall off and you return as a vengeful seagull.", "a": "SHOVE (answer to CLASH)", "b": "BRACE"},
 	"orbital": {"goal": "Dodgeball on a tiny planet. Throws ORBIT forever — a 45-second-old ball still kills, and its thrower still gets paid.", "a": "hold: AIM+THROW / tap: CATCH", "b": "JUMP the gap"},
 	"mower": {"goal": "Mow more lawn than anyone. Coverage is score; ramming is diplomacy.", "a": "RAM HORN", "b": "BOOST (wider cut)"},
-	"greed": {"goal": "One pot of gold, four sets of hands. Bank it down your chute; tackle whoever is richer.", "a": "GRAB / TACKLE", "b": "DASH"},
+	"greed": {"goal": "One pot of gold, four sets of hands. Bank it down your chute; tackle whoever is richer.", "a": "GRAB / TACKLE", "b": "DASH", "jump": "HOP (cosmetic — just for kicks)"},
 	"swap": {"goal": "Kart race where your weapon TRADES PLACES with whoever it hits. The lead is a rumor.", "a": "THROW SWAP ORB", "b": "hold: DRIFT, release: BOOST"},
 	"deadweight": {"goal": "Sumo where the dead never leave — they possess the furniture and fling it at the living.", "a": "SHOVE", "b": "HOP"},
-	"throne": {"goal": "One throne, four claimants. Reigning scores. Decrees blast, guards defend, gravity votes last.", "a": "SHOVE / DECREE", "b": "DASH / GUARD"},
+	"throne": {"goal": "One throne, four claimants. Reigning scores. Decrees blast, guards defend, gravity votes last.", "a": "SHOVE / DECREE", "b": "DASH / GUARD", "jump": "HOP (cosmetic — just for kicks)"},
 	"lastwill": {"goal": "A funeral procession race: first to the crypt inherits. Every death freezes the world while the deceased writes a curse into the road.", "a": "SHOVE", "b": "HOP"},
 	"widowsgaze": {"goal": "Rob the wake. Creep the parlor for relics while the Widow weeps — FREEZE when she turns, or her gaze flings you back to the rope. A shove as the sting plays is a murder.", "a": "GRAB / BANK (hold)", "b": "SHOVE"},
 	"seance": {"goal": "A co-op séance: guide the planchette to the spirit's word — but one of you was paid in grudge to make it fail without getting caught. The Executor is the medium.", "a": "CHANT ON THE PULSE", "b": "SURGE (anonymous)"},
@@ -199,10 +199,13 @@ static func show_howto(estate, modules: Dictionary, id: String) -> void:
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 8)
 		row.add_child(PlayerBadge.make(i, 16))
+		var has_jump: bool = String(how.get("jump", "")) != ""
 		if not PlayerInput.is_bot(i) and not NetSession.is_seat_remote(i) and id != "par":
 			_add_control_segment(row, i, "move", "", "")
 			_add_control_segment(row, i, "a", "", "")
 			_add_control_segment(row, i, "b", "", "")
+			if has_jump:
+				_add_control_segment(row, i, "jump", "", "")
 		var l := Label.new()
 		if PlayerInput.is_bot(i):
 			l.text = "%s — bot, needs no manual" % GameState.PLAYER_NAMES[i]
@@ -216,6 +219,8 @@ static func show_howto(estate, modules: Dictionary, id: String) -> void:
 				GameState.PLAYER_NAMES[i], PlayerInput.describe_binding(i, "move"),
 				PlayerInput.describe_binding(i, "a"), String(how.a),
 				PlayerInput.describe_binding(i, "b"), String(how.b)]
+			if has_jump:
+				l.text += "  ·  %s: %s" % [PlayerInput.describe_binding(i, "jump"), String(how.jump)]
 		l.add_theme_font_size_override("font_size", 17)
 		l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
 		row.add_child(l)
@@ -420,10 +425,13 @@ static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, 
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 8)
 		row.add_child(PlayerBadge.make(i, 16))
+		var has_jump: bool = String(how.get("jump", "")) != ""
 		if not PlayerInput.is_bot(i) and not NetSession.is_seat_remote(i) and id != "par":
 			_add_control_segment(row, i, "move", "", "")
 			_add_control_segment(row, i, "a", "", "")
 			_add_control_segment(row, i, "b", "", "")
+			if has_jump:
+				_add_control_segment(row, i, "jump", "", "")
 		var l := Label.new()
 		if PlayerInput.is_bot(i):
 			l.text = "%s — bot, needs no manual" % GameState.PLAYER_NAMES[i]
@@ -437,6 +445,8 @@ static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, 
 				GameState.PLAYER_NAMES[i], PlayerInput.describe_binding(i, "move"),
 				PlayerInput.describe_binding(i, "a"), String(how.a),
 				PlayerInput.describe_binding(i, "b"), String(how.b)]
+			if has_jump:
+				l.text += "  ·  %s: %s" % [PlayerInput.describe_binding(i, "jump"), String(how.jump)]
 		l.add_theme_font_size_override("font_size", 17)
 		l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
 		row.add_child(l)
