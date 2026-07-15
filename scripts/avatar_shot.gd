@@ -312,7 +312,13 @@ func _fire_contact() -> void:
 	_putt.ball = _ball
 	_putt.hide_preview()
 	_self_stroke = true
-	_putt.debug_putt(power, angle)
+	# ONLINE PHASE 3: the swing's (power, angle) is a seat-attributed intent — it
+	# enters the frozen sim through main's ONE funnel. Offline/host this is a
+	# straight pass-through to the same debug_putt(power, angle) (byte-identical).
+	if _main != null and _main.has_method("submit_putt_intent"):
+		_main.submit_putt_intent(actor, power, angle)
+	else:
+		_putt.debug_putt(power, angle)
 	_self_stroke = false
 	print("SWING_FIRE p=%d power=%.2f angle=%.2f phys=%d" % [actor, power, angle, Engine.get_physics_frames()])
 	_snap_once("contact")

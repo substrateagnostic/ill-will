@@ -92,6 +92,43 @@ var _nogrief := false
 var _grief_last := {}        # victim -> {"by": int, "tick": int}
 var _grief_trap_last := {}   # trap instance id -> {"by": int, "tick": int}
 
+## ONLINE PHASE 3 (docs/design/22-par-online-integration.md). Par's control
+## surface — mouse drag-putt + charge-swing + ghost trap placement, hotseat on
+## device -3 — bypasses the PlayerInput relay every other game rides, so par
+## crosses the wire as SEAT-ATTRIBUTED INTENTS instead: putt {seat, power, angle}
+## and build {seat, card, tile, rot} flow through one funnel (submit_putt_intent
+## / the _build_* handlers), the host applies them into the frozen sim, and the
+## match state fans out via _net_state()/_net_apply() at the house 20 Hz. When no
+## --net flag is present EVERY online branch below is inert and couch play is
+## byte-identical (the funnel is a straight pass-through to debug_putt).
+##   _net_role: ""=offline · "host"=authoritative sim + pump · "join"=render mirror
+var _net_role := ""
+var _online_host := false     # authoritative: runs the sim, grants seats, pumps state
+var _online_client := false   # render mirror: no sim, ships intents, applies snapshots
+var _self_net := false        # standalone (--skipmenu): par owns the pump/seat-grant
+var _net_pump_accum := 0.0
+var _net_seq := 0
+var _remote_seats := {}       # seat -> true (granted to a guest; held for intents)
+var _next_grant_seat := 0     # host: round-robin cursor for seat grants
+## Mirror render state (client). Applied from _net_state snapshots; juice fires
+## from deltas (the house pattern). None of this runs on the host/offline.
+var _mir := {}                # last applied snapshot
+var _mir_ghost: Trap = null   # streamed placement ghost preview
+var _mir_traps := {}          # net trap id -> Trap node (mirror-spawned)
+var _mir_champ_done := false
+var _mir_killcam_seq := -1    # last killcam trigger applied
+## Client input: a compact charge state so a remote guest aims + hold-charges on
+## their mirror and ships a putt intent, feel-matched to the couch swing.
+var _cin_active := false
+var _cin_charging := false
+var _cin_t := 0.0
+var _cin_power := 1.2
+var _cin_aim := Vector3(0, 0, -1)
+var _cin_seat := -1
+var _cin_send_accum := 0.0
+## Client build input: pick a card, drag the ghost, click to confirm.
+var _cbuild_card := -1
+
 @onready var putt_controller: Node3D = $PuttController
 @onready var placement: Node3D = $PlacementController
 @onready var camera_rig: Node3D = $CameraRig
@@ -128,6 +165,12 @@ func _ready() -> void:
 			_embodied = false
 		elif arg == "--nogrief":
 			_nogrief = true
+		elif arg == "--net=host":
+			_net_role = "host"
+		elif arg.begins_with("--net=join"):
+			_net_role = "join"
+		elif arg == "--netauto":
+			_net_auto = true   # verify: a mirror auto-drives MY seat through intents
 	if _embodied:
 		_embodied = bool(PartySetup.pref("par_embodied", true))
 	# Seed the bot rng FROM GameState.rng without consuming its stream (read the
@@ -168,6 +211,11 @@ func _ready() -> void:
 	if _killcam_test_mode == "chaos":
 		GameState.round_num = GameState.rounds_total
 	_rebuild_scoreboard()
+	# ONLINE PHASE 3: a joined guest becomes a render mirror — it builds the same
+	# world above for rendering but never simulates; _net_apply drives it. The
+	# host and every couch/offline run take the normal sim path unchanged.
+	if _online_init():
+		return
 	_start_round()
 	if _killcam_test_mode != "":
 		call_deferred("_run_killcam_test", _killcam_test_mode)
@@ -359,7 +407,7 @@ func _begin_draft_turn() -> void:
 			btn.modulate = Color(1.0, 0.75, 1.0)
 		# Same seat gate as placement: a human can't click a card on a BOT's
 		# draft turn (bots pick via debug_pick_card, which bypasses the button).
-		btn.disabled = _is_bot(p)
+		btn.disabled = not _is_local_human(p)
 		btn.pressed.connect(_on_card_picked.bind(idx))
 		card_row.add_child(btn)
 	draft_panel.visible = true
@@ -387,7 +435,7 @@ func _on_card_picked(card_idx: int) -> void:
 	# Seat gate: the shared mouse may drive the ghost only on a HUMAN's build
 	# turn. A bot's ghost ignores all device input (it places via its own
 	# debug_place_scan path), so fast clicks can't steal or move a bot's trap.
-	placement.begin(TrapCatalog.load_scene(id), p, player.color, info.get("params", {}), not _is_bot(p))
+	placement.begin(TrapCatalog.load_scene(id), p, player.color, info.get("params", {}), _is_local_human(p))
 	# Course saturated for this footprint? Skip the placement silently.
 	if not placement.has_valid_placement():
 		placement.cancel()
@@ -416,12 +464,32 @@ func _begin_putt_phase() -> void:
 ## powered-trap interaction — is identical run to run for a given --seed.
 ## (v3 accumulated wall-clock _process deltas; same-seed matches diverged.)
 func _physics_process(delta: float) -> void:
+	# ONLINE PHASE 3: a mirror never simulates — the host owns the sim; a guest's
+	# input rides the applied snapshot (_net_apply → _client_input). The host runs
+	# the sim exactly as couch and pumps the snapshot at 20 Hz.
+	if _online_client:
+		return
+	# Standalone host lobby hold: pump the snapshot so the guest's mirror settles,
+	# then open the match a beat after the first chair is claimed (or a 90 s
+	# fallback so a guestless soak never hangs).
+	if _await_guest:
+		_await_frames += 1
+		var seated_ready := _guest_seated_frame >= 0 and _await_frames - _guest_seated_frame >= 40
+		if seated_ready or _await_frames > 5400:
+			_par_begin_online_match()
+		else:
+			_net_pump(delta)
+			return
 	_bot_tick(delta)
+	if _online_host:
+		_net_pump(delta)
 
 func _process(delta: float) -> void:
+	if _online_client:
+		return
 	# mouse putting is disabled on a bot's turn (the bot drives it instead)
 	var cur := round_manager.current_player()
-	putt_controller.enabled = phase == Phase.PUTT and round_manager.is_turn_ready() and not _is_bot(cur)
+	putt_controller.enabled = phase == Phase.PUTT and round_manager.is_turn_ready() and _is_local_human(cur)
 	if phase == Phase.PUTT and GameState.is_chaos_round():
 		_track_chaos_concurrency()
 	if phase == Phase.BUILD:
@@ -511,8 +579,10 @@ func _on_turn_started(p: int) -> void:
 	putt_controller.ball = balls[p]
 	camera_rig.ball = balls[p]
 	if _embodied:
-		# Walk the acting avatar to its ball; the swing fires the frozen putt.
-		avatar_shot.begin_turn(p, avatars[p], balls[p], _is_bot(p), GameState.is_chaos_round())
+		# Walk the acting avatar to its ball; the swing fires the frozen putt. A
+		# remote seat holds the address stance (like a bot) until its putt intent
+		# arrives — the host then plays the swing with the guest's (power, angle).
+		avatar_shot.begin_turn(p, avatars[p], balls[p], _is_bot(p) or _is_remote(p), GameState.is_chaos_round())
 		# Camera: skill-shot framing for the normal-round shot (owner note:
 		# SMITE-style, aim line readable across the lane). CHAOS keeps the v3
 		# diorama — several balls are live at once and the overview must read.
@@ -700,7 +770,15 @@ func _start_killcam(victim: int, death_pos: Vector3, border_color: Color, show_b
 	vb.visible = false
 	var ball_color: Color = GameState.players[victim].color
 	var restore_cam: Camera3D = camera_rig.get_node("Camera3D")
+	# ONLINE PHASE 3: stamp the trigger fact so guests restage their own replay.
+	if _online_host:
+		_net_kc_seq += 1
+		_net_killcam = {"seq": _net_kc_seq, "v": victim,
+			"x": death_pos.x, "y": death_pos.y, "z": death_pos.z,
+			"col": border_color.to_html(false), "border": show_border, "text": banner_text}
 	get_tree().paused = true
+	if _online_host:
+		get_tree().create_timer(0.9, true, false, true).timeout.connect(func(): VerifyCapture.snap("paronline_host_killcam"))
 	_killcam_t0 = Time.get_ticks_msec()
 	print("KILLCAM play victim=%d samples=%d dur=%.2f botonly=%s" % [victim, samples.size(), KILLCAM_DURATION, str(_is_bot_only_match())])
 	_killcam.play(samples, death_pos, approach, ball_color, border_color, show_border, banner_text, KILLCAM_DURATION, _is_bot_only_match(), restore_cam)
@@ -819,6 +897,7 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 	GameState.round_num += 1
 	if GameState.is_match_over():
 		var champ: int = GameState.standings()[0]
+		_net_champ = champ   # ONLINE PHASE 3: pre-announce the winner to mirrors
 		print("MATCH_OVER champ=", GameState.players[champ].name)
 		var points := {}
 		var monuments: Array = []
@@ -955,6 +1034,11 @@ func debug_place_auto() -> void:
 
 # --- minimal per-player bot ----------------------------------------------------
 func _is_bot(i: int) -> bool:
+	# ONLINE PHASE 3: a seat granted to a remote guest is neither bot nor local —
+	# it plays through intents, so it drops out of BOTH the bot driver and the
+	# local mouse. Offline this is a no-op (no remote seats), so byte-identical.
+	if _is_remote(i):
+		return false
 	return _par_bot_all or (i >= 0 and PlayerInput.is_bot(i))
 
 ## Drives whichever seat currently owns the turn, if that seat is a bot. Fires
@@ -1043,7 +1127,9 @@ func _bot_putt(actor: int) -> void:
 	# rng draw count per stroke is unchanged, so --parbots stays reproducible.
 	if _embodied and avatar_shot.bot_swing(power, angle):
 		return
-	putt_controller.debug_putt(power, angle)
+	# v3-direct fallback (embodied off, or the swing declined) also rides the
+	# funnel — a straight pass-through to debug_putt offline (byte-identical).
+	submit_putt_intent(actor, power, angle)
 
 func get_phase_name() -> String:
 	return Phase.keys()[phase]
@@ -1199,3 +1285,680 @@ func _stage_kill(mode: String) -> void:
 	if crusher.has_node("Hammer"):
 		crusher.get_node("Hammer").position.y = 0.28   # freeze the hammer mid-slam
 	vb.die(crusher)
+
+
+# ============================================================================
+# ONLINE PHASE 3 — THE INTENT LAYER + RENDER MIRROR
+# (docs/design/10 §phase-3, docs/design/22-par-online-integration.md)
+#
+# Par's inputs (mouse drag-putt / charge-swing / ghost trap placement, hotseat
+# on device -3) bypass the PlayerInput relay every other game rides. So par
+# crosses the wire as SEAT-ATTRIBUTED INTENTS. Every putt — local charge-swing,
+# bot, drag, or a remote guest — becomes {seat, power, angle} and enters the sim
+# through ONE funnel (submit_putt_intent → _apply_putt_intent → the FROZEN
+# debug_putt). Builds cross as {seat, card, tile, rot}. The host runs the whole
+# sim exactly as couch; a guest shrinks to a render mirror fed by _net_state()
+# at 20 Hz and ships intents back. When there is no --net flag every branch here
+# is inert and couch play is byte-identical (the funnel is a straight
+# pass-through to debug_putt on the exact numbers).
+# ============================================================================
+
+## Decide the online posture. Standalone (--skipmenu) reads the --net flag par
+## parsed in _ready; embedded in the estate (no --net flag) it falls back to the
+## live NetSession role the shell already opened. Returns true ONLY for a guest
+## (a render mirror) so _ready skips _start_round and the sim never runs there.
+## Host + offline return false (normal sim). Offline NetSession reports neither
+## host nor client, so a couch run takes the normal path untouched.
+func _online_init() -> bool:
+	_self_net = get_tree().current_scene == self   # standalone (--skipmenu): par owns the pump
+	var role := _net_role
+	if role == "":
+		if NetSession.is_client():
+			role = "join"
+		elif NetSession.is_host():
+			role = "host"
+	if role == "host":
+		_enter_online_host()
+		# Standalone host holds in a short lobby so a guest can claim its chair
+		# before play — then the round starts on the first grant (or a timeout so a
+		# soak never hangs). Inside the estate the shell owns the lobby, so the
+		# round starts immediately as it does today.
+		if _self_net:
+			_online_lobby_hold()
+			return true
+		return false
+	if role == "join":
+		_enter_mirror()
+		return true
+	return false
+
+var _par_started := false
+var _await_guest := false
+var _await_frames := 0
+var _guest_seated_frame := -1     # physics frame the first guest claimed a chair
+
+func _online_lobby_hold() -> void:
+	_await_guest = true
+	turn_label.text = "WAITING FOR A GUEST…"
+	round_label.text = "PAR ONLINE"
+	print("PAR_ONLINE lobby: code=%s addr=%s" % [NetSession.invite_code(), NetSession.listen_addr()])
+
+## Start the match once (first guest seated, or the lobby timeout). Late joiners
+## still get a chair and play their next turn.
+func _par_begin_online_match() -> void:
+	if _par_started:
+		return
+	_par_started = true
+	_await_guest = false
+	print("PAR_ONLINE match start (guests=%d)" % NetSession.guest_count())
+	_start_round()
+	if _killcam_test_mode != "":
+		call_deferred("_run_killcam_test", _killcam_test_mode)
+
+## HOST: authoritative. Runs the full sim; grants a chair to each guest; routes
+## their intents into the funnel; pumps the match snapshot. Seat grant + pump
+## only self-drive when standalone — inside the estate the shell owns both (it
+## already fans _net_state() to guests; see docs/design/22 for the gamestate seam).
+func _enter_online_host() -> void:
+	_online_host = true
+	NetSession.panel_intent_received.connect(_on_par_panel_intent)
+	if _self_net:
+		NetSession.seat_requested.connect(_on_par_seat_requested)
+		NetSession.peer_left_seat.connect(_on_par_seat_left)
+	print("PAR_ONLINE host ready self_net=%s" % str(_self_net))
+
+## CLIENT: a render mirror. The world is already built (same course/roster) for
+## rendering; from here _net_apply drives every visual and local input produces
+## intents. No bots, no round start, no economy — the host owns every fact.
+func _enter_mirror() -> void:
+	_online_client = true
+	set_process_unhandled_input(true)
+	# Freeze the sim bodies: the host owns their transforms, we place them.
+	for b in balls:
+		b.freeze = true
+	for a in avatars:
+		a.set_physics_process(false)
+	# The physics-signal paths are host-authoritative; the mirror shows their
+	# OUTCOMES from state deltas instead (a frozen body never fires them anyway).
+	round_manager.set_physics_process(false)
+	NetSession.module_state_received.connect(_net_apply)
+	NetSession.seat_granted.connect(_on_par_seat_granted)
+	turn_label.text = "CONNECTING…"
+	print("PAR_MIRROR boot my_seat=%d players=%d" % [NetSession.my_seat(), GameState.players.size()])
+
+# --- seat mapping (host, standalone) ------------------------------------------
+
+## A guest asked for a chair. Grant the lowest seat that isn't already a remote
+## and isn't the host's own local human — a bot seat converts cleanly (it stops
+## being bot-driven the moment it enters _remote_seats). Estate runs own policy.
+func _on_par_seat_requested(peer_id: int) -> void:
+	var seat := -1
+	for i in GameState.players.size():
+		if _remote_seats.has(i) or NetSession.is_seat_remote(i):
+			continue
+		if not _par_bot_all and not PlayerInput.is_bot(i) and PlayerInput.device_of(i) != -99:
+			continue   # keep a real local human on the couch
+		seat = i
+		break
+	if seat < 0:
+		NetSession.grant_seat(peer_id, -1, "the course is full")
+		return
+	_remote_seats[seat] = true
+	NetSession.grant_seat(peer_id, seat, "seat %d" % seat)
+	print("PAR_ONLINE granted seat=%d peer=%d" % [seat, peer_id])
+	# Mark the first grant; the physics loop opens the match a beat later so the
+	# guest's mirror has settled and received a few snapshots first.
+	if _await_guest and _guest_seated_frame < 0:
+		_guest_seated_frame = _await_frames
+
+func _on_par_seat_left(seat: int, _peer_id: int) -> void:
+	_remote_seats.erase(seat)   # the seat falls back to a bot for the rest of the night
+	print("PAR_ONLINE seat=%d left → bot" % seat)
+
+func _on_par_seat_granted(seat: int, reason: String) -> void:
+	turn_label.text = "SEATED — %s" % GameState.PLAYER_NAMES[seat] if seat >= 0 else "NO SEAT: %s" % reason
+	print("PAR_MIRROR seat granted=%d (%s)" % [seat, reason])
+
+# --- intent routing (host) ----------------------------------------------------
+
+## Every par intent a guest ships lands here (reliable panel-intent channel).
+func _on_par_panel_intent(seat: int, intent: Dictionary) -> void:
+	if not _online_host:
+		return
+	match String(intent.get("kind", "")):
+		"par_putt":
+			if phase == Phase.PUTT and round_manager.current_player() == seat:
+				print("PAR_ONLINE recv par_putt seat=%d power=%.1f angle=%.1f" % [seat, float(intent.get("power", 0.0)), float(intent.get("angle", 0.0))])
+				submit_putt_intent(seat, float(intent.get("power", 2.0)), float(intent.get("angle", 0.0)))
+				get_tree().create_timer(0.5).timeout.connect(func(): VerifyCapture.snap("paronline_host_putt"))
+		"par_aim":
+			_remote_aim(seat, float(intent.get("ax", 0.0)), float(intent.get("az", -1.0)), float(intent.get("power", 1.2)))
+		"par_build_pick":
+			if phase == Phase.DRAFT and draft_pointer < draft_order.size() and draft_order[draft_pointer] == seat:
+				debug_pick_card(int(intent.get("card", 0)))
+		"par_build_move":
+			if phase == Phase.BUILD and placement.active and _building_seat() == seat:
+				placement.remote_move(Vector3(float(intent.get("x", 0.0)), 0.0, float(intent.get("z", 0.0))), float(intent.get("rot", 0.0)))
+		"par_build_confirm":
+			if phase == Phase.BUILD and placement.active and _building_seat() == seat:
+				print("PAR_ONLINE recv par_build_confirm seat=%d" % seat)
+				_remote_confirm_build(Vector3(float(intent.get("x", 0.0)), 0.0, float(intent.get("z", 0.0))), float(intent.get("rot", 0.0)))
+
+func _building_seat() -> int:
+	return draft_order[draft_pointer] if draft_pointer < draft_order.size() else -1
+
+## Remote builder clicked to place: honor the point when legal, else scan a legal
+## spot so a guest never softlocks the build on a bad click.
+func _remote_confirm_build(pos: Vector3, rot: float) -> void:
+	if placement.remote_place(pos, rot):
+		return
+	if not placement.debug_place_scan(_bot_rng.randf_range(0.0, 360.0), GameState.rng):
+		placement.cancel()
+		build_hint.visible = false
+		_advance_after_placement()
+
+## Show the remote's aim line on the couch (low-rate, presentation only).
+func _remote_aim(seat: int, ax: float, az: float, power: float) -> void:
+	if phase != Phase.PUTT or round_manager.current_player() != seat:
+		return
+	var dir := Vector3(ax, 0.0, az)
+	if dir.length() < 0.01:
+		return
+	putt_controller.ball = balls[seat]
+	putt_controller.show_aim_preview(dir.normalized(), power)
+
+# --- THE PUTT FUNNEL (all producers, all roles) -------------------------------
+
+## The one door a gameplay putt enters by. seat attributes the stroke; (power,
+## angle) is the frozen debug_putt shape. On a client for MY seat it ships to the
+## host; on host/offline it applies immediately — byte-identical to couch.
+func submit_putt_intent(seat: int, power: float, angle: float) -> void:
+	if _online_client:
+		if seat == NetSession.my_seat():
+			NetSession.send_panel_intent({"kind": "par_putt", "seat": seat, "power": power, "angle": angle})
+		return
+	_apply_putt_intent(seat, power, angle)
+
+## Host/offline: enter the frozen sim. A remote seat plays the embodied swing on
+## the host (so the couch sees the stroke); the local/bot path already swung and
+## just lands the impulse. Either way exactly one debug_putt fires, unchanged.
+func _apply_putt_intent(seat: int, power: float, angle: float) -> void:
+	if seat < 0 or seat >= balls.size():
+		return
+	putt_controller.ball = balls[seat]
+	if _online_host and _remote_seats.has(seat) and _embodied and avatar_shot.is_addressed(seat):
+		if avatar_shot.auto_swing(power, angle):
+			return
+	putt_controller.debug_putt(power, angle)
+
+func _is_remote(i: int) -> bool:
+	# Standalone par tracks its own grants in _remote_seats; inside the estate the
+	# shell owns seat policy, so honor its NetSession map too. Offline: both empty.
+	return _remote_seats.has(i) or NetSession.is_seat_remote(i)
+
+func _is_local_human(i: int) -> bool:
+	return not _is_bot(i) and not _remote_seats.has(i)
+
+# --- host state pump (20 Hz, house pattern) -----------------------------------
+
+func _net_pump(delta: float) -> void:
+	if not _self_net or not NetSession.has_guests():
+		return
+	_net_pump_accum += delta
+	if _net_pump_accum < 1.0 / 20.0:
+		return
+	_net_pump_accum = 0.0
+	_net_seq += 1
+	var st := _net_state()
+	st["seq"] = _net_seq
+	NetSession.send_module_state(st)
+
+## HOST snapshot: everything on a couch player's screen right now, nothing else.
+## Read by the estate's pump too (the gamestate mirror seam), so it stays PUBLIC.
+func _net_state() -> Dictionary:
+	# Compact packed encoding keeps the 20 Hz snapshot under the ENet MTU even at
+	# a full board of traps: balls/avatars as float32, scores as int32, traps as
+	# one flat float row + a parallel id list (color comes from the author seat).
+	var bl := PackedFloat32Array()
+	for b in balls:
+		var flags := 0
+		if b.is_sunk: flags |= 1
+		if b.is_dead: flags |= 2
+		if b.is_petrified: flags |= 4
+		if b.in_transit: flags |= 8
+		if b.visible: flags |= 16
+		bl.append_array([b.global_position.x, b.global_position.y, b.global_position.z, float(flags)])
+	var av := PackedFloat32Array()
+	for a in avatars:
+		av.append_array([a.global_position.x, a.global_position.y, a.global_position.z,
+			atan2(a.facing.x, a.facing.z), float(_avatar_anim_code(a))])
+	var sc := PackedInt32Array()
+	for p in GameState.players:
+		sc.append_array([int(p.score), int(p.grudge), int(p.royalties)])
+	var tp := PackedFloat32Array()   # [netid, x, z, roty, author] per trap
+	var tid := PackedStringArray()   # trap_id slug per trap (for load_scene)
+	for t in course.get_node("TrapContainer").get_children():
+		if t is Trap and not (t as Trap).is_ghost:
+			var tr: Trap = t
+			tp.append_array([float(_trap_netid(tr)), tr.global_position.x, tr.global_position.z,
+				tr.rotation.y, float(tr.author_index)])
+			tid.append(tr.trap_id)
+	var st := {
+		"ph": phase,
+		"rn": GameState.round_num, "rt": GameState.rounds_total,
+		"chaos": GameState.is_chaos_round(),
+		"rl": round_label.text, "tl": turn_label.text,
+		"tlc": turn_label.get_theme_color("font_color").to_html(false),
+		"sl": stroke_label.text,
+		"ban": [banner.text, banner.get_theme_color("font_color").to_html(false), banner.visible],
+		"cur": round_manager.current_player(),
+		"b": bl, "av": av, "sc": sc, "tp": tp, "tid": tid,
+		"kc": _net_killcam, "champ": _net_champ,
+	}
+	# Draft hand + placement ghost are public (they are on the couch screen).
+	if phase == Phase.DRAFT and draft_panel.visible:
+		st["draft"] = {"seat": _building_seat(), "label": draft_label.text,
+			"hand": current_hand.duplicate(), "grudge": grudge_card_idx}
+	if placement.active and placement.ghost != null:
+		var g: Trap = placement.ghost
+		st["ghost"] = {"id": g.trap_id, "seat": _building_seat(),
+			"x": snappedf(g.global_position.x, 0.02), "z": snappedf(g.global_position.z, 0.02),
+			"rot": snappedf(g.rotation.y, 0.02), "valid": placement._valid}
+	return st
+
+## Small stable per-trap net id (float32-safe), assigned on first sight.
+var _trap_ids := {}
+var _trap_id_next := 0
+func _trap_netid(t: Trap) -> int:
+	var k := t.get_instance_id()
+	if not _trap_ids.has(k):
+		_trap_id_next += 1
+		_trap_ids[k] = _trap_id_next
+	return int(_trap_ids[k])
+
+func _avatar_anim_code(a: PlayerAvatar) -> int:
+	if a.anim == null:
+		return 0
+	var n := String(a.anim.current_animation)
+	if n.contains("Death"): return 4
+	if n.contains("Attack") or n.contains("Slice"): return 3
+	if n.contains("Running"): return 2
+	if n.contains("Walking"): return 1
+	if n.contains("Cheer"): return 5
+	return 0
+
+# --- killcam / ending trigger facts (host) ------------------------------------
+## A death that opens a killcam stamps a fact here; the mirror restages its own
+## local replay from the same trigger. Facts carry a seq so a mirror plays each
+## exactly once. _net_champ pre-announces the winner (facts minted the same tick
+## as report_finished never reach a mirror — the house ending rule).
+var _net_killcam := {}
+var _net_champ := -1
+var _net_kc_seq := 0
+
+# --- CLIENT mirror apply + input ----------------------------------------------
+
+## Latest-state-wins. Positions the frozen bodies, restages labels/scores/traps,
+## and fires killcam + ceremonies from deltas.
+var _mir_apply_count := 0
+func _net_apply(state: Dictionary) -> void:
+	if not _online_client:
+		return
+	var prev := _mir
+	_mir = state
+	_mir_apply_count += 1
+	if _mir_apply_count % 40 == 1:
+		print("PAR_MIRROR apply #%d seq=%d ph=%d my_seat=%d cur=%d" % [
+			_mir_apply_count, int(state.get("seq", 0)), int(state.get("ph", -1)),
+			NetSession.my_seat(), int(state.get("cur", -1))])
+	phase = int(state.get("ph", phase)) as Phase
+	GameState.round_num = int(state.get("rn", GameState.round_num))
+	round_label.text = str(state.get("rl", ""))
+	turn_label.text = str(state.get("tl", ""))
+	turn_label.add_theme_color_override("font_color", Color.html(str(state.get("tlc", "ffffff"))))
+	stroke_label.text = str(state.get("sl", ""))
+	_mir_apply_banner(state.get("ban", []), prev.get("ban", []))
+	# balls (float32: x,y,z,flags per ball)
+	var bl: PackedFloat32Array = state.get("b", PackedFloat32Array())
+	for i in mini(int(bl.size() / 4), balls.size()):
+		var o := i * 4
+		var b: Ball = balls[i]
+		b.global_position = Vector3(bl[o], bl[o + 1], bl[o + 2])
+		var flags := int(bl[o + 3])
+		b.is_sunk = bool(flags & 1)
+		b.is_dead = bool(flags & 2)
+		b.is_petrified = bool(flags & 4)
+		b.in_transit = bool(flags & 8)
+		b.visible = bool(flags & 16)
+	# avatars (float32: x,y,z,yaw,anim per avatar)
+	var av: PackedFloat32Array = state.get("av", PackedFloat32Array())
+	for i in mini(int(av.size() / 5), avatars.size()):
+		var o := i * 5
+		var a: PlayerAvatar = avatars[i]
+		a.global_position = Vector3(av[o], av[o + 1], av[o + 2])
+		var yaw := av[o + 3]
+		a.face_dir(Vector3(sin(yaw), 0.0, cos(yaw)))
+		_mir_avatar_anim(a, int(av[o + 4]))
+	# scores (int32: score,grudge,royalties per player)
+	var sc: PackedInt32Array = state.get("sc", PackedInt32Array())
+	for i in mini(int(sc.size() / 3), GameState.players.size()):
+		var o := i * 3
+		GameState.players[i].score = sc[o]
+		GameState.players[i].grudge = sc[o + 1]
+		GameState.players[i].royalties = sc[o + 2]
+	_rebuild_scoreboard()
+	_mir_sync_traps(state.get("tp", PackedFloat32Array()), state.get("tid", PackedStringArray()))
+	_mir_sync_draft(state.get("draft", {}))
+	_mir_sync_ghost(state.get("ghost", {}))
+	_mir_killcam(state.get("kc", {}))
+	_mir_ending(int(state.get("champ", -1)))
+	# client input for MY turn (aim/charge/build) rides here so it never diverges
+	# from the snapshot it just applied.
+	_client_input(state)
+
+func _mir_apply_banner(cur: Array, prev: Array) -> void:
+	if cur.size() < 3:
+		banner.visible = false
+		return
+	var text := str(cur[0])
+	var vis := bool(cur[2])
+	var changed := prev.size() < 3 or str(prev[0]) != text or bool(prev[2]) != vis
+	if vis and changed:
+		_flash_banner(text, Color.html(str(cur[1])), 1.6)
+	elif not vis:
+		banner.visible = false
+
+var _mir_anim_prev := {}
+func _mir_avatar_anim(a: PlayerAvatar, code: int) -> void:
+	var prev := int(_mir_anim_prev.get(a.get_instance_id(), -1))
+	_mir_anim_prev[a.get_instance_id()] = code
+	match code:
+		4:
+			if prev != 4: a.react_death()
+		3:
+			if prev != 3: a.play_once("2H_Melee_Attack_Slice")
+		2:
+			a.play_loop("Running_A")
+		1:
+			a.play_loop("Walking_A")
+		5:
+			if prev != 5: a.react("Cheer")
+		_:
+			if a._dead: a.revive()
+			a.play_loop("Idle")
+
+## Spawn/track/free mirror trap nodes to match the host's TrapContainer. tp is a
+## flat float row [netid,x,z,roty,author]*n; tid the parallel trap_id slugs. Trap
+## color comes from the author seat (no color bytes on the wire).
+func _mir_sync_traps(tp: PackedFloat32Array, tid: PackedStringArray) -> void:
+	var seen := {}
+	var n := mini(int(tp.size() / 5), tid.size())
+	for i in n:
+		var o := i * 5
+		var netid := int(tp[o])
+		var x := tp[o + 1]
+		var z := tp[o + 2]
+		var roty := tp[o + 3]
+		var author := int(tp[o + 4])
+		seen[netid] = true
+		if _mir_traps.has(netid):
+			var tn: Trap = _mir_traps[netid]
+			if is_instance_valid(tn):
+				tn.global_position = Vector3(x, tn.global_position.y, z)
+				tn.rotation.y = roty
+			continue
+		var scene: PackedScene = TrapCatalog.load_scene(tid[i])
+		if scene == null:
+			continue
+		var t: Trap = scene.instantiate()
+		course.get_node("TrapContainer").add_child(t)
+		t.global_position = Vector3(x, 0.0, z)
+		t.rotation.y = roty
+		t.set_author(author, _seat_color(author))
+		if t.has_method("solidify"):
+			t.solidify()
+		_mir_traps[netid] = t
+	for netid in _mir_traps.keys():
+		if not seen.has(netid):
+			var tn: Trap = _mir_traps[netid]
+			if is_instance_valid(tn):
+				tn.queue_free()
+			_mir_traps.erase(netid)
+
+func _seat_color(seat: int) -> Color:
+	if seat >= 0 and seat < GameState.players.size():
+		return GameState.players[seat].color
+	return Color(0.8, 0.8, 0.8)
+
+## Mirror draft panel: everyone sees the hand; only MY seat's cards are live.
+func _mir_sync_draft(d: Dictionary) -> void:
+	if d.is_empty():
+		if phase != Phase.DRAFT:
+			draft_panel.visible = false
+		return
+	var seat := int(d.get("seat", -1))
+	draft_label.text = str(d.get("label", ""))
+	var hand: Array = d.get("hand", [])
+	# rebuild only when the hand changes (avoid clobbering hover state each frame)
+	var sig := "%d|%s" % [seat, ",".join(hand)]
+	if sig != _mir_draft_sig:
+		_mir_draft_sig = sig
+		for c in card_row.get_children():
+			c.queue_free()
+		for idx in hand.size():
+			var info: Dictionary = TrapCatalog.info(str(hand[idx]))
+			var btn := Button.new()
+			btn.text = "%s\n\n%s" % [String(info.get("name", hand[idx])), String(info.get("desc", ""))]
+			btn.custom_minimum_size = Vector2(230, 160)
+			btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			btn.clip_text = false
+			btn.disabled = seat != NetSession.my_seat()
+			btn.pressed.connect(_client_send_build_pick.bind(idx))
+			card_row.add_child(btn)
+	draft_panel.visible = true
+var _mir_draft_sig := ""
+
+## Mirror placement ghost preview (streamed from whoever is building).
+func _mir_sync_ghost(g: Dictionary) -> void:
+	if g.is_empty():
+		if _mir_ghost != null and is_instance_valid(_mir_ghost):
+			_mir_ghost.queue_free()
+		_mir_ghost = null
+		return
+	if _mir_ghost == null or not is_instance_valid(_mir_ghost) or _mir_ghost.trap_id != str(g.get("id", "")):
+		if _mir_ghost != null and is_instance_valid(_mir_ghost):
+			_mir_ghost.queue_free()
+		var scene: PackedScene = TrapCatalog.load_scene(str(g.get("id", "")))
+		if scene == null:
+			return
+		_mir_ghost = scene.instantiate()
+		course.get_node("TrapContainer").add_child(_mir_ghost)
+		_mir_ghost.set_author(int(g.get("seat", -1)), _seat_color(int(g.get("seat", -1))))
+		_mir_ghost.ghostify()
+	_mir_ghost.global_position = Vector3(float(g.get("x", 0.0)), 0.0, float(g.get("z", 0.0)))
+	_mir_ghost.rotation.y = float(g.get("rot", 0.0))
+
+## Restage the killcam locally from the host's trigger fact (presentation only).
+func _mir_killcam(kc: Dictionary) -> void:
+	if kc.is_empty():
+		return
+	var seq := int(kc.get("seq", -1))
+	if seq == _mir_killcam_seq:
+		return
+	_mir_killcam_seq = seq
+	var victim := int(kc.get("v", -1))
+	if victim < 0 or victim >= balls.size():
+		return
+	var death_pos := Vector3(float(kc.get("x", 0.0)), float(kc.get("y", 0.0)), float(kc.get("z", 0.0)))
+	var samples: Array = balls[victim].get_replay_samples(2.0)
+	if samples.is_empty():
+		samples = [Transform3D(Basis(), death_pos)]
+	var col := Color.html(str(kc.get("col", "ffffff")))
+	var restore_cam: Camera3D = camera_rig.get_node("Camera3D")
+	get_tree().paused = true
+	_killcam.play(samples, death_pos, Vector3(0, 0, -1), GameState.players[victim].color,
+		col, bool(kc.get("border", true)), str(kc.get("text", "")), KILLCAM_DURATION, false, restore_cam)
+	get_tree().create_timer(0.9, true, false, true).timeout.connect(func(): VerifyCapture.snap("paronline_client_killcam"))
+	print("PAR_MIRROR killcam seq=%d victim=%d" % [seq, victim])
+
+## Pre-announced ending: the winner banner + confetti, once.
+func _mir_ending(champ: int) -> void:
+	if champ < 0 or _mir_champ_done:
+		return
+	_mir_champ_done = true
+	round_label.text = "FINAL"
+	Sfx.play("match_win")
+	if champ < avatars.size():
+		avatars[champ].react("Cheer")
+		_spawn_confetti(avatars[champ].global_position + Vector3(0, 1.5, 0), GameState.players[champ].color)
+	_flash_banner("%s WINS THE MATCH!" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
+	print("PAR_MIRROR ending champ=%d" % champ)
+
+# --- CLIENT input: aim + charge → putt intent; click → build intent -----------
+
+## Runs every applied snapshot. When the snapshot says it is MY seat's turn, the
+## local mouse produces the intent through the SAME funnel the couch swing uses.
+func _client_input(state: Dictionary) -> void:
+	var my := NetSession.my_seat()
+	if my < 0:
+		return
+	if _net_auto:
+		_client_auto(state, my)
+		return
+	if phase == Phase.PUTT and int(state.get("cur", -1)) == my and not bool(state.get("chaos", false)):
+		_client_putt_input()
+	else:
+		if _cin_active:
+			putt_controller.hide_preview()
+		_cin_active = false
+		_cin_charging = false
+
+## Verify-only mirror auto-driver: on MY actionable turn, produce the intent a
+## human would — draft pick, place a trap, aim at the cup and putt — all through
+## the SAME intent channel a real guest uses (proves the wire, not a shortcut).
+var _net_auto := false
+var _auto_ctx := ""
+var _auto_wait := 0
+func _client_auto(state: Dictionary, my: int) -> void:
+	var ctx := ""
+	if phase == Phase.DRAFT and int(state.get("draft", {}).get("seat", -1)) == my:
+		ctx = "draft"
+	elif phase == Phase.BUILD and int(state.get("ghost", {}).get("seat", -1)) == my:
+		ctx = "build"
+	elif phase == Phase.PUTT and int(state.get("cur", -1)) == my:
+		ctx = "putt:%s" % str(state.get("sl", ""))
+	if ctx == "":
+		_auto_ctx = ""
+		return
+	if ctx != _auto_ctx:
+		_auto_ctx = ctx
+		_auto_wait = 16   # ~0.8s of snapshots before acting (human-ish beat)
+		return
+	if _auto_wait > 0:
+		_auto_wait -= 1
+		return
+	_auto_wait = 24       # don't re-fire until the turn's context changes
+	if ctx == "draft":
+		_client_send_build_pick(0)
+	elif ctx == "build":
+		var c: Vector3 = course.course_center
+		NetSession.send_panel_intent({"kind": "par_build_confirm", "seat": my,
+			"x": c.x, "z": c.z + 1.5, "rot": 0.0})
+	elif ctx.begins_with("putt"):
+		var b: Ball = balls[my]
+		var cup: Vector3 = course.cup_position()
+		var to := cup - b.global_position
+		to.y = 0.0
+		var dist := to.length()
+		var dir := to.normalized() if dist > 0.01 else Vector3(0, 0, -1)
+		var angle := rad_to_deg(atan2(-dir.x, -dir.z))
+		var power: float = clampf(dist * 0.55 + 1.5, 2.0, 13.0)
+		submit_putt_intent(my, power, angle)
+		print("PAR_MIRROR auto-putt seat=%d power=%.1f angle=%.1f" % [my, power, angle])
+		get_tree().create_timer(0.5).timeout.connect(func(): VerifyCapture.snap("paronline_client_putt"))
+
+func _client_putt_input() -> void:
+	var my := NetSession.my_seat()
+	if my < 0 or my >= balls.size():
+		return
+	_cin_active = true
+	_cin_seat = my
+	putt_controller.ball = balls[my]
+	var cam: Camera3D = camera_rig.get_node("Camera3D")
+	# aim: cursor on the ground plane through the ball
+	var mp := get_viewport().get_mouse_position()
+	var hit = Plane(Vector3.UP, balls[my].global_position.y).intersects_ray(
+		cam.project_ray_origin(mp), cam.project_ray_normal(mp))
+	if hit != null:
+		var d: Vector3 = (hit as Vector3) - balls[my].global_position
+		d.y = 0.0
+		if d.length() > 0.08:
+			_cin_aim = d.normalized()
+	var holding := Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT)
+	var dt := 1.0 / 20.0
+	if holding:
+		# ping-pong charge, feel-matched to AvatarShot (POWER_MIN..MAX over 1.1s)
+		_cin_charging = true
+		_cin_t += dt
+		var t: float = _cin_pingpong(_cin_t / 1.1)
+		_cin_power = lerpf(1.2, 13.0, t)
+		putt_controller.show_aim_preview(_cin_aim, _cin_power)
+	elif _cin_charging:
+		# release → fire the intent through the funnel
+		_cin_charging = false
+		var angle := rad_to_deg(atan2(-_cin_aim.x, -_cin_aim.z))
+		submit_putt_intent(my, _cin_power, angle)
+		putt_controller.hide_preview()
+		_cin_t = 0.0
+		_cin_power = 1.2
+	else:
+		putt_controller.show_aim_preview(_cin_aim, 1.2)
+	# stream the aim to the couch at ~7 Hz so it can watch me line up
+	_cin_send_accum += dt
+	if _cin_send_accum >= 0.14:
+		_cin_send_accum = 0.0
+		NetSession.send_panel_intent({"kind": "par_aim", "seat": my,
+			"ax": _cin_aim.x, "az": _cin_aim.z, "power": _cin_power if _cin_charging else 1.2})
+
+func _cin_pingpong(x: float) -> float:
+	var m: float = fmod(x, 2.0)
+	return m if m <= 1.0 else 2.0 - m
+
+func _client_send_build_pick(idx: int) -> void:
+	_cbuild_card = idx
+	NetSession.send_panel_intent({"kind": "par_build_pick", "seat": NetSession.my_seat(), "card": idx})
+
+## Client build placement: click the ground to place; the point streams as it
+## moves so the couch sees the ghost track.
+func _unhandled_input(event: InputEvent) -> void:
+	if not _online_client:
+		return
+	var my := NetSession.my_seat()
+	if my < 0:
+		return
+	if phase != Phase.BUILD or int(_mir.get("ghost", {}).get("seat", -1)) != my:
+		return
+	var cam: Camera3D = camera_rig.get_node("Camera3D")
+	if event is InputEventMouseMotion:
+		var p := _client_ground(cam, (event as InputEventMouseMotion).position)
+		if p != Vector3.INF:
+			NetSession.send_panel_intent({"kind": "par_build_move", "seat": my,
+				"x": p.x, "z": p.z, "rot": _cbuild_rot})
+	elif event is InputEventMouseButton and (event as InputEventMouseButton).pressed:
+		var mb := event as InputEventMouseButton
+		if mb.button_index == MOUSE_BUTTON_LEFT:
+			var p := _client_ground(cam, mb.position)
+			if p != Vector3.INF:
+				NetSession.send_panel_intent({"kind": "par_build_confirm", "seat": my,
+					"x": p.x, "z": p.z, "rot": _cbuild_rot})
+		elif mb.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_cbuild_rot = wrapf(_cbuild_rot + 15.0, 0.0, 360.0)
+		elif mb.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_cbuild_rot = wrapf(_cbuild_rot - 15.0, 0.0, 360.0)
+var _cbuild_rot := 0.0
+
+func _client_ground(cam: Camera3D, screen: Vector2) -> Vector3:
+	if cam == null:
+		return Vector3.INF
+	var hit = Plane(Vector3.UP, 0.0).intersects_ray(cam.project_ray_origin(screen), cam.project_ray_normal(screen))
+	return hit if hit != null else Vector3.INF
