@@ -51,6 +51,18 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     rides the kit via a signal seam (its turf saturation still animates in
     lockstep). Nits queued for wave 2: card/hint-bar notation consistency,
     a banner-stacking beat, always list all 4 seats.
+  - ✅ **SFX AAA PASS** (merge 7e122ce): 40 keys / 105 variants, all CC0
+    (6 Kenney packs + OpenGameArt; license ledger in assets/audio/), all
+    processed to the house declick bar (44.1k/16-bit, razor onsets on
+    impacts, bit-zeroed edges, −1dBFS impacts; 8.5MB total). Old keys
+    unchanged, 7 gained anti-canned round-robin variants; new families:
+    impact tiers, whooshes, UI set, stingers, countdown ticks, bell/raven/
+    creak/thunder/chain/coffin/projector gothic kit + 3 ambience beds
+    (core/ambience.gd, wired into nothing yet). **YOUR VETO SURFACE:**
+    `godot --path . res://tools/sfx_audition.tscn` — arrows + Enter to
+    audition everything. 9 taste calls await you in docs/design/21-sfx-
+    overhaul.md §MORNING CALLS (organ stab, stingers, crowd, which keys
+    get swapped in games...). Music untouched — your domain.
   - ✅ **THE WHOLE ANTHOLOGY HAS THE HOUSE LOOK** (merge d9bbe0a): EnvKit
     applied to all 12 original games (echo ring now blooms hot gold —
     root cause was emission 0.6 below the 1.0 glow threshold), with real
