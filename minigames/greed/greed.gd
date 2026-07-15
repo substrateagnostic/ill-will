@@ -204,6 +204,33 @@ func _ready() -> void:
 		begin(_default_config())
 
 
+# ui_kit intro card (doc 14 nit 7): shown at load, feature-detects glyphs, real
+# key fallback via describe_binding. Auto-starts after 6s so bot soaks flow through.
+const GAME_INTRO := {
+	"name": "GREED INC.",
+	"goal": "The pot fills forever. Bank it at your chute — but carrying makes you a slow, glowing target.",
+	"accent": Color(1, 0.82, 0.2),
+	"controls": [
+		{"action": "move", "label": "MOVE"},
+		{"action": "a", "label": "GRAB / BANK"},
+		{"action": "b", "label": "DASH / TACKLE"},
+	],
+	"tips": [
+		"Carry the pot to YOUR chute and hold to bank the coins as points.",
+		"The longer you hold it, the more it leaks — and the bigger a target you are.",
+		"Tackle a carrier to knock the pot loose, then scoop the spill.",
+	],
+}
+
+## ui_kit intro card, then the callback. Feature-detected; ≤5-line hook (nit 7).
+func _intro_then(cb: Callable) -> void:
+	var card := IntroCard.new()
+	add_child(card)
+	card.started.connect(cb)
+	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	spec["seats"] = _human_seats()
+	card.present(spec)
+
 func begin(config: Dictionary) -> void:
 	if _begun:
 		return
@@ -258,13 +285,18 @@ func begin(config: Dictionary) -> void:
 	bots.setup(int(config.rng_seed) ^ 0x6EED, roster.size())
 	_log("begin players=%d seed=%d rounds=%d bots=%s" % [
 		roster.size(), int(config.rng_seed), rounds_total, str(bot_enabled)])
-	_start_round()
-	if _aim_probe_on:
-		_run_greed_probe()
-	if _hitkit_cap:
-		_run_hitkit_cap()
-	if _bell_cap:
-		_run_bell_cap()
+	# NIT 7: intro card at load. Headless probe/capture modes keep the synchronous
+	# start so their frame-indexed receipts stay byte-identical.
+	if _test_mode != "" or _cap_on or _aim_probe_on or _hitkit_cap or _bell_cap:
+		_start_round()
+		if _aim_probe_on:
+			_run_greed_probe()
+		if _hitkit_cap:
+			_run_hitkit_cap()
+		if _bell_cap:
+			_run_bell_cap()
+	else:
+		_intro_then(_start_round)
 
 
 # ===========================================================================

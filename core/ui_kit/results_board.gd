@@ -299,34 +299,53 @@ func _winner_beat() -> void:
 	var nm := _name_for(player)
 	if _rows[0].has("name"):
 		nm = str(_rows[0]["name"])
+	# NIT 1 — EVERY SEAT RENDERS A ROW: by the hero beat force every placement
+	# row fully opaque, so a skipped/interrupted reveal can never leave a seat
+	# (zero-score or otherwise) invisible on the final standings. This is the
+	# frame the ceremony holds on and the frame verify captures.
+	for rw in _row_widgets:
+		(rw.row as Control).modulate = Color(1, 1, 1, 1)
 	var tmpl := str(_opts.get("win_title", "{name} WINS"))
 	_winner_banner.text = tmpl.replace("{name}", nm)
 	_winner_banner.add_theme_color_override("font_color", col)
-	_winner_banner.visible = true
-	# clear the "calculating" title so the hero banner owns the top third
+	# NIT 2 — SEQUENTIAL BEAT EXCLUSIVITY: the "calculating" title + subtitle
+	# (e.g. mower's "COVERAGE IS SCORE") must fade FULLY before the hero banner
+	# appears — never one stacked frame of title + subtitle + winner together.
+	_winner_banner.visible = false
 	if _reduced:
 		_title.visible = false
 		_subtitle.visible = false
-	else:
-		var ht := create_tween()
-		ht.set_parallel(true)
-		ht.tween_property(_title, "modulate:a", 0.0, 0.2)
-		ht.tween_property(_subtitle, "modulate:a", 0.0, 0.2)
-	if not _reduced:
-		_winner_banner.pivot_offset = _winner_banner.size / 2.0
-		_winner_banner.scale = Vector2(1.7, 1.7)
-		var tw := create_tween()
-		tw.tween_property(_winner_banner, "scale", Vector2.ONE, 0.32) \
-			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-		# emphasise the winner row
-		var row: Control = w.row
-		row.pivot_offset = row.size / 2.0
-		var rp := create_tween()
-		rp.tween_property(row, "scale", Vector2(1.12, 1.12), 0.18) \
-			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		rp.tween_property(row, "scale", Vector2.ONE, 0.22) \
-			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		_confetti(col)
+		_winner_banner.visible = true
+		Sfx.play("match_win")
+		winner_beat.emit(player)
+		return
+	var ht := create_tween()
+	ht.set_parallel(true)
+	ht.tween_property(_title, "modulate:a", 0.0, 0.18)
+	ht.tween_property(_subtitle, "modulate:a", 0.0, 0.18)
+	# only once the previous beat is gone does the protected hero beat rise
+	ht.chain().tween_callback(_raise_winner_banner.bind(w, player, col))
+
+## The protected hero beat, raised after the prior beat has fully faded (nit 2).
+## Fires winner_beat here so game-side spectacle syncs with the visible banner.
+func _raise_winner_banner(w: Dictionary, player: int, col: Color) -> void:
+	_title.visible = false
+	_subtitle.visible = false
+	_winner_banner.visible = true
+	_winner_banner.pivot_offset = _winner_banner.size / 2.0
+	_winner_banner.scale = Vector2(1.7, 1.7)
+	var tw := create_tween()
+	tw.tween_property(_winner_banner, "scale", Vector2.ONE, 0.32) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	# emphasise the winner row
+	var row: Control = w.row
+	row.pivot_offset = row.size / 2.0
+	var rp := create_tween()
+	rp.tween_property(row, "scale", Vector2(1.12, 1.12), 0.18) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	rp.tween_property(row, "scale", Vector2.ONE, 0.22) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_confetti(col)
 	Sfx.play("match_win")
 	winner_beat.emit(player)
 

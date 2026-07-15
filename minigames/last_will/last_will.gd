@@ -295,6 +295,33 @@ func _default_config() -> Dictionary:
 		})
 	return {"roster": r, "rounds": 3, "rng_seed": _cli_seed, "practice": false}
 
+# ui_kit intro card (doc 14 nit 7): shown at load, real key fallback, auto-starts
+# after 6s so bot soaks flow through.
+const GAME_INTRO := {
+	"name": "LAST WILL",
+	"goal": "A funeral race where DYING IS A POWER. Three lives each — first body to the crypt inherits.",
+	"accent": Color(0.72, 0.55, 0.95),
+	"controls": [
+		{"action": "move", "label": "RUN"},
+		{"action": "a", "label": "SHOVE"},
+		{"action": "b", "label": "HOP"},
+	],
+	"tips": [
+		"Spend a life as a curse or a boulder to wreck the leaders, then respawn ahead.",
+		"HOP the traps: pendulums, spinners, and the gust gates.",
+		"First through the crypt door takes the estate.",
+	],
+}
+
+## ui_kit intro card, then the callback. Feature-detected; ≤5-line hook (nit 7).
+func _intro_then(cb: Callable) -> void:
+	var card := IntroCard.new()
+	add_child(card)
+	card.started.connect(cb)
+	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	spec["seats"] = _human_seats()
+	card.present(spec)
+
 func begin(config: Dictionary) -> void:
 	if _started:
 		return
@@ -374,9 +401,13 @@ func begin(config: Dictionary) -> void:
 		NetSession.set_aim_provider(_net_aim)
 		print("LW_MIRROR boot players=%d my_seat=%d" % [players.size(), NetSession.my_seat()])
 		return
-	_start_race()
-	if _hitkit_cap:
-		_run_hitkit_cap()
+	# NIT 7: intro card at load; headless tally/test/probe/capture keep sync start.
+	if _tally or _test_mode != "" or _shove_cue_probe or _hitkit_cap:
+		_start_race()
+		if _hitkit_cap:
+			_run_hitkit_cap()
+	else:
+		_intro_then(_start_race)
 
 # ================================================================ world
 func _build_world() -> void:

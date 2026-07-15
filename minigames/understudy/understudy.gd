@@ -265,6 +265,32 @@ func _default_config() -> Dictionary:
 		})
 	return {"roster": r, "rounds": 0, "rng_seed": _cli_seed, "practice": false}
 
+# ui_kit intro card (doc 14 nit 7): shown at load, real key fallback, auto-starts
+# after 6s so bot soaks flow through.
+const GAME_INTRO := {
+	"name": "THE UNDERSTUDY",
+	"goal": "Three know tonight's PLAY. One is faking. Spot the Understudy — or bluff through as one.",
+	"accent": Color(1, 0.85, 0.3),
+	"controls": [
+		{"action": "move", "label": "CHOOSE"},
+		{"action": "a", "label": "COMMIT"},
+	],
+	"tips": [
+		"On your cue, act out a beat of the play — vague enough to hide if you're faking.",
+		"Watch who over- or under-commits; the Understudy is only guessing.",
+		"Aim with the stick, lock your vote in with A.",
+	],
+}
+
+## ui_kit intro card, then the callback. Feature-detected; ≤5-line hook (nit 7).
+func _intro_then(cb: Callable) -> void:
+	var card := IntroCard.new()
+	add_child(card)
+	card.started.connect(cb)
+	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	spec["seats"] = _human_seats()
+	card.present(spec)
+
 func begin(config: Dictionary) -> void:
 	if _started:
 		return
@@ -337,7 +363,11 @@ func begin(config: Dictionary) -> void:
 	# casting sends its private cards inline (see _present_call / _tick_casting).
 	hint_label.text = _controls_bar()
 	round_index = 0
-	_start_round()
+	# NIT 7: intro card at load; headless --ustally keeps the synchronous start.
+	if _tally:
+		_start_round()
+	else:
+		_intro_then(_start_round)
 
 # ============================================================== world
 func _build_world() -> void:

@@ -341,6 +341,33 @@ func _default_config() -> Dictionary:
 	return {"roster": roster, "rounds": rounds_total, "rng_seed": _seed_from_args(),
 		"practice": false, "roles": roles}
 
+# ui_kit intro card (doc 14 nit 7): shown at load, real key fallback, auto-starts
+# after 6s so bot soaks flow through.
+const GAME_INTRO := {
+	"name": "DEAD WEIGHT",
+	"goal": "Sumo brawl in the attic. Shove rivals off — the fallen return as furniture-hurling ghosts.",
+	"accent": Color(0.62, 0.78, 0.95),
+	"controls": [
+		{"action": "move", "label": "MOVE"},
+		{"action": "a", "label": "SHOVE"},
+		{"action": "b", "label": "HOP"},
+	],
+	"tips": [
+		"Shove rivals over the edge; a HOP dodges a shove and repositions.",
+		"Fall off and you possess the furniture — hurl it at the living.",
+		"Last body standing takes the round.",
+	],
+}
+
+## ui_kit intro card, then the callback. Feature-detected; ≤5-line hook (nit 7).
+func _intro_then(cb: Callable) -> void:
+	var card := IntroCard.new()
+	add_child(card)
+	card.started.connect(cb)
+	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	spec["seats"] = _human_seats()
+	card.present(spec)
+
 func begin(config: Dictionary) -> void:
 	_begin(config)
 
@@ -416,9 +443,13 @@ func _begin(config: Dictionary) -> void:
 		NetSession.set_aim_provider(_net_aim)
 		print("DW_MIRROR boot players=%d my_seat=%d" % [players.size(), NetSession.my_seat()])
 		return
-	_start_round()
-	if _aim_probe_on:
-		_run_dw_probe()
+	# NIT 7: intro card at load; headless balance/probe/capture keep the sync start.
+	if _balance_rounds > 0 or _aim_probe_on or _hitkit_cap:
+		_start_round()
+		if _aim_probe_on:
+			_run_dw_probe()
+	else:
+		_intro_then(_start_round)
 	if _hitkit_cap:
 		_run_hitkit_cap()
 
