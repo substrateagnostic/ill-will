@@ -65,6 +65,7 @@ var _net_walker_seq := 0
 # a contract module exposing _net_state() gets it fanned to guests at 20 Hz;
 # clients boot the SAME scene in mirror mode and feed _net_apply(). -----
 var _net_mirror_id := ""          # module id while a mirrorable game runs
+var _booted := false              # NIT 6: gate the scene-swap wipe off during _ready
 var _net_module_accum := 0.0      # 20 Hz module-state pump
 var _net_module_seq := 0
 var _client_last_state := {}      # client: last mirrored lobby facts
@@ -161,6 +162,15 @@ func _ready() -> void:
 				_enter_lobby()
 				get_tree().create_timer(0.4).timeout.connect(func():
 					VerifyCapture.snap("lobbyrows")))
+		elif arg == "--wipeshot":
+			# NIT 6 proof: seat a human so the scene-swap iris is NOT skipped, then
+			# fire a wrapped transition. _wipe_swap() snaps "estate_wipe" at mid-cover.
+			get_tree().create_timer(1.2).timeout.connect(func():
+				PlayerInput.assign(0, -1)
+				PlayerInput.set_bot(0, false)
+				_enter_grounds()
+				get_tree().create_timer(TransitionWipe.COVER_TIME + 0.8).timeout.connect(
+					func(): get_tree().quit()))
 		elif arg == "--slotshot":
 			get_tree().create_timer(1.2).timeout.connect(func():
 				_build_slot_panel()
@@ -280,6 +290,7 @@ func _ready() -> void:
 		# --net=host CLI boot: straight to the open lobby with the invite code.
 		_hide_title()
 		_enter_lobby()
+	_booted = true   # NIT 6: from here on, scene swaps play the iris wipe
 
 ## ----- TITLE SCREEN (front door; PLAY -> straight into the night) -----
 
@@ -486,6 +497,10 @@ func _start_fresh_slot(slot_idx: int) -> void:
 func _enter_title() -> void:
 	phase = Phase.TITLE
 	_net_set_ceremony({})
+	# NIT 6: return to the title behind the iris wipe (skipped at boot/soak/client)
+	_wipe_swap(_enter_title_swap)
+
+func _enter_title_swap() -> void:
 	Music.play_slot("lobby")
 	$UI/TopBar.visible = false
 	phase_panel.visible = false
@@ -608,7 +623,12 @@ func _enter_lobby() -> void:
 	$UI/TopBar.visible = false
 	_lobby_ready.clear()
 	_join_ready_lock.clear()
-	_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0)
+	# NIT 4: the persistent "ILL WILL" title banner collided with the lobby
+	# panel's "who's on the couch?" header — the panel header is the title in
+	# the lobby, so keep the banner hidden while the seat panel is open. (No
+	# wipe here: several verify hooks call _enter_lobby() then build synchronously.)
+	banner.visible = false
+	_dedupe_human_devices()
 	_build_lobby_panel()
 
 func _build_lobby_panel() -> void:
@@ -644,12 +664,20 @@ func _build_lobby_panel() -> void:
 		if status == "REMOTE":
 			dev_btn.text = "REMOTE LINK · %d ms" % NetSession.rtt_of_seat(i)
 			dev_btn.disabled = true
+		elif status == "BOT":
+			# NIT 4: a BOT plays itself — showing its vestigial device ("KEYBOARD
+			# (ARROWS)") read as a claimed seat. A dash makes clear no hand is here.
+			dev_btn.text = "—"
+			dev_btn.disabled = true
+		elif status == "EMPTY":
+			dev_btn.text = "UNASSIGNED"
+			dev_btn.disabled = true
 		else:
 			dev_btn.text = PartySetup.DEVICE_NAMES.get(PlayerInput.device_of(i), "UNASSIGNED")
+			# NIT 4: cycle only to devices no other HUMAN seat holds — two humans
+			# can never resolve to (or display) the same device (doc 14 item 2).
 			dev_btn.pressed.connect(func():
-				var cur := PartySetup.DEVICE_CYCLE.find(PlayerInput.device_of(i))
-				var nxt: int = PartySetup.DEVICE_CYCLE[(cur + 1) % PartySetup.DEVICE_CYCLE.size()]
-				PlayerInput.assign(i, nxt)
+				PlayerInput.assign(i, _next_free_device(i))
 				PlayerInput.set_bot(i, false)
 				Sfx.play("card")
 				_build_lobby_panel())
@@ -800,6 +828,44 @@ func _first_free_device() -> int:
 			return int(d)
 	return -3
 
+## Is `dev` held by any HUMAN seat other than `seat`? (Only real human hands
+## collide — a BOT/EMPTY seat's leftover device number is not a claim.)
+func _device_taken_by_other(seat: int, dev: int) -> bool:
+	for j in 4:
+		if j == seat:
+			continue
+		if _seat_status(j) == "HUMAN" and PlayerInput.device_of(j) == dev:
+			return true
+	return false
+
+## NIT 4: the seat's next device in the cycle that no OTHER human seat holds, so
+## a human cycling their input can never land on a device already in use.
+func _next_free_device(seat: int) -> int:
+	var cycle: Array = PartySetup.DEVICE_CYCLE
+	var n := cycle.size()
+	var cur := cycle.find(PlayerInput.device_of(seat))
+	for step in range(1, n + 1):
+		var cand: int = cycle[(cur + step) % n]
+		if not _device_taken_by_other(seat, cand):
+			return cand
+	return PlayerInput.device_of(seat)   # couch full: keep the current device
+
+## NIT 4: two HUMAN seats can never display the same device (doc 14 item 2). On
+## lobby entry, reassign any later collider (e.g. from a restored setup) to a
+## free device before the seat panel draws.
+func _dedupe_human_devices() -> void:
+	var seen: Array = []
+	for i in 4:
+		if _seat_status(i) != "HUMAN":
+			continue
+		var dev := PlayerInput.device_of(i)
+		if seen.has(dev):
+			var free := _first_free_device()
+			PlayerInput.assign(i, free)
+			seen.append(free)
+		else:
+			seen.append(dev)
+
 ## EMPTY seats (unassigned, not bot) become bots when the night begins — a
 ## soak never stalls on an unmanned chair.
 func _fill_empty_seats_with_bots() -> void:
@@ -890,9 +956,8 @@ func _claim_seat_for_device(dev: int) -> int:
 			Sfx.play("confirm")
 			var glyph: String = PartySetup.DEVICE_NAMES.get(dev, "A DEVICE")
 			_flash("%s JOINS THE PARTY (%s)" % [GameState.PLAYER_NAMES[i], glyph], GameState.PLAYER_COLORS[i], 2.2)
-			get_tree().create_timer(2.3).timeout.connect(func():
-				if phase == Phase.LOBBY:
-					_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0))
+			# NIT 4: the join flash fades on its own; do NOT restore the "ILL WILL"
+			# title over the lobby panel (that was the header overlap).
 			if phase == Phase.LOBBY:
 				_build_lobby_panel()
 				call_deferred("_flash_lobby_seat", i)
@@ -1278,9 +1343,7 @@ func _on_joy_connection_changed(device: int, connected: bool) -> void:
 	if connected:
 		if phase == Phase.LOBBY:
 			_flash("GAMEPAD %d RESTORED — PRESS A TO TAKE A SEAT" % (device + 1), Color(0.85, 0.9, 1.0), 2.4)
-			get_tree().create_timer(2.5).timeout.connect(func():
-				if phase == Phase.LOBBY:
-					_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0))
+			# NIT 4: transient notice fades on its own; no "ILL WILL" title over the panel
 		return
 	if phase != Phase.LOBBY and phase != Phase.GROUNDS:
 		return
@@ -1293,9 +1356,7 @@ func _on_joy_connection_changed(device: int, connected: bool) -> void:
 			Sfx.play("grudge", -4.0)
 			_flash("GAMEPAD %d LOST — %s PLAYS ITSELF UNTIL FURTHER NOTICE" % [device + 1, GameState.PLAYER_NAMES[i]], GameState.PLAYER_COLORS[i], 2.6)
 			if phase == Phase.LOBBY:
-				get_tree().create_timer(2.7).timeout.connect(func():
-					if phase == Phase.LOBBY:
-						_flash("ILL WILL", Color(1, 0.85, 0.2), 9999.0))
+				# NIT 4: transient notice fades on its own; no "ILL WILL" title over the panel
 				_build_lobby_panel()
 
 func _process(delta: float) -> void:
@@ -1383,14 +1444,16 @@ func _clear_panel(title: String, color := Color(1, 0.9, 0.5)) -> void:
 func _enter_grounds() -> void:
 	phase = Phase.GROUNDS
 	_net_set_ceremony({})   # boundary handoff: guests return to grounds + panel
-	Music.play_slot("grounds")
 	_grounds_timer = GROUNDS_TIME
 	_tile_buyers.clear()
 	_rebuild_top_bar()
-	if _all_bots():
-		_build_freeroam_panel()
-		return
-	_enter_stroll()
+	# NIT 6: the swap into free roam rides the iris wipe (skipped for soaks/clients)
+	_wipe_swap(func() -> void:
+		Music.play_slot("grounds")
+		if _all_bots():
+			_build_freeroam_panel()
+		else:
+			_enter_stroll())
 
 func _build_freeroam_panel() -> void:
 	_strolling = false
@@ -1722,10 +1785,28 @@ func _launch_game(id: String, practice := false) -> void:
 		return
 	_do_launch_game(id, practice)
 
+## NIT 6: route an estate scene swap through the ui_kit iris/curtain wipe (doc
+## 14 §5 — fully obscure the swap for its ~340ms). phase is set by the caller
+## BEFORE this so state stays correct while the visual swap runs hidden. Skipped
+## for an all-bot soak and for net clients (they mirror the host), so headless
+## verify flows never stall or shift their frame-indexed receipts.
+func _wipe_swap(swap: Callable, style := TransitionWipe.IRIS) -> void:
+	if not _booted or _all_bots() or NetSession.is_client():
+		swap.call()
+		return
+	TransitionWipe.play(self, swap, style)
+	var vc := get_node_or_null("/root/VerifyCapture")
+	if vc != null and vc.active:
+		get_tree().create_timer(TransitionWipe.COVER_TIME * 0.5, true, false, true) \
+			.timeout.connect(func() -> void: vc.snap("estate_wipe"))
+
 func _do_launch_game(id: String, practice := false) -> void:
 	if phase == Phase.GAME:
 		return
-	phase = Phase.GAME
+	phase = Phase.GAME   # re-entry guard set before the wipe covers the swap
+	_wipe_swap(_launch_game_swap.bind(id, practice))
+
+func _launch_game_swap(id: String, practice := false) -> void:
 	_net_set_ceremony({})
 	Music.stop()
 	_hide_title()
