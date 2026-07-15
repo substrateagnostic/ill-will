@@ -18,6 +18,29 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
   being made by the director per your delegation — each logged below as it's
   made, overridable in the morning.
 
+  **DIRECTOR'S RULINGS (night 4, batch 1):**
+  - **THE BOARD = "THE PROCESSION"** (doc 18 has all eight calls + spec).
+    Highlights: movement = PUTT YOUR PAWN (frozen golf physics as the dice);
+    hard currency = **DEEDS** (you're the T&E attorney — it had to be);
+    parallel roll+move with staggered Executor reveals (parallelize the
+    boring part, serialize the funny part); zero hidden arbiters; default
+    session ~25 min with a Deed-goal dial; Trail absorbed as the QUICK WAKE
+    preset; nemesis Vendetta spaces IN. Building full Approach A tonight.
+  - **JUMP RULING:** research (doc 16) found every shove check already
+    flattens Y — so: universal *expressive hop* (provably zero balance
+    impact) on a new third button for walking games (echo/throne/greed),
+    REAL traversal jump for the estate walker (the Mario Party board-jump
+    analog), existing hops/jumps untouched (orbital/DW/LW/par-grief),
+    vehicles/seated/masked-ball exempt. Your "people expect jump" and the
+    2-verb module contract both survive — the own-controller mandate is
+    what unlocks the third button.
+  - **ORBITAL VISIBILITY:** full-body per-player-color silhouettes through
+    planets (extending the marker-orb no_depth_test trick already in the
+    code), plus occluded-ball ghost dots. Camera/minimap/transparency
+    approaches ruled out for control-frame and clutter reasons (doc 16).
+  - **CODEX NOTE:** account rejected model 'codex-5.6-sol'; lanes rerun on
+    the CLI default model.
+
 - **☀️☀️☀️ MORNING MENU #3 — THE FINAL FABLE MORNING. Read this one.**
   The overnight run delivered EVERYTHING on the board. Headlines:
   1. **THE WHOLE GAME IS ONLINE.** 12 of 13 games mirror across the
