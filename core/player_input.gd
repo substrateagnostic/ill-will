@@ -5,24 +5,36 @@ extends Node
 ##
 ## Device ids:
 ##   0..7  = gamepads (Godot joypad ids)
-##   -1    = keyboard LEFT half  (WASD move, Space=a, E=b)
-##   -2    = keyboard RIGHT half (arrows move, Enter=a, RShift=b)
+##   -1    = keyboard LEFT half  (WASD move, Space=a, E=b, Q=jump)
+##   -2    = keyboard RIGHT half (arrows move, Enter=a, RShift=b, Ctrl=jump)
 ##   -3    = mouse/shared (turn-based games like Par for the Curse; no
 ##           get_move - pointer input handled by the game itself)
-##   -4    = KB+MOUSE (WASD move, LMB=a, RMB=b; aim via get_aim_dir) —
-##           the PC-native pick for aiming games
+##   -4    = KB+MOUSE (WASD move, LMB=a, RMB=b, Space=jump; aim via
+##           get_aim_dir) — the PC-native pick for aiming games
 ##   -99   = unassigned
 ##
 ## API (all by player index):
 ##   get_move(p) -> Vector2      analog move, y = forward(-1)/back(+1)
-##   is_down(p, "a"|"b") -> bool
-##   just_pressed(p, "a"|"b") -> bool   (edge, valid within the frame)
+##   is_down(p, "a"|"b"|"jump") -> bool
+##   just_pressed(p, "a"|"b"|"jump") -> bool   (edge, valid within the frame)
 ##   assign(p, device) / device_of(p)
 ##   auto_assign(n) -> assigns gamepads first, then keyboard halves,
 ##                     remainder get -3 (shared/mouse)
+##
+## "jump" (director's ruling, docs/design/16-jump-and-visibility.md): a THIRD
+## input, gamepad X, alongside move+A+B — used by the estate walker (real
+## traversal jump) and by echo/throne/greed (cosmetic expressive hop). COUCH
+## ONLY this pass: the online `_remote` packet shape (NetSession) carries only
+## move/a/b, and extending it is out of this change's scope (would touch
+## net_session.gd) — see is_down()'s remote branch below. A remote seat simply
+## never reads jump=true; nothing crashes, it just can't jump yet online.
 
-const KEY_LEFT_MAP := {"up": KEY_W, "down": KEY_S, "left": KEY_A, "right": KEY_D, "a": KEY_SPACE, "b": KEY_E}
-const KEY_RIGHT_MAP := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "a": KEY_ENTER, "b": KEY_SHIFT}
+const KEY_LEFT_MAP := {"up": KEY_W, "down": KEY_S, "left": KEY_A, "right": KEY_D, "a": KEY_SPACE, "b": KEY_E, "jump": KEY_Q}
+const KEY_RIGHT_MAP := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "a": KEY_ENTER, "b": KEY_SHIFT, "jump": KEY_CTRL}
+## KB+MOUSE (-4) shares LEFT's WASD move, but "a"/"b" are mouse buttons (see
+## is_down/describe_binding, both special-case device -4 before consulting a
+## keymap at all) — Space is otherwise unused on this device, so jump gets it.
+const KEY_KBM_MAP := {"up": KEY_W, "down": KEY_S, "left": KEY_A, "right": KEY_D, "a": KEY_SPACE, "b": KEY_E, "jump": KEY_SPACE}
 
 const SETUP_PATH := "user://party_setup.json"
 
@@ -118,7 +130,7 @@ func load_setup() -> bool:
 ## no dead actions possible).
 func set_key_binding(device: int, action: String, keycode: int) -> void:
 	if not _custom_maps.has(device):
-		var def := KEY_LEFT_MAP if device != -2 else KEY_RIGHT_MAP
+		var def := KEY_RIGHT_MAP if device == -2 else (KEY_KBM_MAP if device == -4 else KEY_LEFT_MAP)
 		_custom_maps[device] = def.duplicate()
 	var m: Dictionary = _custom_maps[device]
 	for other in m:
@@ -155,12 +167,14 @@ func describe_binding(p: int, action: String) -> String:
 	if d >= 0:
 		if action == "move":
 			return "LEFT STICK"
+		if action == "jump":
+			return "(X)"   # not part of the A/B swap pair — always X, per the ruling
 		var swapped := pad_swapped(d)
 		if action == "a":
 			return "(B)" if swapped else "(A)"
 		return "(A)" if swapped else "(B)"
 	if d == -3:
-		return "MOUSE"
+		return "—" if action == "jump" else "MOUSE"   # shared/mouse seat has no discrete jump
 	if d == -4 and action == "a":
 		return "LEFT CLICK"
 	if d == -4 and action == "b":
@@ -258,16 +272,22 @@ func get_move(p: int) -> Vector2:
 
 func is_down(p: int, action: String) -> bool:
 	if _remote.has(p):
+		# COUCH ONLY (see header note): _remote_edge never carries a "jump_eff"
+		# entry (only a/b are edge-tracked in _tick_remote_edges), so this falls
+		# through to _remote[p].get("jump", false) — always false, since
+		# NetSession's packet never sets "jump". Safe no-op, not a crash.
 		var e: Dictionary = _remote_edge.get(p, {})
 		return bool(e.get(action + "_eff", bool(_remote[p].get(action, false))))
 	var d := device_of(p)
 	if d >= 0:
+		if action == "jump":
+			return Input.is_joy_button_pressed(d, JOY_BUTTON_X)   # left face button (Godot 4 mapping)
 		var want_a := (action == "a") != pad_swapped(d)
 		return Input.is_joy_button_pressed(d, JOY_BUTTON_A if want_a else JOY_BUTTON_B)
-	if d == -4:
+	if d == -4 and action != "jump":
 		return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT if action == "a" else MOUSE_BUTTON_RIGHT)
 	var m := _keymap(d)
-	return not m.is_empty() and Input.is_physical_key_pressed(m[action])
+	return not m.is_empty() and m.has(action) and Input.is_physical_key_pressed(m[action])
 
 ## For aiming games: world-space direction from `from_pos` toward the mouse
 ## cursor projected on the horizontal plane at from_pos.y. Returns ZERO for
@@ -355,18 +375,26 @@ func _physics_process(_delta: float) -> void:
 	_tick_remote_edges()
 	_prev_down = _down.duplicate()
 	for p in _devices:
-		for action in ["a", "b"]:
+		for action in ["a", "b", "jump"]:
 			_down["%d_%s" % [p, action]] = is_down(p, action)
 	for p in _remote:
 		if not _devices.has(p):
-			for action in ["a", "b"]:
+			for action in ["a", "b", "jump"]:
 				_down["%d_%s" % [p, action]] = is_down(p, action)
 
 func _keymap(d: int) -> Dictionary:
 	if _custom_maps.has(d):
-		return _custom_maps[d]
-	if d == -1 or d == -4:
+		var m: Dictionary = _custom_maps[d]
+		if not m.has("jump") and (d == -1 or d == -2 or d == -4):
+			# backward-compat: a custom keymap saved before "jump" existed
+			# (an older party_setup.json) defaults to the house key instead of
+			# silently never jumping until the player reopens remap.
+			m["jump"] = (KEY_RIGHT_MAP if d == -2 else (KEY_KBM_MAP if d == -4 else KEY_LEFT_MAP))["jump"]
+		return m
+	if d == -1:
 		return KEY_LEFT_MAP
+	if d == -4:
+		return KEY_KBM_MAP
 	if d == -2:
 		return KEY_RIGHT_MAP
 	return {}
