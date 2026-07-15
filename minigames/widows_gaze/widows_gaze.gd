@@ -864,7 +864,12 @@ func _print_tally() -> void:
 # ===========================================================================
 func _input_for(p: int, delta: float) -> Dictionary:
 	if bot_enabled[p]:
-		return bots.decide(p, self, delta)
+		var d: Dictionary = bots.decide(p, self, delta)
+		# bots stride at 87%: humans out-hustle them (spec: beatable), and
+		# bot-only rounds stretch into the T-25 fake-out act instead of
+		# stripping the wake clean at half time.
+		d.move = (d.move as Vector2) * 0.87
+		return d
 	return {
 		"move": PlayerInput.get_move(p),
 		"grab": PlayerInput.is_down(p, "a"),
