@@ -318,26 +318,18 @@ func _build_static() -> void:
 	add_child(_cam)
 	_cam.look_at(CAM_LOOK)
 	_cam.current = true
-	var sun := DirectionalLight3D.new()
-	add_child(sun)
-	sun.rotation_degrees = Vector3(-54, 34, 0)
-	sun.light_energy = 1.3
-	sun.shadow_enabled = true
-	sun.directional_shadow_max_distance = 70.0
-	var wenv := WorldEnvironment.new()
-	var env := Environment.new()
-	env.background_mode = Environment.BG_COLOR
-	env.background_color = Color(0.14, 0.11, 0.12)
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.ambient_light_color = Color(0.68, 0.64, 0.62)
-	env.ambient_light_energy = 0.75
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	env.glow_enabled = true
-	env.glow_intensity = 0.7
-	env.glow_bloom = 0.06
-	env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SCREEN
-	wenv.environment = env
-	add_child(wenv)
+	# THE HOUSE LOOK -- MOONLIT night market (core/env_kit.gd). The kart race runs
+	# after dark: a cool moon key rakes the track, a strong WARM fill stands in for
+	# the market's lamp strings, thin ground fog gives the far side depth, and the
+	# high-threshold glow blooms the swap-orb + boost trails without touching the
+	# UI. Replaces the old flat FILMIC day-env + hand-rolled sun.
+	var rig := EnvKit.apply(self, EnvKit.MOONLIT, {
+		"key_energy": 1.15,      # a touch brighter so asphalt + rumble strips read
+		"fill_energy": 0.42,     # warm market-lamp fill washing the whole track
+		"fog_density": 0.006,    # thin -- keep the far side of the track legible
+	})
+	# the track is large: keep the old shadow throw so karts cast across it
+	(rig["key"] as DirectionalLight3D).directional_shadow_max_distance = 70.0
 	track = SwapTrack.new()
 	add_child(track)
 	track.build()
