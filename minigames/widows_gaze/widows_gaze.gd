@@ -81,6 +81,25 @@ const MATCH_END_HOLD := 8.0
 const TIEBREAK_SAFETY := 45.0
 const CAM_FOV := 55.0
 
+# ui_kit adoption (doc 14 nit 5): the Mario-Party intro card at load. Accent is
+# the widow's spectral violet. Feature-detected glyphs, real key fallback.
+const GAME_INTRO := {
+	"name": "THE WIDOW'S GAZE",
+	"goal": "Rob the wake while she weeps. FREEZE when she turns — or be taken.",
+	"accent": Color(0.68, 0.5, 0.95),
+	"controls": [
+		{"action": "move", "label": "CREEP"},
+		{"action": "a", "label": "GRAB / BANK"},
+		{"action": "b", "label": "SHOVE"},
+	],
+	"tips": [
+		"Hold A by a relic to lift it, carry it home, press A at your chest to bank.",
+		"SHOVE a rival as the sting rises and the Widow does your murder for you.",
+		"Once she grows suspicious, a FALLING third note is a fake-out — hold.",
+	],
+}
+const WIDOW_VIOLET := Color(0.68, 0.5, 0.95)
+
 var roster: Array = []
 var rng := RandomNumberGenerator.new()
 var fx_rng := RandomNumberGenerator.new()
@@ -126,6 +145,11 @@ var bot_enabled: Array = []
 var _begun := false
 var _reported := false
 var _standalone := false
+
+# ui_kit adoption (doc 14 nit 5): intro card at load + staged final standings.
+var _intro_card: IntroCard = null
+var _results_board: ResultsBoard = null
+var _board_running := false
 
 # CLI
 var _cli_seed := 1
@@ -255,7 +279,24 @@ func begin(config: Dictionary) -> void:
 			bots.malice[i] = maxf(float(bots.malice[i]), 0.7)
 	_log("begin players=%d seed=%d bots=%s" % [
 		roster.size(), int(config.rng_seed), str(bot_enabled)])
-	_start_round()
+	# ui_kit intro card at load, then the round. Headless assert modes skip the
+	# ceremony (byte-identical receipts); the card auto-starts after 6s so an
+	# all-bot windowed demo flows through untouched.
+	if _tally_mode or _cap_on:
+		_start_round()
+	else:
+		_present_intro_card()
+
+
+func _present_intro_card() -> void:
+	_intro_card = IntroCard.new()
+	add_child(_intro_card)
+	_intro_card.started.connect(_start_round)
+	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	spec["seats"] = _human_seats()
+	_intro_card.present(spec)
+	if _vc != null:
+		get_tree().create_timer(1.0).timeout.connect(func() -> void: _vc.snap("wg_intro"))
 
 
 func _start_round() -> void:
@@ -324,7 +365,9 @@ func _physics_process(delta: float) -> void:
 				(p as WGPawn).tick_movement(delta)
 			if _cap_on:
 				_capture_beats()
-			if phase_t >= MATCH_END_HOLD and not _reported:
+			# the ResultsBoard reports on its `done` beat when present (host,
+			# non-headless); the MATCH_END_HOLD gate is the no-board fallback.
+			if not _board_running and phase_t >= MATCH_END_HOLD and not _reported:
 				_reported = true
 				report_finished(_results)
 				if _tally_mode:
@@ -811,11 +854,10 @@ func _finish_match(champ: int) -> void:
 	var champ_pl: Dictionary = roster[champ]
 	if _stretch != null:
 		_stretch.match_ended()
-	_flash_banner("%s INHERITS THE WAKE!" % champ_pl.name, champ_pl.color, 9999.0)
-	Sfx.play("match_win")
-	(players[champ] as WGPawn).cheer()
-	_confetti((players[champ] as WGPawn).global_position + Vector3(0, 1.8, 0), champ_pl.color)
-	_shake = maxf(_shake, 0.5)
+	# The bespoke persistent "INHERITS THE WAKE" banner + champ cheer are now the
+	# ResultsBoard's protected winner beat (see the tail of this function). The
+	# wake settles back to weeping either way.
+	banner.visible = false
 	widow.weep()
 	widow.set_gaze(false)
 	_set_lights(false)
@@ -854,6 +896,61 @@ func _finish_match(champ: int) -> void:
 	_cap_event("results")
 	_log("match_end " + JSON.stringify(_results))
 	print("KILL_EVENTS n=", _kill_events.size(), " ", JSON.stringify(_kill_events))
+	# Headless assert (--wgtally) keeps the MATCH_END_HOLD path; everyone else gets
+	# the staged final standings. _finish_match is host/standalone only (the mirror
+	# stages its own champ moment from the `champ` fact), so no mirror guard needed.
+	if not _tally_mode:
+		_present_results_board(champ)
+
+
+## Final standings via the shared ui_kit ResultsBoard (doc 14 §3, nit 5): freeze
+## -> per-player banks count-up -> protected winner hero beat. The tie ceremony
+## stays game-side (the TIEBREAK phase resolved before we got here); the winner's
+## 3D cheer + confetti hang off the board's winner_beat seam.
+func _present_results_board(champ: int) -> void:
+	var panel := get_node_or_null("UI/ScorePanel")
+	if panel:
+		panel.visible = false   # the board is the standings now — no double list
+	var rows: Array = []
+	for p in _results.placements:
+		var pidx := int(p)
+		rows.append({
+			"player": pidx,
+			"score": int(points.get(pidx, 0)),
+			"color": roster[pidx].color,
+			"name": str(roster[pidx].name),
+		})
+	var board := ResultsBoard.new()
+	add_child(board)
+	_results_board = board
+	_board_running = true
+	board.winner_beat.connect(_on_results_winner)
+	board.done.connect(func() -> void:
+		if not _reported:
+			_reported = true
+			report_finished(_results))
+	board.present(rows, {
+		"title": "THE WILL IS READ",
+		"subtitle": "MOST BANKED INHERITS THE WAKE",
+		"score_type": ResultsBoard.ScoreType.POINTS,
+		"win_title": "{name} INHERITS THE WAKE!",
+		"accent": WIDOW_VIOLET,
+	})
+
+
+## The protected winner beat: the champion cheers, confetti falls (kept game-side
+## via the board's signal seam). champ == placements[0] here (forced by _finish).
+func _on_results_winner(champ: int) -> void:
+	if champ < 0 or champ >= players.size():
+		return
+	Sfx.play("match_win")
+	(players[champ] as WGPawn).cheer()
+	_confetti((players[champ] as WGPawn).global_position + Vector3(0, 1.8, 0), roster[champ].color)
+	if not _reduced_motion():
+		_shake = maxf(_shake, 0.5)
+	if _vc != null:
+		get_tree().create_timer(0.35, true, false, true).timeout.connect(
+			func() -> void: _vc.snap("wg_results"))
 
 
 func _print_tally() -> void:
@@ -1057,9 +1154,6 @@ func _flash_ground_label(at: Vector3, text: String, color: Color) -> void:
 # ===========================================================================
 # Live-binding hint bar (real keys, house pattern)
 # ===========================================================================
-const HINT_GENERIC := "MOVE   -   A = GRAB / BANK   -   B = SHOVE   |   FREEZE WHEN SHE TURNS"
-
-
 func _human_seats() -> Array:
 	var out := []
 	for i in roster.size():
@@ -1069,10 +1163,16 @@ func _human_seats() -> Array:
 	return out
 
 
-func _btn_hint(action: String, label: String) -> String:
+## Seats whose bindings the hint bar prints: the live humans, or seat 0 as a
+## representative when a bot-only demo has no humans — so the bar shows the SAME
+## real key the intro card prints, never an abstract "A =" verb (notation nit).
+func _hint_seats() -> Array:
 	var seats := _human_seats()
-	if seats.is_empty():
-		return ""
+	return seats if not seats.is_empty() else [0]
+
+
+func _btn_hint(action: String, label: String) -> String:
+	var seats := _hint_seats()
 	var keys := []
 	var same := true
 	for i in seats:
@@ -1089,8 +1189,6 @@ func _btn_hint(action: String, label: String) -> String:
 
 
 func _controls_bar() -> String:
-	if _human_seats().is_empty():
-		return HINT_GENERIC
 	return "MOVE   ·   %s   ·   %s   |   FREEZE WHEN SHE TURNS" % [
 		_btn_hint("a", "GRAB / BANK (hold)"), _btn_hint("b", "SHOVE")]
 

@@ -766,8 +766,6 @@ func _spawn_gull(p: int, at: Vector3) -> void:
 	_rebuild_scoreboard()
 	_refresh_hint()
 
-const TILT_HINT_BASE := "MOVE  -  A = SHOVE (ANSWER A SHOVE TO CLASH!)  -  B = BRACE   |   FALL AND YOU RETURN AS A SEAGULL (A = BOMB)"
-
 ## The hint bar's seagull legend: shown whenever a HUMAN is a seagull so the dead
 ## get their controls (fly + bomb). Bots never trigger it. Owns hint visibility
 ## once the round-1 intro window closes.
@@ -786,7 +784,14 @@ func _refresh_hint() -> void:
 			if human_gull < 0:
 				human_gull = p
 	if n > 0:
-		hint_label.text = _gull_hint_line(human_gull) if n == 1 else "SPLASH! YOU'RE A SEAGULL — MOVE to fly · A = drop a BOMB"
+		if n == 1:
+			hint_label.text = _gull_hint_line(human_gull)
+		else:
+			# real keys even for the multi-gull line (notation nit): the first
+			# human gull's bindings stand in for the flock (couches share layouts)
+			var mv: String = PlayerInput.describe_binding(human_gull, "move")
+			var bomb: String = PlayerInput.describe_binding(human_gull, "a")
+			hint_label.text = "SEAGULLS ON THE WING — %s to fly · %s = drop a BOMB" % [mv, bomb]
 		hint_label.visible = true
 	else:
 		hint_label.visible = false
@@ -800,8 +805,8 @@ func _gull_hint_line(p: int) -> String:
 ## ---- live-binding hint bar (real keys, not "A"/"B"; see docs/verify/realkeys-VERIFY.md) ----
 
 ## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
-## main bar personalizes only these; an all-bot demo gets an empty list and keeps
-## the generic TILT_HINT_BASE text.
+## main bar personalizes these; an all-bot demo falls back to seat 0 via
+## _hint_seats() so the bar still shows real keys, never abstract verbs.
 func _human_seats() -> Array:
 	var out := []
 	for i in roster.size():
@@ -813,14 +818,19 @@ func _human_seats() -> Array:
 			out.append(i)
 	return out
 
-## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## Seats whose bindings the hint bar prints: the live humans, or seat 0 as a
+## representative when a bot-only demo has no humans — so the bar shows the SAME
+## real key the intro card prints, never an abstract "A =" verb (notation nit).
+func _hint_seats() -> Array:
+	var seats := _human_seats()
+	return seats if not seats.is_empty() else [0]
+
+## One button's live legend: "KEY = LABEL" when every hint seat shares the key
 ## (all pads -> "(A) = SHOVE"), else the per-seat "LABEL: KEY/NAME · KEY/NAME"
 ## form (mixed keyboard + pad). Bindings are fixed per match, so this is built
 ## once when the round starts - no live polling.
 func _btn_hint(action: String, label: String) -> String:
-	var seats := _human_seats()
-	if seats.is_empty():
-		return ""
+	var seats := _hint_seats()
 	var keys := []
 	var same := true
 	for i in seats:
@@ -835,10 +845,8 @@ func _btn_hint(action: String, label: String) -> String:
 		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
 	return "%s: %s" % [label, " · ".join(parts)]
 
-## The main living bar with real keys, or TILT_HINT_BASE for an all-bot demo.
+## The main living bar, always real keys via describe_binding (matches the card).
 func _controls_bar() -> String:
-	if _human_seats().is_empty():
-		return TILT_HINT_BASE
 	return "MOVE   ·   %s   ·   %s   |   FALL AND YOU RETURN AS A SEAGULL" % [
 		_btn_hint("a", "SHOVE"), _btn_hint("b", "BRACE")]
 
@@ -1120,8 +1128,6 @@ func _present_results_board() -> void:
 		if not _reported:
 			_reported = true
 			report_finished(_results))
-	if _vc != null:
-		get_tree().create_timer(2.4).timeout.connect(func() -> void: _vc.snap("tilt_results"))
 	board.present(rows, {
 		"title": "FINAL STANDINGS",
 		"subtitle": "BEST OF %d" % rounds_total,
@@ -1139,6 +1145,11 @@ func _on_match_winner(champ: int) -> void:
 	else:
 		_confetti(Vector3(0, 3, 0), champ_pl.color)
 	_shake = maxf(_shake, 0.3)
+	# NIT 1 deliverable: snap the hero beat — by now every seat's row (winner
+	# included, revealed last) is fully rendered, so the standings show ALL four.
+	if _vc != null:
+		get_tree().create_timer(0.35, true, false, true).timeout.connect(
+			func() -> void: _vc.snap("tilt_results"))
 
 func _dict_max(d: Dictionary) -> int:
 	var best := 0

@@ -205,6 +205,10 @@ func begin(config: Dictionary) -> void:
 		return
 	_log("begin players=%d seed=%d roundtime=%.0f bots=%s covtest=%s" % [
 		roster.size(), int(config.rng_seed), round_time, str(bot_enabled), _covtest])
+	# NIT 3: set the real-key hint bar NOW (not just at _start_round) so the bar
+	# shown behind the intro card never reads the scene-authored abstract "A =".
+	hint_label.text = _controls_bar()
+	hint_label.visible = true
 	_kickoff()
 
 ## Intro card (ui_kit) at load, then the round. --covtest skips the ceremony
@@ -388,14 +392,20 @@ func _human_seats() -> Array:
 			out.append(i)
 	return out
 
-## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## Seats whose bindings the hint bar prints: the live humans, or seat 0 as a
+## representative when a bot-only demo has no humans — so the bar shows the SAME
+## real key the intro card prints for glyph_seat 0, never an abstract "A =" verb
+## (doc 14 item 13 / notation-consistency nit).
+func _hint_seats() -> Array:
+	var seats := _human_seats()
+	return seats if not seats.is_empty() else [0]
+
+## One button's live legend: "KEY = LABEL" when every hint seat shares the key
 ## (all pads -> "(A) = RAM HORN"), else the per-seat "LABEL: KEY/NAME · KEY/NAME"
 ## form (mixed keyboard + pad). Bindings are fixed per match, so this is built
 ## once when the round starts - no live polling.
 func _btn_hint(action: String, label: String) -> String:
-	var seats := _human_seats()
-	if seats.is_empty():
-		return ""
+	var seats := _hint_seats()
 	var keys := []
 	var same := true
 	for i in seats:
@@ -410,10 +420,8 @@ func _btn_hint(action: String, label: String) -> String:
 		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
 	return "%s: %s" % [label, " · ".join(parts)]
 
-## The main bar with real keys, or "" for an all-bot demo (keep the scene text).
+## The main bar, always real keys via describe_binding (matches the intro card).
 func _controls_bar() -> String:
-	if _human_seats().is_empty():
-		return ""
 	return "MOVE = STEER   ·   %s   ·   %s   |   COVERAGE IS SCORE" % [
 		_btn_hint("a", "RAM HORN"), _btn_hint("b", "BOOST")]
 
