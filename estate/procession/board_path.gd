@@ -43,20 +43,46 @@ const LAYOUT: Array[String] = [
 	S.BLANK,         # 23
 ]
 
-# ---- SWAP-POINTS for the incoming generated Meshy batch (waypoint stone,
-# tollgate arch, codicil pedestal, signpost, hearse). If a file exists in the
-# worktree it is used; otherwise the FALLBACK committed prop / primitive draws.
-const GEN_WAYPOINT := "res://assets/models/meshy/generated/waypoint_stone.glb"
-const GEN_TOLLARCH := "res://assets/models/meshy/generated/tollgate_arch.glb"
-const GEN_CODICIL := "res://assets/models/meshy/generated/codicil_pedestal.glb"
-const GEN_SIGNPOST := "res://assets/models/meshy/generated/signpost.glb"
-const GEN_HEARSE := "res://assets/models/meshy/generated/hearse.glb"
+# ---- SWAP-POINTS for the shipped meshy-6 gothic batch (docs/verify/
+# meshy-forge-VERIFY.md). Every board fixture now resolves to a purpose-built
+# funeral-gothic GLB; the committed props below remain as fallbacks so a fresh
+# checkout that lacks the generated batch still renders a coherent drive.
+const GEN_DIR := "res://assets/models/meshy/generated/"
+const GEN_WAYPOINT := GEN_DIR + "board_waypoint_lantern.glb"   # green-man marker stone
+const GEN_TOLLARCH := GEN_DIR + "board_tollgate_arch.glb"      # wrought-iron gate
+const GEN_CODICIL := GEN_DIR + "board_codicil_pedestal.glb"    # fluted column + scroll
+const GEN_SIGNPOST := GEN_DIR + "board_grim_signpost.glb"      # crooked multi-arrow post
+const GEN_HEARSE := GEN_DIR + "board_hearse_cart.glb"          # draped black hearse
+const GEN_CRYPT := GEN_DIR + "board_crypt_door.glb"            # stone arch + iron door
+const GEN_PLANCHETTE := GEN_DIR + "board_planchette.glb"       # séance pointer
+# Estate perimeter dressing (all gothic, all KEEP).
+const GEN_ANGEL := GEN_DIR + "estate_broken_angel.glb"
+const GEN_WELL := GEN_DIR + "estate_covered_well.glb"
+const GEN_DEADTREE := GEN_DIR + "estate_dead_tree.glb"
+const GEN_FOUNTAIN := GEN_DIR + "estate_dry_fountain.glb"
+const GEN_TOPIARY := GEN_DIR + "estate_hedge_topiary.glb"
+const GEN_IRONGATE := GEN_DIR + "estate_iron_gate.glb"         # thin (0.22) fence section
+const GEN_LAMPPOST := GEN_DIR + "estate_lamppost.glb"          # glowing lantern head
+const GEN_WHEELBARROW := GEN_DIR + "estate_wheelbarrow.glb"
+# Headstone variety for WEEPING GRAVE stones — assigned deterministically by
+# space index (never randi() in a visual path; the receipt must not shift).
+const GRAVE_VARIANTS: Array[String] = [
+	GEN_DIR + "grave_headstone_plain.glb",
+	GEN_DIR + "grave_celtic_cross.glb",
+	GEN_DIR + "grave_headstone_cracked.glb",
+	GEN_DIR + "grave_small_obelisk.glb",
+	GEN_DIR + "grave_cherub_stone.glb",
+	GEN_DIR + "grave_tilted_slab.glb",
+	GEN_DIR + "grave_mausoleum_front.glb",
+	GEN_DIR + "grave_iron_fence_plot.glb",
+]
 # Committed fallbacks (verified present in assets/models/meshy/).
 const FB_TOLLARCH := "res://assets/models/meshy/manor_gate.glb"
 const FB_CODICIL := "res://assets/models/meshy/gilded_pot.glb"
-const FB_STALL := "res://assets/models/meshy/market_stall.glb"
 const FB_LANTERN := "res://assets/models/meshy/stone_lantern.glb"
+const FB_CRATE := "res://assets/models/meshy/crate.glb"
 const FB_GRAVE := "res://assets/models/meshy/broken_column.glb"
+const FB_COLUMN := "res://assets/models/meshy/broken_column.glb"
 const FB_HEARSE := "res://assets/models/meshy/go_kart.glb"
 
 # Ellipse geometry (manor-grounds scale). Space 0 sits at the manor gate.
@@ -106,12 +132,13 @@ func _build_ground() -> void:
 	pm.size = Vector2(60, 52)
 	ground.mesh = pm
 	var gmat := StandardMaterial3D.new()
-	gmat.albedo_color = Color(0.13, 0.14, 0.12)
+	gmat.albedo_color = Color(0.055, 0.065, 0.085)   # cool damp lawn under moonlight
 	gmat.roughness = 1.0
 	ground.material_override = gmat
 	ground.position = CENTER + Vector3(0, -0.02, 0)
 	add_child(ground)
-	# The drive itself — a darker ribbon torus hint under the stones.
+	# The drive itself — a paler flagstone ribbon torus under the stones so the
+	# loop reads as a walked path even in the dark.
 	var ring := MeshInstance3D.new()
 	var tm := TorusMesh.new()
 	tm.inner_radius = RADIUS_X - 1.4
@@ -119,7 +146,8 @@ func _build_ground() -> void:
 	tm.rings = 48
 	ring.mesh = tm
 	var rmat := StandardMaterial3D.new()
-	rmat.albedo_color = Color(0.09, 0.09, 0.11)
+	rmat.albedo_color = Color(0.16, 0.17, 0.205)
+	rmat.roughness = 0.95
 	ring.material_override = rmat
 	ring.position = CENTER + Vector3(0, -0.01, 0)
 	ring.scale = Vector3(1.0, 1.0, RADIUS_Z / RADIUS_X)
@@ -127,33 +155,69 @@ func _build_ground() -> void:
 	add_child(ring)
 
 func _build_stone(i: int, type: String) -> void:
+	var pos := space_pos(i)
+	var col: Color = S.color(type)
+	# The marker is a DARK STONE puck — the colour identity now lives in a lit
+	# emissive rim ring (bloom under MOONLIT) rather than a flat toy-bright face,
+	# so each space reads as a carved, moonlit stone marker on the drive.
 	var s := MeshInstance3D.new()
 	var mesh := CylinderMesh.new()
-	mesh.top_radius = 0.85
-	mesh.bottom_radius = 0.95
-	mesh.height = 0.16
+	mesh.top_radius = 0.86
+	mesh.bottom_radius = 0.98
+	mesh.height = 0.18
 	s.mesh = mesh
 	var mat := StandardMaterial3D.new()
-	var col: Color = S.color(type)
-	mat.albedo_color = col.lerp(Color(0.2, 0.2, 0.24), 0.35)
+	mat.albedo_color = Color(0.11, 0.115, 0.14).lerp(col, 0.12)
 	mat.emission_enabled = true
 	mat.emission = col
-	mat.emission_energy_multiplier = 0.25
-	mat.roughness = 0.8
+	mat.emission_energy_multiplier = 0.06
+	mat.roughness = 0.92
 	s.material_override = mat
 	add_child(s)
-	s.global_position = space_pos(i)
+	s.global_position = pos
 	stone_nodes.append(s)
-	# Icon + effect label floating over the stone (all effects announced).
+	# Emissive rim ring — the lit "rune circle" that carries the colour code.
+	var rim := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.74
+	tm.outer_radius = 0.90
+	tm.rings = 8
+	tm.ring_segments = 28
+	rim.mesh = tm
+	var rmat := StandardMaterial3D.new()
+	rmat.albedo_color = col.darkened(0.2)
+	rmat.emission_enabled = true
+	rmat.emission = col
+	rmat.emission_energy_multiplier = 2.6
+	rmat.roughness = 0.5
+	rim.material_override = rmat
+	rim.rotation_degrees.x = 90.0
+	add_child(rim)
+	rim.global_position = pos + Vector3(0, 0.10, 0)
+	# A small ENGRAVED 3D icon lying flat on the stone (the space-type sigil),
+	# emissive so it glows as an inlaid rune under moonlight.
+	var rune := Label3D.new()
+	rune.text = S.icon(type)
+	rune.font_size = 120
+	rune.pixel_size = 0.0032
+	rune.rotation_degrees = Vector3(-90, 0, 0)
+	rune.modulate = col.lerp(Color.WHITE, 0.35)
+	rune.outline_size = 22
+	rune.outline_modulate = Color(0, 0, 0, 0.85)
+	rune.no_depth_test = false
+	rune.position = pos + Vector3(0, 0.115, 0)
+	add_child(rune)
+	# Billboard identity label above the stone — icon + name, colour-keyed. Kept
+	# as the colour-blind-safe text tag (never colour alone).
 	var tag := Label3D.new()
-	tag.text = "%s\n%s" % [S.icon(type), S.display_name(type)]
+	tag.text = "%s  %s" % [S.icon(type), S.display_name(type)]
 	tag.font_size = 40
-	tag.pixel_size = 0.006
+	tag.pixel_size = 0.0056
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	tag.modulate = col
-	tag.outline_size = 10
-	tag.outline_modulate = Color(0, 0, 0, 0.9)
-	tag.position = space_pos(i) + Vector3(0, 1.1, 0)
+	tag.modulate = col.lerp(Color.WHITE, 0.15)
+	tag.outline_size = 12
+	tag.outline_modulate = Color(0, 0, 0, 0.92)
+	tag.position = pos + Vector3(0, 1.15, 0)
 	add_child(tag)
 
 ## Bind each existing player monument to a weeping-grave stone (deterministic
@@ -178,38 +242,85 @@ func _map_monuments(monuments: Array, players: Array) -> void:
 			_mark_grave_monument(graves[g], (m as Dictionary).get("color", "ffffff"))
 			g += 1
 
+## A weeping grave that a rival's monument OWNS gets a small owner-coloured votive
+## flame beside its (already-placed) headstone — the toll marker. Purely visual;
+## the base headstone for every grave is placed in _build_furniture.
 func _mark_grave_monument(space_idx: int, color_html) -> void:
 	var col := Color.from_string(str(color_html), Color.WHITE)
-	var head := _prop(GEN_WAYPOINT, FB_GRAVE, 1.5, col)
-	head.global_position = space_pos(space_idx) + Vector3(0, 0.08, 0)
-	add_child(head)
+	var votive := MeshInstance3D.new()
+	var cyl := CylinderMesh.new()
+	cyl.top_radius = 0.09
+	cyl.bottom_radius = 0.12
+	cyl.height = 0.34
+	votive.mesh = cyl
+	var vmat := StandardMaterial3D.new()
+	vmat.albedo_color = col.darkened(0.3)
+	vmat.emission_enabled = true
+	vmat.emission = col
+	vmat.emission_energy_multiplier = 2.2
+	votive.material_override = vmat
+	add_child(votive)
+	votive.global_position = space_pos(space_idx) + Vector3(0.55, 0.17, 0.45)
+
+## Seat a prop under this node, THEN place it — global_position/look_at both need
+## the node inside the tree, so add_child must come first.
+func _place(node: Node3D, pos: Vector3) -> void:
+	add_child(node)
+	node.global_position = pos
+
+func _place_facing(node: Node3D, pos: Vector3, target: Vector3) -> void:
+	add_child(node)
+	node.look_at_from_position(pos, target, Vector3.UP)
 
 func _build_furniture() -> void:
 	for i in SPACES:
 		var type: String = LAYOUT[i]
 		var here := space_pos(i)
+		# Push furniture a touch OUTBOARD of the stone so pawns own the disc and
+		# the drive stays readable as a path.
+		var out := _outward(i)
 		match type:
 			S.TOLLGATE:
-				var arch := _prop(GEN_TOLLARCH, FB_TOLLARCH, 3.4)
-				arch.global_position = here + Vector3(0, 0.08, 0)
-				arch.look_at_from_position(arch.global_position, CENTER, Vector3.UP)
-				add_child(arch)
+				_place_facing(_prop(GEN_TOLLARCH, FB_TOLLARCH, 3.4), here + Vector3(0, 0.06, 0), CENTER)
 			S.STALL:
-				var stall := _prop(GEN_SIGNPOST, FB_STALL, 2.2)
-				stall.global_position = here + Vector3(1.2, 0.08, 0)
-				add_child(stall)
+				# A gothic peddler's stash: a crate under a stone lantern (the
+				# striped market tent is retired — it read carnival, not funeral).
+				_place(_prop(FB_CRATE, FB_CRATE, 0.9), here + out * 1.15 + Vector3(0, 0.06, 0))
+				_place(_prop(FB_LANTERN, FB_LANTERN, 1.5), here + out * 1.15 + Vector3(0.7, 0.06, 0.2))
 			S.SHRINE:
-				var lamp := _prop(GEN_WAYPOINT, FB_LANTERN, 1.6)
-				lamp.global_position = here + Vector3(0, 0.08, -1.1)
-				add_child(lamp)
-	# The manor gate anchors space 0; a hearse waits just inside it.
-	var gate := _prop(GEN_TOLLARCH, FB_TOLLARCH, 5.0)
-	gate.global_position = space_pos(0) + Vector3(0, 0.08, 1.4)
-	gate.look_at_from_position(gate.global_position, CENTER, Vector3.UP)
-	add_child(gate)
-	var hearse := _prop(GEN_HEARSE, FB_HEARSE, 2.0)
-	hearse.global_position = space_pos(0) + Vector3(-2.4, 0.08, 1.2)
-	add_child(hearse)
+				# A lit lamppost — small mercy on the drive, and a warm glow point
+				# that blooms against the cool moonlight.
+				_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.4), here + out * 1.1 + Vector3(0, 0.06, 0))
+			S.WEEPING_GRAVE:
+				# Deterministic headstone variety by space index (no RNG).
+				_place(_prop(_grave_variant_for(i), FB_GRAVE, 1.7), here + out * 0.9 + Vector3(0, 0.06, 0))
+			S.SEANCE:
+				# The planchette lies flat beside the circle, séance-ready.
+				_place(_prop(GEN_PLANCHETTE, FB_LANTERN, 0.35), here + out * 1.05 + Vector3(0, 0.06, 0))
+	_build_manor_gate()
+	_build_perimeter()
+
+## Grave variant for a weeping-grave space — pure function of the space index so
+## the couch and any net mirror render identical headstones.
+func _grave_variant_for(space_idx: int) -> String:
+	return GRAVE_VARIANTS[posmod(space_idx, GRAVE_VARIANTS.size())]
+
+## Unit vector pointing from the drive centre outward through space `i` (in the
+## ellipse's world scale, then normalised) — used to seat furniture just outboard.
+func _outward(i: int) -> Vector3:
+	var v := space_pos(i) - CENTER
+	v.y = 0.0
+	return v.normalized() if v.length() > 0.01 else Vector3.FORWARD
+
+## The manor gate + hearse cluster and the grim signpost anchor space 0 (start).
+func _build_manor_gate() -> void:
+	var start := space_pos(0)
+	var out := _outward(0)
+	_place_facing(_prop(GEN_TOLLARCH, FB_TOLLARCH, 5.0), start + out * 1.6 + Vector3(0, 0.06, 0), CENTER)
+	# The hearse waits just inside the gate — the pink kart is retired.
+	_place_facing(_prop(GEN_HEARSE, FB_HEARSE, 2.1), start + out * 1.4 + Vector3(-2.6, 0.06, 0), start)
+	# A crooked signpost at the fork tells the mourners which way the wake turns.
+	_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), start + Vector3(2.4, 0.06, 0.4))
 	var manor := Label3D.new()
 	manor.text = "THE MANOR"
 	manor.font_size = 64
@@ -217,21 +328,75 @@ func _build_furniture() -> void:
 	manor.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	manor.modulate = Color(1, 0.9, 0.5)
 	manor.outline_size = 14
-	manor.position = space_pos(0) + Vector3(0, 3.2, 1.4)
+	manor.outline_modulate = Color(0, 0, 0, 0.9)
+	manor.position = start + out * 1.6 + Vector3(0, 3.6, 0)
 	add_child(manor)
 
+## Sparse, deterministic perimeter dressing OUTSIDE the drive ring. Every entry
+## is placed by a fixed angle/radius so nothing here draws from the sim RNG.
+## Kept tasteful — the drive must always read clearly as a loop.
+func _build_perimeter() -> void:
+	# {path, angle_deg, radius_out, height}. Angles avoid the manor gate (-90°).
+	var ring: Array = [
+		{"p": GEN_CRYPT, "a": 205.0, "o": 1.62, "h": 3.4},
+		{"p": GEN_DEADTREE, "a": 250.0, "o": 1.70, "h": 4.3},
+		{"p": FB_COLUMN, "a": 20.0, "o": 1.55, "h": 2.5},
+		{"p": GEN_ANGEL, "a": 65.0, "o": 1.58, "h": 3.0},
+		{"p": GEN_WELL, "a": 115.0, "o": 1.66, "h": 2.4},
+		{"p": GEN_IRONGATE, "a": 150.0, "o": 1.50, "h": 2.3},
+		{"p": GEN_FOUNTAIN, "a": 300.0, "o": 1.66, "h": 1.4},
+		{"p": GEN_TOPIARY, "a": 335.0, "o": 1.58, "h": 2.6},
+		{"p": GEN_DEADTREE, "a": 35.0, "o": 1.78, "h": 3.6},
+		{"p": GEN_IRONGATE, "a": 130.0, "o": 1.50, "h": 2.3},
+		{"p": GEN_WHEELBARROW, "a": 172.0, "o": 1.40, "h": 1.1},
+	]
+	for e in ring:
+		var ang := deg_to_rad(float(e["a"]))
+		var o := float(e["o"])
+		var p := CENTER + Vector3(cos(ang) * RADIUS_X * o, 0.06, sin(ang) * RADIUS_Z * o)
+		_place(_prop(String(e["p"]), FB_COLUMN, float(e["h"])), p)
+	# A low dry-fountain centrepiece far at the back of the courtyard — a focal
+	# silhouette for the flyover that never blocks the readable ring of stones.
+	_place(_prop(GEN_FOUNTAIN, FB_COLUMN, 1.6), CENTER + Vector3(0, 0.02, -1.0))
+
 func _build_beacon() -> void:
-	beacon = _prop(GEN_CODICIL, FB_CODICIL, 1.8, Color(0.96, 0.86, 0.38))
+	beacon = _prop(GEN_CODICIL, FB_CODICIL, 2.0, Color(0.96, 0.86, 0.38))
 	add_child(beacon)
+	# A gold OMNI glow so the objective marker is the brightest thing on the drive
+	# — the one warm pool of light in the moonlight (shadowless; perf-cheap).
+	var lamp := OmniLight3D.new()
+	lamp.name = "BeaconGlow"
+	lamp.light_color = Color(1.0, 0.86, 0.42)
+	lamp.light_energy = 3.2
+	lamp.omni_range = 8.0
+	lamp.shadow_enabled = false
+	lamp.position = Vector3(0, 1.6, 0)
+	beacon.add_child(lamp)
+	# An emissive halo disc at the base so the pedestal reads as consecrated.
+	var halo := MeshInstance3D.new()
+	var hm := CylinderMesh.new()
+	hm.top_radius = 1.05
+	hm.bottom_radius = 1.05
+	hm.height = 0.04
+	halo.mesh = hm
+	var hmat := StandardMaterial3D.new()
+	hmat.albedo_color = Color(0.2, 0.16, 0.06)
+	hmat.emission_enabled = true
+	hmat.emission = Color(1.0, 0.85, 0.4)
+	hmat.emission_energy_multiplier = 2.4
+	halo.material_override = hmat
+	halo.position = Vector3(0, 0.12, 0)
+	beacon.add_child(halo)
 	var glow := Label3D.new()
 	glow.name = "BeaconTag"
-	glow.text = "◆ CODICIL ◆"
-	glow.font_size = 44
+	glow.text = "◆ THE CODICIL ◆"
+	glow.font_size = 48
 	glow.pixel_size = 0.007
 	glow.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	glow.modulate = Color(1, 0.9, 0.4)
-	glow.outline_size = 12
-	glow.position = Vector3(0, 2.4, 0)
+	glow.modulate = Color(1, 0.92, 0.5)
+	glow.outline_size = 14
+	glow.outline_modulate = Color(0, 0, 0, 0.92)
+	glow.position = Vector3(0, 2.7, 0)
 	beacon.add_child(glow)
 	set_beacon(beacon_index)
 
