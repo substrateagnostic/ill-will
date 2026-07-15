@@ -51,6 +51,17 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     rides the kit via a signal seam (its turf saturation still animates in
     lockstep). Nits queued for wave 2: card/hint-bar notation consistency,
     a banner-stacking beat, always list all 4 seats.
+  - ✅ **GAME #14: THE WIDOW'S GAZE** (merge 8d621b0): red-light-green-light
+    at the wake — creep up the parlor, rob relics from beside the coffin,
+    FREEZE when she turns. The ILL WILL twist: shove someone as the sting
+    plays and the Widow takes them (attributed murder, +1 + royalty).
+    Movement-feel tuned for your hands: 0.5s sting window vs 0.465s
+    best-case human stop (react 0.25s + friction bleed 0.215s) — barely
+    possible, exactly as specced. T-25 fake-outs with a learnable falling
+    third note. Full net mirror day one; sobs/stings play client-side.
+    Bots stride at 0.87× with mourning rests so humans out-hustle them.
+    Play: MINIGAMES → THE WIDOW'S GAZE. Bugs to expect: none known;
+    seed-11 tally receipt in minigames/widows_gaze/VERIFY.md.
   - ✅ **THE ESTATE'S MEMORY** (merge 0948268): the night's biggest surprise,
     shipped in three parts. **THE NEWSREEL** — deciding moments and victors
     are captured automatically (MomentScribe hooks the shared fov_punch/
