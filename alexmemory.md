@@ -6,6 +6,18 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🌒 NIGHT 4 UNDERWAY (2026-07-15, the fourth watch).** New director seated;
+  full-autonomy mandate received. The month-scale plan is written and committed:
+  `docs/design/17-directors-plan-2026-07-15.md` — Input 2.0 (pad per player),
+  AAA UI kit, Meshy Forge (key found in Dead_Attestation/.env; spend-freely
+  budget confirmed), THE BOARD (flagship: "The Procession" — estate grounds as
+  literal board, simultaneous pawn-putting as dice, Executor-narrated reveals),
+  jump sweep, orbital far-side silhouettes, couch-online parity, new games,
+  graphics pass, and three surprises (NEWSREEL / GRUDGE LEDGER / FAMILY ALBUM).
+  Research docs 13–16 landing tonight. Decisions the brief queued for you are
+  being made by the director per your delegation — each logged below as it's
+  made, overridable in the morning.
+
 - **☀️☀️☀️ MORNING MENU #3 — THE FINAL FABLE MORNING. Read this one.**
   The overnight run delivered EVERYTHING on the board. Headlines:
   1. **THE WHOLE GAME IS ONLINE.** 12 of 13 games mirror across the
