@@ -26,6 +26,13 @@ extends Node3D
 # tonight — point this at it and nothing else changes (doc 24 F6/F7). The
 # manifest ships this at the meshy ROOT, not generated/ (see LICENSE-NOTE).
 const EXECUTOR_GLB := "res://assets/models/meshy/executor_butler.glb"
+# THE RIG (day 5): the same butler through Meshy auto-rig + preset Idle. When
+# this ships, he breathes from the skeleton and the tween idle steps back to a
+# garnish; the gesture library stays, layered on the pivot above the bones.
+# Rigged exports must NOT be AABB-sized (mesh AABB reads ~1/100) — native
+# height comes from the rig request (tools/meshy_rig_trial_report.json).
+const EXECUTOR_GLB_RIGGED := "res://assets/models/meshy/executor_butler_idle.glb"
+const RIGGED_NATIVE_HEIGHT := 1.9
 const FIGURE_HEIGHT := 2.55
 # The GLB's modelled front may not be +Z; nudge this (radians) if he faces away.
 const FIGURE_YAW_OFFSET := 0.0
@@ -56,6 +63,7 @@ var _g_yaw := 0.0                   # rotation.y  (turn toward a stone; offset)
 var _g_bob := 0.0                   # position.y  (nod / page dip)
 var _g_scale := 0.0                 # uniform squash on emphasis
 var _gesture_tw: Tween = null
+var _rigged := false                # skeletal idle carries the breath
 
 func _init(prng_seed := 0) -> void:
 	_prng.seed = prng_seed
@@ -65,7 +73,12 @@ func _ready() -> void:
 	_pivot = Node3D.new()
 	_pivot.name = "Pivot"
 	add_child(_pivot)
-	_figure = MeshyProp.instance(EXECUTOR_GLB, FIGURE_HEIGHT, rad_to_deg(FIGURE_YAW_OFFSET))
+	_rigged = ResourceLoader.exists(EXECUTOR_GLB_RIGGED)
+	if _rigged:
+		_figure = MeshyProp.instance_rigged(EXECUTOR_GLB_RIGGED,
+				RIGGED_NATIVE_HEIGHT, FIGURE_HEIGHT, rad_to_deg(FIGURE_YAW_OFFSET))
+	else:
+		_figure = MeshyProp.instance(EXECUTOR_GLB, FIGURE_HEIGHT, rad_to_deg(FIGURE_YAW_OFFSET))
 	_figure.name = "Figure"
 	_pivot.add_child(_figure)
 
@@ -93,8 +106,11 @@ func _process(delta: float) -> void:
 	if _pivot == null:
 		return
 	_breathe_t += delta
-	var bob := sin(_breathe_t * BREATHE_FREQ) * BREATHE_BOB
-	var sway := sin(_breathe_t * BREATHE_FREQ * 0.5 + 0.6) * BREATHE_SWAY
+	# With bones, the skeletal idle owns the breath; the tween idle drops to a
+	# whisper so the two rhythms never visibly fight.
+	var breath := 0.35 if _rigged else 1.0
+	var bob := sin(_breathe_t * BREATHE_FREQ) * BREATHE_BOB * breath
+	var sway := sin(_breathe_t * BREATHE_FREQ * 0.5 + 0.6) * BREATHE_SWAY * breath
 	_pivot.position.y = _base_y + _g_bob + bob
 	_pivot.rotation.x = _g_lean + sway * 0.35
 	_pivot.rotation.z = _g_tilt + sway
