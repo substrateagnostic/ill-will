@@ -108,6 +108,11 @@ func _ready() -> void:
 	box.add_child(quit_row)
 	_build_disconnect_overlay()
 	_build_hostpause_overlay()
+	# The front-end director (title composition + attract mode) rides this
+	# always-on autoload so it survives scene reloads and needs no estate.gd edit.
+	var fe := FrontEndDirector.new()
+	fe.name = "FrontEndDirector"
+	add_child(fe)
 	# NetSession autoloads AFTER PartySetup (project.godot order), so its node is
 	# not in the tree yet — wire the guest-pause signals on the next idle frame.
 	call_deferred("_wire_net_pause_signals")
