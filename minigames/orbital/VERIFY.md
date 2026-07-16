@@ -27,6 +27,40 @@ godot --path . res://minigames/orbital/orbital.tscn -- --orbbots --seed=11 --sho
 
 # 4. Aim-preview closeup (player 0 holds a full-power aim forever)
 godot --path . res://minigames/orbital/orbital.tscn -- --orbtest=aim --seed=7 --shots=140 --outdir=verify_out
+
+# 5. GHOST MEDDLING live-wisp shot (dev flag --orbmeddleshot, windowed; bypasses
+#    the human gate to photograph the actor — never a receipt path)
+godot --path . res://minigames/orbital/orbital.tscn -- --orbbots --seed=7 --orbmeddleshot
+#    -> verify_out/orbital_meddle_wisp.png
+```
+
+## GHOST MEDDLING (doc 24 §6 / B6)
+
+A KO'd **human** seat hovers **fixed at its death spot** (drift=false — a
+floor-clamped drift would fight orbital's screen-relative planet controls) for
+its 3s respawn window as an owner-tinted wisp (name + cooldown ring + "MEDDLE
+READY"), and may press **A** once to **RATTLE THE VOID**: a cold spectral pulse.
+Filed by the estate: `RED'S GHOST RATTLED THE VOID.` (`core/ghost_meddle.gd`,
+wired in `_build_static` / `_physics_process` / `_do_kill` / `_process_respawns`
+/ `_net_apply` / `_mirror_tick`).
+
+**PRESENTATION-only — safety absolute.** In an arena where *every ball is lethal*,
+a sim nudge could kill; so the meddle is a cosmetic burst + soft rush only
+(`_on_ghost_meddle`, `presentation_only=true`). It touches **no** ball, score,
+kill credit, or sim RNG (`_spawn_burst` uses engine particle randomness, never
+the seeded sim `rng`), and each screen renders its own — no new network messages.
+
+**Receipt-safe by construction.** A wisp is raised **only for a non-bot seat**
+(`not bot_enabled[victim]`), so `--orbbots` all-bot runs never build one and never
+call `_on_ghost_meddle`. Verified byte-identical vs the pre-meddle baseline
+(orbital's slow-mo never touches `Engine.time_scale`, so the sim is fully
+deterministic run-to-run):
+
+```
+godot --headless --path . res://minigames/orbital/orbital.tscn -- \
+  --orbbots --seed=7 --fast=10 --autoquit
+# KILL/HOP log + ORBITAL_RESULTS placements":[3,0,2,1] points":{0:13,1:6,2:10,3:14}
+# + ORBITAL_ASSERT ... PASS  — all IDENTICAL before/after; zero ORB_MEDDLE lines.
 ```
 
 ## Risks & tests from the spec
