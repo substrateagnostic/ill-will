@@ -544,6 +544,102 @@ func advance_pawn(seat: int, from_idx: int, spaces_moved: int) -> Tween:
 		tw.tween_callback(Sfx.play.bind("card", -12.0, 0.15))
 	return tw
 
+var _preview: Dictionary = {}      # seat -> Node3D reticle+tooltip marker
+
+## PUTT TARGET PREVIEW (F29). Highlight the stone this seat's charge would reach,
+## with a seat-coloured reticle and a floating rule tooltip so steering at a space
+## is a real decision. Pure presentation — reads the board, mutates nothing.
+func set_putt_preview(seat: int, space_idx: int, color: Color) -> void:
+	var idx := posmod(space_idx, SPACES)
+	var marker: Node3D
+	if _preview.has(seat):
+		marker = _preview[seat]
+	else:
+		marker = _make_preview_marker(color)
+		add_child(marker)
+		_preview[seat] = marker
+	marker.visible = true
+	marker.global_position = space_pos(idx) + Vector3(0, 0.16, 0)
+	var tip := marker.get_node(^"Tip") as Label3D
+	if tip != null:
+		# The Codicil overlays the base layout; name it when the reticle sits on it.
+		if idx == beacon_index:
+			tip.text = "◆ THE CODICIL — BUY A DEED"
+		else:
+			var t := type_at(idx)
+			tip.text = "%s · %s" % [S.display_name(t), S.rule(t)]
+		tip.modulate = color.lerp(Color.WHITE, 0.25)
+		# Stagger tooltip height by seat so overlapping targets don't collide.
+		tip.position = Vector3(0, 3.9 + 0.5 * float(seat), 0)
+
+func clear_putt_preview(seat: int) -> void:
+	if _preview.has(seat):
+		(_preview[seat] as Node3D).visible = false
+
+func clear_all_putt_previews() -> void:
+	for seat in _preview:
+		(_preview[seat] as Node3D).visible = false
+
+## A target reticle that reads from the overview: a seat-coloured ring on the
+## stone, a soft vertical beam so the target is visible over furniture from any
+## angle, a floating downward chevron ("land HERE"), and a billboard rule tooltip.
+func _make_preview_marker(color: Color) -> Node3D:
+	var root := Node3D.new()
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 1.12
+	tm.outer_radius = 1.34
+	tm.rings = 6
+	tm.ring_segments = 24
+	ring.mesh = tm
+	ring.material_override = _emissive(color, 4.5)
+	ring.rotation_degrees.x = 90.0
+	root.add_child(ring)
+	# A soft vertical beam rising from the stone — visible over any prop.
+	var beam := MeshInstance3D.new()
+	var bm := CylinderMesh.new()
+	bm.top_radius = 0.10
+	bm.bottom_radius = 0.20
+	bm.height = 3.2
+	beam.mesh = bm
+	var bmat := _emissive(color, 2.4)
+	bmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	bmat.albedo_color = Color(color.r, color.g, color.b, 0.28)
+	beam.material_override = bmat
+	beam.position = Vector3(0, 1.6, 0)
+	root.add_child(beam)
+	# A downward chevron (an inverted cone) bobbing above the target.
+	var chev := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.34
+	cm.bottom_radius = 0.0
+	cm.height = 0.5
+	chev.mesh = cm
+	chev.material_override = _emissive(color, 4.0)
+	chev.position = Vector3(0, 3.2, 0)
+	root.add_child(chev)
+	var tip := Label3D.new()
+	tip.name = "Tip"
+	tip.font_size = 48
+	tip.pixel_size = 0.0062
+	tip.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	tip.no_depth_test = true
+	tip.outline_size = 14
+	tip.outline_modulate = Color(0, 0, 0, 0.92)
+	tip.modulate = color
+	tip.position = Vector3(0, 3.9, 0)
+	root.add_child(tip)
+	return root
+
+func _emissive(color: Color, energy: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.emission_enabled = true
+	m.emission = color
+	m.emission_energy_multiplier = energy
+	m.albedo_color = color
+	return m
+
 func type_at(i: int) -> String:
 	return LAYOUT[posmod(i, SPACES)]
 

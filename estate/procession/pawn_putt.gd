@@ -318,6 +318,19 @@ func _net_apply(state: Dictionary) -> void:
 		m.set_readout(ratios[i], i < released.size() and released[i],
 			spaces[i] if i < spaces.size() else 0)
 
+## The space count this seat's putt currently projects to, under the SAME frozen
+## physics the release uses (F29 target preview). Presentation read only — it
+## never mutates roll state. Returns 0 when there is nothing to preview (idle, or
+## not yet charging); a released seat's projection locks to its committed result.
+func preview_spaces(seat: int) -> int:
+	if seat < 0 or seat >= ratios.size():
+		return 0
+	if seat < released.size() and released[seat]:
+		return spaces[seat] if seat < spaces.size() else 0
+	if seat < holding.size() and holding[seat] and ratios[seat] > 0.02:
+		return spaces_for_power(speed_for_ratio(ratios[seat]))
+	return 0
+
 static func projected_distance(speed: float) -> float:
 	# The 1-D rail projection of Par's frozen exponential roll.
 	return clampf(speed, 0.0, MAX_SPEED) / LINEAR_DAMP

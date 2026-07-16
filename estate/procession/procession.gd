@@ -75,6 +75,7 @@ var _preset_explicit := false
 var _capture := false            # windowed: pose beats + snap for screenshots
 var _phase := "boot"
 var _round_codicil_seat := -1   # who claims the Codicil this round (pass-or-land)
+var _preview_active := false    # F29: live putt target reticles during the roll
 
 # ---- nodes ---- (concrete types so method returns infer without annotation)
 var board: ProcessionBoardPath
@@ -113,6 +114,20 @@ var clauses: Array = []
 
 func _ready() -> void:
 	call_deferred("_autostart")
+
+## F29: while the roll is live, paint each charging seat's projected landing stone
+## with a seat-coloured reticle + rule tooltip, so steering at a space is a real
+## decision. Presentation only; inert under the fast soak and outside the roll.
+func _process(_delta: float) -> void:
+	if _fast or not _preview_active or putt == null or board == null:
+		return
+	for i in roster.size():
+		var sp := putt.preview_spaces(i)
+		if sp > 0:
+			var dest := posmod(positions[i] + sp, BoardPath.SPACES)
+			board.set_putt_preview(i, dest, roster[i].color)
+		else:
+			board.clear_putt_preview(i)
 
 ## estate.gd (merge path) calls this with a real roster BEFORE the deferred
 ## _autostart fires; the flag makes the two entry points mutually exclusive.
@@ -650,6 +665,20 @@ func _intro() -> void:
 	_hide_announce()
 	executor.clear_banner()
 
+## Capture only: snap the live putt-target reticles a beat into the roll, without
+## blocking the roll's all_released await.
+func _snap_putt_preview_later() -> void:
+	await _beat(0.85)
+	if _preview_active:
+		var shown: Array[String] = []
+		for i in roster.size():
+			var sp := putt.preview_spaces(i)
+			if sp > 0:
+				var dest := posmod(positions[i] + sp, BoardPath.SPACES)
+				shown.append("%s→sp%d(%s)" % [String(roster[i].name), dest, board.type_at(dest)])
+		print("PUTT_PREVIEW ", ", ".join(shown))
+		await _cap_snap("putt_preview")
+
 ## Any human tap (A or B) breaks the opening flyover — the director polls this
 ## each frame during its tour. All-bots (autoplay/capture) never trips it, so the
 ## full tour plays for the verification screenshots.
@@ -697,9 +726,17 @@ func _round() -> void:
 		putt.end_roll_visuals()
 	var targets := _bot_targets()
 	putt.begin_roll(targets, rng)
+	_preview_active = true   # F29: live target reticles follow each charging meter
 	if not _capture:
 		VerifyCapture.snap("putt_meters")
+	elif round_num == 2:
+		# Fire-and-forget so the delayed snap never sits between begin_roll and the
+		# all_released await (which would risk missing the signal). Round 2 spreads
+		# the pawns around the ring so the reticles land at distinct stones.
+		_snap_putt_preview_later()
 	var results: Array = await putt.all_released
+	_preview_active = false
+	board.clear_all_putt_previews()
 	putt.end_roll_visuals()
 	# spaces per seat, adjusted by held items (announced when spent).
 	var moved: Array[int] = []
