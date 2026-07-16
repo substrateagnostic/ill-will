@@ -44,6 +44,50 @@ ghosts replay heavies (wide 2-dmg swing), parry stances (Blocking), and the
 charge windup with the right anims — and the determinism assertion still
 prints `max_err 0.000000` (ghosts report endpoint drift as they fragment).
 
+## v1.2 — GHOST MEDDLING (doc 24 §6 / B6)
+
+The dead get one verb. When a **human** seat is KO'd it rises as a drifting,
+owner-tinted **wisp** (name + cooldown ring + "MEDDLE READY" tag) for its 2s
+respawn window and may, once, press **A** to **STIR A COLD DRAFT** — a brief
+0.22s spectral stagger of the LIVING within 3.2m. The estate files it:
+`RED'S GHOST STIRRED A COLD DRAFT.` (`core/ghost_meddle.gd`, wired in
+`_build_world` / `_tick_play` / `_on_death` / `_process_respawns` /
+`_mirror_tick`).
+
+**Mischief, not murder — safety by construction.** The draft is a *stagger*,
+which adds **no velocity**, so it can never ring anyone out; and it **skips any
+fighter already over the ring** (`r > RING_R`), so it never decides a death in
+progress. It never touches HP or points. SIM meddle: the stagger rides the
+existing fighter snapshot to mirrors — no new network messages.
+
+**Receipt-safe by construction.** A wisp is raised **only for a non-bot seat**
+(`not fighters[victim].is_bot`), so `--echobots` / standalone all-bot runs never
+build one and never call `_on_ghost_meddle`. Verified byte-identical:
+
+```
+# baseline (HEAD, pre-meddle) vs wired — identical, every run:
+godot --headless --path . res://minigames/echo_chamber/echo_chamber.tscn -- \
+  --echobots --echofast=3 --seed=1 --echocap --outdir=verify_out
+# -> ECHO_DETERMINISM round=1..5 ... max_err=0.000000 OK   (all five, identical)
+# -> ECHO_MATCH_OVER champ=BLUE placements=[1, 3, 0, 2]     (identical)
+```
+
+The determinism assertions + final placements are byte-identical before/after
+(the bounty-kill *line ordering* jitters ±1 run-to-run from the pre-existing
+real-time hit-pause timer — see Known issues — independent of this change; the
+ghost-replay `max_err` stays exactly 0).
+
+**Live-wisp screenshot** (dev flag `--echomeddleshot`, windowed — bypasses the
+human gate to photograph the actor; never a receipt path):
+```
+godot --path . res://minigames/echo_chamber/echo_chamber.tscn -- \
+  --echobots --echofast=6 --seed=1 --echomeddleshot --outdir=verify_out
+# -> verify_out/echo_meddle_wisp.png  (RED wisp: emissive orb, floating name,
+#    cooldown ring, "MEDDLE READY"; the killed seat reads RED 0 on the board)
+```
+
+---
+
 ### v1.1 required evidence (verify_out/, windowed seed=1)
 
 - **echo_heavy_windup.png** — a fighter mid-charge: red-tinted, scaled-up

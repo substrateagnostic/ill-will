@@ -38,6 +38,12 @@ const HEAVY_HIT_PTS := 2
 const RIPOSTE_BONUS_PTS := 1
 const PARRY_STAGGER_T := 0.6
 
+# GHOST MEDDLING (doc 24 §6): the dead's ONE verb — a cold draft that STAGGERS the
+# living within reach. Stagger adds no velocity, so it can never ring anyone out; a
+# fighter already over the ring is skipped, so a death-in-progress is never decided.
+const MEDDLE_GUST_R := 3.2
+const MEDDLE_GUST_STAGGER := 0.22
+
 const DEFAULT_CHARS := [
 	"res://assets/models/kaykit/Barbarian.glb",
 	"res://assets/models/kaykit/Knight.glb",
@@ -63,6 +69,8 @@ var _aim_probe_on := false
 var _aim_probe_deg := 0.0
 var _ring_test := false            # dev: park fighter 0 outside the ring to film warning+KO
 var _ringtest_state := 0
+var _meddle_shot := false          # dev: force a seat-0 ghost-meddle wisp for a windowed shot
+var _meddle_shot_done := false
 var _names: Dictionary = {}
 var _colors: Dictionary = {}
 
@@ -152,6 +160,7 @@ var round_label: Label
 var timer_label: Label
 var ghost_label: Label
 var controls_label: Label     # persistent real-keys hint bar (realkeys-VERIFY.md)
+var _meddle: GhostMeddle       # GHOST MEDDLING (doc 24 §6 / B6): dead humans get one verb
 var banner: Label
 var credit_banner: Label
 var score_rows: VBoxContainer
@@ -280,12 +289,14 @@ func _parse_args() -> void:
 			_cap_on = true
 		elif arg == "--ringtest":
 			_ring_test = true
+		elif arg == "--echomeddleshot":
+			_meddle_shot = true    # dev-only: photograph a live ghost-meddle wisp (windowed)
 		elif arg.begins_with("--aimprobe="):
 			_aim_probe_on = true
 			_aim_probe_deg = float(arg.trim_prefix("--aimprobe="))
 		elif arg.begins_with("--outdir="):
 			_cap_dir = arg.trim_prefix("--outdir=")
-	if _cap_on or _aim_probe_on or _ring_test:
+	if _cap_on or _aim_probe_on or _ring_test or _meddle_shot:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
 
 
@@ -379,6 +390,16 @@ func _build_world() -> void:
 	camera.position = _cam_base
 	camera.look_at_from_position(_cam_base, Vector3(0, 0.5, 0), Vector3.UP)
 	add_child(camera)
+
+	# GHOST MEDDLING (doc 24 §6 / B6): a dead HUMAN seat rises as a wisp for its
+	# respawn window and may STIR A COLD DRAFT (a brief stagger of the nearby
+	# living). SIM meddle — the stagger rides the fighter snapshot to mirrors, so
+	# presentation_only stays false. Bots never raise a wisp (receipt-safe).
+	_meddle = GhostMeddle.new()
+	add_child(_meddle)
+	_meddle.setup(self, camera, GhostMeddle.DEFAULT_CD, false)
+	_meddle.set_bounds(Vector2.ZERO, Vector2(RING_R, RING_R))
+	_meddle.meddled.connect(_on_ghost_meddle)
 
 
 func _spawn_pillars() -> void:
@@ -582,6 +603,46 @@ func _controls_bar() -> String:
 		_btn_hint("a", "STRIKE"), _btn_hint("b", "DASH / hold PARRY"), _btn_hint("jump", "HOP")]
 
 
+## GHOST MEDDLING: while any wisp exists, append each locally-controlled dead
+## seat's meddle legend (the _hint_seats pattern, real keys via describe_binding)
+## under the live-controls bar and re-reveal it; restore the plain bar when the
+## last wisp respawns. Only _human_seats() are listed (a mirror shows just its own).
+func _refresh_meddle_hints() -> void:
+	if controls_label == null:
+		return
+	if _meddle == null or _meddle.ghost_count() == 0:
+		controls_label.text = _controls_bar()
+		return
+	var lines := [_controls_bar()]
+	for i in _human_seats():
+		if _meddle.has_ghost(int(i)):
+			lines.append(_meddle.hint_line(int(i), "GUST"))
+	controls_label.text = "\n".join(lines)
+	controls_label.visible = true
+
+
+## GHOST MEDDLING (doc 24 §6): a dead human's ONE verb. A cold spectral draft
+## STAGGERS the LIVING within reach — a stumble, never a shove: it adds no
+## velocity, so it can neither ring anyone out nor decide the round, and it skips
+## a fighter already over the ring (a death in progress is never the draft's doing).
+## Mischief, filed. SIM meddle: the stagger rides the fighter snapshot to mirrors.
+func _on_ghost_meddle(index: int, origin: Vector3, _aim: Vector3) -> void:
+	var touched := 0
+	for f in fighters:
+		if not f.alive or f.player_index == index:
+			continue
+		var d := Vector2(f.global_position.x - origin.x, f.global_position.z - origin.z).length()
+		if d > MEDDLE_GUST_R:
+			continue
+		if Vector2(f.global_position.x, f.global_position.z).length() > RING_R:
+			continue   # already over the edge — the draft does not decide that
+		f.stagger(MEDDLE_GUST_STAGGER)
+		touched += 1
+	Sfx.play("gust", -8.0)
+	_meddle.attribute(index, "STIRRED A COLD DRAFT")
+	print("ECHO_MEDDLE seat=%d touched=%d (cold draft; stagger-only, no ring-out)" % [index, touched])
+
+
 func _spawn_fighters() -> void:
 	for i in roster.size():
 		var pl: Dictionary = roster[i]
@@ -621,6 +682,10 @@ func _enter_intro(n: int) -> void:
 	for pl in roster:
 		_deaths_round[int(pl["index"])] = 0
 	_respawns.clear()
+	# GHOST MEDDLING: a new round reseats everyone alive — clear any lingering wisps.
+	if _meddle != null:
+		_meddle.clear()
+		_refresh_meddle_hints()
 	# reset fighters to their start rings, full HP
 	for i in fighters.size():
 		fighters[i].respawn(_start_pos(i), HP_MAX)
@@ -929,6 +994,12 @@ func _tick_play(delta: float) -> void:
 	# 4. respawns + round end
 	_process_respawns(delta)
 
+	# 4b. GHOST MEDDLING: drive dead-human wisps off the AUTHORITATIVE tick (reads
+	# each dead seat's drift + A; fires _on_ghost_meddle when the verb is ready).
+	_meddle.tick(delta)
+	if _meddle_shot:
+		_meddle_shot_tick()
+
 	# HUD
 	var remain := maxf(0.0, round_len - _round_time)
 	timer_label.text = "%0.1f" % remain
@@ -988,6 +1059,41 @@ func _grab(tag: String, quit_after: bool) -> void:
 		get_tree().quit()
 
 
+## DEV/VERIFY ONLY (--echomeddleshot, windowed): once the arena has settled, kill
+## seat 0's body and force-raise its ghost-meddle wisp so the actor (orb, name,
+## cooldown ring, MEDDLE READY tag) can be photographed. This BYPASSES the human
+## gate on purpose — it is never enabled in a receipt run, so all-bot receipts are
+## untouched. Mirrors the game's own _ring_test / --echocap capture precedent.
+func _meddle_shot_tick() -> void:
+	if _meddle_shot_done or round_no != 1 or _round_time < 1.6:
+		return
+	_meddle_shot_done = true
+	var f0: EchoFighter = fighters[0]
+	if f0.alive:
+		f0.kill()
+	# spawn the wisp at a deliberately CLEAR spot (front-left of the ring) so the
+	# actor photographs unobstructed by the center fighter cluster
+	_meddle.add_ghost(0, str(_names[0]), _colors[0], Vector3(-3.0, 0.05, 2.8))
+	_refresh_meddle_hints()
+	print("ECHO_MEDDLE_SHOT wisp raised for seat 0 (dev capture; not a receipt path)")
+	_grab_meddle()
+
+
+func _grab_meddle() -> void:
+	await get_tree().create_timer(0.8).timeout   # let the wisp fade in + ring draw
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+		var img := get_viewport().get_texture().get_image()
+		var path := "res://%s/echo_meddle_wisp.png" % _cap_dir
+		img.save_png(path)
+		print("ECHO_CAP ", path)
+	else:
+		print("ECHO_CAP_SKIP_HEADLESS meddle_wisp")
+	await get_tree().create_timer(0.3).timeout
+	print("ECHO_MEDDLE_SHOT_DONE")
+	get_tree().quit()
+
+
 func _process_respawns(delta: float) -> void:
 	var still: Array = []
 	for r in _respawns:
@@ -997,6 +1103,9 @@ func _process_respawns(delta: float) -> void:
 			var f: EchoFighter = rr["f"]
 			var pos: Vector3 = _center_spawn() if rr["mode"] == "center" else _edge_spawn()
 			f.respawn(pos, int(rr["hp"]))
+			# GHOST MEDDLING: the seat lives again — retire its wisp.
+			_meddle.remove_ghost(int(f.player_index))
+			_refresh_meddle_hints()
 			Sfx.play("confirm", -4.0)
 		else:
 			still.append(rr)
@@ -1196,6 +1305,11 @@ func _on_death(victim: int, is_fall: bool, killer: int = -1, cause: String = "sh
 		mode = "center"
 		hp_amt = 2   # respawn center at half HP
 	_respawns.append({"f": fighters[victim], "t": RESPAWN_TIME, "hp": hp_amt, "mode": mode})
+	# GHOST MEDDLING: raise a wisp for a dead HUMAN seat (never a bot — that is what
+	# keeps every all-bot receipt byte-identical). Removed again on respawn.
+	if not fighters[victim].is_bot:
+		_meddle.add_ghost(victim, str(_names[victim]), _colors[victim], fighters[victim].global_position)
+		_refresh_meddle_hints()
 	_shake = maxf(_shake, 0.7 if self_echo else 0.55)
 	_spawn_death_fx(fighters[victim].global_position, _colors[victim])
 	# THE DECIDING MOMENT (doc 09 §Q2): a KO inside the final round's dying 10
@@ -1549,10 +1663,19 @@ func _net_apply(st: Dictionary) -> void:
 		if now_alive and not f.alive:
 			Sfx.play("confirm", -4.0)          # respawn chime (couch parity)
 			f.global_position = _mir_f[i][0]   # spawn teleports snap, not glide
+			# GHOST MEDDLING (mirror): the alive edge is our death/respawn signal
+			# here (no sim runs). Retire this seat's wisp as it returns.
+			_meddle.remove_ghost(int(f.player_index))
+			_refresh_meddle_hints()
 		elif not now_alive and f.alive:
 			Sfx.play("death")
 			_shake = maxf(_shake, 0.55)
 			_spawn_death_fx(f.global_position, _colors[f.player_index])
+			# GHOST MEDDLING (mirror): raise this dead HUMAN seat's wisp locally so
+			# the guest still feels present as a ghost (bots never do).
+			if not f.is_bot:
+				_meddle.add_ghost(int(f.player_index), str(_names[f.player_index]), _colors[f.player_index], f.global_position)
+				_refresh_meddle_hints()
 		elif now_alive and hp < f.hp:
 			_hit_feedback(f.global_position, f.color, f.hp - hp >= 2)
 		f.hp = hp
@@ -1663,6 +1786,11 @@ func _mirror_tick(delta: float) -> void:
 		var tp: Vector3 = rec["pos"]
 		var np2 := tp if g.global_position.distance_to(tp) > 4.0 else g.global_position.lerp(tp, k)
 		g.net_pose(np2, lerp_angle(g.yaw, float(rec["yaw"]), k), int(rec["st"]))
+
+	# GHOST MEDDLING (mirror): drive the LOCAL seat's wisp from its own input; the
+	# others idle-drift. This is a SIM meddle, so a wisp's A does NOT fire here —
+	# the guest's A relays to the host, whose stagger arrives via the pose snapshot.
+	_meddle.tick_cosmetic(delta, NetSession.my_seat())
 
 
 ## Mirror banner applier (throne pattern): text + color as facts, pop locally
