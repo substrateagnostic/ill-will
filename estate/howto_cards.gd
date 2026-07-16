@@ -23,6 +23,7 @@ const HOWTO := {
 	"seance": {"goal": "A co-op séance: guide the planchette to the spirit's word — but one of you was paid in grudge to make it fail without getting caught. The Executor is the medium.", "a": "CHANT ON THE PULSE", "b": "SURGE (anonymous)"},
 	"understudy": {"goal": "Everyone knows tonight's play but the understudy, who must bluff along. Rehearse, interrogate, vote — the scoring never stalemates.", "a": "COMMIT (move = choose)", "b": "—"},
 	"maskedball": {"goal": "A crowd of identical masked dancers — four of them are you, and nobody is told which. Find yourself, dance like furniture, curtsy to the throne, and spend your one mark to unmask a human. Wrong guess: you flash.", "a": "CURTSY (scores in the circle)", "b": "UNMASK (one mark)"},
+	"pallbearers": {"goal": "The anthology's first TEAM race: 2v2, one coffin per pair. The coffin moves on the BLEND of both your sticks — sync to sprint, pull apart and the dead spill out. First pall to the crypt wins.", "a": "RESTUFF (mash on a drop)", "b": "", "jump": "HOP / HEAVE (both = clear mud)"},  # B7-HOOK
 }
 
 static func schedule_howto_test(estate) -> void:

@@ -31,8 +31,9 @@ const CHAR_SCENES := [
 const REVEAL_BEAT := 2.2
 const POINTS := [5, 3, 2, 1]        # RECKONING / will placement -> Grudge
 const CONTRACT_POOL := ["echo", "tilt", "orbital", "mower", "greed", "swap",
-	"deadweight", "throne", "lastwill"]
+	"deadweight", "throne", "lastwill", "pallbearers"]  # B7-HOOK
 const MODULE_SCENES := {
+	"pallbearers": "res://minigames/pallbearers/pallbearers.tscn",  # B7-HOOK
 	"echo": "res://minigames/echo_chamber/echo_chamber.tscn",
 	"tilt": "res://minigames/tilt/tilt.tscn",
 	"orbital": "res://minigames/orbital/orbital.tscn",
