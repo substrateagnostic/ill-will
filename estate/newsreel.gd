@@ -325,6 +325,11 @@ func _show_still(m: Dictionary, grab: bool) -> void:
 	tw2.tween_property(_still, "modulate:a", 0.0, 0.25)
 	await tw2.finished
 
+## Net parity: the host's ceremony moved on (the will facts arrived on a guest
+## mirror while this reel still ran) — wrap up through the normal skip path.
+func finish_now() -> void:
+	_skip = true
+
 func _end() -> void:
 	if _finished:
 		return

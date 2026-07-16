@@ -47,6 +47,7 @@ signal probe_first_input(seat: int)              # host, NETPROBE only: tape lan
 # --- PHASE 2: game mirrors (docs/design/10 §4.3; first game: THE SÉANCE) ---
 signal module_state_received(state: Dictionary)  # client: running game's _net_state()
 signal module_private_received(data: Dictionary) # client: THIS seat's hidden info only
+signal ceremony_media_received(data: Dictionary) # client: newsreel stills etc. (reliable)
 ## The host stepped into its ESC/settings overlay (or lost a local controller):
 ## the whole shared simulation is frozen on the host until it resumes. The 20 Hz
 ## state pump lives in the estate's (pausable) _process, so it stops the instant
@@ -644,6 +645,18 @@ func _rpc_module_state(state: Dictionary) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _rpc_module_private(data: Dictionary) -> void:
 	module_private_received.emit(data)
+
+## Host -> all guests, reliable: bulky one-shot ceremony media (the newsreel's
+## compressed stills + intertitle text — doc 20's guest-parity field). ENet
+## fragments/reassembles large reliable packets, so a ~10-25 kB JPEG per still
+## rides one call; the whole reel is <= ~150 kB once per night.
+func send_ceremony_media(data: Dictionary) -> void:
+	if role == Role.HOST and has_guests():
+		_rpc_ceremony_media.rpc(data)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_ceremony_media(data: Dictionary) -> void:
+	ceremony_media_received.emit(data)
 
 ## ----- host pause (the estate holds its breath) -----
 ## The estate's state pump rides the host's (pausable) _process, so it stops the

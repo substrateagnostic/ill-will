@@ -18,6 +18,7 @@ static func wire_signals(estate) -> void:
 	NetSession.probe_first_input.connect(Callable(estate, "_on_net_probe_first_input"))
 	NetSession.module_state_received.connect(Callable(estate, "_on_net_module_state"))
 	NetSession.module_private_received.connect(Callable(estate, "_on_net_module_private"))
+	NetSession.ceremony_media_received.connect(Callable(estate, "_on_net_ceremony_media"))
 
 ## ----- host side -----
 

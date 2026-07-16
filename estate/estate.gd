@@ -2143,14 +2143,54 @@ func _enter_will_reading(champ) -> void:
 	if _all_bots():
 		get_tree().create_timer(2.5).timeout.connect(_night_parade)
 
-## Host-side silent-film ceremony (net mirrors stay on the night_podium facts
-## until the will facts arrive — the newsreel is host-screen only this phase,
-## exactly like the minigames). Blocks until the reel finishes or is skipped.
+## The silent-film ceremony, both screens (doc 20's guest-parity field): the
+## host ships tonight's stills as compact JPEGs + intertitle text over the
+## reliable channel, then rolls its own reel; each guest rolls the same reel
+## locally from the received frames. Net mirrors otherwise stay on the
+## night_podium facts until the will facts arrive — and the will fact is what
+## folds a guest reel that is still running (the host's pacing is authority).
+## Blocks until the host reel finishes or is skipped.
 func _play_newsreel(moments: Array) -> void:
+	_net_send_newsreel(moments)
 	var done := [false]
 	Newsreel.play(moments, func(): done[0] = true)
 	while not done[0]:
 		await get_tree().process_frame
+
+## GUEST PARITY: downscale tonight's kept stills to ~360px JPEG (quality 0.6 —
+## the newsreel shader's sepia/grain hides the compression) and send each with
+## its intertitle facts, then the roll order. One reliable burst of <= ~150 kB
+## per night. A still whose PNG cannot be read ships text-only — the guest reel
+## degrades to intertitles over black for that act, never breaks.
+func _net_send_newsreel(moments: Array) -> void:
+	if not (NetSession.is_host() and NetSession.has_guests()):
+		return
+	var n: int = mini(moments.size(), Newsreel.MAX_STILLS)
+	for i in n:
+		var m: Dictionary = moments[i]
+		NetSession.send_ceremony_media({
+			"kind": "reel_still", "i": i,
+			"caption": String(m.get("caption", "A MOMENT")),
+			"game": String(m.get("game", "")),
+			"players": m.get("players", []),
+			"jpg": _reel_jpeg_of(m),
+		})
+	NetSession.send_ceremony_media({"kind": "reel_roll", "n": n})
+	print("NEWSREEL_NET sent stills=%d" % n)
+
+func _reel_jpeg_of(m: Dictionary) -> PackedByteArray:
+	var path := String(m.get("abs", ""))
+	if path == "" and m.has("file"):
+		path = ProjectSettings.globalize_path(String(m.file))
+	if path == "" or not FileAccess.file_exists(path):
+		return PackedByteArray()
+	var img := Image.load_from_file(path)
+	if img == null:
+		return PackedByteArray()
+	const REEL_W := 360
+	if img.get_width() > REEL_W:
+		img.resize(REEL_W, maxi(1, int(img.get_height() * float(REEL_W) / float(img.get_width()))), Image.INTERPOLATE_LANCZOS)
+	return img.save_jpg_to_buffer(0.6)
 
 var _parade_running := false
 
@@ -2311,6 +2351,42 @@ func _on_net_module_state(state: Dictionary) -> void:
 func _on_net_module_private(data: Dictionary) -> void:
 	NetLobby.on_module_private(self, data)
 
+## ----- THE NEWSREEL on the guest screen (doc 20 guest-parity field) -----
+## The host ships compressed stills + intertitle facts (reliable, ordered),
+## then the roll order; this guest plays the SAME Newsreel scene locally.
+var _client_reel_pending: Array = []
+var _client_reel: Node = null
+
+func _on_net_ceremony_media(data: Dictionary) -> void:
+	match String(data.get("kind", "")):
+		"reel_still":
+			var m: Dictionary = {
+				"caption": String(data.get("caption", "A MOMENT")),
+				"game": String(data.get("game", "")),
+				"players": data.get("players", []),
+			}
+			var jpg: PackedByteArray = data.get("jpg", PackedByteArray())
+			if not jpg.is_empty():
+				var img := Image.new()
+				if img.load_jpg_from_buffer(jpg) == OK:
+					m["tex"] = ImageTexture.create_from_image(img)
+			_client_reel_pending.append(m)
+		"reel_roll":
+			if _client_reel_pending.is_empty():
+				return
+			print("NET newsreel roll: %d stills" % _client_reel_pending.size())
+			_client_reel = Newsreel.play(_client_reel_pending,
+				func() -> void: _client_reel = null)
+			_client_reel_pending = []
+
+## The host's ceremony moved on (will facts landed, or the stage cleared at a
+## boundary): a guest reel still running folds now — host pacing is authority.
+func _client_close_reel() -> void:
+	_client_reel_pending = []
+	if _client_reel != null and is_instance_valid(_client_reel):
+		(_client_reel as Newsreel).finish_now()
+	_client_reel = null
+
 ## Boot the same module scene in mirror mode: same roster shape the host
 ## builds, no seed, no sim — _net_apply drives everything.
 var _client_mirror_up := false   # guards teardown: never touch a HOST module
@@ -2413,6 +2489,7 @@ func _client_render_ceremony(cer: Dictionary) -> void:
 		"match_podium", "night_podium", "run_podium":
 			_client_show_podium(cer)
 		"will":
+			_client_close_reel()   # a straggling guest reel folds under the will
 			_client_show_will(cer)
 		"parade":
 			_client_clear_podium()
@@ -2426,6 +2503,7 @@ func _client_end_ceremony() -> void:
 		return
 	_client_cer_stage = ""
 	_client_banner_sig = ""
+	_client_close_reel()
 	_client_clear_podium()
 	banner.visible = false
 
@@ -2725,8 +2803,14 @@ func _netprobe_host_flow(ps: String, pf: String) -> void:
 		if await _np_wait(npod_up, 20.0):
 			await get_tree().create_timer(2.0).timeout
 			await _np_snap("online_host_nightpodium")
+		# The NEWSREEL now plays between the night podium and the will (up to
+		# ~45 s for a full reel) — snap it, and give the will wait room for it.
+		var reel_up := func() -> bool: return get_tree().root.get_node_or_null("Newsreel") != null
+		if await _np_wait(reel_up, 15.0):
+			await get_tree().create_timer(4.0).timeout
+			await _np_snap("online_host_newsreel")
 		var will_up := func() -> bool: return String(_net_ceremony.get("stage", "")) == "will"
-		if await _np_wait(will_up, 30.0):
+		if await _np_wait(will_up, 75.0):
 			await get_tree().create_timer(4.0).timeout
 			await _np_snap("online_host_will")
 		_night_parade()
@@ -2799,8 +2883,14 @@ func _netprobe_join_flow() -> void:
 		if await _np_wait(npod_seen, 20.0):
 			await get_tree().create_timer(2.0).timeout
 			await _np_snap("online_client_nightpodium")
+		# GUEST NEWSREEL (doc 20 parity): the received reel rolls between the
+		# night podium and the will facts — snap it mid-still.
+		var reel_seen := func() -> bool: return _client_reel != null
+		if await _np_wait(reel_seen, 20.0):
+			await get_tree().create_timer(4.0).timeout
+			await _np_snap("online_client_newsreel")
 		var will_seen := func() -> bool: return _client_cer_fact() == "will"
-		if await _np_wait(will_seen, 30.0):
+		if await _np_wait(will_seen, 75.0):
 			await get_tree().create_timer(3.6).timeout
 			await _np_snap("online_client_will")
 		var parade_seen := func() -> bool: return _client_cer_fact() == "parade"
