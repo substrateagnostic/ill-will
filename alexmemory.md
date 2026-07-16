@@ -42,9 +42,25 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     live 3D!); settings double-panel bug fixed at root + AMBIENCE
     slider + 5s quit-hold.
 
-  **STILL COOKING:** B1 procession broadcast cameras · B7 PALLBEARERS
-  (game #15) · Z2 forge wave 2 (7 props committed; re-rolls + Meshy
-  RIG TRIAL running) · B6 ghost meddling (launched) · B8 arena dressing
+  - ✅ **BOARD BROADCAST** (B1): the Procession watches itself like TV —
+    opening flyover, type-aware landing close-ups, the DEED MONEY-SHOT
+    (wax-seal card flies to the buyer, beacon visibly relocates), the
+    séance wheel actually spins, flying attributed +/− numbers, minigame
+    ROULETTE, putt TARGET PREVIEW (beams+chevrons on projected stones),
+    reveal-cascade REACT buttons (HA!/OOF/OOH glyphs), board moments now
+    feed the newsreel. Seed-7 receipt byte-identical through all 8
+    features + the merge.
+  - ✅ **GAME #15: PALLBEARERS** (B7): the anthology's first TEAM game.
+    2v2, one coffin per pair, moves on the BLEND of both sticks; drop it
+    and the deceased spills out complaining ("You have dropped me before
+    the mourners. Note it for the record.") — mash to restuff; swinging
+    gate, mud, mourner crossings, downhill runaway; synced-hop HEAVE;
+    online mirror + byte-identical receipts. Director nit fixed on the
+    way in: the heir crown banner no longer shows the SEED to real
+    players.
+
+  **STILL COOKING:** Z2 forge wave 2 (7 props committed; re-rolls +
+  Meshy RIG TRIAL running) · B6 ghost meddling · B8 arena dressing
   (waits on forge).
 
 - **☀️☀️☀️☀️ MORNING MENU #4 — THE FOURTH WATCH (2026-07-15). The night
