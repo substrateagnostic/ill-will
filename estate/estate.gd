@@ -2868,6 +2868,11 @@ func _ambient_test_run() -> void:
 			w.global_position = Vector3(8.0 + w.player_idx * 0.7, 0.1, 2.5)
 	await get_tree().create_timer(0.8).timeout
 	await _ambient_snap("atmosphere")
+	# EXTRAS — the vengeful seagull wheeling, and the runt lantern popped bright.
+	if al2 != null and al2.has_method("debug_extras"):
+		al2.debug_extras()
+	await get_tree().create_timer(0.3).timeout
+	await _ambient_snap("extras")
 	print("AMBIENTTEST done")
 	await get_tree().create_timer(0.2).timeout
 	get_tree().quit()

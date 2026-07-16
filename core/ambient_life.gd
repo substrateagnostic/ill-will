@@ -44,6 +44,7 @@ var _rng := RandomNumberGenerator.new()   # OWN stream — NEVER EstateState.rng
 var _members: Array[AmbientMember] = []
 var _walkers_root: Node3D
 var _cam: Camera3D
+var _grounds: Node3D
 var _scan_accum := 0.0
 var _podium := Vector3(3.5, 0.0, -2.5)   # fallback "who's losing" gaze point
 
@@ -52,6 +53,7 @@ var _podium := Vector3(3.5, 0.0, -2.5)   # fallback "who's losing" gaze point
 func setup(grounds: Node3D, walkers_root: Node3D, cam: Camera3D) -> void:
 	_walkers_root = walkers_root
 	_cam = cam
+	_grounds = grounds
 	_rng.randomize()   # local presentation — a different jitter each night is fine
 	add_to_group("ambient_life")
 	grounds.add_child(self)
@@ -78,12 +80,23 @@ func debug_check_watch() -> void:
 		if m is GhostQueue:
 			(m as GhostQueue).debug_check_watch()
 
+## Dev-only: freeze the seagull mid-wheel and pop the runt lantern bright, so a
+## windowed shot catches both airborne/figureless members in place.
+func debug_extras() -> void:
+	for m in _members:
+		if m is Seagull:
+			(m as Seagull).debug_pose(10.0, -2.2)
+		elif m is MoodyLantern:
+			(m as MoodyLantern).debug_bright()
+
 # ---------------------------------------------------------------- member wiring
 func _build_members() -> void:
 	_add_member(CrowGallery.new())
 	_add_member(Groundskeeper.new())
 	_add_member(GhostQueue.new())
 	_add_member(Atmosphere.new())
+	_add_member(Seagull.new())
+	_add_member(MoodyLantern.new())
 
 func _add_member(m: AmbientMember) -> void:
 	m.life = self
@@ -169,6 +182,23 @@ func chronicle_lines() -> Array:
 
 func rng() -> RandomNumberGenerator:
 	return _rng
+
+func grounds() -> Node3D:
+	return _grounds
+
+## Cross-member gags (the seagull steals Old Rake's leaves; a guttering lantern
+## startles the flock). Return null-safe so a member can be absent.
+func groundskeeper() -> Groundskeeper:
+	for m in _members:
+		if m is Groundskeeper:
+			return m as Groundskeeper
+	return null
+
+func gallery() -> CrowGallery:
+	for m in _members:
+		if m is CrowGallery:
+			return m as CrowGallery
+	return null
 
 # ---------------------------------------------------------------- scenery
 ## A little burying ground in the open west of the lawn — homes for the crows,
@@ -444,6 +474,18 @@ class CrowGallery extends AmbientMember:
 		var tw := crow.create_tween()
 		tw.tween_property(crow, "position:y", y0 + 0.12, 0.12).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		tw.tween_property(crow, "position:y", y0, 0.14).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+
+	## A bigger flap — one crow startles off its perch and resettles. Called when
+	## the runt lantern pops (doc §3.7 crosses §3.3).
+	func startle() -> void:
+		if _crows.is_empty():
+			return
+		var crow: Node3D = _crows[rr().randi_range(0, _crows.size() - 1)]
+		var y0: float = crow.position.y
+		var tw := crow.create_tween()
+		tw.tween_property(crow, "position:y", y0 + 0.55, 0.22).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(crow, "rotation:y", crow.rotation.y + rr().randf_range(-1.0, 1.0), 0.22)
+		tw.tween_property(crow, "position:y", y0, 0.5).set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
 
 	## Dev-only: pop the current gossip line up immediately (verify shots).
 	func debug_pop_bubble() -> void:
@@ -806,9 +848,59 @@ class Ghost extends Node3D:
 
 # ================================================================ 3.5 THE SEAGULL
 ## The estate's oldest grudge has feathers. Canon, wordless (doc 26 §3.5): it
-## wheels, dives, and undoes Old Rake's work. Built in the atmosphere pass.
+## wheels overhead, then swoops — and when it swoops low over Old Rake's side of
+## the lawn, it undoes his raking (crosses §3.1). Reuse-only: seagull.glb.
 class Seagull extends AmbientMember:
-	pass
+	var _pivot: Node3D            # spins -> the bird wheels
+	var _bird: Node3D            # dips on the pivot arm -> swoops
+	var _spin_tw: Tween
+	var _swoop_t := 0.0
+	var _cooldown := 0.0
+
+	func build() -> void:
+		reaction_radius = 0.0     # airborne; it reacts to no one
+		anchor = Vector3(0.0, 4.6, -1.5)
+		_pivot = Node3D.new()
+		_pivot.position = anchor
+		add_child(_pivot)
+		_bird = MeshyProp.instance(AmbientLife.SEAGULL_GLB, 0.62)
+		_pivot.add_child(_bird)
+		_bird.position = Vector3(5.2, 0.0, 0.0)   # out on the arm
+		_bird.rotation.y = deg_to_rad(-90.0)      # face the direction of travel
+		_spin_tw = create_tween().set_loops()
+		_spin_tw.tween_property(_pivot, "rotation:y", TAU, 12.0).from(0.0)
+		_swoop_t = rr().randf_range(6.0, 11.0)
+
+	func tick(dt: float, _nearest: Node3D, _nd: float, _losing: Vector3, _lod: bool) -> void:
+		_cooldown = maxf(0.0, _cooldown - dt)
+		_swoop_t -= dt
+		if _swoop_t <= 0.0 and _cooldown <= 0.0:
+			_swoop_t = rr().randf_range(7.0, 13.0)
+			_cooldown = 2.2
+			_swoop()
+
+	## A dive on the pivot arm: the bird drops toward the lawn and climbs back. At
+	## the bottom, if it is over the west (Old Rake's) side, it scatters his pile.
+	func _swoop() -> void:
+		var y0: float = _bird.position.y
+		var tw := _bird.create_tween()
+		tw.tween_property(_bird, "position:y", -3.9, 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		tw.tween_callback(_at_bottom)
+		tw.tween_property(_bird, "position:y", y0, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+	func _at_bottom() -> void:
+		if _bird.global_position.x < -1.0:
+			var gk := life.groundskeeper()
+			if gk != null:
+				gk.scatter_leaves()   # it's the gull who undoes the raking
+		Sfx.play("raven", -14.0)
+
+	## Dev-only: park the bird at a wheel angle + arm-dip so a shot catches it.
+	func debug_pose(angle_deg: float, y: float) -> void:
+		if _spin_tw != null and _spin_tw.is_valid():
+			_spin_tw.kill()
+		_pivot.rotation.y = deg_to_rad(angle_deg)
+		_bird.position.y = y
 
 # ============================================================ 5. ATMOSPHERE FLOOR
 ## The wordless, figureless floor of life: fog wisps pooling in the graves,
@@ -896,3 +988,56 @@ class Atmosphere extends AmbientMember:
 		ramp.set_color(1, Color(color.r, color.g, color.b, 0.0))
 		p.color_ramp = ramp
 		return p
+
+# ============================================================ 3.7 MOODY LANTERNS
+## The estate's infrastructure has moods. Every lantern glows steady except one
+## runt that gutters on its own rhythm — dims, goes dark a beat, then pops back
+## a touch too bright, startling the nearest crow off its perch (crosses §3.3).
+## Reuse-only, figureless: it re-skins ONE existing lantern glow with its own
+## material so the others stay steady. (doc 26 §3.7)
+class MoodyLantern extends AmbientMember:
+	var _mat: StandardMaterial3D
+	var _base_energy := 2.0
+	var _gutter_t := 0.0
+
+	func build() -> void:
+		reaction_radius = 0.0
+		anchor = Vector3(5.2, 0.95, -4.5)   # the runt: Grounds/Lanterns/LGlow3
+		var g := life.grounds()
+		if g == null:
+			return
+		var glow := g.get_node_or_null("Lanterns/LGlow3") as MeshInstance3D
+		if glow == null:
+			return
+		# give the runt its OWN material so guttering it doesn't dim the others
+		var shared := glow.get_active_material(0)
+		if shared is StandardMaterial3D:
+			_mat = (shared as StandardMaterial3D).duplicate() as StandardMaterial3D
+			_base_energy = _mat.emission_energy_multiplier
+			glow.set_surface_override_material(0, _mat)
+		_gutter_t = rr().randf_range(4.0, 8.0)
+
+	func tick(dt: float, _nearest: Node3D, _nd: float, _losing: Vector3, _lod: bool) -> void:
+		if _mat == null:
+			return
+		_gutter_t -= dt
+		if _gutter_t <= 0.0:
+			_gutter_t = rr().randf_range(5.0, 9.0)
+			_gutter()
+
+	## Dev-only: hold the runt at its bright pop (verify shots).
+	func debug_bright() -> void:
+		if _mat != null:
+			_mat.emission_energy_multiplier = _base_energy * 1.9
+
+	func _gutter() -> void:
+		var tw := create_tween()
+		tw.tween_property(_mat, "emission_energy_multiplier", _base_energy * 0.2, 0.5).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(_mat, "emission_energy_multiplier", 0.0, 0.25)
+		tw.tween_interval(rr().randf_range(0.7, 1.1))          # dark, a worse night than yours
+		tw.tween_property(_mat, "emission_energy_multiplier", _base_energy * 1.9, 0.14)   # pop, too bright
+		tw.tween_callback(func() -> void:
+			var gal := life.gallery()
+			if gal != null:
+				gal.startle())
+		tw.tween_property(_mat, "emission_energy_multiplier", _base_energy, 0.6).set_trans(Tween.TRANS_SINE)
