@@ -190,5 +190,65 @@
     "category": "ESTATE_DRESSING",
     "prompt": "A small stone garden well with a peaked wooden shingled roof and a hand crank, weathered grey stone",
     "target_height_hint": 1.3
+  },
+  {
+    "id": "npc_mourner_hooded",
+    "category": "NPC_TROUPE",
+    "prompt": "A hooded weeping mourner figure shrouded in a full-length floor-sweeping dark mourning cloak that completely hides the legs and feet, hands clasped together in front holding a small handkerchief, head bowed, standing neutral pose, slightly oversized head for readability",
+    "target_height_hint": 1.75
+  },
+  {
+    "id": "npc_mourner_elderly",
+    "category": "NPC_TROUPE",
+    "prompt": "A stooped elderly mourner leaning heavily on a wooden cane with one hand, the other hand checking a pocket watch, hunched posture, dark somber Victorian mourning clothes, standing neutral pose, no legs mid-stride",
+    "target_height_hint": 1.55
+  },
+  {
+    "id": "npc_groundskeeper",
+    "category": "NPC_TROUPE",
+    "prompt": "A stout weary groundskeeper figure holding a long rake upright at his side, flat cloth cap, rolled-up sleeves, sturdy work boots, standing neutral pose, no legs mid-stride, slightly oversized head for readability",
+    "target_height_hint": 1.7
+  },
+  {
+    "id": "npc_crow_perched",
+    "category": "NPC_TROUPE",
+    "prompt": "A black crow with folded wings, perched and alert, standing on both feet, glossy feathers, small compact pose, single distinct object",
+    "target_height_hint": 0.35
+  },
+  {
+    "id": "npc_crow_flapping",
+    "category": "NPC_TROUPE",
+    "prompt": "A black crow mid-flap with both wings raised high above its back in a strong V shape, mid downstroke, chunky rounded bird body clearly visible below the raised wings, glossy black feathers, single distinct object",
+    "target_height_hint": 0.4
+  },
+  {
+    "id": "board_hearse_ornate",
+    "category": "BOARD_DRESSING",
+    "prompt": "An ornate Victorian horse-drawn funeral hearse carriage with tall glass side panels, black lacquered wood, silver filigree trim, no horse, chunky toy proportions",
+    "target_height_hint": 1.8
+  },
+  {
+    "id": "board_carry_coffin",
+    "category": "BOARD_DRESSING",
+    "prompt": "A polished wooden coffin with four protruding brass carry handles, two per side, slightly cartoonish rounded proportions, dark varnished wood with gold trim",
+    "target_height_hint": 0.55
+  },
+  {
+    "id": "board_funeral_wreath",
+    "category": "BOARD_DRESSING",
+    "prompt": "A round funeral wreath of dark green foliage and black ribbon, mounted upright on a wooden display stand, mournful and formal",
+    "target_height_hint": 1.1
+  },
+  {
+    "id": "monument_obelisk_small",
+    "category": "PLACEHOLDER_SWEEP",
+    "prompt": "A small plain memorial stone obelisk marker, smooth blank grey stone with no carvings, simple tapering shape, standing upright on a low square base",
+    "target_height_hint": 1.0
+  },
+  {
+    "id": "relic_funerary_urn",
+    "category": "PLACEHOLDER_SWEEP",
+    "prompt": "A tall slender lidded funerary ash urn, much taller than wide, narrow footed base flaring up to a rounded shoulder and a small domed lid, engraved dark aged bronze, ceremonial vase silhouette",
+    "target_height_hint": 0.55
   }
 ]

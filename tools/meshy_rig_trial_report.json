@@ -1,0 +1,13 @@
+{
+    "generated_at":  "2026-07-16T03:07:34.3226673-05:00",
+    "experiment":  "rigging+animation trial: executor_butler -\u003e preset Idle (action_id 0)",
+    "input_glb":  "assets/models/meshy/executor_butler.glb",
+    "output_glb":  "assets/models/meshy/executor_butler_idle.glb",
+    "height_meters":  1.9,
+    "rig_task_id":  "019f69f6-57be-73ea-8f36-53f6561428ea",
+    "rig_credits":  5,
+    "anim_task_id":  "019f69f7-3153-7822-8565-86bfc34ebbfd",
+    "action_id":  0,
+    "anim_credits":  3,
+    "total_credits":  8
+}
