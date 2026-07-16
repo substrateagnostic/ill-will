@@ -235,7 +235,8 @@ static func test_wall(count: int) -> FamilyAlbumWall:
 		"THE LAST STAND", "THE RECKONING", "THE COLLAPSE", "THE HEIST",
 		"THE OATH", "THE FALL", "THE CROWNING", "THE VENDETTA", "THE RUIN"]
 	var games := ["echo_chamber", "throne", "greed", "dead_weight", "last_will",
-		"tilt", "swap_meet", "orbital", "mower", "seance", "masked_ball", "understudy"]
+		"tilt", "swap_meet", "orbital", "mower", "seance", "masked_ball", "understudy",
+		"pallbearers"]  # B7-HOOK
 	for i in count:
 		synth.append({
 			"tex": Newsreel._synthetic_still(i, count),

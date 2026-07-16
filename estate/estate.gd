@@ -25,6 +25,7 @@ const MODULES := {
 	"seance": {"name": "THE SÉANCE", "scene": "res://minigames/seance/seance.tscn", "mode": "contract", "theater": true},
 	"understudy": {"name": "THE UNDERSTUDY", "scene": "res://minigames/understudy/understudy.tscn", "mode": "contract", "theater": true, "intro": true},
 	"maskedball": {"name": "MASKED BALL", "scene": "res://minigames/masked_ball/masked_ball.tscn", "mode": "contract", "theater": true},
+	"pallbearers": {"name": "PALLBEARERS", "scene": "res://minigames/pallbearers/pallbearers.tscn", "mode": "contract"},  # B7-HOOK
 	"mock": {"name": "EXHIBITION MATCH", "scene": "res://estate/mock_game.tscn", "mode": "contract"},
 }
 const CHAR_PATHS := [
@@ -1611,6 +1612,7 @@ func _enter_auction() -> void:
 	high_bidder = -1
 	_bid_timer = BID_TIME
 	var pool := ["mock", "mock", "mock"] if mockonly else ["par", "echo", "tilt", "orbital", "mower", "greed", "swap", "deadweight", "throne", "lastwill"]
+	if not mockonly and ResourceLoader.exists("res://minigames/pallbearers/pallbearers.tscn"): pool.append("pallbearers")  # B7-HOOK
 	if not mockonly and bool(PartySetup.pref("theater_in_pool", false)):
 		for tid in ["seance", "understudy"]:
 			if ResourceLoader.exists(String(MODULES[tid].scene)):
