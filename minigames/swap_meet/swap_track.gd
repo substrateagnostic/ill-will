@@ -94,6 +94,7 @@ func build() -> void:
 	_build_gates()
 	_build_shortcut_visual()
 	_build_decor()
+	_build_b8_horizon()  # B8-HOOK: estate grounds ringing the night market (arena_dressing.gd)
 
 ## --- geometry ---------------------------------------------------------------
 
@@ -578,6 +579,27 @@ func _build_table() -> void:
 	floor_mi.material_override = flm
 	floor_mi.position.y = -7.5
 	add_child(floor_mi)
+
+## B8 ARENA DRESSING — the night market currently ends at a bare brown table
+## rim (24.2u) past the track's outer edge (~21.5u). A lamppost ring + a
+## market gate + a couple hedges, all sitting ON the existing felt tabletop
+## (radius ~21-23, so nothing floats) between the track and the table's edge,
+## reads as the estate's own grounds hosting the market after dark instead of
+## a kart circuit floating in a brown void. Positions dodge the castle
+## (11.8,0.4) and obstacle spots already placed by _build_decor().
+##
+## The fixed camera (pos 0,28.5,22.0 -> look_at 0,0,0.9, fov 45) is pitched
+## steep enough that the NEAR side (z beyond roughly +12, toward the camera's
+## own z=22) drops below the bottom of frame — verified against the camera
+## basis; every position below lands within the visible frustum. Static,
+## outside the track corridor, no collision, one light per lamppost.
+func _build_b8_horizon() -> void:
+	var lamp_light := {"color": Color(1.0, 0.8, 0.5), "energy": 1.1, "range": 6.0}
+	for spot in [Vector3(23.0, 0, 0), Vector3(-23.0, 0, 3.0), Vector3(0, 0, -23.0), Vector3(14.0, 0, -15.0)]:
+		ArenaDressing.prop(self, "estate_lamppost", 2.7, spot, 0.0, lamp_light)
+	ArenaDressing.prop(self, "estate_iron_gate", 2.2, Vector3(-19.0, 0, 9.0), 100.0)
+	for hs in [Vector3(16.5, 0, -16.0), Vector3(-16.5, 0, -16.5)]:
+		ArenaDressing.prop(self, "estate_hedge_topiary", 1.4, hs, 0.0)
 
 func _build_decor() -> void:
 	var castle: PackedScene = load("res://assets/models/minigolf/castle.glb")
