@@ -59,9 +59,22 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     way in: the heir crown banner no longer shows the SEED to real
     players.
 
-  **STILL COOKING:** Z2 forge wave 2 (7 props committed; re-rolls +
-  Meshy RIG TRIAL running) · B6 ghost meddling · B8 arena dressing
-  (waits on forge).
+  - ✅ **MESHY FORGE WAVE 2** (Z2, harvested after an unscheduled Windows
+    update rebooted the box mid-run — nothing lost, all GLBs were already
+    downloaded): 10 troupe/board props on master (mourners, groundskeeper,
+    two crows, hearse, carry-coffin, wreath, obelisk, hooded mourner, urn);
+    monument obelisk-GLB wiring with BoxMesh fallback; **THE RIG TRIAL
+    PASSED** — executor_butler_idle.glb plays a 4s Meshy preset idle for
+    8 credits (rigging+animation endpoints work; scale caveat documented
+    in docs/verify/meshy-troupe-VERIFY.md: never AABB-size a rigged GLB).
+    Crow re-roll verdict was honest: it refused a flight pose twice, so
+    it ships as a second GALLERY standing silhouette, never airborne.
+    Seed-7 receipt byte-identical post-merge.
+
+  **STILL COOKING (relaunched post-reboot):** B6 ghost meddling (kit
+  survived the reboot untracked and it's GOOD — human-input-only by
+  construction; fresh agent wiring echo_chamber + more) · B8 arena
+  dressing (launched against the landed prop catalog).
 
 - **☀️☀️☀️☀️ MORNING MENU #4 — THE FOURTH WATCH (2026-07-15). The night
   you asked for a board game, and the estate grew one.**
