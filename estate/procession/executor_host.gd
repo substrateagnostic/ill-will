@@ -98,12 +98,113 @@ const WILL_OPEN := [
 	"The will is read. It was written some time ago, and about all of you.",
 ]
 
+# --- THE BODY (doc 24 F6/F7) --------------------------------------------------
+const Body := preload("res://estate/procession/executor_body.gd")
+
+# Reaction moods handed to the body's strike. Kept as ints so the body needn't
+# preload this script. NEUTRAL is the dry no-reaction default (the anticlimax).
+const MOOD_NEUTRAL := 0
+const MOOD_GOOD := 1
+const MOOD_BAD := 2
+const MOOD_CODICIL := 3
+const MOOD_WATCH := 4
+const MOOD_RISE := 5
+
 var banner: RichTextLabel = null   # procession supplies the reveal banner
 var cam: Camera3D = null           # procession supplies the live camera
+var body: ProcessionExecutorBody = null   # the embodied host (null when headless)
+var board: ProcessionBoardPath = null     # supplies stone positions for gestures
+# PRESENTATION-side rng — used only for gesture variety and the eulogy templates,
+# NEVER the sim stream, so no flourish can shift the byte-identical receipt.
+var _prng := RandomNumberGenerator.new()
 
 func setup(reveal_banner: RichTextLabel, camera: Camera3D) -> void:
 	banner = reveal_banner
 	cam = camera
+
+# --------------------------------------------------------------------------
+# EMBODIMENT + GESTURE ORCHESTRATION (doc 24 F6/F7)
+# --------------------------------------------------------------------------
+## Give the host a body and a place to stand. No-op under headless — the soak has
+## no viewport, so the receipt path never builds or animates the figure and the
+## tally stays byte-identical.
+func embody(world: Node3D, board_ref: ProcessionBoardPath, prng_seed: int) -> void:
+	board = board_ref
+	_prng.seed = prng_seed * 2654435761 + 1013904223   # a presentation stream of our own
+	if DisplayServer.get_name() == "headless":
+		return
+	body = Body.new(int(_prng.randi()))
+	world.add_child(body)
+	# Stand him at the manor gate (space 0), just off the drive to one side,
+	# facing the loop's CENTER so he presides over every landing.
+	var gate := board.space_pos(0)
+	var out := gate - board.CENTER
+	out.y = 0.0
+	out = out.normalized() if out.length() > 0.01 else Vector3.FORWARD
+	var right := out.cross(Vector3.UP).normalized()
+	# Off to the gate's side, clear of the crooked signpost, presiding over the loop.
+	var stand := gate + out * 0.30 + right * 4.4
+	stand.y = gate.y
+	body.stand_at(stand, board.CENTER)
+
+func has_body() -> bool:
+	return body != null
+
+## THE HOUSE AWAKENS — the host rises (F7).
+func gesture_house_rise() -> void:
+	if body != null:
+		body.rise()
+
+## Between rounds: the ledger turns (F7). The dry round-opener aside is layered on
+## by the procession hook in part 3; the page-turn ships with the body.
+func begin_round() -> void:
+	if body != null:
+		body.page_turn()
+
+## Paint a dry aside during the dead air (round openers, colour commentary). Drawn
+## from the PRESENTATION rng, so it never perturbs the sim stream or the receipt.
+func aside(pool: Array, color: Color, args: Array = []) -> void:
+	if banner == null:
+		return
+	say(pick(pool, _prng, args), color)
+
+## Ease the host home to his idle rest pose at the close of a reveal cascade.
+func settle_body() -> void:
+	if body != null:
+		body.settle()
+
+## A low three-quarter host shot from the drive side — the eulogy framing and the
+## verification stills. Eased; leaves the per-frame look-at aimed at his face.
+func frame_body(dur := 0.8) -> void:
+	if cam == null or body == null:
+		return
+	var focus := body.global_position + Vector3(0, 1.7, 0)
+	var fwd := (board.CENTER - body.global_position) if board != null else Vector3.FORWARD
+	fwd.y = 0.0
+	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
+	var side := fwd.cross(Vector3.UP).normalized()
+	var pos := body.global_position + fwd * 3.9 + side * 1.6 + Vector3(0, 1.85, 0)
+	_aim = focus
+	_aiming = true
+	var tw := cam.create_tween()
+	tw.tween_property(cam, "global_position", pos, dur) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+## Windowed capture only (doc 24 verify): pose the idle body, then a staged
+## reveal gesture, grabbing each via the procession's settled snap. Never headless.
+func showcase_gestures(proc: Node) -> void:
+	if body == null:
+		return
+	frame_body(0.6)
+	await proc.get_tree().create_timer(0.75).timeout   # let the framing tween settle
+	await proc._cap_snap("exec_idle")
+	var stone := board.space_pos(1) if board != null else Vector3.ZERO
+	var yaw := body.yaw_toward(stone)
+	body.anticipate(yaw, 0.85)
+	await proc.get_tree().create_timer(0.45).timeout
+	body.present(yaw, 0.9, MOOD_CODICIL)
+	await proc.get_tree().create_timer(0.28).timeout
+	await proc._cap_snap("exec_gesture")
 
 ## Fill one line from a pool by seeded index (deterministic).
 static func pick(pool: Array, rng: RandomNumberGenerator, args: Array = []) -> String:
