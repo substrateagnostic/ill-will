@@ -55,6 +55,31 @@ const MATCH_END_HOLD := 8.0
 # corner sign pattern -> chute per player index
 const CORNER_SIGNS := [Vector2(-1, -1), Vector2(1, -1), Vector2(-1, 1), Vector2(1, 1)]
 
+# VOICE B floor pools (doc 26 §2) — drawn via Voice.pick, presentation-only.
+# The round-start line is the highest-repetition string in the game; it needs
+# the most variants. None of these touch sim rng or a receipt path.
+const VP_ROUND_START: PackedStringArray = [
+	"THE POT IS UNGUARDED",
+	"CLAIM IT",
+	"THE POT SITS OPEN",
+	"NO ONE OWNS IT YET",
+	"THE POT ANSWERS TO NO ONE",
+]
+const VP_THEFT: PackedStringArray = [
+	"%s RELIEVED %s OF IT",
+	"%s COLLECTED FROM %s",
+	"%s LIGHTENED %s'S LOAD",
+	"%s TOOK %s'S SHARE",
+	"%s AUDITED %s",
+	"%s HELD %s TO ACCOUNT",
+]
+const VP_LAST_BANKS: PackedStringArray = [
+	"THE CHUTE CLOSES SOON",
+	"LAST CALL AT THE CHUTE",
+	"BANK NOW OR NOT AT ALL",
+	"THE CHUTE IS CLOSING",
+]
+
 var roster: Array = []
 var rng := RandomNumberGenerator.new()
 var fx_rng := RandomNumberGenerator.new()
@@ -349,7 +374,7 @@ func _end_round(kind: String) -> void:
 	if greed_punished:
 		_scatter_entire_pot()
 		_ev_punished += 1
-		_flash_banner("GREED PUNISHED!\nTHE POT SCATTERS", Color(1.0, 0.35, 0.25), 2.8)
+		_flash_banner("TOO GREEDY.\nTHE POT SCATTERS", Color(1.0, 0.35, 0.25), 2.8)
 		Sfx.play("grudge")
 		pot_value = POT_START
 	else:
@@ -382,7 +407,7 @@ func _finish_match() -> void:
 	var champ_pl: Dictionary = roster[champ]
 	if _stretch != null:
 		_stretch.match_ended()
-	_flash_banner("%s WINS GREED INC.!" % champ_pl.name, champ_pl.color, 9999.0)
+	_flash_banner("%s KEEPS THE POT — AND THE ENMITY" % champ_pl.name, champ_pl.color, 9999.0)
 	Sfx.play("match_win")
 	(players[champ] as GreedPlayer).cheer()
 	_confetti((players[champ] as GreedPlayer).global_position + Vector3(0, 1.8, 0), champ_pl.color)
@@ -438,7 +463,7 @@ func _physics_process(delta: float) -> void:
 			if phase_t >= INTRO_TIME:
 				phase = Phase.PLAY
 				round_t = 0.0
-				_flash_banner("GRAB IT!", Color(1, 0.85, 0.2), 0.8)
+				_flash_banner(Voice.pick(VP_ROUND_START), Color(1, 0.85, 0.2), 0.8)
 				Sfx.play("confirm")
 		Phase.PLAY:
 			round_t += delta
@@ -712,7 +737,7 @@ func _drop_carrier(victim: int, tackler: int) -> void:
 	_coin_burst(drop_pos + Vector3(0, 1.0, 0), 22)
 	Sfx.play("splat", -1.0)
 	Sfx.play("death", -6.0)
-	_flash_banner("%s MUGGED %s!" % [roster[tackler].name, roster[victim].name],
+	_flash_banner(Voice.pick_fmt(VP_THEFT, [roster[tackler].name, roster[victim].name]),
 		roster[tackler].color, 1.8)
 	_ev_drops += 1
 	_ev_last_drop = [victim, tackler]
@@ -1026,7 +1051,7 @@ func _tick_closing_bell(delta: float) -> void:
 		_bell_last = true
 		if _stretch != null:
 			_stretch.escalate()   # FINAL STRETCH: the bell brings the tense track
-		_flash_banner("LAST BANKS!", Color(1.0, 0.85, 0.2), 1.5)
+		_flash_banner(Voice.pick(VP_LAST_BANKS), Color(1.0, 0.85, 0.2), 1.5)
 		Sfx.play("grudge", -6.0)
 		pot.bell_pulse()
 		_log("bell_lastbanks t=%.1f pot=%d" % [round_t, pot_value])
