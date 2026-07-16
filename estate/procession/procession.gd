@@ -340,10 +340,13 @@ func _build_hud() -> void:
 	_reveal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_reveal.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_reveal.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	# No serif ships in the project; Baloo2 is its heaviest, most formal face —
-	# the closest to a will-reading register available. (Follow-up: add a gothic
-	# serif TTF for the Executor's proclamations.)
-	var serif: FontFile = load("res://assets/fonts/Baloo2.ttf")
+	# B2-HOOK: the Executor's proclamations (and the eulogy, same lower-third) are
+	# set in IM Fell English — an OFL-licensed 17th-century gothic serif, the
+	# will-reading register the estate deserves. Scoped to this band only, never
+	# the whole UI. Baloo2 remains the fallback if the face fails to load.
+	var serif: FontFile = load("res://assets/fonts/IMFellEnglish-Regular.ttf")
+	if serif == null:
+		serif = load("res://assets/fonts/Baloo2.ttf")
 	if serif != null:
 		_reveal.add_theme_font_override("normal_font", serif)
 		_reveal.add_theme_font_override("bold_font", serif)
