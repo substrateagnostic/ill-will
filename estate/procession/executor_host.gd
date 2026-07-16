@@ -300,6 +300,17 @@ func clear_banner() -> void:
 	if banner:
 		banner.visible = false
 
+## Paint one eulogy line (F33) with a solemn reading cadence on the body — a slow
+## nod on some lines, a ledger page-turn on others. Same lower-third as a reveal.
+func say_eulogy(text: String, color: Color, index: int) -> void:
+	say(text, color)
+	if body == null:
+		return
+	if index % 3 == 2:
+		body.page_turn()
+	elif index % 2 == 0:
+		body.nod(0.5)
+
 var _aim := Vector3.ZERO   # live look-at target, tracked every frame while set
 var _aiming := false
 

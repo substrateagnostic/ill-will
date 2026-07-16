@@ -142,6 +142,10 @@ func _react(mood: int) -> void:
 		4: _watch()         # MOOD_WATCH — a considering tilt
 		5: rise()           # MOOD_RISE
 
+## Public assent, for the eulogy's solemn reading cadence.
+func nod(weight := 0.6) -> void:
+	_nod(weight)
+
 ## A slow assenting dip — good news, a Codicil claimed.
 func _nod(weight: float) -> void:
 	var tw := create_tween()

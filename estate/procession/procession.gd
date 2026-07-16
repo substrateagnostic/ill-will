@@ -537,6 +537,7 @@ func _run_night() -> void:
 		if round_num >= 60:
 			break   # safety cap — a night must always end
 	await _will_reading()
+	await ProcessionEulogy.deliver(self, executor)   # B2-HOOK: procedural closing eulogy (F33)
 	await _heir_crowned()
 	_emit_tally()
 
