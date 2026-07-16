@@ -6,14 +6,75 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
-- **🌒 NIGHT 5 UNDERWAY (2026-07-16, the fifth watch).** Thesis: night 4
-  built the board; night 5 makes it a broadcast. Plan = doc 23; research
-  docs 24 (board broadcast standard, 34 findings), 25 (front-end audit),
-  26 (VOICE BIBLE + ambient troupe). Meshy upgraded to premium mid-night
-  (3× credits) — caps lifted; rigging/animation/retexture endpoints
-  discovered and documented (doc 15 addendum).
+- **☀️☀️☀️☀️☀️ MORNING MENU #5 — THE FIFTH WATCH (2026-07-16). The night
+  the estate became a broadcast — and survived a Windows update.**
 
-  **MERGED so far (receipts green + screenshots director-read on all):**
+  **THE SHAPE OF THE WATCH:** night thesis (doc 23): night 4 built the
+  board; night 5 makes it a show. 7 lane merges landed overnight; then an
+  unscheduled Windows update rebooted the box mid-fleet (~04:30). Nothing
+  was lost: master was clean and pushed, and the two in-flight lanes left
+  everything harvestable in their worktrees. The morning director
+  harvested both, ran a DIRECTOR'S SCREENING of the integrated build,
+  spun two more lanes off its findings, and closed out at **11 merges,
+  v0.2.0 packaged, every receipt green.**
+
+  **HEADLINES:**
+  1. **THE BOARD IS A BROADCAST.** Cameras that know where the story is
+     (flyover, landing push-ins, deed money-shot), an Executor with a
+     body and a silver tray who leans in when stakes deserve it, THE
+     EULOGY composed from the night's real ledger, a séance wheel that
+     spins, flying attributed numbers, react buttons for the waiting.
+  2. **GAME #15: PALLBEARERS** — 2v2 blended-stick coffin carry; drop
+     the deceased and he files a complaint.
+  3. **THE FRONT DOOR JOINED THE HOUSE (D1, the screening's big find).**
+     The title was still kawaii-green pills on a daylight lawn; it now
+     wears the event-card stationery — ink panels, gold hairline, IM
+     Fell, moonlit manor gate as the hero, candy stall hidden. Your
+     delegated gothic-serif call, exercised. Review: PLAY's full-gold
+     focus ring, verify_out/d1_postmerge/shot_0300.png.
+  4. **NO DEAD SEATS (B6).** The dead get ONE attributed verb. Honest
+     survey: only echo_chamber ("STIRRED A COLD DRAFT", sim, mirrored)
+     and orbital ("RATTLED THE VOID", per-screen cosmetic) truly
+     eliminate anyone without an existing ghost — the rest keep their
+     own actors. Human-input-only BY CONSTRUCTION: all-bot receipts
+     byte-identical, no new network messages. Full judgment calls at the
+     NIGHT 5 — B6 log entry below.
+  5. **THE GROUNDS GREW A CAST (Z2+B3+B8).** 10 new troupe props (all
+     KEEP), gossiping crows, Old Rake, ghost queue; four plainest arenas
+     dressed (TILT's moonlit coastline, GREED's antechamber, MOWER's
+     graveyard, SWAP MEET's grounds) — verified against each camera's
+     actual frustum. **THE RIG TRIAL PASSED**: executor_butler_idle.glb
+     breathes a real Meshy idle for 8 credits — an animation lane is now
+     safe to build on (scale caveat in docs/verify/meshy-troupe-VERIFY.md).
+  6. **v0.2.0 IS IN THE TRUNK.** build/illwill-0.2.0.zip (~411 MB),
+     release exe boot-tested clean (the shutdown segfault is editor-only,
+     absent from the export template). README now leads with THE
+     PROCESSION; STORE-BLURB knows what nights 4–5 built. Chicago-ready.
+
+  **THE DIRECTOR'S SCREENING (new practice, worth keeping):** ran the
+  integrated build like dailies — a full windowed board night (seed 11,
+  18 rounds, heir crowned) + title/attract sampling. Three alarms
+  dissolved under systematic follow-up, all one root cause: **your box
+  renders at 144Hz**, so frame-indexed shot timings aren't 60fps-seconds
+  (lesson banked to project memory). What it really caught: the front
+  door (headline 3) and GREED's score panel haunting the intro card as
+  an empty gray slab (fixed, receipt unchanged).
+
+  **JUDGMENT CALLS FOR YOUR EYE:** crow re-roll refused a flight pose
+  twice → kept as a second standing GALLERY silhouette, never airborne ·
+  B6 wired 2 games not 4 (the codebase only has 2 that qualify) · title
+  gothic-serif applied to button labels too (all-caps stays legible;
+  revert to sans is one stylebox if you disagree) · version bumped
+  0.1.0 → 0.2.0.
+
+  **OPEN THREADS (none urgent):** the Executor's board body still uses
+  transform-tween puppetry — the rigged idle GLB is landed and the
+  EXECUTOR_GLB swap seam exists when you want him breathing on the
+  board · music bus routing is built; composition awaits its composer ·
+  the board's midfield reads dark in wide shots — one center-dressing
+  beat would finish the flyover.
+
+  **MERGED THIS WATCH (receipts green + screenshots director-read):**
   - ✅ **THE EXECUTOR EMBODIED** (B2): the host has a BODY at the manor
     gate — breathing idle, stakes-scaled lean-in before each reveal, nod/
     tut gestures; expanded line pools; **THE EULOGY** (procedural closing
@@ -71,10 +132,22 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     it ships as a second GALLERY standing silhouette, never airborne.
     Seed-7 receipt byte-identical post-merge.
 
-  **STILL COOKING (relaunched post-reboot):** B6 ghost meddling (kit
-  survived the reboot untracked and it's GOOD — human-input-only by
-  construction; fresh agent wiring echo_chamber + more) · B8 arena
-  dressing (launched against the landed prop catalog).
+  - ✅ **GHOST MEDDLING** (B6, relaunched post-reboot — the kit survived
+    the reboot untracked and needed ZERO fixes): dead humans in
+    echo_chamber and orbital become drifting wisps with one slow-charging
+    MEDDLE verb, every use attributed in the estate register. Receipts
+    byte-identical by construction.
+  - ✅ **ARENA DRESSING** (B8): TILT coastline, GREED antechamber, MOWER
+    graveyard, SWAP MEET grounds — shared ArenaDressing helper; 10 of 14
+    other arenas were already enclosed/dressed. Four receipts
+    byte-identical.
+  - ✅ **THE FRONT DOOR** (D1, from the screening): title menu in funeral
+    stationery, IM Fell tagline/labels, moonlit grounds, manor gate
+    reframe, gold gamepad focus ring. Every grounds mutation restores
+    exactly on dismiss; attract + settings + board receipt verified.
+  - ✅ **Director inline:** GREED intro-card gray-slab fix ·
+    STORE-BLURB/README refresh (THE PROCESSION leads) · v0.2.0 bump ·
+    seed banner autoplay-only (confirmed working in screening).
 
 - **☀️☀️☀️☀️ MORNING MENU #4 — THE FOURTH WATCH (2026-07-15). The night
   you asked for a board game, and the estate grew one.**
