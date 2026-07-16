@@ -277,6 +277,7 @@ func _ready() -> void:
 	_spawn_walkers()
 	_spawn_toys()
 	_spawn_executor()
+	_ambient_life_setup()   # B3-HOOK: the troupe that makes the grounds breathe (core/ambient_life.gd)
 	$Trail.build(EstateState.players, EstateState.gate_statues)
 	$Trail.seat_all(EstateState.trail_pos)
 	_redraw_monuments()
@@ -2912,3 +2913,124 @@ func _netprobe_join_flow() -> void:
 ## The ceremony stage as the CLIENT knows it — from facts, never local state.
 func _client_cer_fact() -> String:
 	return String((_client_last_state.get("ceremony", {}) as Dictionary).get("stage", ""))
+
+# ============================================================ AMBIENT LIFE (B3)
+## The estate grounds, made to breathe. This is the ONE setup region the ambient
+## lane owns in estate.gd (see the B3-HOOK call in _ready). Everything else lives
+## in core/ambient_life.gd. Purely presentational: it only READS the chronicle
+## and standings, owns its own RNG, and never writes an estate save.
+func _ambient_life_setup() -> void:
+	var al := AmbientLife.new()
+	al.name = "AmbientLife"
+	al.setup($Grounds, $Grounds/Walkers, cam)
+	if "--ambienttest" in OS.get_cmdline_user_args():
+		_ambient_test_run.call_deferred()
+
+## Windowed proof for the troupe: seat a human, seed a few nights of memory (in
+## RAM only — never saved), stroll the grounds, and photograph each member in
+## place. Self-contained; quits when done. Dev-only (guarded on --ambienttest).
+func _ambient_test_run() -> void:
+	await get_tree().create_timer(1.2).timeout
+	_ambient_seed_chronicle()
+	_enter_lobby()
+	_enter_stroll()
+	var al: Node = get_tree().get_first_node_in_group("ambient_life")
+	# let the grounds settle and the troupe take a few scans
+	await get_tree().create_timer(2.4).timeout
+	# THE GALLERY — crows gossiping, a bubble up, no one leaning in. Park the
+	# (wandering bot) walkers south so the flock reads clear of the graveyard.
+	for w in walkers:
+		if is_instance_valid(w):
+			w.global_position = Vector3(-1.5 + w.player_idx * 1.0, 0.1, 1.4)
+	if al != null and al.has_method("debug_show_gossip"):
+		al.debug_show_gossip()
+	await get_tree().create_timer(0.4).timeout
+	await _ambient_snap("gallery")
+	# THE GALLERY (silenced) — a walker leans into the flock; heads snap forward
+	if not walkers.is_empty():
+		walkers[0].global_position = Vector3(-7.2, 0.1, -4.6)
+	await get_tree().create_timer(0.9).timeout
+	await _ambient_snap("gallery_silent")
+	# THE GROUNDSKEEPER (mid-stare) — a walker jumps at Old Rake's pile; the
+	# leaves scatter and he freezes, staring, until they leave. (Gameplay uses
+	# the vy>2 jump check; the shot forces the latch to dodge the physics race.)
+	# Park the other walkers away so Old Rake and his scattered pile read clear.
+	var al2: Node = get_tree().get_first_node_in_group("ambient_life")
+	for w in walkers:
+		if is_instance_valid(w) and w.player_idx != 0:
+			w.global_position = Vector3(7.5 + w.player_idx * 0.8, 0.1, -1.0)
+	if not walkers.is_empty():
+		walkers[0].global_position = Vector3(-2.2, 0.1, 2.05)
+		walkers[0].velocity = Vector3(0, 6, 0)
+		if al2 != null and al2.has_method("debug_stare"):
+			al2.debug_stare(walkers[0].global_position)
+	await get_tree().create_timer(0.6).timeout
+	if not walkers.is_empty():
+		walkers[0].global_position = Vector3(-2.2, 0.1, 2.05)   # hold them in his glare
+	await get_tree().create_timer(0.1).timeout
+	await _ambient_snap("groundskeeper_stare")
+	# THE QUEUE — two ghost mourners hovering at a mausoleum door that never
+	# opens; the front one consults its pocket watch. Clear the walkers away so
+	# the ghosts are in their resting queue (no "after you" step-aside firing).
+	for w in walkers:
+		if is_instance_valid(w):
+			w.global_position = Vector3(2.0 + w.player_idx * 1.0, 0.1, 3.0)
+	await get_tree().create_timer(0.6).timeout
+	if al2 != null and al2.has_method("debug_check_watch"):
+		al2.debug_check_watch()
+	await get_tree().create_timer(0.4).timeout
+	await _ambient_snap("queue")
+	# ATMOSPHERE — fog wisps in the graves, embers over the lanterns. Walkers
+	# tucked to the far side so the floor of life reads on its own.
+	for w in walkers:
+		if is_instance_valid(w):
+			w.global_position = Vector3(8.0 + w.player_idx * 0.7, 0.1, 2.5)
+	await get_tree().create_timer(0.8).timeout
+	await _ambient_snap("atmosphere")
+	# EXTRAS — the vengeful seagull wheeling, and the runt lantern popped bright.
+	if al2 != null and al2.has_method("debug_extras"):
+		al2.debug_extras()
+	await get_tree().create_timer(0.3).timeout
+	await _ambient_snap("extras")
+	print("AMBIENTTEST done")
+	await get_tree().create_timer(0.2).timeout
+	get_tree().quit()
+
+## A few nights of synthetic conduct so the crows have something to gossip. Shape
+## matches end_night()'s ledger/monuments; rebuilds the chronicle in place. RAM
+## ONLY — no save() is ever called, so the owner's slots are untouched.
+func _ambient_seed_chronicle() -> void:
+	EstateState.ledger = [
+		{"night": 0, "winner": "GOLD", "awards": [
+			{"who": "BLUE", "title": "THE SNAKE", "line": ""},
+			{"who": "MINT", "title": "THE DOORMAT", "line": ""},
+			{"who": "RED", "title": "NEMESIS OF BLUE", "line": ""}]},
+		{"night": 1, "winner": "GOLD", "awards": [
+			{"who": "MINT", "title": "THE DOORMAT", "line": ""},
+			{"who": "RED", "title": "NEMESIS OF BLUE", "line": ""},
+			{"who": "GOLD", "title": "THE HOARDER", "line": ""}]},
+		{"night": 2, "winner": "MINT", "awards": [
+			{"who": "MINT", "title": "THE ARCHITECT", "line": ""},
+			{"who": "RED", "title": "THE RECKONER", "line": ""}]},
+	]
+	EstateState.monuments = [
+		{"owner": "GOLD", "label": "GOLD — Champion of Night 1", "night": 0},
+		{"owner": "GOLD", "label": "GOLD — Champion of Night 2", "night": 1},
+		{"owner": "MINT", "label": "MINT — Champion of Night 3", "night": 2},
+		{"owner": "MINT", "label": "the spite obelisk", "night": 2},
+	]
+	EstateState.chronicle = {"by_name": {"BLUE": {"events": {"quiet_betrayal": 1}}}}
+	EstateState._rebuild_chronicle()
+
+## Grab the current frame to verify_out/ (own capture — does not depend on the
+## VerifyCapture harness being armed).
+func _ambient_snap(tag: String) -> void:
+	await RenderingServer.frame_post_draw
+	var img := get_viewport().get_texture().get_image()
+	if img == null:
+		return
+	var out := "verify_out"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + out))
+	var path := "res://%s/ambient_%s.png" % [out, tag]
+	img.save_png(path)
+	print("AMBIENT_SNAP ", ProjectSettings.globalize_path(path))
