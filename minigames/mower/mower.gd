@@ -263,6 +263,30 @@ func _build_environment() -> void:
 	cam.position = Vector3(0, 15.0, 10.2)
 	cam.look_at(Vector3(0, 0, -0.2))
 	cam.fov = 52.0
+	_build_b8_horizon()  # B8-HOOK: graveyard glimpsed past the hedges (arena_dressing.gd)
+
+## B8 ARENA DRESSING — headstones, dead trees and a lamppost pair just past
+## the hedge line (hedges sit at HX/HZ+0.2, so everything here starts at
+## +0.8 to +2.6 beyond that), on-brand with the gravestone bumpers already
+## reused inside the mowable lawn. Static, outside the 16x12 play rect, no
+## collision. The two props on the near (+z, camera) side sit closer to the
+## hedge than the rest — verified against the fixed camera (pos 0,15.0,10.2
+## -> look_at 0,0,-0.2, fov 52): past ~z=+7.5 out here they'd drop below the
+## bottom of frame at this pitch.
+func _build_b8_horizon() -> void:
+	var ring := [
+		["estate_dead_tree", 3.0, Vector3(-MowerLawn.HX - 2.6, 0, -MowerLawn.HZ - 2.2), 40.0],
+		["grave_headstone_plain", 1.1, Vector3(-MowerLawn.HX - 2.2, 0, 0), 15.0],
+		["estate_dead_tree", 2.7, Vector3(-MowerLawn.HX - 2.6, 0, MowerLawn.HZ + 1.0), -30.0],
+		["estate_lamppost", 2.6, Vector3(0, 0, -MowerLawn.HZ - 2.6), 0.0],
+		["grave_headstone_cracked", 1.0, Vector3(MowerLawn.HX + 2.2, 0, -MowerLawn.HZ * 0.5), 200.0],
+		["estate_lamppost", 2.6, Vector3(MowerLawn.HX + 2.6, 0, MowerLawn.HZ * 0.5), 0.0],
+		["grave_small_obelisk", 1.5, Vector3(0, 0, MowerLawn.HZ + 1.0), 60.0],
+	]
+	for r in ring:
+		var light := {} if str(r[0]) != "estate_lamppost" else \
+			{"color": Color(1.0, 0.8, 0.5), "energy": 1.0, "range": 5.5}
+		ArenaDressing.prop(self, str(r[0]), float(r[1]), r[2], float(r[3]), light)
 
 ## Low hedge walls around the lawn so the arena reads as enclosed grounds.
 func _build_hedges() -> void:

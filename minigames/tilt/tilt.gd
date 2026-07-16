@@ -1319,6 +1319,43 @@ func _build_world() -> void:
 	cam.look_at(Vector3(0, 0.4, 0))
 	cam.fov = 50.0
 	_cam_base = cam.global_transform
+	_build_b8_horizon()  # B8-HOOK: distant shoreline dressing (arena_dressing.gd)
+
+## B8 ARENA DRESSING — a coastline glimpsed across the night sea, so the
+## platter reads as tilting off the estate's own grounds instead of floating
+## in a void. Five rock skerries (low dark mounds poking above OCEAN_Y) carry
+## forged estate props, static, unlit except one lamppost glow. Cheap: 5
+## mounds + 7 props + 1 light, zero collision, zero per-frame cost.
+##
+## Angles/radii (200-340deg, r=15-18) are NOT arbitrary: the fixed camera
+## (pos 0,15.5,14.5 -> look_at 0,0.4,0, fov 50) pitches down steeply enough
+## that ground points behind roughly the 200-340deg arc, or past ~r=20 dead
+## ahead, cross above the top of frame or fall outside the camera's own
+## near-side view — verified against the camera's forward/up basis so every
+## cluster below actually lands on screen (a first pass at r=33-37 rendered
+## nothing; see verify_out/b8_before vs b8_after for the empty-frame proof).
+func _build_b8_horizon() -> void:
+	var skerries := [
+		{"ang": 215.0, "r": 17.0, "props": [["grave_mausoleum_front", 2.6]]},
+		{"ang": 250.0, "r": 18.0, "props": [["estate_dead_tree", 3.0], ["grave_headstone_plain", 1.1]]},
+		{"ang": 280.0, "r": 16.0, "props": [["estate_lamppost", 2.6]], "light": true},
+		{"ang": 310.0, "r": 18.0, "props": [["grave_small_obelisk", 1.6], ["estate_dead_tree", 2.7]]},
+		{"ang": 335.0, "r": 15.0, "props": [["grave_headstone_cracked", 1.0]]},
+	]
+	for sk in skerries:
+		var ang: float = deg_to_rad(float(sk["ang"]))
+		var center := Vector3(cos(ang) * float(sk["r"]), 0.0, sin(ang) * float(sk["r"]))
+		var tangent := Vector3(-sin(ang), 0.0, cos(ang))
+		ArenaDressing.mound(self, center + Vector3(0, -1.6, 0), 2.6, 3.4, 3.2, Color(0.10, 0.13, 0.19))
+		var names: Array = sk["props"]
+		for i in names.size():
+			var spec: Array = names[i]
+			var lateral := (float(i) - float(names.size() - 1) * 0.5) * 1.3
+			var pos := center + tangent * lateral
+			var yaw := fmod(float(sk["ang"]) * 3.0 + float(i) * 47.0, 360.0)
+			var light := {} if not sk.get("light", false) else \
+				{"color": Color(1.0, 0.8, 0.5), "energy": 0.9, "range": 5.0}
+			ArenaDressing.prop(self, str(spec[0]), float(spec[1]), pos, yaw, light)
 
 ## Deciding-moment standard (doc 09 §Q2): ordinary falls demoted to 0.5x/0.2s
 ## (was a flat 0.35x/0.32s on EVERY fall); the round-ending fall promotes to

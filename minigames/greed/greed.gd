@@ -1709,6 +1709,27 @@ func _build_world() -> void:
 	cam.look_at(Vector3(0, 0.9, 0))
 	cam.fov = 56.0
 	_cam_base = cam.global_transform
+	_build_b8_dressing()  # B8-HOOK: outer antechamber glimpsed past the vault walls (arena_dressing.gd)
+
+
+## B8 ARENA DRESSING — the vault currently reads as a gold-rimmed slab
+## floating in pure black. Broken columns + an iron gate flanked by two dim
+## stone lanterns sell "an old antechamber past the money-room walls" without
+## brightening the play surface — lantern light is capped low and aimed only
+## at the gate. Static, no collision, no per-frame cost.
+##
+## Positions sit entirely on the far (-z) side of the fixed camera (pos
+## 0,15.5,12.8 -> look_at 0,0.9,0, fov 56): the NEAR side (+z, same side as
+## the camera) drops below the bottom of frame almost immediately at this
+## pitch, so a naive front+back symmetric ring would render half its props
+## off-screen — verified against the camera basis before picking these.
+func _build_b8_dressing() -> void:
+	for c in [Vector2(9, -9), Vector2(-9, -9), Vector2(13, -12), Vector2(-13, -12)]:
+		ArenaDressing.prop(self, "broken_column", 3.0, Vector3(c.x, 0.0, c.y), c.x * 4.0)
+	ArenaDressing.prop(self, "estate_iron_gate", 2.6, Vector3(0, 0, -11.0), 0.0)
+	for side in [-1.0, 1.0]:
+		ArenaDressing.prop(self, "stone_lantern", 1.5, Vector3(side * 2.6, 0, -10.6), 0.0,
+			{"color": Color(1.0, 0.78, 0.45), "energy": 0.6, "range": 4.0, "height": 1.6})
 
 
 func _build_walls() -> void:
