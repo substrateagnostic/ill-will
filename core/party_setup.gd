@@ -20,6 +20,14 @@ var panel: PanelContainer
 var tabs: TabContainer
 var open := false
 
+# A full-screen dim behind the settings panel so it reads as its own moment and
+# nothing underneath (a LOBBY seat panel, a live minigame HUD) bleeds through or
+# stays clickable — the doc 25 gap row 22 fix.
+var _settings_scrim: ColorRect = null
+# The estate's own phase panel (LOBBY/GROUNDS desk), hidden while settings is
+# open and restored on close so the two never stack.
+var _phase_panel_hidden: Control = null
+
 var _prefs := {}
 var _seats_box: VBoxContainer
 var _controls_box: VBoxContainer
@@ -61,6 +69,13 @@ func _ready() -> void:
 	_apply_audio_prefs()
 	_apply_video_prefs()
 	_apply_access_prefs()
+	# Scrim first so it draws BEHIND the panel (CanvasLayer children draw in order).
+	_settings_scrim = ColorRect.new()
+	_settings_scrim.visible = false
+	_settings_scrim.color = Color(0.02, 0.02, 0.04, 0.82)
+	_settings_scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_settings_scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_settings_scrim)
 	panel = PanelContainer.new()
 	panel.visible = false
 	panel.set_anchors_preset(Control.PRESET_CENTER)
@@ -102,7 +117,9 @@ func _ready() -> void:
 	quit_btn.button_up.connect(func(): _quit_button_held = false)
 	quit_row.add_child(quit_btn)
 	_quit_hold = HoldConfirm.new()
-	_quit_hold.configure(3.0)
+	# 5.0s, not 3.0 (doc 14 HOLDCONFIRM-1 / doc 25 §3.3.2): QUIT TO TITLE forfeits
+	# three other players' game — a shared-consequence action gets the 5s ceiling.
+	_quit_hold.configure(5.0)
 	_quit_hold.completed.connect(quit_to_title)
 	quit_row.add_child(_quit_hold)
 	box.add_child(quit_row)
@@ -134,6 +151,18 @@ func _ready() -> void:
 				PlayerInput.set_bot(seat, false)
 				_begin_disconnect_overlay(seat, 0)
 				VerifyCapture.snap("input2_disconnect"))
+		elif arg == "--settingslobbyshot":
+			# Repro (doc 25 gap row 22): open the ESC settings while the estate's
+			# LOBBY phase_panel is up and snap the stacked result.
+			get_tree().create_timer(1.3).timeout.connect(func():
+				var est: Node = get_tree().current_scene
+				if est != null and est.has_method("_enter_lobby"):
+					est.call("_enter_lobby")
+				get_tree().create_timer(0.4).timeout.connect(func():
+					if not open:
+						toggle()
+					get_tree().create_timer(0.4).timeout.connect(func():
+						VerifyCapture.snap("settings_over_lobby"))))
 		elif arg.begins_with("--padpausetest="):
 			# Dev-only: a physical pad Start press can't be sent headlessly, so this
 			# seats a local human on (phantom) gamepad 0, drives the requested
@@ -228,17 +257,38 @@ func toggle() -> void:
 		return
 	open = not open
 	panel.visible = open
+	if _settings_scrim != null:
+		_settings_scrim.visible = open
 	get_tree().paused = open
 	# Tell the guests the estate held its breath (host only — a guest's own ESC
 	# pauses just its local tree and must never freeze the shared table).
 	_net_reflect_host_pause(open)
 	if open:
+		_hide_phase_panel()
 		_rebuild_seats()
 		_rebuild_controls()
 	else:
+		_restore_phase_panel()
 		_stop_listen()
 		PlayerInput.save_setup()
 		_save_prefs()
+
+## Hide the estate's own LOBBY/GROUNDS desk panel while settings is open so the
+## two panels never stack (doc 25 gap row 22). Remembers it to restore on close.
+func _hide_phase_panel() -> void:
+	_phase_panel_hidden = null
+	var scene: Node = get_tree().current_scene
+	if scene == null:
+		return
+	var pp = scene.get("phase_panel")
+	if pp != null and pp is Control and (pp as Control).visible:
+		_phase_panel_hidden = pp as Control
+		(pp as Control).visible = false
+
+func _restore_phase_panel() -> void:
+	if _phase_panel_hidden != null and is_instance_valid(_phase_panel_hidden):
+		_phase_panel_hidden.visible = true
+	_phase_panel_hidden = null
 
 func _process(delta: float) -> void:
 	_poll_pause_buttons()
@@ -515,6 +565,7 @@ func _apply_audio_prefs() -> void:
 	_apply_volume("Master", float(pref("vol_master", 1.0)))
 	_apply_volume("Music", float(pref("vol_music", 0.8)))
 	_apply_volume("SFX", float(pref("vol_sfx", 1.0)))
+	_apply_volume("Ambience", float(pref("vol_ambience", 0.8)))
 
 func _apply_volume(bus_name: String, v: float) -> void:
 	var idx := AudioServer.get_bus_index(bus_name)
@@ -733,6 +784,9 @@ func _build_audio_tab() -> Control:
 	v.add_child(_volume_row("MASTER", "vol_master", 1.0, "Master"))
 	v.add_child(_volume_row("MUSIC", "vol_music", 0.8, "Music"))
 	v.add_child(_volume_row("SFX", "vol_sfx", 1.0, "SFX"))
+	# The estate's fourth bus (core/ambience.gd) routed straight to Master with no
+	# fader — give it one now, before any game lane ships an unadjustable bed.
+	v.add_child(_volume_row("AMBIENCE", "vol_ambience", 0.8, "Ambience"))
 	var note := Label.new()
 	note.text = "the soundtrack arrives when the resident violist approves it"
 	note.add_theme_font_size_override("font_size", 14)
@@ -817,7 +871,10 @@ func _build_access_tab() -> Control:
 	v.name = "ACCESS"
 	v.add_theme_constant_override("separation", 14)
 	var shake := CheckButton.new()
-	shake.text = "SCREEN SHAKE"
+	# Effect-named, not diagnosis-named (doc 25 §3.3.3 / XAG118). Toggle ON = the
+	# effects play; the pref KEY stays "screen_shake" — 13 game scripts read it by
+	# that string (doc 25 §4), so only the on-screen label changes here.
+	shake.text = "SCREEN EFFECTS  (shake · hit-stop · flash)"
 	shake.button_pressed = bool(pref("screen_shake", true))
 	shake.toggled.connect(func(on: bool):
 		_prefs["screen_shake"] = on
