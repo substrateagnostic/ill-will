@@ -312,8 +312,11 @@ class GhostWisp:
 		add_child(nm)
 
 		# THE COOLDOWN RING at the wisp's feet: empty at fire -> full = READY.
+		# drift (flat-floor games): the ring drops to the ground plane (local
+		# -hover_y). Fixed-hover spatial games (drift=false, e.g. orbital) have no
+		# ground plane under the death spot, so the ring rides just below the orb.
 		_cd_ring = CooldownRing.new()
-		_cd_ring.setup(color, 0.62, 0.52, -hover_y + 0.06, 0.9)
+		_cd_ring.setup(color, 0.62, 0.52, (-hover_y + 0.06) if drift else -0.5, 0.9)
 		add_child(_cd_ring)
 
 		_ready_label = Label3D.new()
@@ -334,7 +337,11 @@ class GhostWisp:
 		_half = half
 
 	func spawn_at(pos: Vector3) -> void:
-		global_position = Vector3(pos.x, hover_y, pos.z)
+		# drift (flat-floor games): snap onto the hover plane above the death spot.
+		# Fixed-hover spatial games (drift=false) keep the FULL 3D death spot — the
+		# radial world (orbital) has no single floor y to clamp to. Matches this
+		# kit's docstring: "false = it hovers fixed at the death spot".
+		global_position = pos if not drift else Vector3(pos.x, hover_y, pos.z)
 		_vel = Vector3.ZERO
 
 	func ready() -> bool:
