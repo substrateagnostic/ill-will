@@ -22,6 +22,7 @@ const Executor := preload("res://estate/procession/executor_host.gd")
 const Spaces := preload("res://estate/procession/board_spaces.gd")
 const Presets := preload("res://estate/procession/presets.gd")
 const BoardCamera := preload("res://estate/procession/board_camera.gd")
+const BoardFx := preload("res://estate/procession/board_fx.gd")
 
 const CHAR_SCENES := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -80,6 +81,8 @@ var codicil: ProcessionCodicil
 var executor: ProcessionExecutor
 var cam: Camera3D
 var board_camera: ProcessionCamera    # F1: the named-shot camera director
+var fx: ProcessionFx                  # F10/F11/F17: flying numbers + the Deed token
+var _fx_host: Control
 var final_kit: Node
 var _ui: CanvasLayer
 var _topbar: Control
@@ -307,7 +310,7 @@ func _build_hud() -> void:
 		var stat_l := _chip_label("2♠  ◆0", 30, Color(0.95, 0.95, 1.0))
 		col.add_child(stat_l)
 		chiprow.add_child(panel)
-		_chips.append({"grudge": stat_l})
+		_chips.append({"grudge": stat_l, "panel": panel})
 
 	# ---- REVEAL lower-third: a broadcast-style band pinned bottom-centre, with a
 	# dark translucent scrim + gold rule, the affected player's PlayerBadge, and
@@ -395,10 +398,31 @@ func _build_hud() -> void:
 	_ui.add_child(meter_host)
 	putt.configure(roster, meter_host, _mirror)
 
+	# The FX layer rides ABOVE the chips so flying numbers + the Deed token land
+	# on the HUD (F10/F11/F17). A full-rect, input-transparent Control.
+	_fx_host = Control.new()
+	_fx_host.name = "FxHost"
+	_fx_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fx_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ui.add_child(_fx_host)
+	fx = BoardFx.new()
+	add_child(fx)
+	fx.setup(_fx_host, cam, _fast)
+
 	executor.setup(_reveal, cam)
 	# The endgame kit escalates music + light on the final Deed (juice floor).
 	final_kit = FinalStretch.attach(self, null, {"ticks": false})
 	_refresh_hud()
+
+## Screen-space centre of a seat's HUD chip — the homing target for flying numbers
+## and the Deed token (F10/F11/F17).
+func _chip_screen_pos(seat: int) -> Vector2:
+	if seat >= 0 and seat < _chips.size():
+		var panel: Control = _chips[seat].get("panel")
+		if panel != null and panel.is_inside_tree():
+			return panel.global_position + panel.size * 0.5
+	var vp := get_viewport()
+	return vp.get_visible_rect().size * Vector2(0.5, 0.92) if vp else Vector2(640, 660)
 
 func _chip_label(text: String, size: int, color: Color) -> Label:
 	var l := Label.new()
@@ -749,7 +773,7 @@ func _reveal_landing(seat: int) -> void:
 	var col: Color = roster[seat].color
 	var name := String(roster[seat].name)
 	if seat == _round_codicil_seat:
-		_resolve_codicil(seat)
+		await _resolve_codicil(seat)
 	else:
 		match board.type_at(idx):
 			Spaces.SHRINE: _resolve_shrine(seat, name, col)
@@ -876,23 +900,51 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	executor.say(Executor.pick(Executor.VENDETTA_RESULT, rng, [roster[win].name, roster[lose].name]) \
 		+ "  (%d♠, stakes %d vs %d)" % [moved_g, s_a, s_b], roster[win].color)
 
+## THE DEED MONEY-SHOT (F17). The economy's climax: hero push into the Codicil, a
+## gold flare, a wax-sealed Deed flying to the buyer's chip, the price draining
+## from their grudge, and the beacon RELOCATING visibly (a gold wisp streak) so
+## the moving target is never lost. The sim (charge/grant/relocation rng) is
+## byte-identical to before; only the theater is new, all gated behind not _fast.
 func _resolve_codicil(seat: int) -> void:
 	var name := String(roster[seat].name)
 	var col: Color = roster[seat].color
 	var price := codicil.price_for(deeds[seat])
-	if grudge[seat] >= price:
-		grudge[seat] -= price
-		deeds[seat] += 1
-		stats[seat].deeds_bought += 1
-		stats[seat].spent += price
-		Sfx.play("match_win", -6.0)
-		executor.say(Executor.pick(Executor.CODICIL, rng, [name]) + "  (−%d♠ → ◆%d)" % [price, deeds[seat]], col)
-		var new_idx := codicil.choose_relocation(rng, BoardPath.SPACES)
-		board.set_beacon(new_idx)
-		if final_kit and deeds[seat] >= deed_goal - 1 and decision_layer:
-			final_kit.escalate()
-	else:
+	if grudge[seat] < price:
 		executor.say(Executor.pick(Executor.CODICIL_SHORT, rng, [name]) + "  (needs %d♠)" % price, col)
+		return
+	var beacon_pos := board.beacon_world_pos()
+	if not _fast:
+		board_camera.beacon_hero(beacon_pos)
+	# --- sim: charge the price, grant the Deed (unchanged order + effects) ---
+	grudge[seat] -= price
+	deeds[seat] += 1
+	stats[seat].deeds_bought += 1
+	stats[seat].spent += price
+	Sfx.play("match_win", -6.0)
+	executor.say(Executor.pick(Executor.CODICIL, rng, [name]) + "  (−%d♠ → ◆%d)" % [price, deeds[seat]], col)
+	_refresh_hud()
+	# --- theater: flare, the Deed flies to the buyer, the price drains away ---
+	if not _fast:
+		board.flare_beacon()
+		var chip := _chip_screen_pos(seat)
+		fx.fly_deed(beacon_pos, chip, col)
+		fx.fly_number(-price, "♠", beacon_pos, chip, col)
+		if _capture:
+			await _beat(0.3)                 # catch the Deed in flight + the flare
+			await _cap_snap("deed_moneyshot")
+	# The estate's memory ceremony (F5): the deciding-moment still.
+	MomentScribe.capture("codicil_claim", "%s CLAIMS A DEED (◆%d)" % [name, deeds[seat]],
+		3, [seat], "procession")
+	# --- relocation: logical index updates now; the beacon TRAVELS on screen ---
+	var new_idx := codicil.choose_relocation(rng, BoardPath.SPACES)
+	if _fast:
+		board.set_beacon(new_idx)
+	else:
+		var tw: Tween = board.travel_beacon(new_idx)
+		if tw != null and tw.is_valid():
+			await tw.finished
+	if final_kit and deeds[seat] >= deed_goal - 1 and decision_layer:
+		final_kit.escalate()
 
 # ---- helpers ----
 func _nearest_within(seat: int, reach: int) -> int:

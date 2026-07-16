@@ -405,6 +405,76 @@ func set_beacon(i: int) -> void:
 	if beacon:
 		beacon.global_position = space_pos(beacon_index) + Vector3(0, 0.1, 0)
 
+## The Codicil's current world position (pedestal base), for the hero push-in and
+## the Deed's flight origin. Falls back to the logical berth if the prop is gone.
+func beacon_world_pos() -> Vector3:
+	return beacon.global_position if beacon != null else space_pos(beacon_index)
+
+## A gold flare pulse on the beacon glow — the visual punctuation of a Deed claim
+## (F17). Presentation only; no rng, no sim read.
+func flare_beacon() -> void:
+	if beacon == null:
+		return
+	var lamp := beacon.get_node_or_null(^"BeaconGlow") as OmniLight3D
+	if lamp == null:
+		return
+	var tw := create_tween()
+	tw.tween_property(lamp, "light_energy", 9.0, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lamp, "light_energy", 3.2, 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+## RELOCATE THE CODICIL — SHOWN, not teleported (F17). The logical index updates
+## at once (the sim never waits), but the consecrated pedestal GLIDES along an arc
+## to its new berth led by a gold will-o'-wisp, so every player SEES where the
+## target moved. Returns the pedestal tween so the caller can await the drama.
+func travel_beacon(new_idx: int) -> Tween:
+	var start := beacon.global_position if beacon != null else space_pos(beacon_index) + Vector3(0, 0.1, 0)
+	beacon_index = posmod(new_idx, SPACES)
+	var dest := space_pos(beacon_index) + Vector3(0, 0.1, 0)
+	if beacon == null:
+		return null
+	var apex := (start + dest) * 0.5 + Vector3(0, 3.6, 0)
+	_spawn_beacon_wisp(start, apex, dest)
+	var tw := create_tween()
+	tw.tween_method(func(t: float) -> void:
+			beacon.global_position = _quad_bezier(start, apex, dest, t),
+		0.0, 1.0, 0.85).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	return tw
+
+## A short-lived gold wisp that streaks the relocation arc a beat ahead of the
+## pedestal, then fades — the readable "the objective went THERE" cue.
+func _spawn_beacon_wisp(start: Vector3, apex: Vector3, dest: Vector3) -> void:
+	var wisp := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.22
+	sm.height = 0.44
+	wisp.mesh = sm
+	var wm := StandardMaterial3D.new()
+	wm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	wm.emission_enabled = true
+	wm.emission = Color(1.0, 0.86, 0.42)
+	wm.emission_energy_multiplier = 6.0
+	wm.albedo_color = Color(1.0, 0.9, 0.5)
+	wm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wisp.material_override = wm
+	add_child(wisp)
+	wisp.global_position = start
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(1.0, 0.86, 0.42)
+	glow.light_energy = 4.0
+	glow.omni_range = 5.0
+	glow.shadow_enabled = false
+	wisp.add_child(glow)
+	var tw := wisp.create_tween()
+	tw.tween_method(func(t: float) -> void:
+			wisp.global_position = _quad_bezier(start, apex, dest, t),
+		0.0, 1.0, 0.72).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(wm, "albedo_color:a", 0.0, 0.72).set_delay(0.4)
+	tw.tween_callback(wisp.queue_free)
+
+func _quad_bezier(a: Vector3, b: Vector3, c: Vector3, t: float) -> Vector3:
+	var u := 1.0 - t
+	return u * u * a + 2.0 * u * t * b + t * t * c
+
 ## Instance a generated GLB if present, else the committed fallback, else a
 ## tinted primitive. Never returns null; purely visual.
 func _prop(gen_path: String, fallback_path: String, height: float, tint := Color(0, 0, 0, 0)) -> Node3D:
