@@ -33,6 +33,9 @@ const CHAR_SCENES := [
 	"res://assets/models/kaykit/Rogue.glb",
 ]
 const REVEAL_BEAT := 2.2
+# F24 reveal-cascade reactions: waiting-player button -> attributed glyph.
+const REACT_COOLDOWN_MS := 550
+const REACT_MAP := {"b": "HA!", "up": "OOH", "down": "OOF"}
 const POINTS := [5, 3, 2, 1]        # RECKONING / will placement -> Grudge
 const CONTRACT_POOL := ["echo", "tilt", "orbital", "mower", "greed", "swap",
 	"deadweight", "throne", "lastwill"]
@@ -76,6 +79,8 @@ var _capture := false            # windowed: pose beats + snap for screenshots
 var _phase := "boot"
 var _round_codicil_seat := -1   # who claims the Codicil this round (pass-or-land)
 var _preview_active := false    # F29: live putt target reticles during the roll
+var _react_last: Array[int] = []   # F24: per-seat last-reaction wall-clock (cooldown)
+var _reacted_demo := false         # F24: capture fires the reaction demo once
 
 # ---- nodes ---- (concrete types so method returns infer without annotation)
 var board: ProcessionBoardPath
@@ -213,6 +218,9 @@ func _default_roster() -> Array:
 func _init_arrays() -> void:
 	var n := roster.size()
 	grudge.resize(n); deeds.resize(n); positions.resize(n); moved_total.resize(n)
+	_react_last.resize(n)
+	for i in n:
+		_react_last[i] = -100000
 	items.clear(); stats.clear()
 	for i in n:
 		grudge[i] = EstateState.STARTING_GRUDGE + 3   # a small float so turn 1 has stakes
@@ -670,13 +678,6 @@ func _intro() -> void:
 func _snap_putt_preview_later() -> void:
 	await _beat(0.85)
 	if _preview_active:
-		var shown: Array[String] = []
-		for i in roster.size():
-			var sp := putt.preview_spaces(i)
-			if sp > 0:
-				var dest := posmod(positions[i] + sp, BoardPath.SPACES)
-				shown.append("%s→sp%d(%s)" % [String(roster[i].name), dest, board.type_at(dest)])
-		print("PUTT_PREVIEW ", ", ".join(shown))
 		await _cap_snap("putt_preview")
 
 ## Any human tap (A or B) breaks the opening flyover — the director polls this
@@ -873,17 +874,95 @@ func _reveal_landing(seat: int) -> void:
 			await _cap_snap("codicil")
 		else:
 			VerifyCapture.snap("codicil")
-		await _beat(REVEAL_BEAT)
+		await _reveal_beat(seat, REVEAL_BEAT)
 	elif _capture:
 		# Let the landing push-in settle before the verification snap, so the
 		# type-aware close-up (F3) is judged at rest, not mid-travel. Windowed
 		# capture only — the headless receipt never takes this branch.
 		await _beat(0.7)
 		await _cap_snap("reveal")
-		await _beat(maxf(0.0, REVEAL_BEAT - 0.7))
+		# Demo the reveal-cascade REACT glyphs (F24) once, for the screenshot —
+		# real play drives these from live waiting-player button taps.
+		if not _reacted_demo:
+			_reacted_demo = true
+			_capture_demo_reactions(seat)
+			await _beat(0.55)
+			await _cap_snap("reactions")
+		await _reveal_beat(seat, maxf(0.0, REVEAL_BEAT - 0.7))
 	else:
 		VerifyCapture.snap("reveal")
-		await _beat(REVEAL_BEAT)
+		await _reveal_beat(seat, REVEAL_BEAT)
+
+# --------------------------------------------------------------------------
+# F24 — REVEAL-CASCADE REACT BUTTONS. During a landing reveal the WAITING players
+# can tap to float an attributed laugh/jeer/wince over the victim's stone. Purely
+# cosmetic, rate-limited, couch-first (remote seats are guarded out cleanly until
+# a net path exists). No sim impact — it never touches grudge/deeds/rng.
+# --------------------------------------------------------------------------
+## The reveal hold, made reactive: same skippable wait as _beat, but each frame it
+## also polls the waiting players' reaction buttons.
+func _reveal_beat(victim: int, seconds: float) -> void:
+	if _fast:
+		await get_tree().process_frame
+		return
+	var t := 0.0
+	while t < seconds:
+		if _phase != "heir" and _all_press_skip():
+			return
+		_poll_reactions(victim)
+		await get_tree().process_frame
+		t += get_process_delta_time()
+
+## Read every waiting human's reaction buttons and float a glyph on a press,
+## rate-limited per seat. Bots and remote seats are skipped (couch-first).
+func _poll_reactions(victim: int) -> void:
+	var now := Time.get_ticks_msec()
+	for i in roster.size():
+		if i == victim or bool(roster[i].bot):
+			continue
+		if PlayerInput.has_method("is_remote") and PlayerInput.is_remote(i):
+			continue
+		if now - _react_last[i] < REACT_COOLDOWN_MS:
+			continue
+		for action in REACT_MAP:
+			if PlayerInput.just_pressed(i, String(action)):
+				_react_last[i] = now
+				_spawn_reaction(victim, i, String(REACT_MAP[action]))
+				break
+
+## Float a reactor's attributed glyph over the victim's stone: their badge glyph +
+## the reaction word, in the reactor's colour, rising and fading. Never headless.
+func _spawn_reaction(victim: int, reactor: int, word: String) -> void:
+	if _fast or board == null or not board.pawns.has(victim):
+		return
+	var lbl := Label3D.new()
+	lbl.text = "%s %s" % [PlayerBadge.glyph(reactor), word]
+	lbl.font_size = 44
+	lbl.pixel_size = 0.0062
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.no_depth_test = true
+	lbl.outline_size = 13
+	lbl.outline_modulate = Color(0, 0, 0, 0.92)
+	lbl.modulate = Color(roster[reactor].color).lerp(Color.WHITE, 0.15)
+	board.add_child(lbl)
+	# Fan reactions out by reactor so several never stack, at head height over the
+	# victim so they read inside the reveal close-up.
+	var base: Vector3 = (board.pawns[victim] as Node3D).global_position \
+		+ Vector3(0.62 * (float(reactor) - 1.5), 1.3, 0.0)
+	lbl.global_position = base
+	var tw := lbl.create_tween()
+	tw.tween_property(lbl, "global_position", base + Vector3(0, 1.1, 0), 1.1) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 1.1).set_delay(0.5)
+	tw.tween_callback(lbl.queue_free)
+
+## Windowed capture only: fire a couple of scripted reactions from waiting seats so
+## the F24 glyphs appear in the verification screenshot (real play uses live taps).
+func _capture_demo_reactions(victim: int) -> void:
+	for i in roster.size():
+		if i == victim:
+			continue
+		_spawn_reaction(victim, i, String(REACT_MAP.values()[i % REACT_MAP.size()]))
 
 # ---- per-space resolutions ----
 func _resolve_shrine(seat: int, name: String, col: Color) -> void:
