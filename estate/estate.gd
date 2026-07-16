@@ -2850,6 +2850,17 @@ func _ambient_test_run() -> void:
 		walkers[0].global_position = Vector3(-2.2, 0.1, 2.05)   # hold them in his glare
 	await get_tree().create_timer(0.1).timeout
 	await _ambient_snap("groundskeeper_stare")
+	# THE QUEUE — two ghost mourners hovering at a mausoleum door that never
+	# opens; the front one consults its pocket watch. Clear the walkers away so
+	# the ghosts are in their resting queue (no "after you" step-aside firing).
+	for w in walkers:
+		if is_instance_valid(w):
+			w.global_position = Vector3(2.0 + w.player_idx * 1.0, 0.1, 3.0)
+	await get_tree().create_timer(0.6).timeout
+	if al2 != null and al2.has_method("debug_check_watch"):
+		al2.debug_check_watch()
+	await get_tree().create_timer(0.4).timeout
+	await _ambient_snap("queue")
 	print("AMBIENTTEST done")
 	await get_tree().create_timer(0.2).timeout
 	get_tree().quit()

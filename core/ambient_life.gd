@@ -72,10 +72,17 @@ func debug_stare(world_pos: Vector3) -> void:
 		if m is Groundskeeper:
 			(m as Groundskeeper).debug_force_stare(world_pos)
 
+## Dev-only: the front mourner consults its watch now (verify shots).
+func debug_check_watch() -> void:
+	for m in _members:
+		if m is GhostQueue:
+			(m as GhostQueue).debug_check_watch()
+
 # ---------------------------------------------------------------- member wiring
 func _build_members() -> void:
 	_add_member(CrowGallery.new())
 	_add_member(Groundskeeper.new())
+	_add_member(GhostQueue.new())
 
 func _add_member(m: AmbientMember) -> void:
 	m.life = self
@@ -641,11 +648,160 @@ class Groundskeeper extends AmbientMember:
 		return leaf
 
 # ================================================================ 3.4 THE QUEUE
-## The Patient Ghost(s): a polite queue for a mausoleum door that never opens.
-## One checks a pocket watch; when a living walker passes, they wave it ahead.
-## (doc 26 §3.4)
+## The Patient Ghost(s): a polite queue of two for a mausoleum door that never
+## opens. They hover, shuffle forward, and the front one checks a pocket watch;
+## when a living walker passes they step aside and wave it ahead, then resettle
+## at the back of the (still empty) line. (doc 26 §3.4)
 class GhostQueue extends AmbientMember:
-	pass
+	const DOOR := Vector3(-7.7, 0.0, -7.6)   # the mausoleum front (never opens)
+	var _ghosts: Array[Ghost] = []
+	var _aside := false
+
+	func build() -> void:
+		reaction_radius = 3.2
+		anchor = Vector3(-7.55, 0.0, -6.1)
+		var figs := [AmbientLife.KAYKIT_MAGE, AmbientLife.KAYKIT_ROGUE]
+		var homes := [Vector3(-7.55, 0.0, -6.35), Vector3(-7.6, 0.0, -5.72)]
+		for i in 2:
+			var fig: String = AmbientLife.MOURNER_GLB
+			if fig == "" or not ResourceLoader.exists(fig):
+				fig = String(figs[i])
+			var g := Ghost.new()
+			add_child(g)
+			g.build(fig, homes[i], DOOR, i == 0)
+			g.begin(rr())
+			_ghosts.append(g)
+
+	func tick(dt: float, nearest: Node3D, nearest_dist: float, _losing: Vector3, lod: bool) -> void:
+		if not lod:
+			return
+		var pass_by := nearest != null and nearest_dist < reaction_radius
+		if pass_by and not _aside:
+			_aside = true
+			for g in _ghosts:
+				g.step_aside()       # "after you" — let the living cut in
+		elif not pass_by and _aside:
+			_aside = false
+			for g in _ghosts:
+				g.resettle()
+		for g in _ghosts:
+			g.tick(dt, rr())
+
+	## Dev-only: make the front mourner consult its watch now (verify shots).
+	func debug_check_watch() -> void:
+		if not _ghosts.is_empty():
+			_ghosts[0].check_watch()
+
+## One patient revenant. Hovers, shuffles up the (empty) line, consults a watch.
+class Ghost extends Node3D:
+	var _model: Node3D
+	var _watch: Node3D
+	var _home := Vector3.ZERO
+	var _is_front := false
+	var _bob_tw: Tween
+	var _shuffle_t := 0.0
+	var _watch_t := 0.0
+	var _busy := false
+
+	func build(figure_path: String, home: Vector3, face_target: Vector3, is_front: bool) -> void:
+		_home = home
+		_is_front = is_front
+		position = home
+		_model = AmbientLife.character(figure_path, 1.32)
+		AmbientLife.ghostify(_model)
+		add_child(_model)
+		var flat := face_target - home
+		flat.y = 0.0
+		if flat.length() > 0.05:
+			rotation.y = atan2(flat.x, flat.z)
+		if is_front:
+			_watch = _build_watch()
+			add_child(_watch)
+			_watch.position = Vector3(0.16, 0.82, 0.28)
+			_watch.visible = false
+
+	func begin(rng: RandomNumberGenerator) -> void:
+		# a slow spectral hover — on the MODEL, so it never fights the node's own
+		# position tweens (shuffle / step-aside)
+		_bob_tw = _model.create_tween().set_loops()
+		_bob_tw.tween_property(_model, "position:y", 0.14, 1.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_bob_tw.tween_property(_model, "position:y", 0.0, 1.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_shuffle_t = rng.randf_range(4.0, 7.0)
+		_watch_t = rng.randf_range(6.0, 11.0)
+
+	func tick(dt: float, rng: RandomNumberGenerator) -> void:
+		if _busy:
+			return
+		_shuffle_t -= dt
+		if _shuffle_t <= 0.0:
+			_shuffle_t = rng.randf_range(5.0, 9.0)
+			_shuffle_forward()
+		if _is_front:
+			_watch_t -= dt
+			if _watch_t <= 0.0:
+				_watch_t = rng.randf_range(8.0, 14.0)
+				check_watch()
+
+	## A hopeful 0.2 m creep toward a door that will not open, then settle back.
+	func _shuffle_forward() -> void:
+		var fwd := -global_transform.basis.z   # local forward
+		fwd.y = 0.0
+		fwd = fwd.normalized() * 0.2
+		var tw := create_tween()
+		tw.tween_property(self, "position", _home + fwd, 0.5).set_trans(Tween.TRANS_SINE)
+		tw.tween_interval(1.4)
+		tw.tween_property(self, "position", _home, 0.7).set_trans(Tween.TRANS_SINE)
+
+	## Consult the pocket watch: it fades in, the mourner tips forward to read it,
+	## then it fades away. Grief is real; the appointment after it is realer.
+	func check_watch() -> void:
+		if _watch == null:
+			return
+		_watch.visible = true
+		_watch.scale = Vector3(0.6, 0.6, 0.6)
+		var tw := create_tween()
+		tw.tween_property(_watch, "scale", Vector3.ONE, 0.2).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(_model, "rotation:x", 0.22, 0.25)
+		tw.tween_interval(1.4)
+		tw.tween_property(_model, "rotation:x", 0.0, 0.25)
+		tw.tween_callback(func() -> void:
+			if is_instance_valid(_watch):
+				_watch.visible = false)
+
+	## "After you." Step aside and give a small bow to no one in particular.
+	func step_aside() -> void:
+		_busy = true
+		var right := global_transform.basis.x
+		right.y = 0.0
+		var tw := create_tween()
+		tw.tween_property(self, "position", _home + right.normalized() * 0.35, 0.4).set_trans(Tween.TRANS_SINE)
+		tw.parallel().tween_property(_model, "rotation:x", 0.18, 0.3)
+		tw.tween_property(_model, "rotation:x", 0.0, 0.3)
+
+	func resettle() -> void:
+		var tw := create_tween()
+		tw.tween_property(self, "position", _home, 0.5).set_trans(Tween.TRANS_SINE)
+		tw.tween_callback(func() -> void: _busy = false)
+
+	func _build_watch() -> Node3D:
+		var w := Node3D.new()
+		var disc := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 0.06
+		cm.bottom_radius = 0.06
+		cm.height = 0.02
+		disc.mesh = cm
+		disc.rotation.x = deg_to_rad(90.0)   # face outward like a held watch
+		var gold := StandardMaterial3D.new()
+		gold.albedo_color = Color(0.95, 0.82, 0.35)
+		gold.metallic = 0.6
+		gold.roughness = 0.3
+		gold.emission_enabled = true
+		gold.emission = Color(1.0, 0.85, 0.4)
+		gold.emission_energy_multiplier = 0.5
+		disc.material_override = gold
+		w.add_child(disc)
+		return w
 
 # ================================================================ 3.5 THE SEAGULL
 ## The estate's oldest grudge has feathers. Canon, wordless (doc 26 §3.5): it
