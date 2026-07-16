@@ -36,6 +36,21 @@ const KAYKIT_ROGUE := "res://assets/models/kaykit/Rogue.glb"
 
 const GEN := "res://assets/models/meshy/generated/"
 
+# ---------------------------------------------------------------- rigged troupe
+## THE RIGGING WAVE (E3, night 5): three humanoids given real bones via Meshy's
+## auto-rig + preset animations. Each member prefers its animated GLB when it is
+## on disk (MeshyProp.instance_rigged, keyed off the rig's real-world NATIVE
+## height — NEVER an AABB, which reads ~1/100 on a skinned mesh) and falls back
+## to the old static+procedural path when absent. Native heights are the rig
+## `height_meters` recorded in tools/meshy_rig_wave_report.json.
+const GROUNDSKEEPER_ANIM := GEN + "npc_groundskeeper_idle.glb"
+const GROUNDSKEEPER_NATIVE := 1.8
+const MOURNER_ELDERLY_ANIM := GEN + "npc_mourner_elderly_idle.glb"
+const MOURNER_ELDERLY_NATIVE := 1.65
+const MOURNER_HOODED_ANIM_BOW := GEN + "npc_mourner_hooded_bow.glb"    # "pay respects"
+const MOURNER_HOODED_ANIM_IDLE := GEN + "npc_mourner_hooded_idle.glb"  # fallback if bow absent
+const MOURNER_HOODED_NATIVE := 1.75
+
 # ---------------------------------------------------------------- tuning
 const SCAN_HZ := 8.0            # proximity/behaviour scan rate (throttled _process)
 const LOD_FAR := 30.0          # beyond this from player AND camera, a member idles
@@ -319,6 +334,25 @@ static func ghostify(root: Node) -> void:
 		mi.material_override = gm
 		mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
+## RIGGING WAVE: prefer a Meshy-rigged, animated GLB when it exists on disk.
+## Returns a wrapper whose skinned model is scaled by target/native (feet at
+## native y=0) with its shipped skeletal clip looping — or null when the path is
+## absent, so callers fall back to their static character() path. First path in
+## `paths` that resolves wins (lets a member prefer e.g. a bow over an idle).
+static func rigged_or_null(paths: Array, native_height: float, height: float, animate := true) -> Node3D:
+	for p in paths:
+		var path := String(p)
+		if path != "" and ResourceLoader.exists(path):
+			return MeshyProp.instance_rigged(path, native_height, height, 0.0, animate)
+	return null
+
+## The AnimationPlayer of a rigged wrapper (for pausing a skeletal loop), or null.
+static func anim_player_of(root: Node) -> AnimationPlayer:
+	var ap := root.find_child("AnimationPlayer", true, false)
+	if ap is AnimationPlayer:
+		return ap as AnimationPlayer
+	return null
+
 ## Instance a KayKit/Meshy character GLB, uniformly scaled, AnimationPlayer set
 ## to a looped idle. Returns the wrapper (its child "Model" holds the mesh).
 static func character(path: String, height := 1.35) -> Node3D:
@@ -507,6 +541,8 @@ class Groundskeeper extends AmbientMember:
 		Vector3(0.14, 0.02, 0.50), Vector3(-0.12, 0.02, 0.56), Vector3(0.02, 0.02, 0.66)]
 
 	var _model: Node3D
+	var _rigged := false                 # true when Old Rake has Meshy bones
+	var _anim: AnimationPlayer           # his skeletal loop (frozen mid-stare)
 	var _rake: Node3D
 	var _leaves: Array[MeshInstance3D] = []
 	var _bubble: AmbientLife.GossipBubble
@@ -525,7 +561,17 @@ class Groundskeeper extends AmbientMember:
 		var path := AmbientLife.GROUNDSKEEPER_GLB
 		if path == "" or not ResourceLoader.exists(path):
 			path = AmbientLife.KAYKIT_BARBARIAN
-		_model = AmbientLife.character(path, 1.35)
+		# prefer his rigged idle; the procedural rake + leaves layer on top of it.
+		# (No broom/rake preset exists in the library — every "sweep" is a kick —
+		# so his raking stays the swinging prop, now over real skeletal bones.)
+		var rigged := AmbientLife.rigged_or_null([AmbientLife.GROUNDSKEEPER_ANIM], AmbientLife.GROUNDSKEEPER_NATIVE, 1.35)
+		if rigged != null:
+			_model = rigged
+			_rigged = true
+			_anim = AmbientLife.anim_player_of(_model)
+			print("AMBIENT_RIGGED groundskeeper <- ", AmbientLife.GROUNDSKEEPER_ANIM)
+		else:
+			_model = AmbientLife.character(path, 1.35)
 		AmbientLife.tint_model(_model, Color(0.60, 0.50, 0.40))   # muted groundskeeper browns
 		add_child(_model)
 		_rake = _build_rake()
@@ -597,15 +643,22 @@ class Groundskeeper extends AmbientMember:
 		_bubble.hide_bubble()
 		if _rake_tw != null and _rake_tw.is_valid():
 			_rake_tw.kill()
+		_freeze_anim(true)     # he STOPS — the stare is the joke, so freeze the loop
 		_scatter_leaves()
 		_face(p.global_position, 0.2)
 
 	func _exit_stare() -> void:
 		_state = RAKING
 		_state_t = rr().randf_range(3.0, 4.5)
+		_freeze_anim(false)    # back to work
 		_face_yaw(_base_yaw, 0.4)
 		_reset_leaves()
 		_start_rake_sweep()
+
+	## Freeze/resume the skeletal loop (rigged path only; a no-op on KayKit static).
+	func _freeze_anim(frozen: bool) -> void:
+		if _anim != null:
+			_anim.speed_scale = 0.0 if frozen else 1.0
 
 	## Public: the vengeful seagull undoes his work (doc §3.5 crosses §3.1).
 	func scatter_leaves() -> void:
@@ -617,6 +670,7 @@ class Groundskeeper extends AmbientMember:
 		_bubble.hide_bubble()
 		if _rake_tw != null and _rake_tw.is_valid():
 			_rake_tw.kill()
+		_freeze_anim(true)
 		_scatter_leaves()
 		_face(world_pos, 0.2)
 
@@ -705,13 +759,22 @@ class GhostQueue extends AmbientMember:
 		anchor = Vector3(-7.55, 0.0, -6.1)
 		var figs := [AmbientLife.KAYKIT_MAGE, AmbientLife.KAYKIT_ROGUE]
 		var homes := [Vector3(-7.55, 0.0, -6.35), Vector3(-7.6, 0.0, -5.72)]
+		# RIGGING WAVE: real mourners get real bones. Front (with the pocket-watch
+		# gag) is the weary elder on a quiet idle; back is the hooded figure that
+		# prefers a "pay respects" bow, falling back to its own idle. Each falls
+		# back to the ghostly-hover KayKit stand-in when its GLB is absent.
+		var anim_sets := [
+			[AmbientLife.MOURNER_ELDERLY_ANIM],
+			[AmbientLife.MOURNER_HOODED_ANIM_BOW, AmbientLife.MOURNER_HOODED_ANIM_IDLE],
+		]
+		var natives := [AmbientLife.MOURNER_ELDERLY_NATIVE, AmbientLife.MOURNER_HOODED_NATIVE]
 		for i in 2:
 			var fig: String = AmbientLife.MOURNER_GLB
 			if fig == "" or not ResourceLoader.exists(fig):
 				fig = String(figs[i])
 			var g := Ghost.new()
 			add_child(g)
-			g.build(fig, homes[i], DOOR, i == 0)
+			g.build(anim_sets[i], float(natives[i]), fig, homes[i], DOOR, i == 0)
 			g.begin(rr())
 			_ghosts.append(g)
 
@@ -738,6 +801,7 @@ class GhostQueue extends AmbientMember:
 ## One patient revenant. Hovers, shuffles up the (empty) line, consults a watch.
 class Ghost extends Node3D:
 	var _model: Node3D
+	var _rigged := false          # true when this mourner has Meshy bones
 	var _watch: Node3D
 	var _home := Vector3.ZERO
 	var _is_front := false
@@ -746,11 +810,17 @@ class Ghost extends Node3D:
 	var _watch_t := 0.0
 	var _busy := false
 
-	func build(figure_path: String, home: Vector3, face_target: Vector3, is_front: bool) -> void:
+	func build(anim_paths: Array, native_height: float, fallback_path: String, home: Vector3, face_target: Vector3, is_front: bool) -> void:
 		_home = home
 		_is_front = is_front
 		position = home
-		_model = AmbientLife.character(figure_path, 1.32)
+		var rigged := AmbientLife.rigged_or_null(anim_paths, native_height, 1.32)
+		if rigged != null:
+			_model = rigged
+			_rigged = true
+			print("AMBIENT_RIGGED mourner <- ", str(anim_paths))
+		else:
+			_model = AmbientLife.character(fallback_path, 1.32)
 		AmbientLife.ghostify(_model)
 		add_child(_model)
 		var flat := face_target - home
@@ -765,10 +835,13 @@ class Ghost extends Node3D:
 
 	func begin(rng: RandomNumberGenerator) -> void:
 		# a slow spectral hover — on the MODEL, so it never fights the node's own
-		# position tweens (shuffle / step-aside)
-		_bob_tw = _model.create_tween().set_loops()
-		_bob_tw.tween_property(_model, "position:y", 0.14, 1.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-		_bob_tw.tween_property(_model, "position:y", 0.0, 1.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		# position tweens (shuffle / step-aside). ONLY for the figureless KayKit
+		# stand-in: a rigged mourner carries its own skeletal motion, and a
+		# whole-body hover on top of that just fights the loop, so gate it off.
+		if not _rigged:
+			_bob_tw = _model.create_tween().set_loops()
+			_bob_tw.tween_property(_model, "position:y", 0.14, 1.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			_bob_tw.tween_property(_model, "position:y", 0.0, 1.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		_shuffle_t = rng.randf_range(4.0, 7.0)
 		_watch_t = rng.randf_range(6.0, 11.0)
 
