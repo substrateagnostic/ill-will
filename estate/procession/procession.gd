@@ -21,6 +21,7 @@ const Codicil := preload("res://estate/procession/codicil.gd")
 const Executor := preload("res://estate/procession/executor_host.gd")
 const Spaces := preload("res://estate/procession/board_spaces.gd")
 const Presets := preload("res://estate/procession/presets.gd")
+const BoardCamera := preload("res://estate/procession/board_camera.gd")
 
 const CHAR_SCENES := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -78,6 +79,7 @@ var putt: ProcessionPawnPutt
 var codicil: ProcessionCodicil
 var executor: ProcessionExecutor
 var cam: Camera3D
+var board_camera: ProcessionCamera    # F1: the named-shot camera director
 var final_kit: Node
 var _ui: CanvasLayer
 var _topbar: Control
@@ -232,6 +234,12 @@ func _build_world() -> void:
 	cam.global_position = _cam_home
 	cam.look_at(board.CENTER, Vector3.UP)
 	cam.current = true
+
+	# The camera director owns the named-shot spine (F1/F2/F3). It stays inert
+	# under the fast soak (no rendering) and only drives the cam once activated.
+	board_camera = BoardCamera.new()
+	add_child(board_camera)
+	board_camera.setup(cam, board, _fast)
 
 	putt = PawnPutt.new()
 	add_child(putt)
@@ -545,14 +553,15 @@ func _intro() -> void:
 	# in the executor banner, no clause text yet (they don't overlap). ---
 	_reveal_seat = -1
 	executor.say(Executor.pick(Executor.GREETING, rng), Color(0.9, 0.88, 0.98))
-	# --- Establishing camera at the gate, then a cinematic flyover: a tour of the
+	# --- Establishing shot at the gate, then a cinematic flyover: a tour of the
 	# drive, the manor gate + hearse, and the roving Codicil — the opening of a
-	# Mario-Party board, re-staged around the new gothic dressing. ---
-	cam.global_position = Vector3(0.0, 6.5, 6.0)
-	cam.look_at(board.CENTER + Vector3(0, 1.6, -11.0), Vector3.UP)
+	# Mario-Party board, re-staged around the new gothic dressing. The director
+	# owns the shot spine now (F1); any player tap skips the tour (F1 skip). ---
+	board_camera.establish()
 	if not _fast:
-		await _flyover()
+		await board_camera.flyover(_flyover_skip)
 	if _capture:
+		board_camera.hold()   # the hero shots below pose the cam directly
 		await _cap_snap("flyover")
 		await _capture_showcase()
 	else:
@@ -560,8 +569,7 @@ func _intro() -> void:
 	await _beat(1.6)
 	# --- The will clauses, read BEFORE a single putt — nothing hidden decides. ---
 	executor.clear_banner()
-	cam.global_position = _cam_home
-	cam.look_at(board.CENTER, Vector3.UP)
+	board_camera.whole_board(0.6)
 	var lines: Array[String] = []
 	for c in clauses:
 		lines.append("◆ %s — +1 Deed to whoever %s" % [c.title, c.desc])
@@ -574,34 +582,15 @@ func _intro() -> void:
 	_hide_announce()
 	executor.clear_banner()
 
-## The opening flyover: a smooth multi-key camera tour (position AND look-at
-## interpolated together) that shows off the gate, sweeps the drive, passes the
-## Codicil beacon, and settles to the whole-board overview. Presentation only —
-## gated behind `not _fast`, so the headless receipt never runs it.
-func _flyover() -> void:
-	var bpos := board.space_pos(board.beacon_index)
-	var keys: Array = [
-		{"p": Vector3(0.0, 6.5, 6.0), "l": board.CENTER + Vector3(0, 1.6, -11.0)},   # the gate, low
-		{"p": Vector3(-24.0, 13.0, 9.0), "l": board.CENTER + Vector3(-4, 0.6, 2)},    # rise along the drive
-		{"p": Vector3(-9.0, 20.0, -28.0), "l": board.CENTER + Vector3(0, 1.0, -2)},   # sweep the far side
-		{"p": bpos + Vector3(6.0, 8.0, 7.0), "l": bpos + Vector3(0, 1.6, 0)},         # glide past the Codicil
-		{"p": _cam_home, "l": board.CENTER},                                          # settle to overview
-	]
-	cam.global_position = keys[0]["p"]
-	cam.look_at(keys[0]["l"], Vector3.UP)
-	var tw := cam.create_tween()
-	for i in range(1, keys.size()):
-		var a: Dictionary = keys[i - 1]
-		var b: Dictionary = keys[i]
-		var ap: Vector3 = a["p"]
-		var al: Vector3 = a["l"]
-		var bp: Vector3 = b["p"]
-		var bl: Vector3 = b["l"]
-		tw.tween_method(func(t: float) -> void:
-				cam.global_position = ap.lerp(bp, t)
-				cam.look_at(al.lerp(bl, t), Vector3.UP),
-			0.0, 1.0, 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	await tw.finished
+## Any human tap (A or B) breaks the opening flyover — the director polls this
+## each frame during its tour. All-bots (autoplay/capture) never trips it, so the
+## full tour plays for the verification screenshots.
+func _flyover_skip() -> bool:
+	for i in roster.size():
+		if not bool(roster[i].bot):
+			if PlayerInput.just_pressed(i, "a") or PlayerInput.just_pressed(i, "b"):
+				return true
+	return false
 
 ## Windowed capture only: pose two hero shots for the Steam-page verification —
 ## the dressed board wide, and a weeping grave in close with its headstone. Never
@@ -654,9 +643,10 @@ func _round() -> void:
 		moved[seat] = int(r.spaces)
 	_apply_item_movement(moved)
 
-	# --- MOVE: every pawn travels at once; whole-board camera. ---
+	# --- MOVE: every pawn travels at once; a low raking dolly TRAVELS along the
+	# drive (F2) so the procession reads as a procession, not a static overhead. ---
 	_phase = "move"
-	executor.reset_camera(_cam_home, board.CENTER, 0.35 if not _fast else 0.0)
+	board_camera.move_travel(0.9)
 	# The Codicil is a moving target you REACH: the first pawn (by seat) whose
 	# hop passes OR lands on the beacon this round, and can afford it, claims it.
 	# Resolved as that seat's REVEAL beat; relocation happens on the claim.
@@ -689,7 +679,7 @@ func _round() -> void:
 	for seat in order:
 		await _reveal_landing(seat)
 	executor.clear_banner()
-	executor.reset_camera(_cam_home, board.CENTER, 0.4 if not _fast else 0.0)
+	board_camera.whole_board(0.5)
 	_refresh_hud()
 
 ## Bots aim for the highest-value reachable stone (1..6), Codicil first if
@@ -752,8 +742,10 @@ func _reveal_landing(seat: int) -> void:
 	# The affected player's badge rides the lower-third for this landing's line.
 	_reveal_seat = seat
 	_apply_reveal_badge(seat)
-	if not _fast:
-		executor.push_to(board.reveal_anchor(idx), board.pawns[seat].global_position)
+	# Type-aware landing close-up with an overshoot punch-in (F3). The Codicil
+	# claim gets its own hero push (F17), staged inside _resolve_codicil.
+	if not _fast and seat != _round_codicil_seat:
+		board_camera.landing_push(board.reveal_shot(idx, board.type_at(idx)))
 	var col: Color = roster[seat].color
 	var name := String(roster[seat].name)
 	if seat == _round_codicil_seat:
@@ -774,9 +766,17 @@ func _reveal_landing(seat: int) -> void:
 			await _cap_snap("codicil")
 		else:
 			VerifyCapture.snap("codicil")
+		await _beat(REVEAL_BEAT)
+	elif _capture:
+		# Let the landing push-in settle before the verification snap, so the
+		# type-aware close-up (F3) is judged at rest, not mid-travel. Windowed
+		# capture only — the headless receipt never takes this branch.
+		await _beat(0.7)
+		await _cap_snap("reveal")
+		await _beat(maxf(0.0, REVEAL_BEAT - 0.7))
 	else:
 		VerifyCapture.snap("reveal")
-	await _beat(REVEAL_BEAT)
+		await _beat(REVEAL_BEAT)
 
 # ---- per-space resolutions ----
 func _resolve_shrine(seat: int, name: String, col: Color) -> void:

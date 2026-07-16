@@ -498,3 +498,34 @@ func reveal_anchor(space_idx: int) -> Vector3:
 	if out.length() > 0.01:
 		out = out.normalized()
 	return p + out * 4.2 + Vector3(0, 3.4, 0)
+
+## Type-aware landing framing (doc 24 F3): each event gets a pose that expresses
+## it. Returns {pos, look}. A WEEPING GRAVE is shot low, looking UP at the
+## headstone; the CODICIL gets a hero low angle so its glow flares; a SHRINE
+## reads warm from a shallow rise; the rest use the generic above-and-outside
+## anchor. Pure geometry — no rng, no sim read.
+func reveal_shot(space_idx: int, type: String) -> Dictionary:
+	var p := space_pos(space_idx)
+	var out := (p - CENTER)
+	out.y = 0.0
+	out = out.normalized() if out.length() > 0.01 else Vector3.BACK
+	match type:
+		S.WEEPING_GRAVE:
+			# Low and close, looking UP the headstone (which sits outboard at 0.9).
+			return {"pos": p + out * 2.7 + Vector3(0, 1.2, 0),
+				"look": p + out * 0.9 + Vector3(0, 1.4, 0)}
+		S.CODICIL:
+			# Hero low angle into the pedestal's gold glow.
+			return {"pos": p + out * 3.4 + Vector3(0, 1.9, 0),
+				"look": p + Vector3(0, 1.6, 0)}
+		S.SHRINE:
+			# A shallow warm rise on the lamppost mercy.
+			return {"pos": p + out * 3.2 + Vector3(0, 2.6, 0),
+				"look": p + Vector3(0, 0.9, 0)}
+		S.SEANCE:
+			# Slightly higher so the spinning planchette dial reads flat-on.
+			return {"pos": p + out * 3.0 + Vector3(0, 3.2, 0),
+				"look": p + out * 1.0 + Vector3(0, 0.2, 0)}
+		_:
+			return {"pos": p + out * 3.4 + Vector3(0, 2.8, 0),
+				"look": p + Vector3(0, 0.7, 0)}
