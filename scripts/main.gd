@@ -1823,7 +1823,7 @@ func _mir_ending(champ: int) -> void:
 	if champ < avatars.size():
 		avatars[champ].react("Cheer")
 		_spawn_confetti(avatars[champ].global_position + Vector3(0, 1.5, 0), GameState.players[champ].color)
-	_flash_banner("%s WINS THE MATCH!" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
+	_flash_banner("%s OUTLASTS THE PLOT" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
 	print("PAR_MIRROR ending champ=%d" % champ)
 
 # --- CLIENT input: aim + charge → putt intent; click → build intent -----------

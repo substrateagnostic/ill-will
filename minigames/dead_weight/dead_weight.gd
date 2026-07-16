@@ -537,7 +537,7 @@ func _start_round() -> void:
 	if _stretch != null:
 		_stretch.round_reset()   # FINAL STRETCH: light bed until the house wakes
 	if _balance_rounds == 0:
-		_flash_banner("ROUND %d\nFIGHT!" % (round_index + 1), Color(1, 0.85, 0.2), 1.6)
+		_flash_banner("ROUND %d\nHOLD YOUR GROUND" % (round_index + 1), Color(1, 0.85, 0.2), 1.6)
 	# --dwevict evidence pin (probe nights only; --seancechar precedent): fell
 	# the pinned seat through the REAL _fall() path 1 s into round 1, so the
 	# poltergeist-and-furniture arc is guaranteed on film. Loud, never real play.
@@ -729,7 +729,7 @@ func _finish_match() -> void:
 	print("DW_MATCH_OVER champ=%s pts=%d" % [players[champ].name, players[champ].total])
 	if _stretch != null:
 		_stretch.match_ended()
-	_flash_banner("%s WINS DEAD WEIGHT" % players[champ].name, players[champ].color, 6.0)
+	_flash_banner("%s OUTWEIGHS THE DEAD" % players[champ].name, players[champ].color, 6.0)
 	Sfx.play("match_win")
 	_spawn_confetti(_spawns[champ] + Vector3(0, 1.2, 0), players[champ].color)
 

@@ -877,7 +877,7 @@ func _end_match() -> void:
 	pawns[winner]._play_once("Cheer")
 	Sfx.play("match_win")
 	_spawn_burst(pawns[winner].body_center(), pawn_color(winner), 40)
-	_flash_banner("%s RULES THE VOID!" % pawn_name(winner), pawn_color(winner), 9999.0)
+	_flash_banner("%s HOLDS THE VOID" % pawn_name(winner), pawn_color(winner), 9999.0)
 	var highlights: Array = []
 	if _oldest_kill_txt != "":
 		highlights.append(_oldest_kill_txt)

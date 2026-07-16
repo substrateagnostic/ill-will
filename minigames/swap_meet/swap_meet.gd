@@ -1324,7 +1324,7 @@ func _end_race() -> void:
 	Sfx.play("match_win")
 	_confetti(karts[winner].center(), _colors[winner])
 	_confetti(karts[winner].center() + Vector3(1.5, 1, 0), Color(1, 0.9, 0.4))
-	_flash_banner("[color=#%s]%s WINS THE SWAP MEET![/color]" % [_colors[winner].to_html(false), _names[winner]], 9999.0)
+	_flash_banner("[color=#%s]%s CROSSES FIRST[/color]" % [_colors[winner].to_html(false), _names[winner]], 9999.0)
 	# ONLINE: champ minted HERE, 1.8 s of pump before report_finished fires
 	# below (lesson 1: facts minted the same tick as the report never land).
 	_net_champ = winner

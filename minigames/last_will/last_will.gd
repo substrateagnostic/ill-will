@@ -1448,7 +1448,7 @@ func _finish_match() -> void:
 		_print_tally()
 		get_tree().quit()
 		return
-	_flash_banner("%s WINS LAST WILL" % players[champ].name, players[champ].color, 6.0)
+	_flash_banner("%s INHERITS THE ESTATE" % players[champ].name, players[champ].color, 6.0)
 	Sfx.play("match_win")
 	_spawn_confetti(pawns[champ].global_position + Vector3(0, 1.2, 0), players[champ].color)
 	report_finished(results)
@@ -2139,7 +2139,7 @@ func _net_apply(state: Dictionary) -> void:
 			_mir_done = true
 			if _stretch != null:
 				_stretch.match_ended()
-			_flash_banner("%s WINS LAST WILL" % players[champ].name, players[champ].color, 6.0)
+			_flash_banner("%s INHERITS THE ESTATE" % players[champ].name, players[champ].color, 6.0)
 			Sfx.play("match_win")
 			_spawn_confetti(pawns[champ].global_position + Vector3(0, 1.2, 0), players[champ].color)
 
