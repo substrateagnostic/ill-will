@@ -202,6 +202,11 @@ func quit_to_title() -> void:
 		_disconnect_panel.visible = false
 	open = false
 	panel.visible = false
+	# The scrim + phase-panel ref live on this autoload, which survives the scene
+	# reload below — drop them so neither lingers over the fresh title.
+	if _settings_scrim != null:
+		_settings_scrim.visible = false
+	_phase_panel_hidden = null
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	PlayerInput.save_setup()
