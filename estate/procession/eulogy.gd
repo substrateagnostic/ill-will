@@ -100,8 +100,10 @@ static func build(roster: Array, stats: Array, deeds: Array, grudge: Array,
 			if kind < 0 or int(st.get("lost", 0)) > int((stats[kind] as Dictionary).get("lost", 0)):
 				kind = i
 
-	# --- one commendation per seat, keyed to its most salient deed ---
-	# Order the seats by Deeds ascending so the heir's line lands last.
+	# --- one commendation per seat, keyed to its most salient deed. Each seat
+	# gets a DISTINCT descriptor (assigned greedily by salience) so no template
+	# family repeats within a single eulogy. Ordered by Deeds ascending so the
+	# heir's line lands last. ---
 	var order: Array = []
 	for i in n:
 		order.append(i)
@@ -109,10 +111,24 @@ static func build(roster: Array, stats: Array, deeds: Array, grudge: Array,
 		if int(deeds[a]) != int(deeds[b]):
 			return int(deeds[a]) < int(deeds[b])
 		return a < b)
+	var heir_gets_line := int(deeds[heir]) > 0
+	var need: Array = []
+	for seat in order:
+		if int(seat) == kind:
+			continue
+		if int(seat) == heir and heir_gets_line:
+			continue
+		need.append(int(seat))
+	var assigned := _assign_descriptors(need, stats, grudge)
 	for seat in order:
 		if int(seat) == kind:
 			continue   # the warm line covers this seat, near the end
-		lines.append(_seat_line(int(seat), roster, stats, deeds, grudge, heir, prng))
+		if int(seat) == heir and heir_gets_line:
+			var hname := String((roster[seat] as Dictionary).get("name", "SOMEONE"))
+			lines.append(String(_pick(L_HEIR, prng)) % [hname, _deeds_phrase(int(deeds[seat]))])
+		else:
+			lines.append(_format_desc(String(assigned.get(int(seat), "idle")),
+				int(seat), roster, stats, grudge, prng))
 
 	# --- the warm line (if a kindness happened) ---
 	if kind >= 0:
@@ -130,41 +146,56 @@ static func build(roster: Array, stats: Array, deeds: Array, grudge: Array,
 
 	return {"lines": lines, "opener": op, "closer": cl}
 
-## One seat's line, keyed to the stat that most defines their night.
-static func _seat_line(seat: int, roster: Array, stats: Array, deeds: Array,
-		grudge: Array, heir: int, prng: RandomNumberGenerator) -> String:
-	var name := String((roster[seat] as Dictionary).get("name", "SOMEONE"))
+## Salience of each descriptor for one seat. Hoarding is a FAT purse and NO
+## claim; if they bought a Deed they plainly spent, so the hoarder read collapses.
+static func _scores(seat: int, stats: Array, grudge: Array) -> Dictionary:
 	var st: Dictionary = stats[seat]
-	var lost := int(st.get("lost", 0))
-	var duels := int(st.get("duels", 0))
-	var graves := int(st.get("graves", 0))
-	var shrines := int(st.get("shrines", 0))
 	var bought := int(st.get("deeds_bought", 0))
 	var g := int(grudge[seat])
-	if seat == heir and int(deeds[seat]) > 0:
-		return String(_pick(L_HEIR, prng)) % [name, _deeds_phrase(int(deeds[seat]))]
-	# salience-scored descriptors
-	var best := "idle"
-	var best_v := 0.0
-	# Hoarding is a FAT purse and NO claim; if they bought a Deed they plainly
-	# spent, so the hoarder read collapses and their other deeds speak instead.
-	var cand := {
-		"bloody": float(duels) * 2.0,
-		"betrayed": float(lost) * 1.0,
+	return {
+		"bloody": float(st.get("duels", 0)) * 2.0,
+		"betrayed": float(st.get("lost", 0)) * 1.0,
 		"hoarder": (float(g) * 0.2) if bought > 0 else float(g) * 0.9,
-		"mourner": float(graves) * 1.6,
-		"pious": float(shrines) * 1.2,
+		"mourner": float(st.get("graves", 0)) * 1.6,
+		"pious": float(st.get("shrines", 0)) * 1.2,
 	}
-	for k in cand:
-		if float(cand[k]) > best_v:
-			best_v = float(cand[k])
-			best = String(k)
-	match best:
-		"bloody": return String(_pick(L_BLOODY, prng)) % [name, _count_phrase(duels, "score", "scores")]
-		"betrayed": return String(_pick(L_BETRAYED, prng)) % [name, lost]
-		"hoarder": return String(_pick(L_HOARDER, prng)) % [name, g]
-		"mourner": return String(_pick(L_MOURNER, prng)) % [name, _graves_phrase(graves)]
-		"pious": return String(_pick(L_PIOUS, prng)) % [name, _shrines_phrase(shrines)]
+
+## Greedily give each seat a DISTINCT descriptor (highest salience first), so no
+## two seats draw the same template family in one eulogy. Seats with nothing to
+## say fall to "idle".
+static func _assign_descriptors(seats: Array, stats: Array, grudge: Array) -> Dictionary:
+	var triples: Array = []
+	for seat in seats:
+		var sc := _scores(int(seat), stats, grudge)
+		for d in sc:
+			triples.append({"seat": int(seat), "desc": String(d), "v": float(sc[d])})
+	triples.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return float(a["v"]) > float(b["v"]))
+	var out: Dictionary = {}
+	var used_desc: Dictionary = {}
+	for t in triples:
+		var s := int(t["seat"])
+		var d := String(t["desc"])
+		if out.has(s) or used_desc.has(d) or float(t["v"]) <= 0.0:
+			continue
+		out[s] = d
+		used_desc[d] = true
+	for seat in seats:
+		if not out.has(int(seat)):
+			out[int(seat)] = "idle"
+	return out
+
+## Format one seat's assigned descriptor into a line.
+static func _format_desc(desc: String, seat: int, roster: Array, stats: Array,
+		grudge: Array, prng: RandomNumberGenerator) -> String:
+	var name := String((roster[seat] as Dictionary).get("name", "SOMEONE"))
+	var st: Dictionary = stats[seat]
+	match desc:
+		"bloody": return String(_pick(L_BLOODY, prng)) % [name, _count_phrase(int(st.get("duels", 0)), "score", "scores")]
+		"betrayed": return String(_pick(L_BETRAYED, prng)) % [name, int(st.get("lost", 0))]
+		"hoarder": return String(_pick(L_HOARDER, prng)) % [name, int(grudge[seat])]
+		"mourner": return String(_pick(L_MOURNER, prng)) % [name, _graves_phrase(int(st.get("graves", 0)))]
+		"pious": return String(_pick(L_PIOUS, prng)) % [name, _shrines_phrase(int(st.get("shrines", 0)))]
 	return String(_pick(L_IDLE, prng)) % [name]
 
 # ---- delivery ----------------------------------------------------------------
