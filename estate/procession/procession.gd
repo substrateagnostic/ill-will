@@ -23,6 +23,7 @@ const Spaces := preload("res://estate/procession/board_spaces.gd")
 const Presets := preload("res://estate/procession/presets.gd")
 const BoardCamera := preload("res://estate/procession/board_camera.gd")
 const BoardFx := preload("res://estate/procession/board_fx.gd")
+const SeanceWheelScene := preload("res://estate/procession/seance_wheel.gd")
 
 const CHAR_SCENES := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -83,6 +84,7 @@ var cam: Camera3D
 var board_camera: ProcessionCamera    # F1: the named-shot camera director
 var fx: ProcessionFx                  # F10/F11/F17: flying numbers + the Deed token
 var _fx_host: Control
+var seance_wheel: SeanceWheel         # F13: the visible four-slot planchette dial
 var final_kit: Node
 var _ui: CanvasLayer
 var _topbar: Control
@@ -408,6 +410,14 @@ func _build_hud() -> void:
 	fx = BoardFx.new()
 	add_child(fx)
 	fx.setup(_fx_host, cam, _fast)
+
+	# The séance dial (F13) — a visible four-slot wheel that spins to the sim's
+	# pre-decided slot. Titles come straight from the announced grammar.
+	var wheel_titles: Array = []
+	for slot in Spaces.SEANCE_WHEEL:
+		wheel_titles.append(String((slot as Dictionary).title))
+	seance_wheel = SeanceWheelScene.new()
+	seance_wheel.setup(_fx_host, wheel_titles, _fast)
 
 	executor.setup(_reveal, cam)
 	# The endgame kit escalates music + light on the final Deed (juice floor).
@@ -779,7 +789,7 @@ func _reveal_landing(seat: int) -> void:
 			Spaces.SHRINE: _resolve_shrine(seat, name, col)
 			Spaces.WEEPING_GRAVE: _resolve_grave(seat, name, col)
 			Spaces.STALL: _resolve_stall(seat, name, col)
-			Spaces.SEANCE: _resolve_seance(seat, name, col)
+			Spaces.SEANCE: await _resolve_seance(seat, name, col)
 			Spaces.TOLLGATE: _resolve_tollgate(seat, name, col)
 			Spaces.VENDETTA: _resolve_vendetta(seat, name, col)
 			_: executor.say(Executor.pick(Executor.BLANK, rng, [name]), col)
@@ -845,9 +855,26 @@ func _resolve_stall(seat: int, name: String, col: Color) -> void:
 	executor.say(Executor.pick(Executor.STALL, rng, [name]) + "  (%s)" % item.name, col)
 
 func _resolve_seance(seat: int, name: String, col: Color) -> void:
+	# The SIM decides the slot (unchanged rng draw); the visible wheel is theater
+	# that spins TO it (F13). Effects apply as the needle lands, so the dial reads
+	# like it caused the outcome — but it never decides anything.
 	var slot := rng.randi_range(0, Spaces.SEANCE_WHEEL.size() - 1)
 	var w: Dictionary = Spaces.SEANCE_WHEEL[slot]
 	Sfx.play("bumper", -6.0)
+	if not _fast:
+		# Match the lower-third to the séance during the spin (the outcome line
+		# lands after the needle settles).
+		executor.say("The planchette stirs for %s. The circle turns…" % name,
+			Color(0.78, 0.6, 0.95))
+		if _capture:
+			# Fire the spin, snap it mid-turn for the verification screenshot, then
+			# let it settle. Windowed capture only; never on the headless receipt.
+			seance_wheel.spin_to(slot)
+			await _beat(1.1)
+			await _cap_snap("seance_wheel")
+			await _beat(2.0)
+		else:
+			await seance_wheel.spin_to(slot)
 	match slot:
 		0:  # MERCIFUL DRAFT — every mourner +2
 			for i in roster.size():
