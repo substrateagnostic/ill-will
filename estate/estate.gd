@@ -545,11 +545,18 @@ func _enter_title_swap() -> void:
 	logo.add_theme_color_override("font_outline_color", Color(0.2, 0.12, 0.05))
 	logo.add_theme_constant_override("outline_size", 22)
 	box.add_child(logo)
+	# D1 (THE FRONT DOOR art pass): the tagline + hint speak in the house's
+	# funeral-stationery voice — IM Fell English, parchment ink — the same face
+	# the Executor's event cards use (procession.gd). Copy is verbatim; the
+	# lighter serif is kept legible by a bump in size and a warm parchment tone.
+	var serif: Font = load("res://assets/fonts/IMFellEnglish-Regular.ttf")
 	var sub := Label.new()
 	sub.text = "a party nobody asked for"
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.add_theme_font_size_override("font_size", 20)
-	sub.modulate.a = 0.85
+	if serif != null:
+		sub.add_theme_font_override("font", serif)
+	sub.add_theme_font_size_override("font_size", 25)
+	sub.add_theme_color_override("font_color", Color(0.87, 0.81, 0.67))
 	box.add_child(sub)
 	var spacer := Control.new()
 	spacer.custom_minimum_size = Vector2(0, 18)
@@ -608,12 +615,59 @@ func _enter_title_swap() -> void:
 	join_btn.pressed.connect(_build_join_panel)
 	net_row.add_child(join_btn)
 	box.add_child(net_row)
+	# D1: dress every title button in the funeral stationery — dark ink panel,
+	# gold hairline, parchment text; gamepad/hover focus lifts the whole border to
+	# full gold (see _style_title_button). Structure, handlers, tab order and the
+	# PLAY-first focus grab are all unchanged — this is presentation only.
+	var title_btns: Array[Button] = [play, newg, settings, mini, ward, host_btn, join_btn]
+	for b in title_btns:
+		_style_title_button(b)
 	var hint := Label.new()
 	hint.text = "PLAY = tonight's rite — THE PROCESSION board, or classic auctioned minigame nights"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size", 14)
-	hint.modulate.a = 0.6
+	if serif != null:
+		hint.add_theme_font_override("font", serif)
+	hint.add_theme_font_size_override("font_size", 17)
+	hint.add_theme_color_override("font_color", Color(0.78, 0.72, 0.60))
 	box.add_child(hint)
+
+## D1 — THE FRONT DOOR: one title button, dressed as the house's funeral
+## stationery. Near-black ink panel + gold hairline (the register of the
+## Executor's event cards, procession.gd _lowerthird_box), parchment text, and a
+## focus state that lifts the whole border to full gold so a gamepad cursor is
+## unmistakable from couch distance. Labels are set in IM Fell English too — the
+## labels are ALL-CAPS action words (no lowercase old-style figures to muddy),
+## and a couch-distance screenshot confirmed they stay instantly legible while
+## unifying the whole door into the house's one gothic voice. The grow-on-focus
+## is added by FrontEndDirector's focus hook, which complements the gold ring.
+func _style_title_button(btn: Button) -> void:
+	var serif: Font = load("res://assets/fonts/IMFellEnglish-Regular.ttf")
+	if serif != null:
+		btn.add_theme_font_override("font", serif)
+	btn.add_theme_stylebox_override("normal", _title_btn_box(
+		Color(0.05, 0.045, 0.07, 0.92), Color(0.60, 0.50, 0.30, 0.85), 2))
+	btn.add_theme_stylebox_override("hover", _title_btn_box(
+		Color(0.10, 0.09, 0.12, 0.96), Color(0.85, 0.70, 0.40, 1.0), 2))
+	btn.add_theme_stylebox_override("pressed", _title_btn_box(
+		Color(0.03, 0.028, 0.045, 0.96), Color(0.72, 0.60, 0.34, 1.0), 2))
+	var foc := _title_btn_box(Color(0.85, 0.70, 0.35, 0.14), Color(1.0, 0.86, 0.45, 1.0), 3)
+	foc.expand_margin_left = 3.0; foc.expand_margin_right = 3.0
+	foc.expand_margin_top = 3.0; foc.expand_margin_bottom = 3.0
+	btn.add_theme_stylebox_override("focus", foc)
+	btn.add_theme_color_override("font_color", Color(0.90, 0.86, 0.76))
+	btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.82))
+	btn.add_theme_color_override("font_focus_color", Color(1.0, 0.95, 0.82))
+	btn.add_theme_color_override("font_pressed_color", Color(0.86, 0.80, 0.64))
+
+func _title_btn_box(bg: Color, border: Color, bw: int) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(8)
+	sb.set_border_width_all(bw)
+	sb.border_color = border
+	sb.content_margin_left = 18.0; sb.content_margin_right = 18.0
+	sb.content_margin_top = 8.0; sb.content_margin_bottom = 10.0
+	return sb
 
 func _hide_title() -> void:
 	if _title_layer != null:

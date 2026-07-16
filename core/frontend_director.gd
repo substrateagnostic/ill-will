@@ -230,14 +230,23 @@ func _compose_title() -> void:
 		if not _title_env_saved:
 			_title_env = (we as WorldEnvironment).environment
 			_title_env_saved = true
+		# D1 art pass: pull the grounds into the board's night. Lower AGX exposure
+		# darkens the whole 3D render (sinking the bright daylight lawn toward the
+		# moonlit blue) WITHOUT touching the UI menu, which lives on a CanvasLayer;
+		# a lower, cooler ambient completes the drop. Everything here is rebuilt on
+		# _dismiss_title (the env is snapshotted whole), so the walkabout is exact.
 		(we as WorldEnvironment).environment = EnvKit.build_environment(
-			EnvKit._merged(EnvKit.MOONLIT, {"fog_density": 0.024, "ambient_energy": 0.42}))
+			EnvKit._merged(EnvKit.MOONLIT, {
+				"fog_density": 0.026, "ambient_energy": 0.24, "exposure": 0.82}))
 	# --- dim the grounds sun to a moon key so the mood reads at night ---
 	var sun := est.get_node_or_null("Sun")
 	if sun != null and sun is DirectionalLight3D:
 		if _title_sun_energy < 0.0:
 			_title_sun_energy = (sun as DirectionalLight3D).light_energy
-		(sun as DirectionalLight3D).light_energy = 0.38
+		# D1: drop the warm key hard so the lawn reads as moonlit grass, not a
+		# sunlit daytime green. Energy-only (saved above, restored on dismiss);
+		# the sun's colour is untouched, so the restore stays exact.
+		(sun as DirectionalLight3D).light_energy = 0.15
 	# --- a deliberate camera angle: pulled back and near-level so the dark night
 	# sky carries the wordmark and the moonlit manor + gate sit low behind it ---
 	var cam := est.get_node_or_null("Camera3D")
@@ -245,8 +254,11 @@ func _compose_title() -> void:
 		if not _title_cam_saved:
 			_title_cam = (cam as Camera3D).transform
 			_title_cam_saved = true
-		(cam as Camera3D).global_position = Vector3(0.0, 5.1, 9.0)
-		(cam as Camera3D).look_at(Vector3(0.0, 2.7, -12.5), Vector3.UP)
+		# D1: a modest reframe — pulled in and aimed a touch higher so the moonlit
+		# manor gate is the hero behind PLAY (the candy market stall is dressed out
+		# of the title shot in _hide_ground_tags). Transform-only, saved/restored.
+		(cam as Camera3D).global_position = Vector3(0.0, 4.9, 8.4)
+		(cam as Camera3D).look_at(Vector3(0.0, 2.95, -11.8), Vector3.UP)
 	# --- hide the grounds' dev billboards (THE EXECUTOR / THE THEATER etc.) so
 	# the title reads as a composed shot, not the working grounds ---
 	_hide_ground_tags(est)
@@ -301,7 +313,10 @@ func _spawn_lantern_flicker(est: Node) -> void:
 	var spots := [Vector3(2.2, 1.15, 0.5), Vector3(-2.2, 1.15, 0.5),
 		Vector3(5.2, 1.15, -4.5), Vector3(-5.2, 1.15, -4.5)]
 	for pos: Vector3 in spots:
-		_add_title_light(est, pos, Color(1.0, 0.72, 0.42), 1.7, 5.5)
+		# D1: intimate warm pools, not lawn floods — lower energy + tighter range
+		# so the four lanterns glow at their bases without washing the whole green
+		# lawn back to daylight.
+		_add_title_light(est, pos, Color(1.0, 0.72, 0.42), 1.15, 4.0)
 	# The manor backlight: a wider, warmer pool at the gate/house so the moonlit
 	# threshold glows behind PLAY instead of vanishing into the night.
 	_add_title_light(est, Vector3(0.0, 3.2, -11.6), Color(1.0, 0.82, 0.6), 3.0, 11.0)
@@ -332,7 +347,10 @@ func _hide_ground_tags(est: Node) -> void:
 			if (l as Node3D).visible:
 				(l as Node3D).visible = false
 				_hidden_tags.append(l as Node3D)
-	for path in ["Plinths", "GraffitiWall"]:
+	# D1: the candy market stall + its pot are daytime commerce dressing — hide
+	# them from the funeral title shot (restored on dismiss, exactly like the
+	# graffiti wall and monument plinths already are).
+	for path in ["Plinths", "GraffitiWall", "Grounds/Stall", "Grounds/StallPot"]:
 		var n := est.get_node_or_null(path)
 		if n != null and n is Node3D and (n as Node3D).visible:
 			(n as Node3D).visible = false
@@ -377,9 +395,16 @@ func _wire_focus(tl: Node) -> void:
 	first.call_deferred("grab_focus")   # belt-and-suspenders: focus after layout
 
 func _on_btn_focus(btn: Button) -> void:
-	btn.modulate = Color(1.35, 1.3, 0.85)   # a warm brighten so the pad cursor reads
+	# D1: the focus stylebox (estate.gd _style_title_button) already lifts the
+	# border to full gold; add a subtle centered grow + gentle warm lift so the
+	# gamepad cursor is unmistakable from the couch. Scale is a render transform —
+	# it does not reflow the button row, so neighbours never jitter.
+	btn.pivot_offset = btn.size * 0.5
+	btn.scale = Vector2(1.05, 1.05)
+	btn.modulate = Color(1.08, 1.06, 0.98)
 
 func _on_btn_unfocus(btn: Button) -> void:
+	btn.scale = Vector2.ONE
 	btn.modulate = Color.WHITE
 
 func _dress_wordmark(tl: Node) -> void:
