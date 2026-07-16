@@ -16,6 +16,40 @@ extends RefCounted
 ## `yaw_deg` rotates the inner model (so the wrapper's own transform is free for
 ## the caller). Returns an empty Node3D (with a warning) if the path is missing.
 
+## RIGGED GLBs ONLY (Meshy /rigging output, e.g. executor_butler_idle.glb):
+## a skinned export's mesh AABB reads ~1/100 scale (the armature applies the
+## rest at skinning time), so instance()'s AABB math would explode it. This
+## path trusts the model's NATIVE size instead: Meshy rigs to the real-world
+## `height_meters` given at rig time (record it in the rig report), so scale
+## is just target/native and the feet are assumed to stand at native y=0.
+## Also loops the first animation if one ships (pass animate=false to pose).
+static func instance_rigged(path: String, native_height: float,
+		target_height: float, yaw_deg := 0.0, animate := true) -> Node3D:
+	var wrap := Node3D.new()
+	wrap.name = "MeshyProp"
+	if not ResourceLoader.exists(path):
+		push_warning("MeshyProp: missing rigged asset %s" % path)
+		return wrap
+	var scene: PackedScene = load(path)
+	if scene == null:
+		push_warning("MeshyProp: failed to load %s" % path)
+		return wrap
+	var model: Node3D = scene.instantiate()
+	model.name = "Model"
+	if yaw_deg != 0.0:
+		model.rotation.y = deg_to_rad(yaw_deg)
+	if native_height > 0.0001 and target_height > 0.0:
+		var s := target_height / native_height
+		model.scale = Vector3(s, s, s)
+	wrap.add_child(model)
+	if animate:
+		var anim: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
+		if anim != null and anim.get_animation_list().size() > 0:
+			var first: String = anim.get_animation_list()[0]
+			anim.get_animation(first).loop_mode = Animation.LOOP_LINEAR
+			anim.play(first)
+	return wrap
+
 static func instance(path: String, target_height: float,
 		yaw_deg := 0.0, base_at_zero := true, center_xz := true) -> Node3D:
 	var wrap := Node3D.new()
