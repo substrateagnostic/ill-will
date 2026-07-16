@@ -39,6 +39,11 @@ var _disconnect_device: int = -99
 var _disconnect_prev_paused: bool = false
 var _disconnect_claim_held: Dictionary = {}
 
+# GAMEPAD PAUSE (doc 25 §3.4): per-pad edge memory for JOY_BUTTON_START so a
+# held button opens the pause overlay exactly once, mirroring the estate's own
+# _poll_pad_join() edge idiom. pad id -> was-down-last-frame.
+var _pause_btn_held: Dictionary = {}
+
 # The guest-side "THE HOST HAS PAUSED" overlay. PartySetup is the shell's global
 # overlay owner (settings + controller-disconnect already live here), so the
 # host-pause curtain rides the same PROCESS_MODE_ALWAYS CanvasLayer. It is driven
@@ -124,6 +129,29 @@ func _ready() -> void:
 				PlayerInput.set_bot(seat, false)
 				_begin_disconnect_overlay(seat, 0)
 				VerifyCapture.snap("input2_disconnect"))
+		elif arg.begins_with("--padpausetest="):
+			# Dev-only: a physical pad Start press can't be sent headlessly, so this
+			# seats a local human on (phantom) gamepad 0, drives the requested
+			# context, then fires the SAME thing a JOY_BUTTON_START down-edge fires —
+			# toggle() — and snaps the opened overlay. Proves both halves of the
+			# gap fix: _pad_can_pause() recognises a seated human's pad, and toggle()
+			# raises the pause overlay in that context. ctx = title|grounds|game.
+			var ctx := arg.trim_prefix("--padpausetest=")
+			get_tree().create_timer(1.3).timeout.connect(func():
+				PlayerInput.assign(0, 0)
+				PlayerInput.set_bot(0, false)
+				var est: Node = get_tree().current_scene
+				if ctx == "grounds" and est != null and est.has_method("_enter_grounds"):
+					est.call("_enter_grounds")
+				elif ctx == "game" and est != null and est.has_method("_do_launch_game"):
+					for i in range(1, 4):
+						PlayerInput.set_bot(i, true)
+					est.call("_do_launch_game", "greed")
+				get_tree().create_timer(1.8).timeout.connect(func():
+					print("PADPAUSE ctx=%s pad0_can_pause=%s" % [ctx, str(_pad_can_pause(0))])
+					if not open:
+						toggle()
+					VerifyCapture.snap("padpause_%s" % ctx)))
 
 ## Forfeit whatever is running and return to the title, leaving NOTHING behind.
 ## Playtest bug (Andrew, round 2): modules launch parented at the TREE ROOT, so
@@ -208,11 +236,42 @@ func toggle() -> void:
 		_save_prefs()
 
 func _process(delta: float) -> void:
+	_poll_pause_buttons()
 	if _disconnect_active:
 		_poll_disconnect_overlay(delta)
 	if _quit_hold != null:
 		var quit_held: bool = open and not _disconnect_active and _quit_button_held
 		_quit_hold.tick(quit_held, delta)
+
+## GAMEPAD PAUSE — the single cert-grade gap doc 25 names: KEY_ESCAPE was the ONLY
+## thing that opened the pause overlay, so a controller-only player could never
+## pause. Edge-detect JOY_BUTTON_START (Start/Options — the universal couch-pause
+## button) on every connected pad and route it through toggle(), which already
+## carries the correct host/guest broadcast semantics regardless of which local
+## seat pressed it. Gated to a pad that drives a SEATED LOCAL HUMAN this session,
+## so an all-bot attract exhibition (every seat a bot) is interrupted by a stray
+## press rather than paused by it. Runs every frame (PROCESS_MODE_ALWAYS), so the
+## same Start button also closes the overlay — the console pause convention.
+func _poll_pause_buttons() -> void:
+	if _disconnect_active or _listen_action != "":
+		return
+	for pad: int in Input.get_connected_joypads():
+		var down: bool = Input.is_joy_button_pressed(pad, JOY_BUTTON_START)
+		if not down:
+			_pause_btn_held.erase(pad)
+			continue
+		if bool(_pause_btn_held.get(pad, false)):
+			continue
+		_pause_btn_held[pad] = true
+		if _pad_can_pause(pad):
+			toggle()
+			return
+
+## A pad may open the pause overlay only when it drives a seated LOCAL HUMAN
+## (reuses the disconnect overlay's seat lookup, which already excludes bot /
+## remote seats). An unseated or all-bot table is never paused from a pad.
+func _pad_can_pause(pad: int) -> bool:
+	return _local_human_seat_for_device(pad) >= 0
 
 ## ----- controller disconnect safety (global couch overlay) -----
 
