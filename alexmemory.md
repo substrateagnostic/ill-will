@@ -6,6 +6,32 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🌤️ AFTERNOON ENCORE (2026-07-16, pre-Chicago).** You asked for the
+  podium, the Executor's body, and rigging at the director's discretion.
+  Delivered, 4 merges, receipts green, zip rebuilt:
+  - **THE CORONATION (E1):** the podium ceremony left the prototype —
+    moonlit EnvKit, dark stone plinths with IM Fell numerals, the family
+    crypt behind the champion, lantern pools, ash/ember fall, a funeral
+    wreath at plinth one, and fourth place lying beside a plain headstone
+    of their own. Every game's ending upgraded at once; contract and net
+    mirror rule untouched. Probe: tools/podium_probe.tscn.
+  - **THE EXECUTOR BREATHES (E2):** board + estate-grounds bodies swapped
+    to the rigged Meshy idle (native scale via new
+    MeshyProp.instance_rigged; tween idle drops to a whisper so the two
+    rhythms never fight; gesture library intact; static fallback kept).
+    He also breathes through his own eulogy — same object.
+  - **THE RIGGING WAVE (E3, 27cr):** Old Rake + both mourners play real
+    skeletal loops (the hooded one performs a 7.3s Gentleman's Bow); the
+    STARE now freezes Old Rake's loop mid-frame. DISCOVERY: the full
+    **680-clip Meshy animation library is reachable** (public catalog +
+    style_02 retarget proven) — a characterful re-pick (e.g. Dozing
+    Elderly, id 38) is now a report-only change. No raking clip exists;
+    Old Rake keeps his prop honestly.
+  - **YOUR TONAL CALL, WHEN YOU'RE BACK:** the title is moonlit now, but
+    pressing NEW GAME still walks into the bright-daylight hub. Keep the
+    day/night snap (the grounds "wake up" for the living), or moonlight
+    the walkabout too? One EnvKit call either way.
+
 - **☀️☀️☀️☀️☀️ MORNING MENU #5 — THE FIFTH WATCH (2026-07-16). The night
   the estate became a broadcast — and survived a Windows update.**
 
