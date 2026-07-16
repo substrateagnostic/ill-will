@@ -136,7 +136,15 @@ QUICK START
      - Gamepad:  press A
      - Keyboard: Space (left half) or Enter (right half)
    Empty seats are filled by bots. Up to FOUR play at once.
-3. Press PLAY. Bid your grudge at the auction, then play the game that wins.
+3. Press PLAY and choose how the estate settles its debts tonight:
+     - THE PROCESSION (the main event): a full board night. Putt your pawn
+       to move - the golf shot IS the dice. Buy deeds, survive the seance
+       wheel, endure the Executor's commentary. First to the required
+       deeds is crowned heir.
+     - CLASSIC NIGHT: bid your grudge at the auction, then play the
+       minigame that wins.
+   Left alone for 45 seconds, the house rehearses without you (any button
+   interrupts).
 
 ------------------------------------------------------------
 CONTROLS  -  the game always shows you your own keys
@@ -149,7 +157,9 @@ Defaults:
   - A / B:  each game names what A and B do on the card (shove, throw, dash...)
   - PAR FOR THE CURSE is mouse-driven (aim, hold, release to putt) and passes
     the mouse around the couch, hotseat style.
-  - ESC opens PLAYERS & CONTROLS - reassign devices and remap any key there.
+  - ESC (or START on a gamepad) opens PLAYERS & CONTROLS - reassign
+    devices, remap any key, and reach SETTINGS (volume, colorblind
+    palettes, text size, screen shake) from there.
 
 ------------------------------------------------------------
 PLAYING TOGETHER
