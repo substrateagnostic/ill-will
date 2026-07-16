@@ -81,6 +81,25 @@ const MATCH_END_HOLD := 8.0
 const TIEBREAK_SAFETY := 45.0
 const CAM_FOV := 55.0
 
+# VOICE B floor pools (doc 26 §2) — drawn via Voice.pick, presentation-only.
+# The go-signal fires every round; the kill line fires many times a round. Both
+# want variants. Neither touches sim rng or a receipt path.
+const VP_STEAL_WINDOW: PackedStringArray = [
+	"SHE WEEPS — CREEP",
+	"THE PARLOR IS OPEN",
+	"HER BACK IS TURNED",
+	"GO, QUIETLY",
+	"THE WAKE IS UNWATCHED",
+]
+const VP_FED_WIDOW: PackedStringArray = [
+	"%s FED %s TO THE WIDOW",
+	"%s GAVE %s TO HER GAZE",
+	"%s LET THE WIDOW SEE %s",
+	"%s OFFERED UP %s",
+	"%s SAT %s IN HER SIGHT",
+	"%s LEFT %s FOR THE WIDOW",
+]
+
 # ui_kit adoption (doc 14 nit 5): the Mario-Party intro card at load. Accent is
 # the widow's spectral violet. Feature-detected glyphs, real key fallback.
 const GAME_INTRO := {
@@ -349,7 +368,7 @@ func _physics_process(delta: float) -> void:
 			if phase_t >= INTRO_TIME:
 				phase = Phase.PLAY
 				round_t = 0.0
-				_flash_banner("ROB THE WAKE!", Color(1, 0.85, 0.2), 1.0)
+				_flash_banner(Voice.pick(VP_STEAL_WINDOW), Color(1, 0.85, 0.2), 1.0)
 				Sfx.play("confirm")
 				if _stretch != null:
 					_stretch.play_started()
@@ -583,7 +602,7 @@ func _catch(victim: int) -> void:
 		points[killer] = int(points[killer]) + 1
 		_currency.append({"type": "royalty", "player": killer, "amount": 1,
 			"reason": "fed %s to the Widow" % roster[victim].name})
-		_flash_banner("%s FED %s TO THE WIDOW!" % [roster[killer].name, roster[victim].name],
+		_flash_banner(Voice.pick_fmt(VP_FED_WIDOW, [roster[killer].name, roster[victim].name]),
 			roster[killer].color, 2.0)
 		_rebuild_scoreboard()
 	else:
