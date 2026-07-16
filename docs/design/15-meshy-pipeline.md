@@ -170,3 +170,29 @@ never collides with or reshuffles the shipped set. `tools/asset_probe.gd` was
 given a small additive `--dir=`/`--groups=` cmdline option (default behavior
 unchanged) so the existing contact-sheet mechanism can point at
 `generated/` instead of scanning only the flat top-level directory.
+
+---
+
+## NIGHT 5 ADDENDUM (2026-07-16) — the rest of the API, from docs.meshy.ai/llms.txt
+
+Account upgraded pro → **premium** this night (3× monthly credits; Alex: no
+nightly cap needed anymore). Balance at upgrade: 2697.
+
+Capabilities we are NOT yet using (all under https://api.meshy.ai/openapi/):
+- **Rigging** (`/rigging`) — humanoid skeleton auto-added to a generated model.
+- **Animation** (`/animation` + `/animation-library`) — preset motions applied
+  to rigged characters. Rig+preset-idle could replace puppet transform-tweens
+  for NPCs/host in a future pass — trial before committing a lane to it.
+- **Retexture** (`/retexture`) — replace textures on an EXISTING model via
+  text/image prompt. Cheaper fix than re-forging when geometry is fine but
+  style missed.
+- **Remesh** (`/remesh`) — topology/polycount control; useful for background
+  NPC perf budgets.
+- **UV Unwrap** (5 cr), **Convert** (1 cr, GLB/FBX/OBJ/STL/USDZ/BLEND),
+  **Resize** (1 cr), **Image-to-3D** (`/v1/image-to-3d`), text-to-image.
+- Async model: poll, **SSE stream, or webhook** (we poll; SSE is available).
+- **Asset retention is 3 days** on non-Enterprise — always download GLBs
+  immediately (we already do).
+- Rate limits: Pro/premium tier ~20 req/s, 10-20 task queue.
+- A Meshy **MCP server for Claude Code** exists (docs: /api/ai) if a future
+  instance prefers tool-native calls over the forge script.
