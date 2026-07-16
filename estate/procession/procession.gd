@@ -24,6 +24,7 @@ const Presets := preload("res://estate/procession/presets.gd")
 const BoardCamera := preload("res://estate/procession/board_camera.gd")
 const BoardFx := preload("res://estate/procession/board_fx.gd")
 const SeanceWheelScene := preload("res://estate/procession/seance_wheel.gd")
+const MinigameRouletteScene := preload("res://estate/procession/minigame_roulette.gd")
 
 const CHAR_SCENES := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -85,6 +86,7 @@ var board_camera: ProcessionCamera    # F1: the named-shot camera director
 var fx: ProcessionFx                  # F10/F11/F17: flying numbers + the Deed token
 var _fx_host: Control
 var seance_wheel: SeanceWheel         # F13: the visible four-slot planchette dial
+var roulette: MinigameRoulette        # F22: the pre-minigame card-shuffle roulette
 var final_kit: Node
 var _ui: CanvasLayer
 var _topbar: Control
@@ -418,6 +420,10 @@ func _build_hud() -> void:
 		wheel_titles.append(String((slot as Dictionary).title))
 	seance_wheel = SeanceWheelScene.new()
 	seance_wheel.setup(_fx_host, wheel_titles, _fast)
+
+	# The minigame roulette (F22) — a card-shuffle that lands on the chosen game.
+	roulette = MinigameRouletteScene.new()
+	roulette.setup(_fx_host)
 
 	executor.setup(_reveal, cam)
 	# The endgame kit escalates music + light on the final Deed (juice floor).
@@ -1076,9 +1082,19 @@ func _minigame_block() -> void:
 			"black_ribbon":
 				var lead := _deed_leader(i)
 				if lead >= 0: items[lead].ribbon += 1
+	# The SIM picks the game (unchanged rng draw); the roulette (F22) is theater
+	# that lands on it, then calls "TAKE YOUR PLACES" (the estate's voice, doc 26).
 	var mid: String = CONTRACT_POOL[rng.randi_range(0, CONTRACT_POOL.size() - 1)]
-	_announce_text("THE WAKE PAUSES FOR A GAME\n%s" % mid.to_upper(), Color(0.8, 0.9, 1.0))
-	await _beat(1.6)
+	if _fast:
+		pass   # the soak skips the roulette entirely
+	elif _capture:
+		roulette.present(CONTRACT_POOL, mid)   # fire, snap mid-spin, then wait out
+		await _beat(1.2)
+		await _cap_snap("roulette")
+		while not roulette.finished:
+			await get_tree().process_frame
+	else:
+		await roulette.present(CONTRACT_POOL, mid)
 	_hide_announce()
 	var placements: Array = await _run_minigame(mid)
 	# RECKONING — placements pay 5/3/2/1 Grudge (and movement in QUICK WAKE).
