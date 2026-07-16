@@ -206,6 +206,54 @@ func showcase_gestures(proc: Node) -> void:
 	await proc.get_tree().create_timer(0.28).timeout
 	await proc._cap_snap("exec_gesture")
 
+# --------------------------------------------------------------------------
+# COMIC TIMING (doc 24 F8) — the anticipation cascade for one reveal
+# --------------------------------------------------------------------------
+## THE WIND-UP. Before the punchline the host leans BACK and inclines toward the
+## stone, holds a beat SCALED BY STAKES (a Deed claim gets the longest lean-in),
+## then SNAPS forward as the line lands, with the reaction beat keyed to the
+## space. The caller awaits this between the camera push and the resolve, so the
+## pause becomes felt silence, not dead air. Presentation only, gated by the
+## caller behind `not _fast`, so the headless receipt never runs a frame of it.
+func anticipate(space_idx: int, is_codicil: bool) -> void:
+	if body == null or board == null:
+		return
+	var stone := board.space_pos(space_idx)
+	var stakes := _stakes_for(space_idx, is_codicil)
+	var yaw := body.yaw_toward(stone)
+	body.anticipate(yaw, stakes)
+	# 0.26s floor + up to ~0.75s more for the biggest swings (the Codicil).
+	var hold := 0.26 + stakes * 0.75
+	await get_tree().create_timer(hold).timeout
+	body.present(yaw, stakes, _mood_for(space_idx, is_codicil))
+
+## How much drama a landing carries, 0..1 — sets both the lean depth and the
+## length of the anticipation pause. The Codicil (a Deed changes hands) is the
+## crown; a blank path stone is the anticlimax and barely earns a beat.
+func _stakes_for(space_idx: int, is_codicil: bool) -> float:
+	if is_codicil:
+		return 1.0
+	match board.type_at(space_idx):
+		ProcessionBoardSpaces.VENDETTA: return 0.8
+		ProcessionBoardSpaces.WEEPING_GRAVE: return 0.7
+		ProcessionBoardSpaces.SEANCE: return 0.62
+		ProcessionBoardSpaces.TOLLGATE: return 0.55
+		ProcessionBoardSpaces.SHRINE: return 0.5
+		ProcessionBoardSpaces.STALL: return 0.4
+	return 0.16   # BLANK / path stone — the dry anticlimax
+
+## The reaction gesture keyed to the space (see MOOD_* / body._react).
+func _mood_for(space_idx: int, is_codicil: bool) -> int:
+	if is_codicil:
+		return MOOD_CODICIL
+	match board.type_at(space_idx):
+		ProcessionBoardSpaces.SHRINE: return MOOD_GOOD
+		ProcessionBoardSpaces.TOLLGATE: return MOOD_GOOD
+		ProcessionBoardSpaces.WEEPING_GRAVE: return MOOD_BAD
+		ProcessionBoardSpaces.VENDETTA: return MOOD_WATCH
+		ProcessionBoardSpaces.SEANCE: return MOOD_WATCH
+	return MOOD_NEUTRAL
+
 ## Fill one line from a pool by seeded index (deterministic).
 static func pick(pool: Array, rng: RandomNumberGenerator, args: Array = []) -> String:
 	var raw: String = String(pool[rng.randi_range(0, pool.size() - 1)])

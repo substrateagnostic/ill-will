@@ -759,6 +759,7 @@ func _reveal_landing(seat: int) -> void:
 	_apply_reveal_badge(seat)
 	if not _fast:
 		executor.push_to(board.reveal_anchor(idx), board.pawns[seat].global_position)
+		await executor.anticipate(idx, seat == _round_codicil_seat)   # B2-HOOK: comic-timing wind-up (F8)
 	var col: Color = roster[seat].color
 	var name := String(roster[seat].name)
 	if seat == _round_codicil_seat:
