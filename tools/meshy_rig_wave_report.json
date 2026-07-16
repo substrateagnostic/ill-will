@@ -1,0 +1,75 @@
+{
+    "generated_at":  "2026-07-16T11:32:36.4742570-05:00",
+    "experiment":  "RIGGING WAVE: rig graveyard troupe + apply preset animations",
+    "gen_dir":  "assets/models/meshy/generated/",
+    "models":  [
+                   {
+                       "name":  "npc_groundskeeper",
+                       "native_height_meters":  1.8,
+                       "rig_task_id":  "019f6bc2-58b8-7bd2-a5bc-a376ce1b0f6a",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle",
+                                              "action_id":  0,
+                                              "action_name":  "Idle",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_groundskeeper_idle.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   },
+                   {
+                       "name":  "npc_mourner_elderly",
+                       "native_height_meters":  1.65,
+                       "rig_task_id":  "019f6bc3-7722-707d-8909-c332c150f7da",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle",
+                                              "action_id":  0,
+                                              "action_name":  "Idle",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_mourner_elderly_idle.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   },
+                   {
+                       "name":  "npc_mourner_hooded",
+                       "native_height_meters":  1.75,
+                       "rig_task_id":  "019f6bc4-96ec-710c-9b4e-c82956d258f0",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle",
+                                              "action_id":  0,
+                                              "action_name":  "Idle",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_mourner_hooded_idle.glb",
+                                              "error":  ""
+                                          },
+                                          {
+                                              "label":  "bow",
+                                              "action_id":  42,
+                                              "action_name":  "Gentlemans Bow",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_mourner_hooded_bow.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   }
+               ],
+    "totals":  {
+                   "rig_credits":  15,
+                   "anim_credits":  12,
+                   "total_credits":  27
+               }
+}
