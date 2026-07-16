@@ -4,3 +4,4 @@ build/
 *.tmp
 verify_out/
 .claude/
+.env
