@@ -994,6 +994,9 @@ func _rebuild_scoreboard() -> void:
 		row.add_theme_constant_override("outline_size", 5)
 		hb.add_child(row)
 		score_rows.add_child(hb)
+	# The panel starts hidden so the intro card never shows a bare gray slab;
+	# it appears with its first real rows.
+	(score_rows.get_parent() as CanvasItem).visible = not order.is_empty()
 
 
 func _flash_banner(text: String, color: Color, duration: float) -> void:
