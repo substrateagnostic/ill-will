@@ -405,6 +405,76 @@ func set_beacon(i: int) -> void:
 	if beacon:
 		beacon.global_position = space_pos(beacon_index) + Vector3(0, 0.1, 0)
 
+## The Codicil's current world position (pedestal base), for the hero push-in and
+## the Deed's flight origin. Falls back to the logical berth if the prop is gone.
+func beacon_world_pos() -> Vector3:
+	return beacon.global_position if beacon != null else space_pos(beacon_index)
+
+## A gold flare pulse on the beacon glow — the visual punctuation of a Deed claim
+## (F17). Presentation only; no rng, no sim read.
+func flare_beacon() -> void:
+	if beacon == null:
+		return
+	var lamp := beacon.get_node_or_null(^"BeaconGlow") as OmniLight3D
+	if lamp == null:
+		return
+	var tw := create_tween()
+	tw.tween_property(lamp, "light_energy", 9.0, 0.14).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lamp, "light_energy", 3.2, 0.6).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+## RELOCATE THE CODICIL — SHOWN, not teleported (F17). The logical index updates
+## at once (the sim never waits), but the consecrated pedestal GLIDES along an arc
+## to its new berth led by a gold will-o'-wisp, so every player SEES where the
+## target moved. Returns the pedestal tween so the caller can await the drama.
+func travel_beacon(new_idx: int) -> Tween:
+	var start := beacon.global_position if beacon != null else space_pos(beacon_index) + Vector3(0, 0.1, 0)
+	beacon_index = posmod(new_idx, SPACES)
+	var dest := space_pos(beacon_index) + Vector3(0, 0.1, 0)
+	if beacon == null:
+		return null
+	var apex := (start + dest) * 0.5 + Vector3(0, 3.6, 0)
+	_spawn_beacon_wisp(start, apex, dest)
+	var tw := create_tween()
+	tw.tween_method(func(t: float) -> void:
+			beacon.global_position = _quad_bezier(start, apex, dest, t),
+		0.0, 1.0, 0.85).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	return tw
+
+## A short-lived gold wisp that streaks the relocation arc a beat ahead of the
+## pedestal, then fades — the readable "the objective went THERE" cue.
+func _spawn_beacon_wisp(start: Vector3, apex: Vector3, dest: Vector3) -> void:
+	var wisp := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 0.22
+	sm.height = 0.44
+	wisp.mesh = sm
+	var wm := StandardMaterial3D.new()
+	wm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	wm.emission_enabled = true
+	wm.emission = Color(1.0, 0.86, 0.42)
+	wm.emission_energy_multiplier = 6.0
+	wm.albedo_color = Color(1.0, 0.9, 0.5)
+	wm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	wisp.material_override = wm
+	add_child(wisp)
+	wisp.global_position = start
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(1.0, 0.86, 0.42)
+	glow.light_energy = 4.0
+	glow.omni_range = 5.0
+	glow.shadow_enabled = false
+	wisp.add_child(glow)
+	var tw := wisp.create_tween()
+	tw.tween_method(func(t: float) -> void:
+			wisp.global_position = _quad_bezier(start, apex, dest, t),
+		0.0, 1.0, 0.72).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(wm, "albedo_color:a", 0.0, 0.72).set_delay(0.4)
+	tw.tween_callback(wisp.queue_free)
+
+func _quad_bezier(a: Vector3, b: Vector3, c: Vector3, t: float) -> Vector3:
+	var u := 1.0 - t
+	return u * u * a + 2.0 * u * t * b + t * t * c
+
 ## Instance a generated GLB if present, else the committed fallback, else a
 ## tinted primitive. Never returns null; purely visual.
 func _prop(gen_path: String, fallback_path: String, height: float, tint := Color(0, 0, 0, 0)) -> Node3D:
@@ -474,6 +544,102 @@ func advance_pawn(seat: int, from_idx: int, spaces_moved: int) -> Tween:
 		tw.tween_callback(Sfx.play.bind("card", -12.0, 0.15))
 	return tw
 
+var _preview: Dictionary = {}      # seat -> Node3D reticle+tooltip marker
+
+## PUTT TARGET PREVIEW (F29). Highlight the stone this seat's charge would reach,
+## with a seat-coloured reticle and a floating rule tooltip so steering at a space
+## is a real decision. Pure presentation — reads the board, mutates nothing.
+func set_putt_preview(seat: int, space_idx: int, color: Color) -> void:
+	var idx := posmod(space_idx, SPACES)
+	var marker: Node3D
+	if _preview.has(seat):
+		marker = _preview[seat]
+	else:
+		marker = _make_preview_marker(color)
+		add_child(marker)
+		_preview[seat] = marker
+	marker.visible = true
+	marker.global_position = space_pos(idx) + Vector3(0, 0.16, 0)
+	var tip := marker.get_node(^"Tip") as Label3D
+	if tip != null:
+		# The Codicil overlays the base layout; name it when the reticle sits on it.
+		if idx == beacon_index:
+			tip.text = "◆ THE CODICIL — BUY A DEED"
+		else:
+			var t := type_at(idx)
+			tip.text = "%s · %s" % [S.display_name(t), S.rule(t)]
+		tip.modulate = color.lerp(Color.WHITE, 0.25)
+		# Stagger tooltip height by seat so overlapping targets don't collide.
+		tip.position = Vector3(0, 3.9 + 0.5 * float(seat), 0)
+
+func clear_putt_preview(seat: int) -> void:
+	if _preview.has(seat):
+		(_preview[seat] as Node3D).visible = false
+
+func clear_all_putt_previews() -> void:
+	for seat in _preview:
+		(_preview[seat] as Node3D).visible = false
+
+## A target reticle that reads from the overview: a seat-coloured ring on the
+## stone, a soft vertical beam so the target is visible over furniture from any
+## angle, a floating downward chevron ("land HERE"), and a billboard rule tooltip.
+func _make_preview_marker(color: Color) -> Node3D:
+	var root := Node3D.new()
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 1.12
+	tm.outer_radius = 1.34
+	tm.rings = 6
+	tm.ring_segments = 24
+	ring.mesh = tm
+	ring.material_override = _emissive(color, 4.5)
+	ring.rotation_degrees.x = 90.0
+	root.add_child(ring)
+	# A soft vertical beam rising from the stone — visible over any prop.
+	var beam := MeshInstance3D.new()
+	var bm := CylinderMesh.new()
+	bm.top_radius = 0.10
+	bm.bottom_radius = 0.20
+	bm.height = 3.2
+	beam.mesh = bm
+	var bmat := _emissive(color, 2.4)
+	bmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	bmat.albedo_color = Color(color.r, color.g, color.b, 0.28)
+	beam.material_override = bmat
+	beam.position = Vector3(0, 1.6, 0)
+	root.add_child(beam)
+	# A downward chevron (an inverted cone) bobbing above the target.
+	var chev := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = 0.34
+	cm.bottom_radius = 0.0
+	cm.height = 0.5
+	chev.mesh = cm
+	chev.material_override = _emissive(color, 4.0)
+	chev.position = Vector3(0, 3.2, 0)
+	root.add_child(chev)
+	var tip := Label3D.new()
+	tip.name = "Tip"
+	tip.font_size = 48
+	tip.pixel_size = 0.0062
+	tip.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	tip.no_depth_test = true
+	tip.outline_size = 14
+	tip.outline_modulate = Color(0, 0, 0, 0.92)
+	tip.modulate = color
+	tip.position = Vector3(0, 3.9, 0)
+	root.add_child(tip)
+	return root
+
+func _emissive(color: Color, energy: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	m.emission_enabled = true
+	m.emission = color
+	m.emission_energy_multiplier = energy
+	m.albedo_color = color
+	return m
+
 func type_at(i: int) -> String:
 	return LAYOUT[posmod(i, SPACES)]
 
@@ -498,3 +664,34 @@ func reveal_anchor(space_idx: int) -> Vector3:
 	if out.length() > 0.01:
 		out = out.normalized()
 	return p + out * 4.2 + Vector3(0, 3.4, 0)
+
+## Type-aware landing framing (doc 24 F3): each event gets a pose that expresses
+## it. Returns {pos, look}. A WEEPING GRAVE is shot low, looking UP at the
+## headstone; the CODICIL gets a hero low angle so its glow flares; a SHRINE
+## reads warm from a shallow rise; the rest use the generic above-and-outside
+## anchor. Pure geometry — no rng, no sim read.
+func reveal_shot(space_idx: int, type: String) -> Dictionary:
+	var p := space_pos(space_idx)
+	var out := (p - CENTER)
+	out.y = 0.0
+	out = out.normalized() if out.length() > 0.01 else Vector3.BACK
+	match type:
+		S.WEEPING_GRAVE:
+			# Low and close, looking UP the headstone (which sits outboard at 0.9).
+			return {"pos": p + out * 2.7 + Vector3(0, 1.2, 0),
+				"look": p + out * 0.9 + Vector3(0, 1.4, 0)}
+		S.CODICIL:
+			# Hero low angle into the pedestal's gold glow.
+			return {"pos": p + out * 3.4 + Vector3(0, 1.9, 0),
+				"look": p + Vector3(0, 1.6, 0)}
+		S.SHRINE:
+			# A shallow warm rise on the lamppost mercy.
+			return {"pos": p + out * 3.2 + Vector3(0, 2.6, 0),
+				"look": p + Vector3(0, 0.9, 0)}
+		S.SEANCE:
+			# Slightly higher so the spinning planchette dial reads flat-on.
+			return {"pos": p + out * 3.0 + Vector3(0, 3.2, 0),
+				"look": p + out * 1.0 + Vector3(0, 0.2, 0)}
+		_:
+			return {"pos": p + out * 3.4 + Vector3(0, 2.8, 0),
+				"look": p + Vector3(0, 0.7, 0)}

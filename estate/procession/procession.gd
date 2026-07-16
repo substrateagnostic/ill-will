@@ -21,6 +21,10 @@ const Codicil := preload("res://estate/procession/codicil.gd")
 const Executor := preload("res://estate/procession/executor_host.gd")
 const Spaces := preload("res://estate/procession/board_spaces.gd")
 const Presets := preload("res://estate/procession/presets.gd")
+const BoardCamera := preload("res://estate/procession/board_camera.gd")
+const BoardFx := preload("res://estate/procession/board_fx.gd")
+const SeanceWheelScene := preload("res://estate/procession/seance_wheel.gd")
+const MinigameRouletteScene := preload("res://estate/procession/minigame_roulette.gd")
 
 const CHAR_SCENES := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -29,6 +33,9 @@ const CHAR_SCENES := [
 	"res://assets/models/kaykit/Rogue.glb",
 ]
 const REVEAL_BEAT := 2.2
+# F24 reveal-cascade reactions: waiting-player button -> attributed glyph.
+const REACT_COOLDOWN_MS := 550
+const REACT_MAP := {"b": "HA!", "up": "OOH", "down": "OOF"}
 const POINTS := [5, 3, 2, 1]        # RECKONING / will placement -> Grudge
 const CONTRACT_POOL := ["echo", "tilt", "orbital", "mower", "greed", "swap",
 	"deadweight", "throne", "lastwill"]
@@ -71,6 +78,9 @@ var _preset_explicit := false
 var _capture := false            # windowed: pose beats + snap for screenshots
 var _phase := "boot"
 var _round_codicil_seat := -1   # who claims the Codicil this round (pass-or-land)
+var _preview_active := false    # F29: live putt target reticles during the roll
+var _react_last: Array[int] = []   # F24: per-seat last-reaction wall-clock (cooldown)
+var _reacted_demo := false         # F24: capture fires the reaction demo once
 
 # ---- nodes ---- (concrete types so method returns infer without annotation)
 var board: ProcessionBoardPath
@@ -78,6 +88,11 @@ var putt: ProcessionPawnPutt
 var codicil: ProcessionCodicil
 var executor: ProcessionExecutor
 var cam: Camera3D
+var board_camera: ProcessionCamera    # F1: the named-shot camera director
+var fx: ProcessionFx                  # F10/F11/F17: flying numbers + the Deed token
+var _fx_host: Control
+var seance_wheel: SeanceWheel         # F13: the visible four-slot planchette dial
+var roulette: MinigameRoulette        # F22: the pre-minigame card-shuffle roulette
 var final_kit: Node
 var _ui: CanvasLayer
 var _topbar: Control
@@ -104,6 +119,20 @@ var clauses: Array = []
 
 func _ready() -> void:
 	call_deferred("_autostart")
+
+## F29: while the roll is live, paint each charging seat's projected landing stone
+## with a seat-coloured reticle + rule tooltip, so steering at a space is a real
+## decision. Presentation only; inert under the fast soak and outside the roll.
+func _process(_delta: float) -> void:
+	if _fast or not _preview_active or putt == null or board == null:
+		return
+	for i in roster.size():
+		var sp := putt.preview_spaces(i)
+		if sp > 0:
+			var dest := posmod(positions[i] + sp, BoardPath.SPACES)
+			board.set_putt_preview(i, dest, roster[i].color)
+		else:
+			board.clear_putt_preview(i)
 
 ## estate.gd (merge path) calls this with a real roster BEFORE the deferred
 ## _autostart fires; the flag makes the two entry points mutually exclusive.
@@ -189,6 +218,9 @@ func _default_roster() -> Array:
 func _init_arrays() -> void:
 	var n := roster.size()
 	grudge.resize(n); deeds.resize(n); positions.resize(n); moved_total.resize(n)
+	_react_last.resize(n)
+	for i in n:
+		_react_last[i] = -100000
 	items.clear(); stats.clear()
 	for i in n:
 		grudge[i] = EstateState.STARTING_GRUDGE + 3   # a small float so turn 1 has stakes
@@ -232,6 +264,12 @@ func _build_world() -> void:
 	cam.global_position = _cam_home
 	cam.look_at(board.CENTER, Vector3.UP)
 	cam.current = true
+
+	# The camera director owns the named-shot spine (F1/F2/F3). It stays inert
+	# under the fast soak (no rendering) and only drives the cam once activated.
+	board_camera = BoardCamera.new()
+	add_child(board_camera)
+	board_camera.setup(cam, board, _fast)
 
 	putt = PawnPutt.new()
 	add_child(putt)
@@ -299,7 +337,7 @@ func _build_hud() -> void:
 		var stat_l := _chip_label("2♠  ◆0", 30, Color(0.95, 0.95, 1.0))
 		col.add_child(stat_l)
 		chiprow.add_child(panel)
-		_chips.append({"grudge": stat_l})
+		_chips.append({"grudge": stat_l, "panel": panel})
 
 	# ---- REVEAL lower-third: a broadcast-style band pinned bottom-centre, with a
 	# dark translucent scrim + gold rule, the affected player's PlayerBadge, and
@@ -390,11 +428,72 @@ func _build_hud() -> void:
 	_ui.add_child(meter_host)
 	putt.configure(roster, meter_host, _mirror)
 
+	# The FX layer rides ABOVE the chips so flying numbers + the Deed token land
+	# on the HUD (F10/F11/F17). A full-rect, input-transparent Control.
+	_fx_host = Control.new()
+	_fx_host.name = "FxHost"
+	_fx_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_fx_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ui.add_child(_fx_host)
+	fx = BoardFx.new()
+	add_child(fx)
+	fx.setup(_fx_host, cam, _fast)
+
+	# The séance dial (F13) — a visible four-slot wheel that spins to the sim's
+	# pre-decided slot. Titles come straight from the announced grammar.
+	var wheel_titles: Array = []
+	for slot in Spaces.SEANCE_WHEEL:
+		wheel_titles.append(String((slot as Dictionary).title))
+	seance_wheel = SeanceWheelScene.new()
+	seance_wheel.setup(_fx_host, wheel_titles, _fast)
+
+	# The minigame roulette (F22) — a card-shuffle that lands on the chosen game.
+	roulette = MinigameRouletteScene.new()
+	roulette.setup(_fx_host)
+
 	executor.setup(_reveal, cam)
 	executor.embody(self, board, seed_value)   # B2-HOOK: give the host a body (F6/F7)
 	# The endgame kit escalates music + light on the final Deed (juice floor).
 	final_kit = FinalStretch.attach(self, null, {"ticks": false})
 	_refresh_hud()
+
+## The world point a flying number lifts off from — above the seat's pawn if it
+## exists, else the stone it stands on (F10/F11).
+func _pawn_src(seat: int) -> Vector3:
+	if board != null and board.pawns.has(seat):
+		return (board.pawns[seat] as Node3D).global_position + Vector3(0, 1.15, 0)
+	return board.space_pos(positions[seat]) + Vector3(0, 1.0, 0) if board else Vector3.ZERO
+
+## A grudge (or deed) delta popup at the seat's pawn, arcing to its chip. glyph
+## carries the currency; the sign + glyph mean it never reads as colour alone.
+func _pop_grudge(seat: int, amount: int, glyph := "♠") -> void:
+	if _fast or fx == null or amount == 0:
+		return
+	fx.fly_number(amount, glyph, _pawn_src(seat), _chip_screen_pos(seat), roster[seat].color)
+
+## A grudge TRANSFER: the value lifts off the payer's pawn and flies to the
+## collector's chip in the COLLECTOR's colour — the MP "Orb" toll, made visible.
+func _pop_transfer(from_seat: int, to_seat: int, amount: int) -> void:
+	if _fast or fx == null or amount <= 0:
+		return
+	fx.fly_number(amount, "♠", _pawn_src(from_seat), _chip_screen_pos(to_seat), roster[to_seat].color)
+
+## A flying number lifting off a fixed world point (a stone, a gate) rather than a
+## pawn — used for pass-through tolls where the payer is mid-hop.
+func _pop_at(world_from: Vector3, seat_target: int, amount: int, color: Color) -> void:
+	if _fast or fx == null or amount == 0:
+		return
+	fx.fly_number(amount, "♠", world_from, _chip_screen_pos(seat_target), color)
+
+## Screen-space centre of a seat's HUD chip — the homing target for flying numbers
+## and the Deed token (F10/F11/F17).
+func _chip_screen_pos(seat: int) -> Vector2:
+	if seat >= 0 and seat < _chips.size():
+		var panel: Control = _chips[seat].get("panel")
+		if panel != null and panel.is_inside_tree():
+			return panel.global_position + panel.size * 0.5
+	var vp := get_viewport()
+	return vp.get_visible_rect().size * Vector2(0.5, 0.92) if vp else Vector2(640, 660)
 
 func _chip_label(text: String, size: int, color: Color) -> Label:
 	var l := Label.new()
@@ -550,14 +649,15 @@ func _intro() -> void:
 	# in the executor banner, no clause text yet (they don't overlap). ---
 	_reveal_seat = -1
 	executor.say(Executor.pick(Executor.GREETING, rng), Color(0.9, 0.88, 0.98))
-	# --- Establishing camera at the gate, then a cinematic flyover: a tour of the
+	# --- Establishing shot at the gate, then a cinematic flyover: a tour of the
 	# drive, the manor gate + hearse, and the roving Codicil — the opening of a
-	# Mario-Party board, re-staged around the new gothic dressing. ---
-	cam.global_position = Vector3(0.0, 6.5, 6.0)
-	cam.look_at(board.CENTER + Vector3(0, 1.6, -11.0), Vector3.UP)
+	# Mario-Party board, re-staged around the new gothic dressing. The director
+	# owns the shot spine now (F1); any player tap skips the tour (F1 skip). ---
+	board_camera.establish()
 	if not _fast:
-		await _flyover()
+		await board_camera.flyover(_flyover_skip)
 	if _capture:
+		board_camera.hold()   # the hero shots below pose the cam directly
 		await _cap_snap("flyover")
 		await _capture_showcase()
 	else:
@@ -565,8 +665,7 @@ func _intro() -> void:
 	await _beat(1.6)
 	# --- The will clauses, read BEFORE a single putt — nothing hidden decides. ---
 	executor.clear_banner()
-	cam.global_position = _cam_home
-	cam.look_at(board.CENTER, Vector3.UP)
+	board_camera.whole_board(0.6)
 	var lines: Array[String] = []
 	for c in clauses:
 		lines.append("◆ %s — +1 Deed to whoever %s" % [c.title, c.desc])
@@ -579,34 +678,22 @@ func _intro() -> void:
 	_hide_announce()
 	executor.clear_banner()
 
-## The opening flyover: a smooth multi-key camera tour (position AND look-at
-## interpolated together) that shows off the gate, sweeps the drive, passes the
-## Codicil beacon, and settles to the whole-board overview. Presentation only —
-## gated behind `not _fast`, so the headless receipt never runs it.
-func _flyover() -> void:
-	var bpos := board.space_pos(board.beacon_index)
-	var keys: Array = [
-		{"p": Vector3(0.0, 6.5, 6.0), "l": board.CENTER + Vector3(0, 1.6, -11.0)},   # the gate, low
-		{"p": Vector3(-24.0, 13.0, 9.0), "l": board.CENTER + Vector3(-4, 0.6, 2)},    # rise along the drive
-		{"p": Vector3(-9.0, 20.0, -28.0), "l": board.CENTER + Vector3(0, 1.0, -2)},   # sweep the far side
-		{"p": bpos + Vector3(6.0, 8.0, 7.0), "l": bpos + Vector3(0, 1.6, 0)},         # glide past the Codicil
-		{"p": _cam_home, "l": board.CENTER},                                          # settle to overview
-	]
-	cam.global_position = keys[0]["p"]
-	cam.look_at(keys[0]["l"], Vector3.UP)
-	var tw := cam.create_tween()
-	for i in range(1, keys.size()):
-		var a: Dictionary = keys[i - 1]
-		var b: Dictionary = keys[i]
-		var ap: Vector3 = a["p"]
-		var al: Vector3 = a["l"]
-		var bp: Vector3 = b["p"]
-		var bl: Vector3 = b["l"]
-		tw.tween_method(func(t: float) -> void:
-				cam.global_position = ap.lerp(bp, t)
-				cam.look_at(al.lerp(bl, t), Vector3.UP),
-			0.0, 1.0, 1.0).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	await tw.finished
+## Capture only: snap the live putt-target reticles a beat into the roll, without
+## blocking the roll's all_released await.
+func _snap_putt_preview_later() -> void:
+	await _beat(0.85)
+	if _preview_active:
+		await _cap_snap("putt_preview")
+
+## Any human tap (A or B) breaks the opening flyover — the director polls this
+## each frame during its tour. All-bots (autoplay/capture) never trips it, so the
+## full tour plays for the verification screenshots.
+func _flyover_skip() -> bool:
+	for i in roster.size():
+		if not bool(roster[i].bot):
+			if PlayerInput.just_pressed(i, "a") or PlayerInput.just_pressed(i, "b"):
+				return true
+	return false
 
 ## Windowed capture only: pose two hero shots for the Steam-page verification —
 ## the dressed board wide, and a weeping grave in close with its headstone. Never
@@ -651,9 +738,17 @@ func _round() -> void:
 		putt.end_roll_visuals()
 	var targets := _bot_targets()
 	putt.begin_roll(targets, rng)
+	_preview_active = true   # F29: live target reticles follow each charging meter
 	if not _capture:
 		VerifyCapture.snap("putt_meters")
+	elif round_num == 2:
+		# Fire-and-forget so the delayed snap never sits between begin_roll and the
+		# all_released await (which would risk missing the signal). Round 2 spreads
+		# the pawns around the ring so the reticles land at distinct stones.
+		_snap_putt_preview_later()
 	var results: Array = await putt.all_released
+	_preview_active = false
+	board.clear_all_putt_previews()
 	putt.end_roll_visuals()
 	# spaces per seat, adjusted by held items (announced when spent).
 	var moved: Array[int] = []
@@ -665,9 +760,10 @@ func _round() -> void:
 		moved[seat] = int(r.spaces)
 	_apply_item_movement(moved)
 
-	# --- MOVE: every pawn travels at once; whole-board camera. ---
+	# --- MOVE: every pawn travels at once; a low raking dolly TRAVELS along the
+	# drive (F2) so the procession reads as a procession, not a static overhead. ---
 	_phase = "move"
-	executor.reset_camera(_cam_home, board.CENTER, 0.35 if not _fast else 0.0)
+	board_camera.move_travel(0.9)
 	# The Codicil is a moving target you REACH: the first pawn (by seat) whose
 	# hop passes OR lands on the beacon this round, and can afford it, claims it.
 	# Resolved as that seat's REVEAL beat; relocation happens on the claim.
@@ -701,7 +797,7 @@ func _round() -> void:
 		await _reveal_landing(seat)
 	executor.clear_banner()
 	executor.settle_body()   # B2-HOOK: host eases home after the cascade (F7)
-	executor.reset_camera(_cam_home, board.CENTER, 0.4 if not _fast else 0.0)
+	board_camera.whole_board(0.5)   # camera belongs to the director (F1-F3)
 	_refresh_hud()
 
 ## Bots aim for the highest-value reachable stone (1..6), Codicil first if
@@ -748,6 +844,8 @@ func _pay_passthrough_tolls(seat: int, from_idx: int, moved: int) -> void:
 				grudge[seat] -= pay
 				grudge[owner] += pay
 				stats[seat].lost += pay
+				_pop_at(board.space_pos(idx) + Vector3(0, 1.0, 0), owner, pay,
+					roster[owner].color)   # F11: pass-toll coins arc to the owner
 
 func _reveal_order(moved: Array[int]) -> Array:
 	var order: Array = []
@@ -764,19 +862,24 @@ func _reveal_landing(seat: int) -> void:
 	# The affected player's badge rides the lower-third for this landing's line.
 	_reveal_seat = seat
 	_apply_reveal_badge(seat)
+	# Type-aware landing close-up with an overshoot punch-in (F3). The Codicil
+	# claim gets its own hero push (F17), staged inside _resolve_codicil.
+	# The camera belongs to the director; the body's comic wind-up (B2, F8)
+	# plays underneath it — lean-in while the shot settles, line on the snap.
+	if not _fast and seat != _round_codicil_seat:
+		board_camera.landing_push(board.reveal_shot(idx, board.type_at(idx)))
 	if not _fast:
-		executor.push_to(board.reveal_anchor(idx), board.pawns[seat].global_position)
 		await executor.anticipate(idx, seat == _round_codicil_seat)   # B2-HOOK: comic-timing wind-up (F8)
 	var col: Color = roster[seat].color
 	var name := String(roster[seat].name)
 	if seat == _round_codicil_seat:
-		_resolve_codicil(seat)
+		await _resolve_codicil(seat)
 	else:
 		match board.type_at(idx):
 			Spaces.SHRINE: _resolve_shrine(seat, name, col)
 			Spaces.WEEPING_GRAVE: _resolve_grave(seat, name, col)
 			Spaces.STALL: _resolve_stall(seat, name, col)
-			Spaces.SEANCE: _resolve_seance(seat, name, col)
+			Spaces.SEANCE: await _resolve_seance(seat, name, col)
 			Spaces.TOLLGATE: _resolve_tollgate(seat, name, col)
 			Spaces.VENDETTA: _resolve_vendetta(seat, name, col)
 			_: executor.say(Executor.pick(Executor.BLANK, rng, [name]), col)
@@ -787,15 +890,102 @@ func _reveal_landing(seat: int) -> void:
 			await _cap_snap("codicil")
 		else:
 			VerifyCapture.snap("codicil")
+		await _reveal_beat(seat, REVEAL_BEAT)
+	elif _capture:
+		# Let the landing push-in settle before the verification snap, so the
+		# type-aware close-up (F3) is judged at rest, not mid-travel. Windowed
+		# capture only — the headless receipt never takes this branch.
+		await _beat(0.7)
+		await _cap_snap("reveal")
+		# Demo the reveal-cascade REACT glyphs (F24) once, for the screenshot —
+		# real play drives these from live waiting-player button taps.
+		if not _reacted_demo:
+			_reacted_demo = true
+			_capture_demo_reactions(seat)
+			await _beat(0.55)
+			await _cap_snap("reactions")
+		await _reveal_beat(seat, maxf(0.0, REVEAL_BEAT - 0.7))
 	else:
 		VerifyCapture.snap("reveal")
-	await _beat(REVEAL_BEAT)
+		await _reveal_beat(seat, REVEAL_BEAT)
+
+# --------------------------------------------------------------------------
+# F24 — REVEAL-CASCADE REACT BUTTONS. During a landing reveal the WAITING players
+# can tap to float an attributed laugh/jeer/wince over the victim's stone. Purely
+# cosmetic, rate-limited, couch-first (remote seats are guarded out cleanly until
+# a net path exists). No sim impact — it never touches grudge/deeds/rng.
+# --------------------------------------------------------------------------
+## The reveal hold, made reactive: same skippable wait as _beat, but each frame it
+## also polls the waiting players' reaction buttons.
+func _reveal_beat(victim: int, seconds: float) -> void:
+	if _fast:
+		await get_tree().process_frame
+		return
+	var t := 0.0
+	while t < seconds:
+		if _phase != "heir" and _all_press_skip():
+			return
+		_poll_reactions(victim)
+		await get_tree().process_frame
+		t += get_process_delta_time()
+
+## Read every waiting human's reaction buttons and float a glyph on a press,
+## rate-limited per seat. Bots and remote seats are skipped (couch-first).
+func _poll_reactions(victim: int) -> void:
+	var now := Time.get_ticks_msec()
+	for i in roster.size():
+		if i == victim or bool(roster[i].bot):
+			continue
+		if PlayerInput.has_method("is_remote") and PlayerInput.is_remote(i):
+			continue
+		if now - _react_last[i] < REACT_COOLDOWN_MS:
+			continue
+		for action in REACT_MAP:
+			if PlayerInput.just_pressed(i, String(action)):
+				_react_last[i] = now
+				_spawn_reaction(victim, i, String(REACT_MAP[action]))
+				break
+
+## Float a reactor's attributed glyph over the victim's stone: their badge glyph +
+## the reaction word, in the reactor's colour, rising and fading. Never headless.
+func _spawn_reaction(victim: int, reactor: int, word: String) -> void:
+	if _fast or board == null or not board.pawns.has(victim):
+		return
+	var lbl := Label3D.new()
+	lbl.text = "%s %s" % [PlayerBadge.glyph(reactor), word]
+	lbl.font_size = 44
+	lbl.pixel_size = 0.0062
+	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lbl.no_depth_test = true
+	lbl.outline_size = 13
+	lbl.outline_modulate = Color(0, 0, 0, 0.92)
+	lbl.modulate = Color(roster[reactor].color).lerp(Color.WHITE, 0.15)
+	board.add_child(lbl)
+	# Fan reactions out by reactor so several never stack, at head height over the
+	# victim so they read inside the reveal close-up.
+	var base: Vector3 = (board.pawns[victim] as Node3D).global_position \
+		+ Vector3(0.62 * (float(reactor) - 1.5), 1.3, 0.0)
+	lbl.global_position = base
+	var tw := lbl.create_tween()
+	tw.tween_property(lbl, "global_position", base + Vector3(0, 1.1, 0), 1.1) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 1.1).set_delay(0.5)
+	tw.tween_callback(lbl.queue_free)
+
+## Windowed capture only: fire a couple of scripted reactions from waiting seats so
+## the F24 glyphs appear in the verification screenshot (real play uses live taps).
+func _capture_demo_reactions(victim: int) -> void:
+	for i in roster.size():
+		if i == victim:
+			continue
+		_spawn_reaction(victim, i, String(REACT_MAP.values()[i % REACT_MAP.size()]))
 
 # ---- per-space resolutions ----
 func _resolve_shrine(seat: int, name: String, col: Color) -> void:
 	grudge[seat] += 3
 	stats[seat].shrines += 1
 	Sfx.play("grudge", -4.0)
+	_pop_grudge(seat, 3)   # F10: +3♠ arcs from the shrine to the chip
 	executor.say(Executor.pick(Executor.SHRINE, rng, [name]), col)
 
 func _resolve_grave(seat: int, name: String, col: Color) -> void:
@@ -811,12 +1001,14 @@ func _resolve_grave(seat: int, name: String, col: Color) -> void:
 		grudge[owner] += toll
 		stats[seat].lost += toll
 		stats[owner].duels += 1
+		_pop_transfer(seat, owner, toll)   # F11: the toll flies to the monument owner
 		executor.say(Executor.pick(Executor.GRAVE_TOLL, rng,
 			[name, roster[owner].name, roster[owner].name, toll]), col)
 	else:
 		var loss := mini(2, grudge[seat])
 		grudge[seat] -= loss
 		stats[seat].lost += loss
+		_pop_grudge(seat, -loss)   # F11: −N♠ falls from the pawn
 		executor.say(Executor.pick(Executor.GRAVE, rng, [name]), col)
 
 func _resolve_stall(seat: int, name: String, col: Color) -> void:
@@ -834,9 +1026,27 @@ func _resolve_stall(seat: int, name: String, col: Color) -> void:
 	executor.say(Executor.pick(Executor.STALL, rng, [name]) + "  (%s)" % item.name, col)
 
 func _resolve_seance(seat: int, name: String, col: Color) -> void:
+	# The SIM decides the slot (unchanged rng draw); the visible wheel is theater
+	# that spins TO it (F13). Effects apply as the needle lands, so the dial reads
+	# like it caused the outcome — but it never decides anything.
 	var slot := rng.randi_range(0, Spaces.SEANCE_WHEEL.size() - 1)
 	var w: Dictionary = Spaces.SEANCE_WHEEL[slot]
 	Sfx.play("bumper", -6.0)
+	if not _fast:
+		# Match the lower-third to the séance during the spin (the outcome line
+		# lands after the needle settles).
+		executor.say("The planchette stirs for %s. The circle turns…" % name,
+			Color(0.78, 0.6, 0.95))
+		if _capture:
+			# Fire the spin, snap it mid-turn for the verification screenshot, then
+			# let it settle. Windowed capture only; never on the headless receipt.
+			seance_wheel.spin_to(slot)
+			await _beat(1.1)
+			await _cap_snap("seance_wheel")
+			await _beat(2.0)
+		else:
+			await seance_wheel.spin_to(slot)
+	var _before: Array[int] = grudge.duplicate()
 	match slot:
 		0:  # MERCIFUL DRAFT — every mourner +2
 			for i in roster.size():
@@ -855,6 +1065,10 @@ func _resolve_seance(seat: int, name: String, col: Color) -> void:
 		3:  # FAVORED MEDIUM — the medium +4, all others +1
 			for i in roster.size():
 				grudge[i] += 4 if i == seat else 1
+	# F10/F11: the communal outcome, made visible — each seat's delta flies to its
+	# chip so the whole table sees who the circle favoured.
+	for i in roster.size():
+		_pop_grudge(i, grudge[i] - _before[i])
 	executor.say(Executor.pick(Executor.SEANCE, rng) + "  [%s — %s]" % [w.title, w.rule],
 		Color(0.78, 0.6, 0.95))
 
@@ -863,6 +1077,7 @@ func _resolve_tollgate(seat: int, name: String, col: Color) -> void:
 	grudge[seat] += 2   # the collected pot (abstracted)
 	stats[seat].duels += 1
 	Sfx.play("sink", -4.0)
+	_pop_grudge(seat, 2)   # F10: the pot arcs to the new gate-owner's chip
 	executor.say(Executor.pick(Executor.TOLLGATE_TAKE, rng, [name]), col)
 
 func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
@@ -886,26 +1101,58 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	grudge[win] += moved_g
 	stats[win].duels += 1
 	stats[lose].lost += moved_g
+	_pop_transfer(lose, win, moved_g)   # F11: the spoils fly from loser to winner
 	executor.say(Executor.pick(Executor.VENDETTA_RESULT, rng, [roster[win].name, roster[lose].name]) \
 		+ "  (%d♠, stakes %d vs %d)" % [moved_g, s_a, s_b], roster[win].color)
+	# A decisive vendetta is a deciding beat for the newsreel (F5).
+	MomentScribe.capture("vendetta", "%s BREAKS %s (%d♠)" % [
+		roster[win].name, roster[lose].name, moved_g], 2, [win, lose], "procession")
 
+## THE DEED MONEY-SHOT (F17). The economy's climax: hero push into the Codicil, a
+## gold flare, a wax-sealed Deed flying to the buyer's chip, the price draining
+## from their grudge, and the beacon RELOCATING visibly (a gold wisp streak) so
+## the moving target is never lost. The sim (charge/grant/relocation rng) is
+## byte-identical to before; only the theater is new, all gated behind not _fast.
 func _resolve_codicil(seat: int) -> void:
 	var name := String(roster[seat].name)
 	var col: Color = roster[seat].color
 	var price := codicil.price_for(deeds[seat])
-	if grudge[seat] >= price:
-		grudge[seat] -= price
-		deeds[seat] += 1
-		stats[seat].deeds_bought += 1
-		stats[seat].spent += price
-		Sfx.play("match_win", -6.0)
-		executor.say(Executor.pick(Executor.CODICIL, rng, [name]) + "  (−%d♠ → ◆%d)" % [price, deeds[seat]], col)
-		var new_idx := codicil.choose_relocation(rng, BoardPath.SPACES)
-		board.set_beacon(new_idx)
-		if final_kit and deeds[seat] >= deed_goal - 1 and decision_layer:
-			final_kit.escalate()
-	else:
+	if grudge[seat] < price:
 		executor.say(Executor.pick(Executor.CODICIL_SHORT, rng, [name]) + "  (needs %d♠)" % price, col)
+		return
+	var beacon_pos := board.beacon_world_pos()
+	if not _fast:
+		board_camera.beacon_hero(beacon_pos)
+	# --- sim: charge the price, grant the Deed (unchanged order + effects) ---
+	grudge[seat] -= price
+	deeds[seat] += 1
+	stats[seat].deeds_bought += 1
+	stats[seat].spent += price
+	Sfx.play("match_win", -6.0)
+	executor.say(Executor.pick(Executor.CODICIL, rng, [name]) + "  (−%d♠ → ◆%d)" % [price, deeds[seat]], col)
+	_refresh_hud()
+	# --- theater: flare, the Deed flies to the buyer, the price drains away ---
+	if not _fast:
+		board.flare_beacon()
+		var chip := _chip_screen_pos(seat)
+		fx.fly_deed(beacon_pos, chip, col)
+		fx.fly_number(-price, "♠", beacon_pos, chip, col)
+		if _capture:
+			await _beat(0.3)                 # catch the Deed in flight + the flare
+			await _cap_snap("deed_moneyshot")
+	# The estate's memory ceremony (F5): the deciding-moment still.
+	MomentScribe.capture("codicil_claim", "%s CLAIMS A DEED (◆%d)" % [name, deeds[seat]],
+		3, [seat], "procession")
+	# --- relocation: logical index updates now; the beacon TRAVELS on screen ---
+	var new_idx := codicil.choose_relocation(rng, BoardPath.SPACES)
+	if _fast:
+		board.set_beacon(new_idx)
+	else:
+		var tw: Tween = board.travel_beacon(new_idx)
+		if tw != null and tw.is_valid():
+			await tw.finished
+	if final_kit and deeds[seat] >= deed_goal - 1 and decision_layer:
+		final_kit.escalate()
 
 # ---- helpers ----
 func _nearest_within(seat: int, reach: int) -> int:
@@ -967,9 +1214,19 @@ func _minigame_block() -> void:
 			"black_ribbon":
 				var lead := _deed_leader(i)
 				if lead >= 0: items[lead].ribbon += 1
+	# The SIM picks the game (unchanged rng draw); the roulette (F22) is theater
+	# that lands on it, then calls "TAKE YOUR PLACES" (the estate's voice, doc 26).
 	var mid: String = CONTRACT_POOL[rng.randi_range(0, CONTRACT_POOL.size() - 1)]
-	_announce_text("THE WAKE PAUSES FOR A GAME\n%s" % mid.to_upper(), Color(0.8, 0.9, 1.0))
-	await _beat(1.6)
+	if _fast:
+		pass   # the soak skips the roulette entirely
+	elif _capture:
+		roulette.present(CONTRACT_POOL, mid)   # fire, snap mid-spin, then wait out
+		await _beat(1.2)
+		await _cap_snap("roulette")
+		while not roulette.finished:
+			await get_tree().process_frame
+	else:
+		await roulette.present(CONTRACT_POOL, mid)
 	_hide_announce()
 	var placements: Array = await _run_minigame(mid)
 	# RECKONING — placements pay 5/3/2/1 Grudge (and movement in QUICK WAKE).
@@ -1103,6 +1360,7 @@ func _will_reading() -> void:
 		if winner_seat >= 0:
 			deeds[winner_seat] += 1
 			stats[winner_seat].will_bonus = int(stats[winner_seat].get("will_bonus", 0)) + 1
+			_pop_grudge(winner_seat, 1, "◆")   # F10: the bonus Deed flies to the chip
 			lines.append("%s — %s (%s)  +1 Deed → ◆%d" % [
 				c.title, roster[winner_seat].name, c.desc, deeds[winner_seat]])
 		else:
@@ -1161,6 +1419,9 @@ func _heir_crowned() -> void:
 	_announce_text("%s IS CROWNED HEIR\n◆%d DEEDS · SEED %d" % [pl.name, deeds[winner], seed_value],
 		Color(pl.color))
 	_announce.visible = true
+	# The victor's crown — the newsreel's headline still (F5).
+	MomentScribe.capture("heir_crowned", "%s IS CROWNED HEIR (◆%d)" % [pl.name, deeds[winner]],
+		3, [winner], "procession")
 	if _capture:
 		await _cap_snap("heir_crowned")
 	else:
