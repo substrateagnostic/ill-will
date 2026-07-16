@@ -671,6 +671,35 @@ godot --path C:\Users\agall\projects\un_party_game          # main menu
 
 ## LOG
 
+### 2026-07-16 — Z1 KNOWN-DEBT SWEEP: all four morning-menu #4 debts paid (branch z1-debt-sweep)
+Night 5's Wave-0 debt lane. Four commits, one per fix, receipts green:
+1. **Hint bars never say "A =" again** (a79418d). The `_hint_seats()`
+   seat-0 fallback (your mower/tilt/widows exemplar) swept into the ten
+   remaining bar-owning games + par's build hint (which told an all-bot
+   demo to CLICK TO PLACE). Bars now always match the intro card
+   (Space/E/Q). 10 receipts diffed pristine-vs-changed: byte-identical
+   (throne/seance wobble reproduced pristine-vs-pristine — noise floor,
+   verdict lines identical). Shots: verify_out/hintbars/.
+2. **The hop crosses the wire** (e01b540). jump + presses_jump ride the
+   30 Hz input packet with the same dropped-tap rescue as A/B; old
+   builds decode jump=false (dict packets, nothing to version). 16/16
+   probe asserts + host/join wire smoke, 0 errors. verify_out/jump_wire/.
+3. **Double-gate collapsed** (0b0e815). Games with their own IntroCard
+   (8 of them, flagged in MODULES) skip the estate GET READY on the
+   couch; online it shrinks to a minimal EVERYONE IN sync (the only
+   cross-estate hold — remote A / ready_toggle still land). Non-intro
+   games keep the full card. --readytest now proves all three faces.
+   Shots: verify_out/gate/.
+4. **THE NEWSREEL plays on guest screens** (df8a647). Host ships each
+   kept still as a ~360px JPEG (~7 kB each, reel <= ~150 kB/night) +
+   intertitles over a new reliable ceremony-media pipe; guests roll the
+   same Newsreel scene; the will facts fold a straggler. Full paired
+   probe night: same ACT I card on both screens, clean fold, 0 errors.
+   Shots: verify_out/newsreel_net/.
+FLAG: my first worktree adoption collided with the procession lane —
+commit 691a841 (identical content to a79418d) sits harmlessly in that
+lane's branch history; merging both branches is clean (same changes).
+
 ### 2026-07-15 — MESHY FORGE: 32 new props (graves / awards / board / estate) on meshy-6 (agent worktree)
 The prop library for the estate's next dressing pass exists. A new
 manifest-driven batch tool (`tools/meshy_forge.ps1` + `tools/meshy_manifest.json`)
