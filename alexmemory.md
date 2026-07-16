@@ -6,6 +6,47 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🌒 NIGHT 5 UNDERWAY (2026-07-16, the fifth watch).** Thesis: night 4
+  built the board; night 5 makes it a broadcast. Plan = doc 23; research
+  docs 24 (board broadcast standard, 34 findings), 25 (front-end audit),
+  26 (VOICE BIBLE + ambient troupe). Meshy upgraded to premium mid-night
+  (3× credits) — caps lifted; rigging/animation/retexture endpoints
+  discovered and documented (doc 15 addendum).
+
+  **MERGED so far (receipts green + screenshots director-read on all):**
+  - ✅ **THE EXECUTOR EMBODIED** (B2): the host has a BODY at the manor
+    gate — breathing idle, stakes-scaled lean-in before each reveal, nod/
+    tut gestures; expanded line pools; **THE EULOGY** (procedural closing
+    monologue from the night's real stats, never repeats two nights
+    running); IM Fell English on the lower-thirds. Seed-7 receipt
+    byte-identical.
+  - ✅ **THE WRITING PASS** (B5): voice bible applied anthology-wide.
+    "%s, DECEASED / CAUSE OF DEATH: %s" · "TAKE YOUR PLACES" · bots
+    "play themselves; need no manual" · new core/voice.gd pools. 3
+    receipt tripwires byte-identical.
+  - ✅ **KNOWN-DEBT SWEEP** (Z1): all four morning-menu-#4 debts dead —
+    jump rides the online packet (16/16 probe asserts); real-key hint
+    bars in ALL games now (brief had it inverted: greed/lw/throne were
+    the broken ones); GET READY/IntroCard double-gate collapsed (couch:
+    IntroCard only; online: minimal EVERYONE IN sync); **newsreel plays
+    on guests** (full ~7.4kB JPEG still transfer, not the fallback).
+  - ✅ **AMBIENT LIFE** (B3): the grounds breathe — THE GALLERY (crows
+    that gossip real chronicle lines, face whoever's losing, fall silent
+    when you approach), Old Rake the groundskeeper (jump near his leaves;
+    endure the stare), a ghost queue at a door that never opens, fog/
+    embers/distant caws, a vengeful seagull, one guttering runt lantern.
+  - ✅ **FRONT-END AAA** (B4): **gamepad pause** (START works — a
+    controller-only player literally couldn't pause before); **attract
+    mode** ("THE HOUSE REHEARSES" — idle 45s → bots play under a 1920s
+    film wash); title recomposed (stale debug bg image was covering the
+    live 3D!); settings double-panel bug fixed at root + AMBIENCE
+    slider + 5s quit-hold.
+
+  **STILL COOKING:** B1 procession broadcast cameras · B7 PALLBEARERS
+  (game #15) · Z2 forge wave 2 (7 props committed; re-rolls + Meshy
+  RIG TRIAL running) · B6 ghost meddling (launched) · B8 arena dressing
+  (waits on forge).
+
 - **☀️☀️☀️☀️ MORNING MENU #4 — THE FOURTH WATCH (2026-07-15). The night
   you asked for a board game, and the estate grew one.**
 
