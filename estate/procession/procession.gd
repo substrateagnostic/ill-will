@@ -1395,7 +1395,7 @@ func _heir_crowned() -> void:
 		EstateState.monuments.append({
 			"owner": String(pl.name),
 			"color": Color(pl.color).to_html(),
-			"label": "%s — HEIR OF THE PROCESSION (◆%d, seed %d)" % [pl.name, deeds[winner], seed_value],
+			"label": "%s — HEIR OF THE PROCESSION (◆%d)" % [pl.name, deeds[winner]],
 			"night": EstateState.nights_played,
 			"kind": "heir",
 		})
@@ -1416,8 +1416,11 @@ func _heir_crowned() -> void:
 	_chiprow.visible = false
 	_reveal.visible = false
 	podium.stage_entries(entries)
-	_announce_text("%s IS CROWNED HEIR\n◆%d DEEDS · SEED %d" % [pl.name, deeds[winner], seed_value],
-		Color(pl.color))
+	# The seed is verification plumbing — real heirs get a clean crown.
+	var crown := "%s IS CROWNED HEIR\n◆%d DEEDS" % [pl.name, deeds[winner]]
+	if _autoplay:
+		crown += " · SEED %d" % seed_value
+	_announce_text(crown, Color(pl.color))
 	_announce.visible = true
 	# The victor's crown — the newsreel's headline still (F5).
 	MomentScribe.capture("heir_crowned", "%s IS CROWNED HEIR (◆%d)" % [pl.name, deeds[winner]],
