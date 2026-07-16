@@ -2832,6 +2832,24 @@ func _ambient_test_run() -> void:
 		walkers[0].global_position = Vector3(-7.2, 0.1, -4.6)
 	await get_tree().create_timer(0.9).timeout
 	await _ambient_snap("gallery_silent")
+	# THE GROUNDSKEEPER (mid-stare) — a walker jumps at Old Rake's pile; the
+	# leaves scatter and he freezes, staring, until they leave. (Gameplay uses
+	# the vy>2 jump check; the shot forces the latch to dodge the physics race.)
+	# Park the other walkers away so Old Rake and his scattered pile read clear.
+	var al2: Node = get_tree().get_first_node_in_group("ambient_life")
+	for w in walkers:
+		if is_instance_valid(w) and w.player_idx != 0:
+			w.global_position = Vector3(7.5 + w.player_idx * 0.8, 0.1, -1.0)
+	if not walkers.is_empty():
+		walkers[0].global_position = Vector3(-2.2, 0.1, 2.05)
+		walkers[0].velocity = Vector3(0, 6, 0)
+		if al2 != null and al2.has_method("debug_stare"):
+			al2.debug_stare(walkers[0].global_position)
+	await get_tree().create_timer(0.6).timeout
+	if not walkers.is_empty():
+		walkers[0].global_position = Vector3(-2.2, 0.1, 2.05)   # hold them in his glare
+	await get_tree().create_timer(0.1).timeout
+	await _ambient_snap("groundskeeper_stare")
 	print("AMBIENTTEST done")
 	await get_tree().create_timer(0.2).timeout
 	get_tree().quit()

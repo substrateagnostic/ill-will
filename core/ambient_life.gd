@@ -65,9 +65,17 @@ func debug_show_gossip() -> void:
 		if m is CrowGallery:
 			(m as CrowGallery).debug_pop_bubble()
 
+## Dev-only: force Old Rake into his stare at a point (the jump trigger, minus
+## the physics race — the gameplay path is the vy>2 check in Groundskeeper.tick).
+func debug_stare(world_pos: Vector3) -> void:
+	for m in _members:
+		if m is Groundskeeper:
+			(m as Groundskeeper).debug_force_stare(world_pos)
+
 # ---------------------------------------------------------------- member wiring
 func _build_members() -> void:
 	_add_member(CrowGallery.new())
+	_add_member(Groundskeeper.new())
 
 func _add_member(m: AmbientMember) -> void:
 	m.life = self
@@ -442,7 +450,195 @@ class CrowGallery extends AmbientMember:
 ## a player jumps near his pile he stops and STARES until they leave — no line,
 ## the stare is the joke — then goes back to it. (doc 26 §3.1)
 class Groundskeeper extends AmbientMember:
-	pass
+	const RAKING := 0
+	const SURVEY := 1
+	const STARE := 2
+	const LEAF_HOME := [
+		Vector3(0.14, 0.02, 0.50), Vector3(-0.12, 0.02, 0.56), Vector3(0.02, 0.02, 0.66)]
+
+	var _model: Node3D
+	var _rake: Node3D
+	var _leaves: Array[MeshInstance3D] = []
+	var _bubble: AmbientLife.GossipBubble
+	var _state := RAKING
+	var _state_t := 0.0
+	var _rake_tw: Tween
+	var _base_yaw := 0.0
+	var _mutter_t := 0.0
+
+	func build() -> void:
+		reaction_radius = 3.0
+		anchor = Vector3(-3.2, 0.0, 1.4)
+		position = anchor
+		_base_yaw = deg_to_rad(28.0)   # angled toward the lawn, working
+		rotation.y = _base_yaw
+		var path := AmbientLife.GROUNDSKEEPER_GLB
+		if path == "" or not ResourceLoader.exists(path):
+			path = AmbientLife.KAYKIT_BARBARIAN
+		_model = AmbientLife.character(path, 1.35)
+		AmbientLife.tint_model(_model, Color(0.60, 0.50, 0.40))   # muted groundskeeper browns
+		add_child(_model)
+		_rake = _build_rake()
+		add_child(_rake)
+		_rake.position = Vector3(0.16, 0.0, 0.30)
+		for home in LEAF_HOME:
+			var leaf := _build_leaf()
+			add_child(leaf)
+			leaf.position = home
+			_leaves.append(leaf)
+		_bubble = AmbientLife.GossipBubble.new()
+		add_child(_bubble)
+		_bubble.position = Vector3(0.0, 2.3, 0.0)
+		_bubble.scale = Vector3(0.62, 0.62, 0.62)   # a mutter, not a broadcast
+		_state_t = 4.0
+		_mutter_t = rr().randf_range(16.0, 28.0)
+		_start_rake_sweep()
+
+	func tick(dt: float, nearest: Node3D, nearest_dist: float, _losing: Vector3, lod: bool) -> void:
+		var near := nearest != null and nearest_dist < reaction_radius
+		# the jab that stops him: a jump inside his patch
+		if near and _state != STARE and _player_jumping(nearest):
+			_enter_stare(nearest)
+			return
+		if _state == STARE:
+			if not near:
+				_exit_stare()
+			elif nearest != null:
+				_face(nearest.global_position, 0.25)   # track them, unblinking
+			return
+		if not lod:
+			return
+		_state_t -= dt
+		if _state_t <= 0.0:
+			if _state == RAKING:
+				_state = SURVEY
+				_state_t = 1.6
+				if _rake_tw != null and _rake_tw.is_valid():
+					_rake_tw.kill()
+				# straighten, hand on back, survey the pile... then a sigh
+				var tw := create_tween()
+				tw.tween_property(self, "position:y", 0.06, 0.5).set_trans(Tween.TRANS_SINE)
+				tw.tween_interval(0.5)
+				tw.tween_property(self, "position:y", 0.0, 0.4).set_trans(Tween.TRANS_SINE)
+			else:
+				_state = RAKING
+				_state_t = rr().randf_range(3.5, 5.0)
+				_reset_leaves()   # the pile never grows; the same three, forever
+				_start_rake_sweep()
+		# a rare, dry mutter of shop-talk (a real chronicle fact)
+		_mutter_t -= dt
+		if _mutter_t <= 0.0:
+			_mutter_t = rr().randf_range(18.0, 32.0)
+			if _state == RAKING:
+				var lines: Array = life.chronicle_lines()
+				if not lines.is_empty():
+					_bubble.show_line(String(lines[rr().randi_range(0, lines.size() - 1)]))
+					var b := _bubble
+					get_tree().create_timer(4.5).timeout.connect(func() -> void:
+						if is_instance_valid(b):
+							b.hide_bubble())
+
+	func _player_jumping(p: Node3D) -> bool:
+		var v: Variant = p.get("velocity")
+		return v is Vector3 and (v as Vector3).y > 2.0
+
+	func _enter_stare(p: Node3D) -> void:
+		_state = STARE
+		_bubble.hide_bubble()
+		if _rake_tw != null and _rake_tw.is_valid():
+			_rake_tw.kill()
+		_scatter_leaves()
+		_face(p.global_position, 0.2)
+
+	func _exit_stare() -> void:
+		_state = RAKING
+		_state_t = rr().randf_range(3.0, 4.5)
+		_face_yaw(_base_yaw, 0.4)
+		_reset_leaves()
+		_start_rake_sweep()
+
+	## Public: the vengeful seagull undoes his work (doc §3.5 crosses §3.1).
+	func scatter_leaves() -> void:
+		_scatter_leaves()
+
+	## Dev-only: latch the stare toward a point (verify shots).
+	func debug_force_stare(world_pos: Vector3) -> void:
+		_state = STARE
+		_bubble.hide_bubble()
+		if _rake_tw != null and _rake_tw.is_valid():
+			_rake_tw.kill()
+		_scatter_leaves()
+		_face(world_pos, 0.2)
+
+	func _scatter_leaves() -> void:
+		for leaf in _leaves:
+			var to := leaf.position + Vector3(rr().randf_range(-0.7, 0.7), rr().randf_range(0.15, 0.35), rr().randf_range(0.2, 0.8))
+			var tw := leaf.create_tween()
+			tw.set_parallel(true)
+			tw.tween_property(leaf, "position", to, 0.55).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+			tw.tween_property(leaf, "rotation:y", rr().randf_range(-6.0, 6.0), 0.55)
+
+	func _reset_leaves() -> void:
+		for i in _leaves.size():
+			var leaf := _leaves[i]
+			var tw := leaf.create_tween()
+			tw.tween_property(leaf, "position", LEAF_HOME[i], 0.3)
+
+	func _start_rake_sweep() -> void:
+		if _rake_tw != null and _rake_tw.is_valid():
+			_rake_tw.kill()
+		_rake.rotation.x = -0.12
+		_rake_tw = create_tween().set_loops()
+		_rake_tw.tween_property(_rake, "rotation:x", 0.16, 0.9).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		_rake_tw.tween_property(_rake, "rotation:x", -0.12, 0.7).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+	func _face(world_pos: Vector3, t: float) -> void:
+		var flat := world_pos - global_position
+		flat.y = 0.0
+		if flat.length() < 0.05:
+			return
+		_face_yaw(atan2(flat.x, flat.z), t)
+
+	func _face_yaw(yaw: float, t: float) -> void:
+		var tw := create_tween()
+		tw.tween_property(self, "rotation:y", yaw, t).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+	func _build_rake() -> Node3D:
+		var rake := Node3D.new()
+		var wood := StandardMaterial3D.new()
+		wood.albedo_color = Color(0.40, 0.27, 0.16)
+		wood.roughness = 0.9
+		var handle := MeshInstance3D.new()
+		var hm := CylinderMesh.new()
+		hm.top_radius = 0.018
+		hm.bottom_radius = 0.024
+		hm.height = 1.1
+		handle.mesh = hm
+		handle.material_override = wood
+		handle.rotation.x = deg_to_rad(58.0)
+		handle.position = Vector3(0.0, 0.52, 0.18)
+		rake.add_child(handle)
+		var head := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = Vector3(0.34, 0.03, 0.05)
+		head.mesh = bm
+		head.material_override = wood
+		head.position = Vector3(0.0, 0.04, 0.62)
+		rake.add_child(head)
+		return rake
+
+	func _build_leaf() -> MeshInstance3D:
+		var leaf := MeshInstance3D.new()
+		var qm := QuadMesh.new()
+		qm.size = Vector2(0.26, 0.22)
+		qm.orientation = PlaneMesh.FACE_Y
+		leaf.mesh = qm
+		var lm := StandardMaterial3D.new()
+		lm.albedo_color = Color(0.66, 0.36, 0.12)
+		lm.cull_mode = BaseMaterial3D.CULL_DISABLED
+		lm.roughness = 1.0
+		leaf.material_override = lm
+		return leaf
 
 # ================================================================ 3.4 THE QUEUE
 ## The Patient Ghost(s): a polite queue for a mausoleum door that never opens.
