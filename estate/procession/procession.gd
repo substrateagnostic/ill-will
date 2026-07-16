@@ -899,6 +899,9 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	stats[lose].lost += moved_g
 	executor.say(Executor.pick(Executor.VENDETTA_RESULT, rng, [roster[win].name, roster[lose].name]) \
 		+ "  (%d♠, stakes %d vs %d)" % [moved_g, s_a, s_b], roster[win].color)
+	# A decisive vendetta is a deciding beat for the newsreel (F5).
+	MomentScribe.capture("vendetta", "%s BREAKS %s (%d♠)" % [
+		roster[win].name, roster[lose].name, moved_g], 2, [win, lose], "procession")
 
 ## THE DEED MONEY-SHOT (F17). The economy's climax: hero push into the Codicil, a
 ## gold flare, a wax-sealed Deed flying to the buyer's chip, the price draining
@@ -1199,6 +1202,9 @@ func _heir_crowned() -> void:
 	_announce_text("%s IS CROWNED HEIR\n◆%d DEEDS · SEED %d" % [pl.name, deeds[winner], seed_value],
 		Color(pl.color))
 	_announce.visible = true
+	# The victor's crown — the newsreel's headline still (F5).
+	MomentScribe.capture("heir_crowned", "%s IS CROWNED HEIR (◆%d)" % [pl.name, deeds[winner]],
+		3, [winner], "procession")
 	if _capture:
 		await _cap_snap("heir_crowned")
 	else:
