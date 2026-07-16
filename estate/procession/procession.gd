@@ -424,6 +424,34 @@ func _build_hud() -> void:
 	final_kit = FinalStretch.attach(self, null, {"ticks": false})
 	_refresh_hud()
 
+## The world point a flying number lifts off from — above the seat's pawn if it
+## exists, else the stone it stands on (F10/F11).
+func _pawn_src(seat: int) -> Vector3:
+	if board != null and board.pawns.has(seat):
+		return (board.pawns[seat] as Node3D).global_position + Vector3(0, 1.15, 0)
+	return board.space_pos(positions[seat]) + Vector3(0, 1.0, 0) if board else Vector3.ZERO
+
+## A grudge (or deed) delta popup at the seat's pawn, arcing to its chip. glyph
+## carries the currency; the sign + glyph mean it never reads as colour alone.
+func _pop_grudge(seat: int, amount: int, glyph := "♠") -> void:
+	if _fast or fx == null or amount == 0:
+		return
+	fx.fly_number(amount, glyph, _pawn_src(seat), _chip_screen_pos(seat), roster[seat].color)
+
+## A grudge TRANSFER: the value lifts off the payer's pawn and flies to the
+## collector's chip in the COLLECTOR's colour — the MP "Orb" toll, made visible.
+func _pop_transfer(from_seat: int, to_seat: int, amount: int) -> void:
+	if _fast or fx == null or amount <= 0:
+		return
+	fx.fly_number(amount, "♠", _pawn_src(from_seat), _chip_screen_pos(to_seat), roster[to_seat].color)
+
+## A flying number lifting off a fixed world point (a stone, a gate) rather than a
+## pawn — used for pass-through tolls where the payer is mid-hop.
+func _pop_at(world_from: Vector3, seat_target: int, amount: int, color: Color) -> void:
+	if _fast or fx == null or amount == 0:
+		return
+	fx.fly_number(amount, "♠", world_from, _chip_screen_pos(seat_target), color)
+
 ## Screen-space centre of a seat's HUD chip — the homing target for flying numbers
 ## and the Deed token (F10/F11/F17).
 func _chip_screen_pos(seat: int) -> Vector2:
@@ -760,6 +788,8 @@ func _pay_passthrough_tolls(seat: int, from_idx: int, moved: int) -> void:
 				grudge[seat] -= pay
 				grudge[owner] += pay
 				stats[seat].lost += pay
+				_pop_at(board.space_pos(idx) + Vector3(0, 1.0, 0), owner, pay,
+					roster[owner].color)   # F11: pass-toll coins arc to the owner
 
 func _reveal_order(moved: Array[int]) -> Array:
 	var order: Array = []
@@ -817,6 +847,7 @@ func _resolve_shrine(seat: int, name: String, col: Color) -> void:
 	grudge[seat] += 3
 	stats[seat].shrines += 1
 	Sfx.play("grudge", -4.0)
+	_pop_grudge(seat, 3)   # F10: +3♠ arcs from the shrine to the chip
 	executor.say(Executor.pick(Executor.SHRINE, rng, [name]), col)
 
 func _resolve_grave(seat: int, name: String, col: Color) -> void:
@@ -832,12 +863,14 @@ func _resolve_grave(seat: int, name: String, col: Color) -> void:
 		grudge[owner] += toll
 		stats[seat].lost += toll
 		stats[owner].duels += 1
+		_pop_transfer(seat, owner, toll)   # F11: the toll flies to the monument owner
 		executor.say(Executor.pick(Executor.GRAVE_TOLL, rng,
 			[name, roster[owner].name, roster[owner].name, toll]), col)
 	else:
 		var loss := mini(2, grudge[seat])
 		grudge[seat] -= loss
 		stats[seat].lost += loss
+		_pop_grudge(seat, -loss)   # F11: −N♠ falls from the pawn
 		executor.say(Executor.pick(Executor.GRAVE, rng, [name]), col)
 
 func _resolve_stall(seat: int, name: String, col: Color) -> void:
@@ -875,6 +908,7 @@ func _resolve_seance(seat: int, name: String, col: Color) -> void:
 			await _beat(2.0)
 		else:
 			await seance_wheel.spin_to(slot)
+	var _before: Array[int] = grudge.duplicate()
 	match slot:
 		0:  # MERCIFUL DRAFT — every mourner +2
 			for i in roster.size():
@@ -893,6 +927,10 @@ func _resolve_seance(seat: int, name: String, col: Color) -> void:
 		3:  # FAVORED MEDIUM — the medium +4, all others +1
 			for i in roster.size():
 				grudge[i] += 4 if i == seat else 1
+	# F10/F11: the communal outcome, made visible — each seat's delta flies to its
+	# chip so the whole table sees who the circle favoured.
+	for i in roster.size():
+		_pop_grudge(i, grudge[i] - _before[i])
 	executor.say(Executor.pick(Executor.SEANCE, rng) + "  [%s — %s]" % [w.title, w.rule],
 		Color(0.78, 0.6, 0.95))
 
@@ -901,6 +939,7 @@ func _resolve_tollgate(seat: int, name: String, col: Color) -> void:
 	grudge[seat] += 2   # the collected pot (abstracted)
 	stats[seat].duels += 1
 	Sfx.play("sink", -4.0)
+	_pop_grudge(seat, 2)   # F10: the pot arcs to the new gate-owner's chip
 	executor.say(Executor.pick(Executor.TOLLGATE_TAKE, rng, [name]), col)
 
 func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
@@ -924,6 +963,7 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	grudge[win] += moved_g
 	stats[win].duels += 1
 	stats[lose].lost += moved_g
+	_pop_transfer(lose, win, moved_g)   # F11: the spoils fly from loser to winner
 	executor.say(Executor.pick(Executor.VENDETTA_RESULT, rng, [roster[win].name, roster[lose].name]) \
 		+ "  (%d♠, stakes %d vs %d)" % [moved_g, s_a, s_b], roster[win].color)
 	# A decisive vendetta is a deciding beat for the newsreel (F5).
@@ -1171,6 +1211,7 @@ func _will_reading() -> void:
 		if winner_seat >= 0:
 			deeds[winner_seat] += 1
 			stats[winner_seat].will_bonus = int(stats[winner_seat].get("will_bonus", 0)) + 1
+			_pop_grudge(winner_seat, 1, "◆")   # F10: the bonus Deed flies to the chip
 			lines.append("%s — %s (%s)  +1 Deed → ◆%d" % [
 				c.title, roster[winner_seat].name, c.desc, deeds[winner_seat]])
 		else:
