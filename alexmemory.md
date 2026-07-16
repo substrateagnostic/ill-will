@@ -2087,3 +2087,76 @@ JUDGMENT CALLS (flag if you disagree):
 Docs: online-echo-VERIFY.md + online-swap-VERIFY.md (+ committed probe
 logs and windowed snap pairs). user:// backed up/restored, md5s
 re-verified, no .npbak leftovers, only my own PIDs touched.
+
+================================================================================
+NIGHT 5 — B6 (GHOST MEDDLING): dead humans get one attributed verb
+================================================================================
+
+Doc 24 §6 doctrine made real: an eliminated HUMAN seat becomes a colour-tinted
+WISP (name + cooldown ring + "MEDDLE READY") for its respawn window and gets ONE
+small, safe, ATTRIBUTED verb on A. Harvested the predecessor's never-committed
+core/ghost_meddle.gd, reviewed it against the live tree — compiled clean, ZERO
+fixes needed; every API it calls verified (CooldownRing, PlayerBadge.glyph,
+PlayerInput.get_move/just_pressed/get_aim_dir/get_aim_stick/describe_binding,
+PartySetup.pref, NetSession.my_seat, Sfx via CooldownRing). Committed the kit
+alone first (a52896e).
+
+WIRED 2 GAMES (echo_chamber + orbital) — the ONLY two that qualify. Exhaustive
+survey: 4 games already own a dead-seat actor (dead_weight/poltergeist,
+last_will/lw_ghost, masked_ball/mb_ghost, tilt/seagull — left alone); the other 8
+(greed, mower, throne, swap_meet, seance, understudy, pallbearers, widows_gaze)
+have NO respawn queue + NO eliminated flag — only brief stuns/knockdowns of still-
+EMBODIED players (greed 1s, mower spin_out, throne dethrone) or no death at all,
+so a wisp would break the fiction and double-represent a live body. echo_chamber
++ orbital are the only games with a genuine temporary-dead (respawn-queue) window
+and no mechanic. Quality over count — I did not force wisps where the doctrine
+("eliminated players become poltergeists") doesn't hold.
+
+- echo_chamber (3e39948): SIM meddle "STIRRED A COLD DRAFT" — a 0.22s spectral
+  STAGGER of the living within 3.2m. Stagger adds NO velocity => can't ring
+  anyone out; skips a fighter already over the ring => never decides a death in
+  progress. Rides the fighter snapshot to mirrors, no new net messages. Wired on
+  both the sim path (_on_death/_process_respawns) and the mirror alive-edge.
+- orbital (a7c2120): PRESENTATION-only "RATTLED THE VOID" — a cosmetic spectral
+  pulse. In an all-balls-are-lethal arena a sim nudge could KILL, so the meddle
+  touches no ball/score/kill/sim-rng; each screen renders its own. Fixed-hover
+  wisp (drift=false) at the death spot.
+- Kit fix (2635bac): drift=false now truly holds the FULL 3D death spot (spawn_at
+  was force-setting y=hover_y + a floor-plane ring — flat-floor assumptions that
+  detached the wisp in orbital's radial world). drift=true path byte-unchanged.
+
+RECEIPT-SAFE BY CONSTRUCTION: a wisp is raised ONLY for a non-bot seat
+(not fighters[i].is_bot / not bot_enabled[i]), so all-bot CLI runs never build one
+and never call the meddle handler. Verified byte-identical vs pre-meddle HEAD:
+- echo: 5x ECHO_DETERMINISM max_err=0.000000 + ECHO_MATCH_OVER champ=BLUE
+  placements=[1,3,0,2] IDENTICAL before/after (--echobots --echofast=3 --seed=1).
+  The bounty-kill line ORDER jitters +/-1 run-to-run — this is the pre-existing
+  echo couch chaos already flagged in this file (real CharacterBody3D physics,
+  diverges from ~round 3); the mode-independent invariants are exact.
+- orbital: KILL/HOP log + ORBITAL_RESULTS placements=[3,0,2,1]
+  points={0:13,1:6,2:10,3:14} + ORBITAL_ASSERT PASS all BYTE-IDENTICAL (orbital
+  never touches Engine.time_scale, so it's fully deterministic; --orbbots --seed=7
+  --fast=10 --autoquit). Zero ORB_MEDDLE lines both trees.
+
+Live-wisp screenshots via gated dev flags (--echomeddleshot / --orbmeddleshot,
+windowed, OFF in every receipt path; _ring_test / --orbtest precedent):
+verify_out/echo_meddle_wisp.png (RED wisp, killed seat reads RED 0) +
+verify_out/orbital_meddle_wisp.png (RED fixed-hover wisp against the stars).
+
+JUDGMENT CALLS (flag if you disagree):
+1. Only 2 games wired, not the "2-4 more" the brief hoped for. The codebase
+   honestly only has 2 qualifying games (survey above). Forcing a 3rd into a
+   stun/knockdown game would violate MISCHIEF-NOT-MURDER and put a ghost next to
+   a still-alive body. Held the line on doctrine + quality.
+2. echo's meddle is a stagger (interrupts an action) — the one sim-touching
+   verb. Guarded so it can never ring-out or touch a death-in-progress, kept to
+   0.22s (a flinch). If you'd rather the dead never touch the living at all,
+   swap it to presentation-only like orbital (one-line change of the handler +
+   presentation_only=true). I judged a felt "haunting" worth the tiny reach.
+3. For a SIM meddle online, the attribution toast + gust sfx fire host-side only
+   (the remote guest sees the stagger via the pose stream, not their own toast).
+   Pre-accepted by the kit's SIM-vs-presentation split; no new net messages, per
+   the brief. Couch (primary mode) shows everything.
+4. Added two gated dev capture flags to the shipping game files (echo/orbital).
+   Precedent: _ring_test, --orbtest, --aimprobe. Never in a receipt path;
+   re-ran both receipts with the flag code present — still byte-identical.
