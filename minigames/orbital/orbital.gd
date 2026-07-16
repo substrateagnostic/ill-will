@@ -124,6 +124,9 @@ var _event_label: Label
 var _timer_label: Label
 var _hint_label: Label
 var _score_rows: VBoxContainer
+var _meddle: GhostMeddle       # GHOST MEDDLING (doc 24 §6 / B6): dead humans get one verb
+var _meddle_shot := false      # dev: force a seat-0 wisp for a windowed shot
+var _meddle_shot_done := false
 var _row_labels: Array = []
 var _event_until := 0.0
 var _banner_gen := 0
@@ -192,6 +195,9 @@ func _parse_args() -> void:
 			_fast = clampf(float(arg.trim_prefix("--fast=")), 1.0, 30.0)
 		elif arg == "--autoquit":
 			_autoquit = true
+		elif arg == "--orbmeddleshot":
+			_meddle_shot = true    # dev-only: photograph a live ghost-meddle wisp (windowed)
+			DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
 		elif arg.begins_with("--matchsec="):
 			_match_override = float(arg.trim_prefix("--matchsec="))
 		elif arg.begins_with("--orbtest="):
@@ -348,6 +354,70 @@ func _controls_bar() -> String:
 	return "MOVE walk   ·   %s   ·   %s" % [
 		_btn_hint("a", "THROW (hold) / CATCH (tap)"), _btn_hint("b", "JUMP the gap")]
 
+
+## GHOST MEDDLING: while any wisp exists, append each locally-controlled dead
+## seat's meddle legend (real keys via describe_binding) under the controls bar
+## and re-reveal it; restore the plain bar when the last wisp respawns.
+func _refresh_meddle_hints() -> void:
+	if _hint_label == null:
+		return
+	if _meddle == null or _meddle.ghost_count() == 0:
+		_hint_label.text = _controls_bar()
+		return
+	var lines := [_controls_bar()]
+	for i in _human_seats():
+		if _meddle.has_ghost(int(i)):
+			lines.append(_meddle.hint_line(int(i), "RATTLE"))
+	_hint_label.text = "\n".join(lines)
+	_hint_label.visible = true
+
+
+## GHOST MEDDLING (doc 24 §6): a dead human's ONE verb. A cold spectral pulse —
+## RATTLE THE VOID. PRESENTATION-ONLY: it spawns a cosmetic burst and a soft rush
+## and touches NO sim state and NO sim rng (_spawn_burst uses engine particle
+## randomness, not the seeded sim rng), so in this all-balls-are-lethal arena it
+## can never move a ball, credit a kill, or desync a mirror. Mischief, filed.
+func _on_ghost_meddle(index: int, origin: Vector3, _aim: Vector3) -> void:
+	_spawn_burst(origin, pawn_color(index), 16)
+	Sfx.play("whoosh_small", -9.0)
+	_meddle.attribute(index, "RATTLED THE VOID")
+	print("ORB_MEDDLE seat=%d (spectral pulse; presentation-only, sim untouched)" % index)
+
+
+## DEV/VERIFY ONLY (--orbmeddleshot, windowed): hide seat 0's body and force-raise
+## its ghost-meddle wisp so the fixed-hover actor can be photographed. BYPASSES the
+## human gate on purpose — never enabled in a receipt run, so all-bot receipts are
+## untouched. Mirrors orbital's own --orbtest / probe capture precedent.
+func _meddle_shot_tick() -> void:
+	if _meddle_shot_done or now < 3.2:   # let the "ORBITAL DODGEBALL" intro banner clear
+		return
+	_meddle_shot_done = true
+	var pw: OrbPawn = pawns[0]
+	if pw._visual != null:
+		pw._visual.visible = false
+	_flash_banner("", Color.WHITE, 0.0)   # clear any lingering banner for a clean plate
+	# a clear foreground spot (toward the camera, off the planet cluster) so the
+	# fixed-hover wisp photographs large against the stars, not lost on a planet
+	_meddle.add_ghost(0, str(pawn_name(0)), pawn_color(0), Vector3(-5.5, 3.4, 7.0), 1.4, false)
+	_refresh_meddle_hints()
+	print("ORB_MEDDLE_SHOT wisp raised for seat 0 (dev capture; not a receipt path)")
+	_grab_meddle()
+
+
+func _grab_meddle() -> void:
+	await get_tree().create_timer(0.8).timeout   # let the wisp fade in + ring draw
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+		var img := get_viewport().get_texture().get_image()
+		var path := "res://verify_out/orbital_meddle_wisp.png"
+		img.save_png(path)
+		print("ORB_MEDDLE_CAP ", path)
+	else:
+		print("ORB_MEDDLE_SHOT_SKIP_HEADLESS")
+	await get_tree().create_timer(0.3).timeout
+	print("ORB_MEDDLE_SHOT_DONE")
+	get_tree().quit()
+
 ## --- static world (camera, light, stars, planets, ui) ----------------------
 
 func _build_static() -> void:
@@ -356,6 +426,17 @@ func _build_static() -> void:
 	_cam.fov = CAM_FOV
 	_cam.current = true
 	add_child(_cam)
+
+	# GHOST MEDDLING (doc 24 §6 / B6): a dead HUMAN seat hovers fixed at its death
+	# spot (drift=false — a floor-clamped drift would fight the screen-relative
+	# planet controls) for its respawn window and may RATTLE THE VOID: a cold
+	# spectral pulse. PRESENTATION-only (presentation_only=true) — in a game where
+	# every ball is lethal, a meddle must never perturb the sim, so it touches no
+	# ball, credits no kill, and each screen renders its own. Bots never raise one.
+	_meddle = GhostMeddle.new()
+	add_child(_meddle)
+	_meddle.setup(self, _cam, GhostMeddle.DEFAULT_CD, true)
+	_meddle.meddled.connect(_on_ghost_meddle)
 	var light := DirectionalLight3D.new()
 	add_child(light)
 	light.look_at_from_position(Vector3(6, 8, 14), Vector3.ZERO, Vector3.UP)
@@ -622,6 +703,11 @@ func _physics_process(delta: float) -> void:
 		_resolve_pickups()
 		_resolve_hits()
 		_process_respawns()
+		# GHOST MEDDLING: drive dead-human wisps (real delta — the dead are not slowed
+		# by the living's hit slow-mo). Presentation-only, so it never touches the sim.
+		_meddle.tick(delta)
+		if _meddle_shot:
+			_meddle_shot_tick()
 		if _test_mode == "":
 			if now >= _next_spawn and balls.size() < MAX_BALLS:
 				_next_spawn += BALL_SPAWN_EVERY
@@ -735,6 +821,11 @@ func _do_kill(pw: OrbPawn, bb: OrbBall) -> void:
 	var spin := bb.vel.cross(pw.srf_n)
 	pw.die(bb.vel, spin)
 	_respawn_queue.append({"t": now + RESPAWN_DELAY, "player": victim})
+	# GHOST MEDDLING: raise a fixed-hover wisp for a dead HUMAN seat at the death
+	# spot (never a bot — that keeps every all-bot receipt byte-identical).
+	if not bool(bot_enabled[victim]):
+		_meddle.add_ghost(victim, str(pawn_name(victim)), pawn_color(victim), pw.body_center(), 1.4, false)
+		_refresh_meddle_hints()
 	Sfx.play("splat")
 	Sfx.play("death")
 	_kill_impact(bb.vel.length())  # speed-scaled VISUAL punch; sim slow-mo unchanged
@@ -767,6 +858,9 @@ func _process_respawns() -> void:
 			var pi := _least_crowded_planet()
 			var n := _respawn_spot(pi)
 			pawns[int(item.player)].respawn(pi, n)
+			# GHOST MEDDLING: the seat lives again — retire its wisp.
+			_meddle.remove_ghost(int(item.player))
+			_refresh_meddle_hints()
 			Sfx.play("confirm", -4.0)
 			_spawn_burst(pawns[int(item.player)].body_center(), pawn_color(int(item.player)), 12)
 		else:
@@ -867,6 +961,10 @@ func _end_match() -> void:
 	phase = Phase.END
 	if _stretch != null:
 		_stretch.match_ended()
+	# GHOST MEDDLING: the match is over — retire any lingering wisps.
+	if _meddle != null:
+		_meddle.clear()
+		_refresh_meddle_hints()
 	var order: Array = _points.keys()
 	order.sort_custom(func(a, b):
 		if _points[a] != _points[b]:
@@ -1590,6 +1688,14 @@ func _net_apply(state: Dictionary) -> void:
 					pw._visual.visible = true
 				Sfx.play("confirm", -4.0)
 				_spawn_burst(pw.body_center(), pawn_color(pw.index), 12)
+				# GHOST MEDDLING (mirror): the seat returns — retire its wisp.
+				_meddle.remove_ghost(i)
+				_refresh_meddle_hints()
+			elif not bool(bot_enabled[i]):
+				# GHOST MEDDLING (mirror): the alive edge is our death signal here (no
+				# sim runs). Raise this dead HUMAN seat's wisp locally at the death spot.
+				_meddle.add_ghost(i, str(pawn_name(i)), pawn_color(i), pw.body_center(), 1.4, false)
+				_refresh_meddle_hints()
 		pw.visible = int(fs[b + 1]) == 1
 		pw._play(NET_ANIMS[clampi(int(fs[b + 9]), 0, NET_ANIMS.size() - 1)])
 		var chg := float(fs[b + 10])
@@ -1701,6 +1807,11 @@ func _mirror_tick(delta: float) -> void:
 						break
 		else:
 			bb.global_position = bb.global_position.lerp(snap_pos, w)
+
+	# GHOST MEDDLING (mirror): drive the LOCAL seat's wisp (cooldown + its own
+	# presentation pulse fires here — orbital's meddle is presentation-only, so
+	# each screen renders its own; no sim, no network). Others idle-hover.
+	_meddle.tick_cosmetic(delta, NetSession.my_seat())
 
 
 ## Host-side pair of the mirror's top-heat latch (probe nights only).
