@@ -25,11 +25,14 @@ extends Node
 ##                                       the built-in deterministic input tape
 ##
 ## INPUT PACKET (spec §4.2), client -> host @ 30 Hz, unreliable_ordered ch.1:
-##   { seq:int(u16), seat:int, move:Vector2, a:bool, b:bool,
+##   { seq:int(u16), seat:int, move:Vector2, a:bool, b:bool, jump:bool,
 ##     presses_a:int, presses_b:int,      # monotonic tap counters (edge rescue)
+##     presses_jump:int,                  # jump/hop tap counter (doc 16 ruling)
 ##     aim:Vector3, aim_screen:Vector2,   # PRE-COMPUTED unit vectors, never raw mice
 ##     stick:Vector2 }                    # raw right-stick for pad aim
-## ~40 bytes @ 30 Hz ≈ 1.2 kB/s per client. Latest-seq wins; stale drops.
+## ~45 bytes @ 30 Hz ≈ 1.4 kB/s per client. Latest-seq wins; stale drops.
+## The jump fields are additive: dict packets are shape-tolerant, so an old
+## build simply reads/sends jump=false — no protocol constant exists or breaks.
 
 signal session_opened(role: int)
 signal session_closed(reason: String)
@@ -44,6 +47,7 @@ signal probe_first_input(seat: int)              # host, NETPROBE only: tape lan
 # --- PHASE 2: game mirrors (docs/design/10 §4.3; first game: THE SÉANCE) ---
 signal module_state_received(state: Dictionary)  # client: running game's _net_state()
 signal module_private_received(data: Dictionary) # client: THIS seat's hidden info only
+signal ceremony_media_received(data: Dictionary) # client: newsreel stills etc. (reliable)
 ## The host stepped into its ESC/settings overlay (or lost a local controller):
 ## the whole shared simulation is frozen on the host until it resumes. The 20 Hz
 ## state pump lives in the estate's (pausable) _process, so it stops the instant
@@ -85,6 +89,7 @@ var _send_gap := 0
 var _seq := 0
 var _presses_a := 0
 var _presses_b := 0
+var _presses_jump := 0
 var _aim_provider := Callable()   # phase-2 game mirrors install {aim, aim_screen}
 
 # --- CLI
@@ -548,6 +553,7 @@ func _rpc_seat_granted(seat: int, reason: String) -> void:
 	_send_gap = 0
 	_presses_a = 0
 	_presses_b = 0
+	_presses_jump = 0
 	if seat >= 0 and _tape_requested:
 		start_net_tape(seat)
 	seat_granted.emit(seat, reason)
@@ -640,6 +646,18 @@ func _rpc_module_state(state: Dictionary) -> void:
 func _rpc_module_private(data: Dictionary) -> void:
 	module_private_received.emit(data)
 
+## Host -> all guests, reliable: bulky one-shot ceremony media (the newsreel's
+## compressed stills + intertitle text — doc 20's guest-parity field). ENet
+## fragments/reassembles large reliable packets, so a ~10-25 kB JPEG per still
+## rides one call; the whole reel is <= ~150 kB once per night.
+func send_ceremony_media(data: Dictionary) -> void:
+	if role == Role.HOST and has_guests():
+		_rpc_ceremony_media.rpc(data)
+
+@rpc("authority", "call_remote", "reliable")
+func _rpc_ceremony_media(data: Dictionary) -> void:
+	ceremony_media_received.emit(data)
+
 ## ----- host pause (the estate holds its breath) -----
 ## The estate's state pump rides the host's (pausable) _process, so it stops the
 ## instant the host opens settings — but the ENet socket keeps being serviced
@@ -709,6 +727,8 @@ func _sample_and_send() -> void:
 		_presses_a += 1
 	if PlayerInput.just_pressed(_my_seat, "b"):
 		_presses_b += 1
+	if PlayerInput.just_pressed(_my_seat, "jump"):
+		_presses_jump += 1
 	_send_gap += 1
 	if _send_gap < INPUT_SEND_EVERY:
 		return
@@ -725,7 +745,9 @@ func _sample_and_send() -> void:
 		"move": PlayerInput.get_move(_my_seat),
 		"a": PlayerInput.is_down(_my_seat, "a"),
 		"b": PlayerInput.is_down(_my_seat, "b"),
+		"jump": PlayerInput.is_down(_my_seat, "jump"),
 		"presses_a": _presses_a, "presses_b": _presses_b,
+		"presses_jump": _presses_jump,
 		"aim": aim, "aim_screen": aim_screen,
 		"stick": PlayerInput.get_aim_stick(_my_seat),
 	})
@@ -788,8 +810,8 @@ func _step_tape() -> void:
 	_tape_seq = (_tape_seq + 1) & 0xFFFF
 	var pkt := {
 		"seq": _tape_seq, "seat": _tape_seat,
-		"move": st.move, "a": a, "b": false,
-		"presses_a": _tape_pa, "presses_b": 0,
+		"move": st.move, "a": a, "b": false, "jump": false,
+		"presses_a": _tape_pa, "presses_b": 0, "presses_jump": 0,
 		"aim": Vector3.ZERO, "aim_screen": Vector2.ZERO, "stick": Vector2.ZERO,
 	}
 	if _tape_local:

@@ -84,11 +84,25 @@ static func schedule_ready_test(estate) -> void:
 		estate._ready_gate_active = false
 		VerifyCapture.snap("readyroom_getready")
 		estate.get_tree().create_timer(1.0).timeout.connect(func():
-			if FileAccess.file_exists(ps + ".rrbak"):
-				DirAccess.copy_absolute(ps + ".rrbak", ps)
-				DirAccess.remove_absolute(ps + ".rrbak")
-			print("READYTEST saves restored")
-			estate.get_tree().quit()))
+			# DOUBLE-GATE COLLAPSE proofs (morning menu #4): the minimal
+			# "everyone in" skin (online sync form), then a couch launch of an
+			# intro-card game, which must SKIP the estate gate entirely and
+			# land on the module's own IntroCard.
+			estate._show_get_ready("tilt", false, true)
+			estate._ready_gate_active = false
+			VerifyCapture.snap("readyroom_gate_minimal")
+			estate.get_tree().create_timer(1.0).timeout.connect(func():
+				estate._launch_game("tilt")
+				print("READYTEST collapse: gate_active=%s phase=%s (want false / GAME)" % [
+					str(estate._ready_gate_active), estate.get_phase_name()])
+				estate.get_tree().create_timer(1.6).timeout.connect(func():
+					VerifyCapture.snap("readyroom_collapse_introcard")
+					if FileAccess.file_exists(ps + ".rrbak"):
+						DirAccess.copy_absolute(ps + ".rrbak", ps)
+						DirAccess.remove_absolute(ps + ".rrbak")
+					print("READYTEST saves restored")
+					estate.get_tree().create_timer(0.4).timeout.connect(func():
+						estate.get_tree().quit())))))
 
 static func schedule_house_rules_test(estate) -> void:
 	# Windowed HOUSE RULES card proof. Self-contained: backs up/restores
@@ -405,7 +419,10 @@ static func poll_house_rules(estate, delta: float) -> void:
 ## The How-to card in a GET READY skin: goal + live per-seat controls, and each
 ## human presses their A to ready (chip flips green). Launches when every human
 ## is ready or after READY_GATE_TIME, whichever first. Feels like _show_howto.
-static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, id: String, practice := false) -> void:
+## `minimal` (the double-gate collapse): the module's own IntroCard will show
+## the goal/controls next, so the card shrinks to an "everyone in" sync —
+## per-seat ready chips + countdown only. Same gate machinery either way.
+static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, id: String, practice := false, minimal := false) -> void:
 	estate._ready_gate_active = true
 	estate._ready_gate_id = id
 	estate._ready_gate_practice = practice
@@ -415,15 +432,18 @@ static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, 
 	Sfx.play("card")
 	var info: Dictionary = modules[id]
 	var how: Dictionary = HOWTO.get(id, {"goal": "?", "a": "A", "b": "B"})
-	estate._clear_panel(Voice.pick_fmt(GET_READY_HEADS, [String(info.name)]), Color(1, 0.9, 0.5))
-	var goal := Label.new()
-	goal.text = String(how.goal)
-	goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	goal.custom_minimum_size = Vector2(680, 0)
-	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	estate.phase_box.add_child(goal)
+	estate._clear_panel("EVERYONE IN — %s" % String(info.name) if minimal \
+			else Voice.pick_fmt(GET_READY_HEADS, [String(info.name)]), Color(1, 0.9, 0.5))
+	if not minimal:
+		var goal := Label.new()
+		goal.text = String(how.goal)
+		goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		goal.custom_minimum_size = Vector2(680, 0)
+		goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		estate.phase_box.add_child(goal)
 	var ctl_title := Label.new()
-	ctl_title.text = "— CONTROLS TONIGHT (press your A to ready) —"
+	ctl_title.text = "— press your A when you're in —" if minimal \
+			else "— CONTROLS TONIGHT (press your A to ready) —"
 	ctl_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ctl_title.modulate.a = 0.7
 	ctl_title.add_theme_font_size_override("font_size", 15)
@@ -435,7 +455,7 @@ static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, 
 		row.add_theme_constant_override("separation", 8)
 		row.add_child(PlayerBadge.make(i, 16))
 		var has_jump: bool = String(how.get("jump", "")) != ""
-		if not PlayerInput.is_bot(i) and not NetSession.is_seat_remote(i) and id != "par":
+		if not minimal and not PlayerInput.is_bot(i) and not NetSession.is_seat_remote(i) and id != "par":
 			_add_control_segment(row, i, "move", "", "")
 			_add_control_segment(row, i, "a", "", "")
 			_add_control_segment(row, i, "b", "", "")
@@ -447,6 +467,8 @@ static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, 
 			l.modulate.a = 0.5
 		elif NetSession.is_seat_remote(i):
 			l.text = "%s — readies from a distant house" % GameState.PLAYER_NAMES[i]
+		elif minimal:
+			l.text = GameState.PLAYER_NAMES[i]
 		elif id == "par":
 			l.text = "%s — MOUSE: aim, hold, release to putt (hotseat — pass it on)" % GameState.PLAYER_NAMES[i]
 		else:

@@ -541,8 +541,7 @@ func _mk_label(font: FontFile, size: int, align: int) -> Label:
 
 ## Seats driven by a HUMAN with a real device (not a bot, not unassigned). A seat
 ## is bot-driven under the same rule _spawn_fighters uses (--echobots OR the
-## roster marks it a bot). The bar personalizes only human seats; an all-bot
-## demo gets an empty list and keeps the generic legend (receipts unchanged).
+## roster marks it a bot). The bar personalizes only human seats.
 func _human_seats() -> Array:
 	var out := []
 	for i in roster.size():
@@ -551,13 +550,18 @@ func _human_seats() -> Array:
 			out.append(i)
 	return out
 
-## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## Seats whose bindings the hint bar prints: the live humans, or seat 0 as a
+## representative when a bot-only demo has no humans — so the bar always shows
+## a REAL key, never an abstract "A =" verb (doc 14 nit 3, notation consistency).
+func _hint_seats() -> Array:
+	var seats := _human_seats()
+	return seats if not seats.is_empty() else [0]
+
+## One button's live legend: "KEY = LABEL" when every hint seat shares the key
 ## (all pads -> "(A) = STRIKE"), else the per-seat "LABEL: KEY/NAME · KEY/NAME"
 ## form (mixed keyboard + pad).
 func _btn_hint(action: String, label: String) -> String:
-	var seats := _human_seats()
-	if seats.is_empty():
-		return ""
+	var seats := _hint_seats()
 	var keys := []
 	var same := true
 	for i in seats:
@@ -572,10 +576,8 @@ func _btn_hint(action: String, label: String) -> String:
 		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
 	return "%s: %s" % [label, " · ".join(parts)]
 
-## The main hint bar with real keys, or a generic legend for an all-bot demo.
+## The main hint bar, always real keys via describe_binding (matches the card).
 func _controls_bar() -> String:
-	if _human_seats().is_empty():
-		return "MOVE   ·   A = STRIKE   ·   B = DASH (hold PARRY)   ·   JUMP = HOP   |   DUEL YOUR OWN ECHO"
 	return "MOVE   ·   %s   ·   %s   ·   %s   |   DUEL YOUR OWN ECHO" % [
 		_btn_hint("a", "STRIKE"), _btn_hint("b", "DASH / hold PARRY"), _btn_hint("jump", "HOP")]
 

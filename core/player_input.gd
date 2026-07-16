@@ -23,11 +23,10 @@ extends Node
 ##
 ## "jump" (director's ruling, docs/design/16-jump-and-visibility.md): a THIRD
 ## input, gamepad X, alongside move+A+B — used by the estate walker (real
-## traversal jump) and by echo/throne/greed (cosmetic expressive hop). COUCH
-## ONLY this pass: the online `_remote` packet shape (NetSession) carries only
-## move/a/b, and extending it is out of this change's scope (would touch
-## net_session.gd) — see is_down()'s remote branch below. A remote seat simply
-## never reads jump=true; nothing crashes, it just can't jump yet online.
+## traversal jump) and by echo/throne/greed (cosmetic expressive hop). ONLINE:
+## the `_remote` packet (NetSession, 30 Hz) carries jump/presses_jump exactly
+## like a/b, with the same press-counter edge rescue, so a remote guest hops
+## with couch parity. Old builds without the fields decode as jump=false.
 
 const KEY_LEFT_MAP := {"up": KEY_W, "down": KEY_S, "left": KEY_A, "right": KEY_D, "a": KEY_SPACE, "b": KEY_E, "jump": KEY_Q}
 const KEY_RIGHT_MAP := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "a": KEY_ENTER, "b": KEY_SHIFT, "jump": KEY_CTRL}
@@ -59,8 +58,9 @@ var _dbg_aim_screen := {}   # p -> Vector2  (x = screen right, y = screen UP)
 # §4.2). NetSession injects remote peers' 30 Hz input packets here; every query
 # below consults _remote FIRST, so a remote human is architecturally identical
 # to a local device. Empty in all couch play — zero behavior change offline.
-# Packet shape per seat: {move:Vector2, a:bool, b:bool, presses_a:int,
-#   presses_b:int, aim:Vector3, aim_screen:Vector2, stick:Vector2, seq:int}
+# Packet shape per seat: {move:Vector2, a:bool, b:bool, jump:bool,
+#   presses_a:int, presses_b:int, presses_jump:int,
+#   aim:Vector3, aim_screen:Vector2, stick:Vector2, seq:int}
 var _remote := {}         # p -> latest injected packet state
 var _remote_edge := {}    # p -> press-counter bookkeeping (dropped-tap rescue)
 
@@ -214,12 +214,14 @@ func set_remote_state(p: int, state: Dictionary) -> void:
 		_remote_edge[p] = {
 			"a_credited": maxi(0, int(state.get("presses_a", 0)) - (1 if bool(state.get("a", false)) else 0)),
 			"b_credited": maxi(0, int(state.get("presses_b", 0)) - (1 if bool(state.get("b", false)) else 0)),
-			"a_eff": false, "b_eff": false, "a_prev": false, "b_prev": false,
+			"jump_credited": maxi(0, int(state.get("presses_jump", 0)) - (1 if bool(state.get("jump", false)) else 0)),
+			"a_eff": false, "b_eff": false, "jump_eff": false,
+			"a_prev": false, "b_prev": false, "jump_prev": false,
 		}
 		return
 	# Cap the synthesized-press backlog so a network stall can't burst-fire.
 	var e: Dictionary = _remote_edge[p]
-	for act in ["a", "b"]:
+	for act in ["a", "b", "jump"]:
 		var total := int(state.get("presses_" + act, 0))
 		if total - int(e[act + "_credited"]) > 3:
 			e[act + "_credited"] = total - 3
@@ -239,7 +241,7 @@ func _tick_remote_edges() -> void:
 	for p in _remote:
 		var st: Dictionary = _remote[p]
 		var e: Dictionary = _remote_edge[p]
-		for act in ["a", "b"]:
+		for act in ["a", "b", "jump"]:
 			var raw := bool(st.get(act, false))
 			var eff := raw
 			if raw and not bool(e[act + "_prev"]):
@@ -272,10 +274,8 @@ func get_move(p: int) -> Vector2:
 
 func is_down(p: int, action: String) -> bool:
 	if _remote.has(p):
-		# COUCH ONLY (see header note): _remote_edge never carries a "jump_eff"
-		# entry (only a/b are edge-tracked in _tick_remote_edges), so this falls
-		# through to _remote[p].get("jump", false) — always false, since
-		# NetSession's packet never sets "jump". Safe no-op, not a crash.
+		# a/b/jump are all edge-tracked in _tick_remote_edges (the "_eff" fold);
+		# any other action falls through to the raw packet bool (absent = false).
 		var e: Dictionary = _remote_edge.get(p, {})
 		return bool(e.get(action + "_eff", bool(_remote[p].get(action, false))))
 	var d := device_of(p)

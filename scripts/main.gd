@@ -440,7 +440,11 @@ func _on_card_picked(card_idx: int) -> void:
 	draft_panel.visible = false
 	phase = Phase.BUILD
 	_build_timer = 0.0
-	build_hint.visible = true
+	# Notation nit (doc 14 item 13): the mouse-verb build hint only belongs to a
+	# seat that can actually drive the ghost. Bots (and remote seats, who see it
+	# on their own mirror) place without it — an all-bot demo shows no
+	# "CLICK TO PLACE" bar for a click nobody can make.
+	build_hint.visible = _is_local_human(p)
 	var info: Dictionary = TrapCatalog.info(id)
 	turn_label.text = "%s PLACES: %s" % [player.name, info.name]
 	# Seat gate: the shared mouse may drive the ghost only on a HUMAN's build

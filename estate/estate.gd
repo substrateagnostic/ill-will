@@ -6,20 +6,24 @@ enum Phase { LOBBY, SELECTOR, GROUNDS, TILES, AUCTION, CHOOSING, GAME, RECKONING
 
 const TILE_COST := 2
 
+## "intro": true = the module shows its own ui_kit IntroCard at load (the AAA
+## beat). The estate's GET READY card collapses for these — couch launches skip
+## straight to the IntroCard; online keeps only a minimal "everyone in" sync
+## (the double-gate collapse, morning menu #4 / doc 14 §5).
 const MODULES := {
 	"par": {"name": "PAR FOR THE CURSE", "scene": "res://scenes/main.tscn", "mode": "gamestate"},
 	"echo": {"name": "ECHO CHAMBER", "scene": "res://minigames/echo_chamber/echo_chamber.tscn", "mode": "contract"},
-	"tilt": {"name": "TILT", "scene": "res://minigames/tilt/tilt.tscn", "mode": "contract"},
+	"tilt": {"name": "TILT", "scene": "res://minigames/tilt/tilt.tscn", "mode": "contract", "intro": true},
 	"orbital": {"name": "ORBITAL DODGEBALL", "scene": "res://minigames/orbital/orbital.tscn", "mode": "contract"},
-	"mower": {"name": "MOWER MAYHEM", "scene": "res://minigames/mower/mower.tscn", "mode": "contract"},
-	"greed": {"name": "GREED INC.", "scene": "res://minigames/greed/greed.tscn", "mode": "contract"},
+	"mower": {"name": "MOWER MAYHEM", "scene": "res://minigames/mower/mower.tscn", "mode": "contract", "intro": true},
+	"greed": {"name": "GREED INC.", "scene": "res://minigames/greed/greed.tscn", "mode": "contract", "intro": true},
 	"swap": {"name": "SWAP MEET", "scene": "res://minigames/swap_meet/swap_meet.tscn", "mode": "contract"},
-	"deadweight": {"name": "DEAD WEIGHT", "scene": "res://minigames/dead_weight/dead_weight.tscn", "mode": "contract"},
-	"throne": {"name": "THE THRONE", "scene": "res://minigames/throne/throne.tscn", "mode": "contract"},
-	"lastwill": {"name": "LAST WILL", "scene": "res://minigames/last_will/last_will.tscn", "mode": "contract"},
-	"widowsgaze": {"name": "THE WIDOW'S GAZE", "scene": "res://minigames/widows_gaze/widows_gaze.tscn", "mode": "contract"},
+	"deadweight": {"name": "DEAD WEIGHT", "scene": "res://minigames/dead_weight/dead_weight.tscn", "mode": "contract", "intro": true},
+	"throne": {"name": "THE THRONE", "scene": "res://minigames/throne/throne.tscn", "mode": "contract", "intro": true},
+	"lastwill": {"name": "LAST WILL", "scene": "res://minigames/last_will/last_will.tscn", "mode": "contract", "intro": true},
+	"widowsgaze": {"name": "THE WIDOW'S GAZE", "scene": "res://minigames/widows_gaze/widows_gaze.tscn", "mode": "contract", "intro": true},
 	"seance": {"name": "THE SÉANCE", "scene": "res://minigames/seance/seance.tscn", "mode": "contract", "theater": true},
-	"understudy": {"name": "THE UNDERSTUDY", "scene": "res://minigames/understudy/understudy.tscn", "mode": "contract", "theater": true},
+	"understudy": {"name": "THE UNDERSTUDY", "scene": "res://minigames/understudy/understudy.tscn", "mode": "contract", "theater": true, "intro": true},
 	"maskedball": {"name": "MASKED BALL", "scene": "res://minigames/masked_ball/masked_ball.tscn", "mode": "contract", "theater": true},
 	"mock": {"name": "EXHIBITION MATCH", "scene": "res://estate/mock_game.tscn", "mode": "contract"},
 }
@@ -1764,8 +1768,15 @@ func _resolve_auction() -> void:
 		row.add_child(b)
 	phase_box.add_child(row)
 
-func _show_get_ready(id: String, practice := false) -> void:
-	HowtoCards.show_get_ready(self, MODULES, READY_GATE_TIME, id, practice)
+func _show_get_ready(id: String, practice := false, minimal := false) -> void:
+	HowtoCards.show_get_ready(self, MODULES, READY_GATE_TIME, id, practice, minimal)
+
+## Any seated human playing from another estate right now?
+func _any_remote_human() -> bool:
+	for i in EstateState.players.size():
+		if NetSession.is_seat_remote(i):
+			return true
+	return false
 
 func _all_ready_gate() -> bool:
 	return HowtoCards.all_ready_gate(self)
@@ -1784,6 +1795,21 @@ func _launch_game(id: String, practice := false) -> void:
 	if phase == Phase.GAME or _ready_gate_active:
 		return
 	if not exhibition and not _all_bots():
+		# THE DOUBLE-GATE COLLAPSE (morning menu #4 debt, director's ruling):
+		# when the module brings its own IntroCard (the AAA beat, with its own
+		# per-seat ready ring), the estate's full GET READY card would be a
+		# second ready gate back to back — the IntroCard wins. Couch: launch
+		# straight into it. Online with remote humans: keep the gate, but as a
+		# minimal "everyone in" sync — it is the only cross-estate hold (remote
+		# seats ready via relayed A / the ready_toggle intent, and guests render
+		# it from the lobby "gate" fact) — stripped of the goal/controls
+		# preview the IntroCard is about to repeat.
+		if bool(MODULES[id].get("intro", false)):
+			if _any_remote_human():
+				_show_get_ready(id, practice, true)
+			else:
+				_do_launch_game(id, practice)
+			return
 		_show_get_ready(id, practice)
 		return
 	_do_launch_game(id, practice)
@@ -2120,14 +2146,54 @@ func _enter_will_reading(champ) -> void:
 	if _all_bots():
 		get_tree().create_timer(2.5).timeout.connect(_night_parade)
 
-## Host-side silent-film ceremony (net mirrors stay on the night_podium facts
-## until the will facts arrive — the newsreel is host-screen only this phase,
-## exactly like the minigames). Blocks until the reel finishes or is skipped.
+## The silent-film ceremony, both screens (doc 20's guest-parity field): the
+## host ships tonight's stills as compact JPEGs + intertitle text over the
+## reliable channel, then rolls its own reel; each guest rolls the same reel
+## locally from the received frames. Net mirrors otherwise stay on the
+## night_podium facts until the will facts arrive — and the will fact is what
+## folds a guest reel that is still running (the host's pacing is authority).
+## Blocks until the host reel finishes or is skipped.
 func _play_newsreel(moments: Array) -> void:
+	_net_send_newsreel(moments)
 	var done := [false]
 	Newsreel.play(moments, func(): done[0] = true)
 	while not done[0]:
 		await get_tree().process_frame
+
+## GUEST PARITY: downscale tonight's kept stills to ~360px JPEG (quality 0.6 —
+## the newsreel shader's sepia/grain hides the compression) and send each with
+## its intertitle facts, then the roll order. One reliable burst of <= ~150 kB
+## per night. A still whose PNG cannot be read ships text-only — the guest reel
+## degrades to intertitles over black for that act, never breaks.
+func _net_send_newsreel(moments: Array) -> void:
+	if not (NetSession.is_host() and NetSession.has_guests()):
+		return
+	var n: int = mini(moments.size(), Newsreel.MAX_STILLS)
+	for i in n:
+		var m: Dictionary = moments[i]
+		NetSession.send_ceremony_media({
+			"kind": "reel_still", "i": i,
+			"caption": String(m.get("caption", "A MOMENT")),
+			"game": String(m.get("game", "")),
+			"players": m.get("players", []),
+			"jpg": _reel_jpeg_of(m),
+		})
+	NetSession.send_ceremony_media({"kind": "reel_roll", "n": n})
+	print("NEWSREEL_NET sent stills=%d" % n)
+
+func _reel_jpeg_of(m: Dictionary) -> PackedByteArray:
+	var path := String(m.get("abs", ""))
+	if path == "" and m.has("file"):
+		path = ProjectSettings.globalize_path(String(m.file))
+	if path == "" or not FileAccess.file_exists(path):
+		return PackedByteArray()
+	var img := Image.load_from_file(path)
+	if img == null:
+		return PackedByteArray()
+	const REEL_W := 360
+	if img.get_width() > REEL_W:
+		img.resize(REEL_W, maxi(1, int(img.get_height() * float(REEL_W) / float(img.get_width()))), Image.INTERPOLATE_LANCZOS)
+	return img.save_jpg_to_buffer(0.6)
 
 var _parade_running := false
 
@@ -2288,6 +2354,42 @@ func _on_net_module_state(state: Dictionary) -> void:
 func _on_net_module_private(data: Dictionary) -> void:
 	NetLobby.on_module_private(self, data)
 
+## ----- THE NEWSREEL on the guest screen (doc 20 guest-parity field) -----
+## The host ships compressed stills + intertitle facts (reliable, ordered),
+## then the roll order; this guest plays the SAME Newsreel scene locally.
+var _client_reel_pending: Array = []
+var _client_reel: Node = null
+
+func _on_net_ceremony_media(data: Dictionary) -> void:
+	match String(data.get("kind", "")):
+		"reel_still":
+			var m: Dictionary = {
+				"caption": String(data.get("caption", "A MOMENT")),
+				"game": String(data.get("game", "")),
+				"players": data.get("players", []),
+			}
+			var jpg: PackedByteArray = data.get("jpg", PackedByteArray())
+			if not jpg.is_empty():
+				var img := Image.new()
+				if img.load_jpg_from_buffer(jpg) == OK:
+					m["tex"] = ImageTexture.create_from_image(img)
+			_client_reel_pending.append(m)
+		"reel_roll":
+			if _client_reel_pending.is_empty():
+				return
+			print("NET newsreel roll: %d stills" % _client_reel_pending.size())
+			_client_reel = Newsreel.play(_client_reel_pending,
+				func() -> void: _client_reel = null)
+			_client_reel_pending = []
+
+## The host's ceremony moved on (will facts landed, or the stage cleared at a
+## boundary): a guest reel still running folds now — host pacing is authority.
+func _client_close_reel() -> void:
+	_client_reel_pending = []
+	if _client_reel != null and is_instance_valid(_client_reel):
+		(_client_reel as Newsreel).finish_now()
+	_client_reel = null
+
 ## Boot the same module scene in mirror mode: same roster shape the host
 ## builds, no seed, no sim — _net_apply drives everything.
 var _client_mirror_up := false   # guards teardown: never touch a HOST module
@@ -2390,6 +2492,7 @@ func _client_render_ceremony(cer: Dictionary) -> void:
 		"match_podium", "night_podium", "run_podium":
 			_client_show_podium(cer)
 		"will":
+			_client_close_reel()   # a straggling guest reel folds under the will
 			_client_show_will(cer)
 		"parade":
 			_client_clear_podium()
@@ -2403,6 +2506,7 @@ func _client_end_ceremony() -> void:
 		return
 	_client_cer_stage = ""
 	_client_banner_sig = ""
+	_client_close_reel()
 	_client_clear_podium()
 	banner.visible = false
 
@@ -2702,8 +2806,14 @@ func _netprobe_host_flow(ps: String, pf: String) -> void:
 		if await _np_wait(npod_up, 20.0):
 			await get_tree().create_timer(2.0).timeout
 			await _np_snap("online_host_nightpodium")
+		# The NEWSREEL now plays between the night podium and the will (up to
+		# ~45 s for a full reel) — snap it, and give the will wait room for it.
+		var reel_up := func() -> bool: return get_tree().root.get_node_or_null("Newsreel") != null
+		if await _np_wait(reel_up, 15.0):
+			await get_tree().create_timer(4.0).timeout
+			await _np_snap("online_host_newsreel")
 		var will_up := func() -> bool: return String(_net_ceremony.get("stage", "")) == "will"
-		if await _np_wait(will_up, 30.0):
+		if await _np_wait(will_up, 75.0):
 			await get_tree().create_timer(4.0).timeout
 			await _np_snap("online_host_will")
 		_night_parade()
@@ -2776,8 +2886,14 @@ func _netprobe_join_flow() -> void:
 		if await _np_wait(npod_seen, 20.0):
 			await get_tree().create_timer(2.0).timeout
 			await _np_snap("online_client_nightpodium")
+		# GUEST NEWSREEL (doc 20 parity): the received reel rolls between the
+		# night podium and the will facts — snap it mid-still.
+		var reel_seen := func() -> bool: return _client_reel != null
+		if await _np_wait(reel_seen, 20.0):
+			await get_tree().create_timer(4.0).timeout
+			await _np_snap("online_client_newsreel")
 		var will_seen := func() -> bool: return _client_cer_fact() == "will"
-		if await _np_wait(will_seen, 30.0):
+		if await _np_wait(will_seen, 75.0):
 			await get_tree().create_timer(3.6).timeout
 			await _np_snap("online_client_will")
 		var parade_seen := func() -> bool: return _client_cer_fact() == "parade"
