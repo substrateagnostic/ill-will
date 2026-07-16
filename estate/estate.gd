@@ -1183,7 +1183,13 @@ func _spawn_executor() -> void:
 		ttag.global_position = th.global_position + Vector3(0, 3.6, 0)
 	if not ResourceLoader.exists(EXECUTOR_GLB):
 		return
-	var ex := MeshyProp.instance(EXECUTOR_GLB, 1.9, 25.0)
+	# Prefer the rigged breathing idle (day 5); the static figure is the fallback.
+	var ex: Node3D
+	if ResourceLoader.exists(ProcessionExecutorBody.EXECUTOR_GLB_RIGGED):
+		ex = MeshyProp.instance_rigged(ProcessionExecutorBody.EXECUTOR_GLB_RIGGED,
+				ProcessionExecutorBody.RIGGED_NATIVE_HEIGHT, 1.9, 25.0)
+	else:
+		ex = MeshyProp.instance(EXECUTOR_GLB, 1.9, 25.0)
 	$Grounds.add_child(ex)
 	ex.global_position = Vector3(2.6, 0.0, -3.4)
 	var tag := Label3D.new()
