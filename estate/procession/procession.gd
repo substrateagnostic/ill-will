@@ -635,6 +635,9 @@ func _round() -> void:
 	_phase = "roll"
 	_hide_announce()
 	executor.begin_round()   # B2-HOOK: page-turn the ledger between rounds (F7)
+	if not _fast:
+		_reveal_seat = -1
+		executor.aside(Executor.ROUND_OPENER, Color(0.82, 0.80, 0.92), [round_num])   # B2-HOOK: dead-air aside (F9)
 	# --- ROLL: all live pawns putt at once (own corner meter). ---
 	# Windowed capture: pose the four corner meters mid-charge for a clean shot
 	# before the live roll (the fast soak resolves a real roll in a few frames).

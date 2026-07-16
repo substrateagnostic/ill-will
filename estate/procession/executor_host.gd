@@ -36,6 +36,7 @@ const GRAVE_TOLL := [
 	"%s weeps on %s's monument — and %s collects the tears (%d♠).",
 	"The grave belongs to %s. %s learns this the way everyone does: by paying.",
 	"%s's headstone bills %s %d♠ for the trespass. The dead keep excellent books.",
+	"%s bleeds onto %s's stone; %s keeps the difference (%d♠), and the grudge.",
 ]
 const STALL := [
 	"%s takes something sharp from the stall. No refunds, no receipts, no remorse.",
@@ -49,10 +50,14 @@ const CODICIL := [
 	"A Deed to %s. Ownership is nine-tenths of the haunting.",
 	"%s pays the Codicil's price. The price, naturally, goes up.",
 	"%s takes a Deed and the Codicil takes a walk. Chase it.",
+	"%s signs for a Deed. The estate files it under acquisitions, and under grievances.",
+	"A Codicil passes to %s. The manor notes a new claimant, and sharpens its interest.",
 ]
 const CODICIL_SHORT := [
 	"%s eyes the Codicil and finds the price beyond them. The estate is not a charity.",
 	"The Codicil declines %s for want of funds. Grieve, then earn.",
+	"%s reaches for the Deed and comes up short. The estate accepts grief, but not as tender.",
+	"The Codicil weighs %s's purse and finds it wanting. Come back richer, or come back bitter.",
 ]
 const SEANCE := [
 	"The planchette moves. Nobody admits to pushing it. The estate has its suspicions.",
@@ -64,6 +69,7 @@ const TOLLGATE_TAKE := [
 	"%s owns the tollgate now. Congratulations on the paperwork.",
 	"The tollgate answers to %s. Passage will cost the rest of you dearly and often.",
 	"%s collects the pot and the deed to the gate. A landlord is born, unmourned.",
+	"%s inherits the tollgate. The estate wishes them the joy of collections.",
 ]
 const TOLLGATE_PASS := [
 	"%s passes %s's gate and pays for the privilege (2♠).",
@@ -73,16 +79,21 @@ const VENDETTA := [
 	"%s and %s settle it the estate's way — quietly, and for money.",
 	"A vendetta ripens between %s and %s. The higher stake walks away heavier.",
 	"%s stares at %s across five spaces. Sealed bids. Old wounds. New debts.",
+	"%s and %s are found within five stones of an old debt. The estate calls the wager.",
 ]
 const VENDETTA_RESULT := [
 	"%s out-stakes %s and takes the difference. Grudges compound.",
 	"%s wins the wager over %s. The estate admires a decisive cruelty.",
 	"The vendetta breaks %s's way. %s adds it to the list they keep.",
+	"%s collects from %s, with interest the estate did not trouble to name.",
 ]
 const BLANK := [
 	"%s lands on nothing. A merciful administrative error.",
 	"%s finds bare stone. The estate resents the missed opportunity.",
 	"Nothing befalls %s. This is not the same as safety.",
+	"%s stands on plain flagstone. The estate has nothing to bill, and resents it.",
+	"Bare stone for %s. Even the grudges take the night off.",
+	"%s lands nowhere in particular. The ledger notes the absence, in ink.",
 ]
 const HOUSE_AWAKENS := [
 	"THE HOUSE AWAKENS. The manor's shadow walks the drive. Reach a safe stone or fall behind.",
@@ -96,6 +107,18 @@ const HOUSE_LOSER := [
 const WILL_OPEN := [
 	"The estate has reviewed the evening's conduct and finds it, on the whole, actionable.",
 	"The will is read. It was written some time ago, and about all of you.",
+	"The estate has audited the evening and finds no one blameless. The will will now say so.",
+	"The reading begins. The estate has weighed the night and found it wanting, as forecast.",
+]
+# Dry commentary for the dead air at the top of a round (F9). Drawn from the
+# PRESENTATION rng only (via aside()), so it never touches the sim stream.
+const ROUND_OPENER := [
+	"Round %d. The mourners take their marks; the estate takes notes.",
+	"The wake resumes at round %d. No one has yet asked to leave early.",
+	"Round %d begins. The estate turns a page it wrote in advance.",
+	"Round %d. The manor settles in to watch you spend.",
+	"Round %d. The drive is patient; the grudges, less so.",
+	"Round %d. The dead keep excellent time, and worse company.",
 ]
 
 # --- THE BODY (doc 24 F6/F7) --------------------------------------------------
