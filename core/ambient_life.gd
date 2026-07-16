@@ -83,6 +83,7 @@ func _build_members() -> void:
 	_add_member(CrowGallery.new())
 	_add_member(Groundskeeper.new())
 	_add_member(GhostQueue.new())
+	_add_member(Atmosphere.new())
 
 func _add_member(m: AmbientMember) -> void:
 	m.life = self
@@ -808,3 +809,90 @@ class Ghost extends Node3D:
 ## wheels, dives, and undoes Old Rake's work. Built in the atmosphere pass.
 class Seagull extends AmbientMember:
 	pass
+
+# ============================================================ 5. ATMOSPHERE FLOOR
+## The wordless, figureless floor of life: fog wisps pooling in the graves,
+## embers breathing over each lantern, and a distant crow-caw now and then. No
+## reactions — it just makes the air feel occupied. (brief item 5)
+class Atmosphere extends AmbientMember:
+	# lantern glow positions (fixed in estate.tscn: Grounds/Lanterns/*)
+	const LANTERNS := [
+		Vector3(2.2, 0.95, 0.5), Vector3(-2.2, 0.95, 0.5),
+		Vector3(5.2, 0.95, -4.5), Vector3(-5.2, 0.95, -4.5)]
+	var _caw_t := 0.0
+
+	func build() -> void:
+		reaction_radius = 0.0
+		anchor = Vector3(-7.3, 0.0, -6.0)
+		_build_fog()
+		for pos in LANTERNS:
+			_build_embers(pos)
+		_caw_t = rr().randf_range(8.0, 18.0)
+
+	func tick(dt: float, _nearest: Node3D, _nd: float, _losing: Vector3, _lod: bool) -> void:
+		_caw_t -= dt
+		if _caw_t <= 0.0:
+			_caw_t = rr().randf_range(14.0, 26.0)
+			# a caw from somewhere in the dark — kept low, so it reads as distant
+			Sfx.play("raven", rr().randf_range(-22.0, -17.0))
+
+	func _build_fog() -> void:
+		var fog := _particles(28, 10.0, Vector2(1.6, 1.1), Color(0.62, 0.72, 0.86, 0.10), false)
+		fog.position = Vector3(-7.3, 0.28, -6.0)
+		fog.emission_shape = CPUParticles3D.EMISSION_SHAPE_BOX
+		fog.emission_box_extents = Vector3(2.8, 0.22, 2.6)
+		fog.direction = Vector3(1.0, 0.0, 0.25)
+		fog.spread = 35.0
+		fog.gravity = Vector3.ZERO
+		fog.initial_velocity_min = 0.04
+		fog.initial_velocity_max = 0.16
+		fog.scale_amount_min = 0.7
+		fog.scale_amount_max = 1.5
+		fog.preprocess = 6.0
+		add_child(fog)
+
+	func _build_embers(at: Vector3) -> void:
+		var em := _particles(9, 3.4, Vector2(0.05, 0.05), Color(1.0, 0.72, 0.32, 1.0), true)
+		em.position = at
+		em.emission_shape = CPUParticles3D.EMISSION_SHAPE_SPHERE
+		em.emission_sphere_radius = 0.22
+		em.direction = Vector3(0.0, 1.0, 0.0)
+		em.spread = 25.0
+		em.gravity = Vector3(0.0, 0.10, 0.0)   # embers drift up, not down
+		em.initial_velocity_min = 0.08
+		em.initial_velocity_max = 0.22
+		em.scale_amount_min = 0.5
+		em.scale_amount_max = 1.2
+		em.preprocess = 2.0
+		add_child(em)
+
+	## A CPUParticles3D with a billboarded quad mesh + fade-in/out ramp. Cheap:
+	## unshaded, few particles. `additive` embers glow; alpha fog just occludes.
+	func _particles(amount: int, lifetime: float, mesh_size: Vector2, color: Color, additive: bool) -> CPUParticles3D:
+		var p := CPUParticles3D.new()
+		p.amount = amount
+		p.lifetime = lifetime
+		p.local_coords = false
+		var qm := QuadMesh.new()
+		qm.size = mesh_size
+		p.mesh = qm
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.billboard_mode = BaseMaterial3D.BILLBOARD_PARTICLES
+		mat.billboard_keep_scale = true
+		mat.albedo_color = color
+		mat.vertex_color_use_as_albedo = true
+		if additive:
+			mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
+			mat.emission_enabled = true
+			mat.emission = Color(color.r, color.g, color.b)
+			mat.emission_energy_multiplier = 1.3
+		p.material_override = mat
+		# fade every particle in and out over its life so none pop
+		var ramp := Gradient.new()
+		ramp.set_color(0, Color(color.r, color.g, color.b, 0.0))
+		ramp.add_point(0.35, color)
+		ramp.set_color(1, Color(color.r, color.g, color.b, 0.0))
+		p.color_ramp = ramp
+		return p

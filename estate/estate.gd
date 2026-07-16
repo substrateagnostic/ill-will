@@ -2861,6 +2861,13 @@ func _ambient_test_run() -> void:
 		al2.debug_check_watch()
 	await get_tree().create_timer(0.4).timeout
 	await _ambient_snap("queue")
+	# ATMOSPHERE — fog wisps in the graves, embers over the lanterns. Walkers
+	# tucked to the far side so the floor of life reads on its own.
+	for w in walkers:
+		if is_instance_valid(w):
+			w.global_position = Vector3(8.0 + w.player_idx * 0.7, 0.1, 2.5)
+	await get_tree().create_timer(0.8).timeout
+	await _ambient_snap("atmosphere")
 	print("AMBIENTTEST done")
 	await get_tree().create_timer(0.2).timeout
 	get_tree().quit()
