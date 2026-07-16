@@ -1080,7 +1080,7 @@ func _build_teams(config: Dictionary) -> void:
 	# instantiate carrier bodies + team coffins
 	for slot in 4:
 		var c: Dictionary = carriers[slot]
-		bot_enabled.append(_mirror if false else (bool(c.bot) or _bots_all))
+		bot_enabled.append(bool(c.bot) or _bots_all)
 		var char_scene := str(roster[0].get("char_scene", CHAR_FALLBACKS[0])) if int(c.roster_index) < 0 else _char_of(int(c.roster_index))
 		if int(c.roster_index) < 0:
 			char_scene = CHAR_FALLBACKS[slot]
