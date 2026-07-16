@@ -2246,3 +2246,62 @@ JUDGMENT CALLS (flag if you disagree):
 4. Added two gated dev capture flags to the shipping game files (echo/orbital).
    Precedent: _ring_test, --orbtest, --aimprobe. Never in a receipt path;
    re-ran both receipts with the flag code present — still byte-identical.
+
+---
+
+## Night 5 — E3 THE RIGGING WAVE (real bones for the graveyard troupe)
+
+Generalized the sanctioned rig trial into `tools/meshy_rig_wave.ps1` (resumable,
+manifest-driven, one model at a time, per-model report save; a FAILED animation
+is logged not fatal) → `tools/meshy_rig_wave_report.json`.
+
+BIG FINDING worth keeping: Meshy's preset catalog is a PUBLIC json,
+`GET https://api.meshy.ai/web/public/animations/resources` (`result.list`, 680
+clips: id=action_id, name, key, category, rigType, isFree). The trial only ever
+proved rigType `style_01` (Idle id 0). 671 of 680 clips are `style_02` — nearly
+every expressive/funeral pose. THIS WAVE PROVED the auto-rig retargets style_02:
+Gentlemans Bow (action_id 42, style_02) succeeded on the hooded mourner rig
+(clip `Armature|Gentlemans_Bow|baselayer`, 7.30s). So the WHOLE 680-clip library
+is reachable from our `/openapi/v1/rigging` output, not just the 4 style_01/biped
+freebies. Future troupes/executors can pull Formal Bow 41, Dozing Elderly 38,
+Depressed Turn 579, Kneel 365, etc. by id.
+
+NO raking/sweeping preset exists — every "sweep" is martial (Sweep Kick etc.).
+So Old Rake keeps his procedural rake prop over a real skeletal idle (honest to
+the library). Reported, not faked.
+
+Rigged 3 humanoids (27 cr total: 3 rigs ×5 + 4 anims ×3). Native heights
+RECORDED in the report (instance_rigged needs them): groundskeeper 1.8 m,
+elderly 1.65 m, hooded 1.75 m. Outputs in assets/models/meshy/generated/:
+`npc_groundskeeper_idle`, `npc_mourner_elderly_idle`, `npc_mourner_hooded_idle`,
+`npc_mourner_hooded_bow` (.glb). Each extracted an embedded `*_texture_0.png` on
+Godot import (butler precedent) — committed with .import sidecars. Same AABB
+caveat holds (rigged mesh reads 0.01×0.02×0.01; only `instance_rigged` scaling
+is safe).
+
+Wiring (core/ambient_life.gd, presentation only): each member prefers its
+animated GLB via new `AmbientLife.rigged_or_null([...], native, target)`, else
+the old static+procedural path. Old Rake: rigged idle + kept rake/leaves; his
+skeletal loop now FREEZES (speed_scale 0) for the STARE (the stop IS the joke)
+and resumes on exit. Mourners: front elder on idle (keeps watch gag), back
+hooded prefers the bow (pays respects); the continuous whole-body ghost hover is
+GATED OFF on the rigged path (it fought the loop) — shuffle/step-aside/watch
+beats kept, both still ghostified. Crows/gull/atmosphere/lantern/door untouched.
+
+Verify: probe `--animate` PROBE_ANIM prints for all 4 clips; windowed estate via
+the B3 `--ambienttest` harness with AMBIENT_RIGGED code-path receipts for all 3;
+headless import clean; procession seed=7 = `PROCESSION_HEIR BLUE (17 rounds)`
+unchanged. Shots: docs/verify/shots/meshy_rig_wave_{audition,audition2,
+estate_groundskeeper,estate_queue}.png. Full writeup: docs/verify/meshy-troupe-VERIFY.md.
+
+JUDGMENT CALLS (flag if you disagree):
+1. Matched the STATIC target heights the old path used (groundskeeper 1.35,
+   mourners 1.32 scene-units) so the swap is invisible — a realistic Meshy human
+   at 1.35 reads slightly shorter than the ~1.5 KayKit players, which is fine
+   for background NPCs. If you want them player-height, bump those two literals.
+2. Hooded mourner wired to the BOW (repeated slow bow = paying respects at a
+   grave). If it reads too busy looped, its own idle GLB already ships as the
+   one-line fallback (swap the const order in GhostQueue.build).
+3. Elderly + groundskeeper on plain Idle (0) — cleanest grief/labor read given
+   no dedicated mourning-stand or rake clip. style_02 is now proven, so a
+   characterful re-pick (e.g. Dozing Elderly 38) is a report-only change later.
