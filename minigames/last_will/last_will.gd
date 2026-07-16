@@ -1684,14 +1684,11 @@ func _set_base_ui(v: bool) -> void:
 	hint_label.visible = v
 	hud.visible = v
 
-const HINT_LIVING := "A = SHOVE   B = HOP   ·   DIE, AND CURSE THE ROAD"
-
 ## ---- live-binding hint bar (real keys, not "A"/"B"; docs/verify/realkeys-VERIFY.md) ----
 ## Self-contained per the template; presentation only. Bindings are fixed per
 ## match, so the living bar is built when begin()/_refresh_hint set it.
 
-## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
-## living bar personalizes only these; an all-bot demo keeps HINT_LIVING.
+## Seats driven by a HUMAN with a real device (not a bot, not unassigned).
 func _human_seats() -> Array:
 	var out := []
 	for i in players.size():
@@ -1699,12 +1696,17 @@ func _human_seats() -> Array:
 			out.append(i)
 	return out
 
-## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## Seats whose bindings the hint bar prints: the live humans, or seat 0 as a
+## representative when a bot-only demo has no humans — so the bar always shows
+## a REAL key, never an abstract "A =" verb (doc 14 nit 3, notation consistency).
+func _hint_seats() -> Array:
+	var seats := _human_seats()
+	return seats if not seats.is_empty() else [0]
+
+## One button's live legend: "KEY = LABEL" when every hint seat shares the key
 ## (all pads -> "(A) = SHOVE"), else the per-seat "LABEL: KEY/NAME · KEY/NAME" form.
 func _btn_hint(action: String, label: String) -> String:
-	var seats := _human_seats()
-	if seats.is_empty():
-		return ""
+	var seats := _hint_seats()
 	var keys := []
 	var same := true
 	for i in seats:
@@ -1719,17 +1721,14 @@ func _btn_hint(action: String, label: String) -> String:
 		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
 	return "%s: %s" % [label, " · ".join(parts)]
 
-## The living hint bar with real keys, or HINT_LIVING for an all-bot demo (so
-## bot-only tally receipts stay byte-identical).
+## The living hint bar, always real keys via describe_binding (matches the card).
 func _controls_bar() -> String:
-	if _human_seats().is_empty():
-		return HINT_LIVING
 	return "%s   ·   %s   ·   DIE, AND CURSE THE ROAD" % [
 		_btn_hint("a", "SHOVE"), _btn_hint("b", "HOP")]
 
 ## Flip the shared hint bar to a dead-state legend when a HUMAN takes a ghost pew,
 ## so the dead know how to gust: aim with the RIGHT channel, A fires. Bots never
-## trigger this (their seats stay HINT_LIVING), so the tally receipts are
+## trigger this (their seats stay on the living bar), so the tally receipts are
 ## unchanged.
 func _refresh_hint() -> void:
 	if hint_label == null:

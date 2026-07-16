@@ -690,7 +690,7 @@ func _begin_waltz() -> void:
 ## match, so the bar is built once when the waltz begins.
 
 ## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
-## bar personalizes only these; an all-bot demo keeps the generic legend.
+## bar personalizes only these.
 func _human_seats() -> Array:
 	var out := []
 	for i in players.size():
@@ -698,12 +698,17 @@ func _human_seats() -> Array:
 			out.append(i)
 	return out
 
-## One button's live legend: "KEY = LABEL" when every human seat shares the key
+## Seats whose bindings the hint bar prints: the live humans, or seat 0 as a
+## representative when a bot-only demo has no humans — so the bar always shows
+## a REAL key, never an abstract "A =" verb (doc 14 nit 3, notation consistency).
+func _hint_seats() -> Array:
+	var seats := _human_seats()
+	return seats if not seats.is_empty() else [0]
+
+## One button's live legend: "KEY = LABEL" when every hint seat shares the key
 ## (all pads -> "(A) = CURTSY"), else the per-seat "LABEL: KEY/NAME · KEY/NAME" form.
 func _btn_hint(action: String, label: String) -> String:
-	var seats := _human_seats()
-	if seats.is_empty():
-		return ""
+	var seats := _hint_seats()
 	var keys := []
 	var same := true
 	for i in seats:
@@ -718,11 +723,8 @@ func _btn_hint(action: String, label: String) -> String:
 		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
 	return "%s: %s" % [label, " · ".join(parts)]
 
-## The main waltz bar with real keys, or the original generic legend for an
-## all-bot demo (so bot-only receipts/demos stay byte-identical).
+## The main waltz bar, always real keys via describe_binding (matches the card).
 func _controls_bar() -> String:
-	if _human_seats().is_empty():
-		return "STICK = DRIFT · FEATHER IT = your mask glints · A = CURTSY · B = UNMASK (one mark)"
 	return "STICK = DRIFT · FEATHER IT = your mask glints · %s · %s" % [
 		_btn_hint("a", "CURTSY"), _btn_hint("b", "UNMASK (one mark)")]
 
@@ -1776,9 +1778,9 @@ func _net_apply(state: Dictionary) -> void:
 		phase = new_ph as Phase
 		print("MB_MIRROR phase -> %s" % Phase.keys()[phase])
 		if phase == Phase.WALTZ:
-			# the mirror keeps the generic legend: remote bindings live on the
-			# host's map and this machine's stick is what the words describe
-			hint_label.text = "STICK = DRIFT · FEATHER IT = your mask glints · A = CURTSY · B = UNMASK (one mark)"
+			# the mirror builds the bar from THIS machine's bindings (my local
+			# seat samples locally — the tilt/dead_weight mirror precedent)
+			hint_label.text = _controls_bar()
 		elif phase == Phase.REVEAL:
 			hint_label.text = ""
 			if not _tally:
