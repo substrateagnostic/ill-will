@@ -775,7 +775,7 @@ func _finish_match() -> void:
 	var champ: int = order[0]
 	timer_label.text = ""
 	round_label.text = "FINAL"
-	_flash_banner("%s WINS THE ECHO!" % _names[champ], _colors[champ], 0.0)
+	_flash_banner("%s SILENCES THE CHAMBER" % _names[champ], _colors[champ], 0.0)
 	Sfx.play("match_win")
 	_spawn_confetti(Vector3(0, 2.5, 0), _colors[champ])
 	_shake = maxf(_shake, 0.6)

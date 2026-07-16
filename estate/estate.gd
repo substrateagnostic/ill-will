@@ -1623,7 +1623,7 @@ func _enter_auction() -> void:
 		bag.remove_at(pick)
 	_bots_place_bets()
 	_rebuild_top_bar()
-	_clear_panel("THE AUCTION — bid grudge to choose the game")
+	_clear_panel("THE AUCTION — bid grudge; the estate takes nothing else")
 	if EstateState.games_played == 0 and not EstateState.vendetta.is_empty():
 		var v: Dictionary = EstateState.vendetta
 		var vl := Label.new()
@@ -1639,6 +1639,9 @@ func _enter_auction() -> void:
 		"The Executor opens the bidding. Spite is legal tender.",
 		"The Executor reminds the room that generosity is not on the block.",
 		"The Executor accepts grudge, resentment, and exact change.",
+		"The Executor calls the lot. The reserve price is a grudge, and it always clears.",
+		"The Executor notes, for the record, that the estate sells the evening and never gives it.",
+		"The Executor opens the book. Bids are entered in spite and paid in kind.",
 	]
 	var eq := Label.new()
 	eq.text = "“%s”" % String(exec_lines[EstateState.rng.randi_range(0, exec_lines.size() - 1)])

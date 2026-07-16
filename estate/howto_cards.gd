@@ -25,6 +25,15 @@ const HOWTO := {
 	"maskedball": {"goal": "A crowd of identical masked dancers — four of them are you, and nobody is told which. Find yourself, dance like furniture, curtsy to the throne, and spend your one mark to unmask a human. Wrong guess: you flash.", "a": "CURTSY (scores in the circle)", "b": "UNMASK (one mark)"},
 }
 
+# Pre-game card header pool (doc 26 §1 #11) — "GET READY" is banned arcade hype
+# (rule 9). The estate seats you instead. Drawn via Voice.pick_fmt (local RNG,
+# presentation-only); each line carries exactly one %s for the game's name.
+const GET_READY_HEADS: PackedStringArray = [
+	"TAKE YOUR PLACES — %s",
+	"THE ESTATE IS SEATING YOU — %s",
+	"THE ESTATE WILL SEE YOU NOW — %s",
+]
+
 static func schedule_howto_test(estate) -> void:
 	# Seat two keyboard humans + two bots so the CONTROLS TONIGHT rows render
 	# real brand glyphs (keyboard here) with text fallback. Self-contained:
@@ -208,10 +217,10 @@ static func show_howto(estate, modules: Dictionary, id: String) -> void:
 				_add_control_segment(row, i, "jump", "", "")
 		var l := Label.new()
 		if PlayerInput.is_bot(i):
-			l.text = "%s — bot, needs no manual" % GameState.PLAYER_NAMES[i]
+			l.text = "%s — plays itself; needs no manual" % GameState.PLAYER_NAMES[i]
 			l.modulate.a = 0.5
 		elif NetSession.is_seat_remote(i):
-			l.text = "%s — REMOTE — plays from their own machine" % GameState.PLAYER_NAMES[i]
+			l.text = "%s — attends from a distant house" % GameState.PLAYER_NAMES[i]
 		elif id == "par":
 			l.text = "%s — MOUSE: aim, hold, release to putt (hotseat — pass it on)" % GameState.PLAYER_NAMES[i]
 		else:
@@ -406,7 +415,7 @@ static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, 
 	Sfx.play("card")
 	var info: Dictionary = modules[id]
 	var how: Dictionary = HOWTO.get(id, {"goal": "?", "a": "A", "b": "B"})
-	estate._clear_panel("GET READY — %s" % String(info.name), Color(1, 0.9, 0.5))
+	estate._clear_panel(Voice.pick_fmt(GET_READY_HEADS, [String(info.name)]), Color(1, 0.9, 0.5))
 	var goal := Label.new()
 	goal.text = String(how.goal)
 	goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -434,10 +443,10 @@ static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, 
 				_add_control_segment(row, i, "jump", "", "")
 		var l := Label.new()
 		if PlayerInput.is_bot(i):
-			l.text = "%s — bot, needs no manual" % GameState.PLAYER_NAMES[i]
+			l.text = "%s — plays itself; needs no manual" % GameState.PLAYER_NAMES[i]
 			l.modulate.a = 0.5
 		elif NetSession.is_seat_remote(i):
-			l.text = "%s — REMOTE — readies from their own estate" % GameState.PLAYER_NAMES[i]
+			l.text = "%s — readies from a distant house" % GameState.PLAYER_NAMES[i]
 		elif id == "par":
 			l.text = "%s — MOUSE: aim, hold, release to putt (hotseat — pass it on)" % GameState.PLAYER_NAMES[i]
 		else:

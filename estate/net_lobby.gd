@@ -67,7 +67,7 @@ static func on_peer_left_seat(estate, seat: int, _peer_id: int) -> void:
 	estate._lobby_ready.erase(seat)
 	estate._join_ready_lock.erase(seat)
 	Sfx.play("grudge", -4.0)
-	estate._flash("THE WIRE TO %s WENT DEAD — %s PLAYS ITSELF UNTIL FURTHER NOTICE" % [GameState.PLAYER_NAMES[seat], GameState.PLAYER_NAMES[seat]], GameState.PLAYER_COLORS[seat], 2.6)
+	estate._flash("%s HAS BEEN CALLED AWAY — THE ESTATE WILL KEEP THEIR SEAT, AND THEIR GRUDGES" % GameState.PLAYER_NAMES[seat], GameState.PLAYER_COLORS[seat], 2.6)
 	if estate.get_phase_name() == "LOBBY":
 		estate.get_tree().create_timer(2.7).timeout.connect(func():
 			if estate.get_phase_name() == "LOBBY":
@@ -442,7 +442,7 @@ static func client_build_panel(estate, client_last_state: Dictionary) -> void:
 	var gate: Dictionary = state.get("gate", {})
 	if not gate.is_empty():
 		var g_t := Label.new()
-		g_t.text = "GET READY — %s" % String(gate.get("name", "?"))
+		g_t.text = Voice.pick_fmt(HowtoCards.GET_READY_HEADS, [String(gate.get("name", "?"))])
 		g_t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		g_t.add_theme_font_size_override("font_size", 22)
 		g_t.add_theme_color_override("font_color", Color(1, 0.9, 0.5))

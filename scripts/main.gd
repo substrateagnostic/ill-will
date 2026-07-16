@@ -27,6 +27,17 @@ const CHAOS_TRAP_SPEED := 1.6
 ## KILLCAM_DURATION later and NO physics advances — determinism is untouched.
 const KILLCAM_DURATION := 1.6
 
+# VOICE B floor pool (doc 26 §2, §1 #9) — one player caused another's death.
+# "griefed" is banned gamer-speak (rule 8); the estate settles accounts instead.
+# Drawn via Voice.pick_fmt, presentation-only — never touches sim rng.
+const VP_GRIEF: PackedStringArray = [
+	"%s WRONGED %s",
+	"%s SETTLED UP WITH %s",
+	"%s SQUARED THINGS WITH %s",
+	"%s HAD WORDS WITH %s",
+	"%s CROSSED %s",
+]
+
 var balls: Array = []
 ## PAR v4: the caddies became the players (PlayerAvatar). Same reaction API.
 var avatars: Array = []
@@ -291,7 +302,7 @@ func _start_round() -> void:
 		avatars[i].revive()
 		_place_avatar_home(avatars[i], i)
 	if GameState.is_chaos_round():
-		round_label.text = "CHAOS ROUND"
+		round_label.text = "ALL AT ONCE"
 		_enter_chaos_round()
 		_begin_putt_phase()
 		return
@@ -307,7 +318,7 @@ func _enter_chaos_round() -> void:
 	course.set_trap_speed_scale(CHAOS_TRAP_SPEED)
 	_apply_golden_hour()
 	Sfx.play("match_win", -4.0)
-	_flash_banner("CHAOS ROUND\nNO WAITING — ALL LIVE", Color(1.0, 0.55, 0.2), 2.8)
+	_flash_banner("EVERY CLAIM AT ONCE\nNO ONE WAITS THEIR TURN", Color(1.0, 0.55, 0.2), 2.8)
 	_set_chaos_turn_banner()
 	# WAVE 2: the non-stroking avatars go live. Gated exactly like the killcam's
 	# determinism guard — autoplay/physputt receipt runs keep the v3-identical
@@ -497,7 +508,7 @@ func _process(delta: float) -> void:
 		if _build_timer > BUILD_TIME_LIMIT:
 			placement.cancel()
 			build_hint.visible = false
-			_flash_banner("TOO SLOW — TRAP FORFEITED", Color(0.8, 0.8, 0.8), 1.5)
+			_flash_banner("TOO SLOW. THE CLAIM LAPSES.", Color(0.8, 0.8, 0.8), 1.5)
 			_advance_after_placement()
 
 ## Counts balls currently rolling (chaos round). Prints on each new peak so the
@@ -549,7 +560,7 @@ func _on_ball_gutter(body: Node3D, target: Vector3) -> void:
 	b.enter_gutter()
 	Sfx.play("bounce", -2.0)
 	print("GUTTER: %s took the channel -> near cup" % GameState.players[b.player_index].name)
-	_flash_banner("%s HIT THE ADVENTURE GUTTER!" % GameState.players[b.player_index].name, Color(0.3, 0.9, 1.0), 1.6)
+	_flash_banner("%s STRAYED FROM THE PLOT" % GameState.players[b.player_index].name, Color(0.3, 0.9, 1.0), 1.6)
 	var start: Vector3 = b.global_position
 	# Two-hop detour: dip out to a side waypoint (below the lip), then rise to the
 	# green near the cup. Quadratic-ish path via nested lerps for a swept feel.
@@ -669,7 +680,7 @@ func _on_ball_died(killer: Trap, victim: int) -> void:
 		_highlights.append("CHAOS CLAIMED %s" % v.name)
 		_credit_grief(victim, killer)
 	print("DEATH: %s by %s (round %d)" % [v.name, credit, GameState.round_num])
-	_flash_banner("%s DIED!\nDEATH BY: %s" % [v.name, credit], credit_color, 2.4)
+	_flash_banner("%s, DECEASED\nCAUSE OF DEATH: %s" % [v.name, credit], credit_color, 2.4)
 	round_manager.on_ball_died(victim)
 	_resolve_death_cinematics(victim, killer, death_pos, credit, credit_color)
 
@@ -861,8 +872,9 @@ func _credit_grief(victim: int, killer: Trap) -> void:
 	var gp = GameState.players[by]
 	gp.grudge += 1
 	_currency_log.append({"type": "grudge", "player": by, "amount": 1, "reason": "griefed %s" % GameState.players[victim].name})
-	_highlights.append("%s GRIEFED %s" % [gp.name, GameState.players[victim].name])
-	_flash_banner("%s GRIEFED %s" % [gp.name, GameState.players[victim].name], gp.color, 1.5)
+	var grief_line: String = Voice.pick_fmt(VP_GRIEF, [gp.name, GameState.players[victim].name])
+	_highlights.append(grief_line)
+	_flash_banner(grief_line, gp.color, 1.5)
 	print("GRIEF_CREDIT by=%d victim=%d" % [by, victim])
 	_rebuild_scoreboard()
 
@@ -932,7 +944,7 @@ func _on_round_finished(finish_order: Array, _strokes: Dictionary) -> void:
 		Sfx.play("match_win")
 		avatars[champ].react("Cheer")
 		_spawn_confetti(avatars[champ].global_position + Vector3(0, 1.5, 0), GameState.players[champ].color)
-		_flash_banner("%s WINS THE MATCH!\n(press R for a rematch)" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
+		_flash_banner("%s OUTLASTS THE PLOT\n(press R for a rematch)" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
 		finished.emit(results)
 		return
 	Sfx.play("round_over")
@@ -1811,7 +1823,7 @@ func _mir_ending(champ: int) -> void:
 	if champ < avatars.size():
 		avatars[champ].react("Cheer")
 		_spawn_confetti(avatars[champ].global_position + Vector3(0, 1.5, 0), GameState.players[champ].color)
-	_flash_banner("%s WINS THE MATCH!" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
+	_flash_banner("%s OUTLASTS THE PLOT" % GameState.players[champ].name, GameState.players[champ].color, 9999.0)
 	print("PAR_MIRROR ending champ=%d" % champ)
 
 # --- CLIENT input: aim + charge → putt intent; click → build intent -----------

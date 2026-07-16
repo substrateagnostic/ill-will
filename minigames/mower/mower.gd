@@ -437,7 +437,7 @@ func _start_round() -> void:
 	_over12 = 0
 	if _stretch != null:
 		_stretch.play_started()   # FINAL STRETCH: light bed under the mowing
-	_flash_banner("MOW!", Color(1, 0.9, 0.3), 1.0)
+	_flash_banner("THE GROUNDS NEED CUTTING", Color(1, 0.9, 0.3), 1.0)
 	hint_label.visible = true
 	var bar := _controls_bar()
 	if bar != "":
@@ -878,7 +878,7 @@ func _run_tally() -> void:
 		"title": "TALLYING...",
 		"subtitle": "COVERAGE IS SCORE",
 		"score_type": ResultsBoard.ScoreType.PERCENT,
-		"win_title": "{name} TAKES THE LAWN!",
+		"win_title": "{name} TAKES THE LAWN",
 		"accent": Color(1, 0.95, 0.55),
 	})
 

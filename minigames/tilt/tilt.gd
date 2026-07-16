@@ -317,7 +317,7 @@ func _physics_process(delta: float) -> void:
 			if phase_t >= 1.4:
 				phase = Phase.PLAY
 				round_t = 0.0
-				_flash_banner("TILT!", Color(1, 0.85, 0.2), 0.8)
+				_flash_banner("MIND YOUR WEIGHT", Color(1, 0.85, 0.2), 0.8)
 				Sfx.play("confirm")
 		Phase.PLAY:
 			round_t += delta
@@ -1132,7 +1132,7 @@ func _present_results_board() -> void:
 		"title": "FINAL STANDINGS",
 		"subtitle": "BEST OF %d" % rounds_total,
 		"score_type": ResultsBoard.ScoreType.POINTS,
-		"win_title": "{name} WINS TILT!",
+		"win_title": "{name} KEPT THEIR FEET",
 		"accent": Color(1, 0.82, 0.3),
 	})
 
