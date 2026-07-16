@@ -20,6 +20,14 @@ var panel: PanelContainer
 var tabs: TabContainer
 var open := false
 
+# A full-screen dim behind the settings panel so it reads as its own moment and
+# nothing underneath (a LOBBY seat panel, a live minigame HUD) bleeds through or
+# stays clickable — the doc 25 gap row 22 fix.
+var _settings_scrim: ColorRect = null
+# The estate's own phase panel (LOBBY/GROUNDS desk), hidden while settings is
+# open and restored on close so the two never stack.
+var _phase_panel_hidden: Control = null
+
 var _prefs := {}
 var _seats_box: VBoxContainer
 var _controls_box: VBoxContainer
@@ -39,6 +47,11 @@ var _disconnect_device: int = -99
 var _disconnect_prev_paused: bool = false
 var _disconnect_claim_held: Dictionary = {}
 
+# GAMEPAD PAUSE (doc 25 §3.4): per-pad edge memory for JOY_BUTTON_START so a
+# held button opens the pause overlay exactly once, mirroring the estate's own
+# _poll_pad_join() edge idiom. pad id -> was-down-last-frame.
+var _pause_btn_held: Dictionary = {}
+
 # The guest-side "THE HOST HAS PAUSED" overlay. PartySetup is the shell's global
 # overlay owner (settings + controller-disconnect already live here), so the
 # host-pause curtain rides the same PROCESS_MODE_ALWAYS CanvasLayer. It is driven
@@ -56,6 +69,13 @@ func _ready() -> void:
 	_apply_audio_prefs()
 	_apply_video_prefs()
 	_apply_access_prefs()
+	# Scrim first so it draws BEHIND the panel (CanvasLayer children draw in order).
+	_settings_scrim = ColorRect.new()
+	_settings_scrim.visible = false
+	_settings_scrim.color = Color(0.02, 0.02, 0.04, 0.82)
+	_settings_scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_settings_scrim.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_settings_scrim)
 	panel = PanelContainer.new()
 	panel.visible = false
 	panel.set_anchors_preset(Control.PRESET_CENTER)
@@ -97,12 +117,19 @@ func _ready() -> void:
 	quit_btn.button_up.connect(func(): _quit_button_held = false)
 	quit_row.add_child(quit_btn)
 	_quit_hold = HoldConfirm.new()
-	_quit_hold.configure(3.0)
+	# 5.0s, not 3.0 (doc 14 HOLDCONFIRM-1 / doc 25 §3.3.2): QUIT TO TITLE forfeits
+	# three other players' game — a shared-consequence action gets the 5s ceiling.
+	_quit_hold.configure(5.0)
 	_quit_hold.completed.connect(quit_to_title)
 	quit_row.add_child(_quit_hold)
 	box.add_child(quit_row)
 	_build_disconnect_overlay()
 	_build_hostpause_overlay()
+	# The front-end director (title composition + attract mode) rides this
+	# always-on autoload so it survives scene reloads and needs no estate.gd edit.
+	var fe := FrontEndDirector.new()
+	fe.name = "FrontEndDirector"
+	add_child(fe)
 	# NetSession autoloads AFTER PartySetup (project.godot order), so its node is
 	# not in the tree yet — wire the guest-pause signals on the next idle frame.
 	call_deferred("_wire_net_pause_signals")
@@ -124,6 +151,41 @@ func _ready() -> void:
 				PlayerInput.set_bot(seat, false)
 				_begin_disconnect_overlay(seat, 0)
 				VerifyCapture.snap("input2_disconnect"))
+		elif arg == "--settingslobbyshot":
+			# Repro (doc 25 gap row 22): open the ESC settings while the estate's
+			# LOBBY phase_panel is up and snap the stacked result.
+			get_tree().create_timer(1.3).timeout.connect(func():
+				var est: Node = get_tree().current_scene
+				if est != null and est.has_method("_enter_lobby"):
+					est.call("_enter_lobby")
+				get_tree().create_timer(0.4).timeout.connect(func():
+					if not open:
+						toggle()
+					get_tree().create_timer(0.4).timeout.connect(func():
+						VerifyCapture.snap("settings_over_lobby"))))
+		elif arg.begins_with("--padpausetest="):
+			# Dev-only: a physical pad Start press can't be sent headlessly, so this
+			# seats a local human on (phantom) gamepad 0, drives the requested
+			# context, then fires the SAME thing a JOY_BUTTON_START down-edge fires —
+			# toggle() — and snaps the opened overlay. Proves both halves of the
+			# gap fix: _pad_can_pause() recognises a seated human's pad, and toggle()
+			# raises the pause overlay in that context. ctx = title|grounds|game.
+			var ctx := arg.trim_prefix("--padpausetest=")
+			get_tree().create_timer(1.3).timeout.connect(func():
+				PlayerInput.assign(0, 0)
+				PlayerInput.set_bot(0, false)
+				var est: Node = get_tree().current_scene
+				if ctx == "grounds" and est != null and est.has_method("_enter_grounds"):
+					est.call("_enter_grounds")
+				elif ctx == "game" and est != null and est.has_method("_do_launch_game"):
+					for i in range(1, 4):
+						PlayerInput.set_bot(i, true)
+					est.call("_do_launch_game", "greed")
+				get_tree().create_timer(1.8).timeout.connect(func():
+					print("PADPAUSE ctx=%s pad0_can_pause=%s" % [ctx, str(_pad_can_pause(0))])
+					if not open:
+						toggle()
+					VerifyCapture.snap("padpause_%s" % ctx)))
 
 ## Forfeit whatever is running and return to the title, leaving NOTHING behind.
 ## Playtest bug (Andrew, round 2): modules launch parented at the TREE ROOT, so
@@ -140,6 +202,11 @@ func quit_to_title() -> void:
 		_disconnect_panel.visible = false
 	open = false
 	panel.visible = false
+	# The scrim + phase-panel ref live on this autoload, which survives the scene
+	# reload below — drop them so neither lingers over the fresh title.
+	if _settings_scrim != null:
+		_settings_scrim.visible = false
+	_phase_panel_hidden = null
 	get_tree().paused = false
 	Engine.time_scale = 1.0
 	PlayerInput.save_setup()
@@ -195,24 +262,76 @@ func toggle() -> void:
 		return
 	open = not open
 	panel.visible = open
+	if _settings_scrim != null:
+		_settings_scrim.visible = open
 	get_tree().paused = open
 	# Tell the guests the estate held its breath (host only — a guest's own ESC
 	# pauses just its local tree and must never freeze the shared table).
 	_net_reflect_host_pause(open)
 	if open:
+		_hide_phase_panel()
 		_rebuild_seats()
 		_rebuild_controls()
 	else:
+		_restore_phase_panel()
 		_stop_listen()
 		PlayerInput.save_setup()
 		_save_prefs()
 
+## Hide the estate's own LOBBY/GROUNDS desk panel while settings is open so the
+## two panels never stack (doc 25 gap row 22). Remembers it to restore on close.
+func _hide_phase_panel() -> void:
+	_phase_panel_hidden = null
+	var scene: Node = get_tree().current_scene
+	if scene == null:
+		return
+	var pp = scene.get("phase_panel")
+	if pp != null and pp is Control and (pp as Control).visible:
+		_phase_panel_hidden = pp as Control
+		(pp as Control).visible = false
+
+func _restore_phase_panel() -> void:
+	if _phase_panel_hidden != null and is_instance_valid(_phase_panel_hidden):
+		_phase_panel_hidden.visible = true
+	_phase_panel_hidden = null
+
 func _process(delta: float) -> void:
+	_poll_pause_buttons()
 	if _disconnect_active:
 		_poll_disconnect_overlay(delta)
 	if _quit_hold != null:
 		var quit_held: bool = open and not _disconnect_active and _quit_button_held
 		_quit_hold.tick(quit_held, delta)
+
+## GAMEPAD PAUSE — the single cert-grade gap doc 25 names: KEY_ESCAPE was the ONLY
+## thing that opened the pause overlay, so a controller-only player could never
+## pause. Edge-detect JOY_BUTTON_START (Start/Options — the universal couch-pause
+## button) on every connected pad and route it through toggle(), which already
+## carries the correct host/guest broadcast semantics regardless of which local
+## seat pressed it. Gated to a pad that drives a SEATED LOCAL HUMAN this session,
+## so an all-bot attract exhibition (every seat a bot) is interrupted by a stray
+## press rather than paused by it. Runs every frame (PROCESS_MODE_ALWAYS), so the
+## same Start button also closes the overlay — the console pause convention.
+func _poll_pause_buttons() -> void:
+	if _disconnect_active or _listen_action != "":
+		return
+	for pad: int in Input.get_connected_joypads():
+		var down: bool = Input.is_joy_button_pressed(pad, JOY_BUTTON_START)
+		if not down:
+			_pause_btn_held.erase(pad)
+			continue
+		if bool(_pause_btn_held.get(pad, false)):
+			continue
+		_pause_btn_held[pad] = true
+		if _pad_can_pause(pad):
+			toggle()
+			return
+
+## A pad may open the pause overlay only when it drives a seated LOCAL HUMAN
+## (reuses the disconnect overlay's seat lookup, which already excludes bot /
+## remote seats). An unseated or all-bot table is never paused from a pad.
+func _pad_can_pause(pad: int) -> bool:
+	return _local_human_seat_for_device(pad) >= 0
 
 ## ----- controller disconnect safety (global couch overlay) -----
 
@@ -451,6 +570,7 @@ func _apply_audio_prefs() -> void:
 	_apply_volume("Master", float(pref("vol_master", 1.0)))
 	_apply_volume("Music", float(pref("vol_music", 0.8)))
 	_apply_volume("SFX", float(pref("vol_sfx", 1.0)))
+	_apply_volume("Ambience", float(pref("vol_ambience", 0.8)))
 
 func _apply_volume(bus_name: String, v: float) -> void:
 	var idx := AudioServer.get_bus_index(bus_name)
@@ -669,6 +789,9 @@ func _build_audio_tab() -> Control:
 	v.add_child(_volume_row("MASTER", "vol_master", 1.0, "Master"))
 	v.add_child(_volume_row("MUSIC", "vol_music", 0.8, "Music"))
 	v.add_child(_volume_row("SFX", "vol_sfx", 1.0, "SFX"))
+	# The estate's fourth bus (core/ambience.gd) routed straight to Master with no
+	# fader — give it one now, before any game lane ships an unadjustable bed.
+	v.add_child(_volume_row("AMBIENCE", "vol_ambience", 0.8, "Ambience"))
 	var note := Label.new()
 	note.text = "the soundtrack arrives when the resident violist approves it"
 	note.add_theme_font_size_override("font_size", 14)
@@ -753,7 +876,10 @@ func _build_access_tab() -> Control:
 	v.name = "ACCESS"
 	v.add_theme_constant_override("separation", 14)
 	var shake := CheckButton.new()
-	shake.text = "SCREEN SHAKE"
+	# Effect-named, not diagnosis-named (doc 25 §3.3.3 / XAG118). Toggle ON = the
+	# effects play; the pref KEY stays "screen_shake" — 13 game scripts read it by
+	# that string (doc 25 §4), so only the on-screen label changes here.
+	shake.text = "SCREEN EFFECTS  (shake · hit-stop · flash)"
 	shake.button_pressed = bool(pref("screen_shake", true))
 	shake.toggled.connect(func(on: bool):
 		_prefs["screen_shake"] = on
