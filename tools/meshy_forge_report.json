@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-15T02:11:28.0983841-05:00",
+  "generated_at": "2026-07-16T02:57:16.7533165-05:00",
   "model": "meshy-6",
   "preview_only": false,
   "batch_size": 5,
@@ -451,16 +451,156 @@
       "consumed_credits": 30,
       "glb_path": "assets/models/meshy/generated/estate_covered_well.glb",
       "error": null
+    },
+    {
+      "id": "npc_mourner_hooded",
+      "category": "NPC_TROUPE",
+      "status": "ok",
+      "preview_task_id": "019f69e4-a278-7127-b763-a5e51582c869",
+      "preview_status": "SUCCEEDED",
+      "preview_credits": 20,
+      "refine_task_id": "019f69eb-7409-7b87-a934-8841670ebc3d",
+      "refine_status": "SUCCEEDED",
+      "refine_credits": 10,
+      "consumed_credits": 30,
+      "glb_path": "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a11bfe70aa4d3e2ef\\assets\\models\\meshy\\generated\\npc_mourner_hooded.glb",
+      "error": null
+    },
+    {
+      "id": "npc_mourner_elderly",
+      "category": "NPC_TROUPE",
+      "status": "ok",
+      "preview_task_id": "019f69e4-aa82-7dd3-ac0d-1bf3921fd1ef",
+      "preview_status": "SUCCEEDED",
+      "preview_credits": 20,
+      "refine_task_id": "019f69eb-7675-7628-b056-f8371918ffef",
+      "refine_status": "SUCCEEDED",
+      "refine_credits": 10,
+      "consumed_credits": 30,
+      "glb_path": "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a11bfe70aa4d3e2ef\\assets\\models\\meshy\\generated\\npc_mourner_elderly.glb",
+      "error": null
+    },
+    {
+      "id": "npc_groundskeeper",
+      "category": "NPC_TROUPE",
+      "status": "ok",
+      "preview_task_id": "019f69e4-b514-7dd5-b172-40bb8cbf8e48",
+      "preview_status": "SUCCEEDED",
+      "preview_credits": 20,
+      "refine_task_id": "019f69eb-78e4-7b89-ac50-be6c9c114e7d",
+      "refine_status": "SUCCEEDED",
+      "refine_credits": 10,
+      "consumed_credits": 30,
+      "glb_path": "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a11bfe70aa4d3e2ef\\assets\\models\\meshy\\generated\\npc_groundskeeper.glb",
+      "error": null
+    },
+    {
+      "id": "npc_crow_perched",
+      "category": "NPC_TROUPE",
+      "status": "ok",
+      "preview_task_id": "019f69e4-bd64-7528-a87e-71987cc1b874",
+      "preview_status": "SUCCEEDED",
+      "preview_credits": 20,
+      "refine_task_id": "019f69eb-7b4b-722f-b94a-5e26bd00e327",
+      "refine_status": "SUCCEEDED",
+      "refine_credits": 10,
+      "consumed_credits": 30,
+      "glb_path": "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a11bfe70aa4d3e2ef\\assets\\models\\meshy\\generated\\npc_crow_perched.glb",
+      "error": null
+    },
+    {
+      "id": "npc_crow_flapping",
+      "category": "NPC_TROUPE",
+      "status": "ok",
+      "preview_task_id": "019f69e4-c4c3-7a29-a9d0-dd7f8452b98b",
+      "preview_status": "SUCCEEDED",
+      "preview_credits": 20,
+      "refine_task_id": "019f69eb-7dbc-7b89-80d1-62d69f99cd59",
+      "refine_status": "SUCCEEDED",
+      "refine_credits": 10,
+      "consumed_credits": 30,
+      "glb_path": "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a11bfe70aa4d3e2ef\\assets\\models\\meshy\\generated\\npc_crow_flapping.glb",
+      "error": null
+    },
+    {
+      "id": "board_hearse_ornate",
+      "category": "BOARD_DRESSING",
+      "status": "ok",
+      "preview_task_id": "019f69e8-74c0-71bd-a6cb-2351b70cde9c",
+      "preview_status": "SUCCEEDED",
+      "preview_credits": 20,
+      "refine_task_id": "019f69ec-abf0-7652-a9a3-26f93724ae09",
+      "refine_status": "SUCCEEDED",
+      "refine_credits": 10,
+      "consumed_credits": 30,
+      "glb_path": "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a11bfe70aa4d3e2ef\\assets\\models\\meshy\\generated\\board_hearse_ornate.glb",
+      "error": null
+    },
+    {
+      "id": "board_carry_coffin",
+      "category": "BOARD_DRESSING",
+      "status": "ok",
+      "preview_task_id": "019f69e8-7f0c-7e61-9785-0eb71af08ef7",
+      "preview_status": "SUCCEEDED",
+      "preview_credits": 20,
+      "refine_task_id": "019f69ec-ae55-7baf-8823-4cef98ec2352",
+      "refine_status": "SUCCEEDED",
+      "refine_credits": 10,
+      "consumed_credits": 30,
+      "glb_path": "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a11bfe70aa4d3e2ef\\assets\\models\\meshy\\generated\\board_carry_coffin.glb",
+      "error": null
+    },
+    {
+      "id": "board_funeral_wreath",
+      "category": "BOARD_DRESSING",
+      "status": "ok",
+      "preview_task_id": "019f69e8-876f-7ade-b4c1-cda0f5b9aeca",
+      "preview_status": "SUCCEEDED",
+      "preview_credits": 20,
+      "refine_task_id": "019f69ec-b0b7-7bb0-966d-2afd735c0741",
+      "refine_status": "SUCCEEDED",
+      "refine_credits": 10,
+      "consumed_credits": 30,
+      "glb_path": "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a11bfe70aa4d3e2ef\\assets\\models\\meshy\\generated\\board_funeral_wreath.glb",
+      "error": null
+    },
+    {
+      "id": "monument_obelisk_small",
+      "category": "PLACEHOLDER_SWEEP",
+      "status": "ok",
+      "preview_task_id": "019f69e8-8f6d-7ae0-a66c-02e3f504a9c5",
+      "preview_status": "SUCCEEDED",
+      "preview_credits": 20,
+      "refine_task_id": "019f69ec-b31b-7257-94d1-64ee77889c10",
+      "refine_status": "SUCCEEDED",
+      "refine_credits": 10,
+      "consumed_credits": 30,
+      "glb_path": "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a11bfe70aa4d3e2ef\\assets\\models\\meshy\\generated\\monument_obelisk_small.glb",
+      "error": null
+    },
+    {
+      "id": "relic_funerary_urn",
+      "category": "PLACEHOLDER_SWEEP",
+      "status": "ok",
+      "preview_task_id": "019f69e8-97be-71cf-adcd-68211a2c607d",
+      "preview_status": "SUCCEEDED",
+      "preview_credits": 20,
+      "refine_task_id": "019f69ec-b570-7bb1-84f6-100ff69f3380",
+      "refine_status": "SUCCEEDED",
+      "refine_credits": 10,
+      "consumed_credits": 30,
+      "glb_path": "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a11bfe70aa4d3e2ef\\assets\\models\\meshy\\generated\\relic_funerary_urn.glb",
+      "error": null
     }
   ],
   "summary": {
-    "total": 32,
-    "ok": 32,
+    "total": 42,
+    "ok": 42,
     "preview_only": 0,
     "failed": 0,
     "resumed_skip": 0,
-    "total_credits_shipped_assets": 960,
-    "total_credits_actual_spend": 1080
+    "total_credits_shipped_assets": 1260,
+    "total_credits_actual_spend": 1380
   },
   "retired_generations": [
     {
@@ -492,5 +632,5 @@
       "consumed_credits": 30
     }
   ],
-  "note": "All 32 shipped assets generated on meshy-6 (lowpoly, tri, 8k polycount, PBR off). 4 ids regenerated once after contact-sheet review; retired v1 task ids above. Actual cumulative spend 1080 credits (32x30 shipped + 4x30 retired)."
+  "note": "All 32 shipped assets generated on meshy-6 (lowpoly, tri, 8k polycount, PBR off). 4 ids regenerated once after contact-sheet review; retired v1 task ids above. Actual cumulative spend 1080 credits (32x30 shipped + 4x30 retired). | 2026-07-16 NPC-troupe/board-dressing batch: 10 props x30cr = 300cr, 0 failures, appended by the forge lane (the -Only run had clobbered this report down to 10 items; 32-item history restored from git and merged)."
 }

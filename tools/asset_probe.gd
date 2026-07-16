@@ -14,6 +14,9 @@ extends Node3D
 ##                                batch's fixed frames 70/130/190/250). Bigger
 ##                                batches (e.g. 32 props) want more, tighter
 ##                                groups so nothing sits off-camera.
+## --only=a,b,c                   probe only these GLBs (basenames, no .glb) —
+##                                single/few-prop close-up audition. Additive,
+##                                default behavior is unchanged when omitted.
 
 const MESHY_DIR := "res://assets/models/meshy/"
 const PED_TOP := 0.5
@@ -23,6 +26,7 @@ const GROUP_FRAME_STEP := 60
 
 var _n_groups := 4
 var _probe_dir := MESHY_DIR
+var _only: PackedStringArray = []
 
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -30,6 +34,8 @@ func _ready() -> void:
 			_probe_dir = arg.trim_prefix("--dir=")
 		elif arg.begins_with("--groups="):
 			_n_groups = maxi(1, int(arg.trim_prefix("--groups=")))
+		elif arg.begins_with("--only="):
+			_only = arg.trim_prefix("--only=").split(",")
 
 	_build_env()
 	var cam := Camera3D.new()
@@ -39,6 +45,12 @@ func _ready() -> void:
 	_ref_capsule(Vector3(0, 0, 0))
 
 	var names := _glb_names(_probe_dir)
+	if not _only.is_empty():
+		var filtered: Array[String] = []
+		for n in names:
+			if _only.has(n.replace(".glb", "")):
+				filtered.append(n)
+		names = filtered
 	print("PROBE: found %d GLBs in %s: %s" % [names.size(), _probe_dir, str(names)])
 
 	var x := SPACING
