@@ -340,10 +340,13 @@ func _build_hud() -> void:
 	_reveal.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_reveal.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_reveal.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	# No serif ships in the project; Baloo2 is its heaviest, most formal face —
-	# the closest to a will-reading register available. (Follow-up: add a gothic
-	# serif TTF for the Executor's proclamations.)
-	var serif: FontFile = load("res://assets/fonts/Baloo2.ttf")
+	# B2-HOOK: the Executor's proclamations (and the eulogy, same lower-third) are
+	# set in IM Fell English — an OFL-licensed 17th-century gothic serif, the
+	# will-reading register the estate deserves. Scoped to this band only, never
+	# the whole UI. Baloo2 remains the fallback if the face fails to load.
+	var serif: FontFile = load("res://assets/fonts/IMFellEnglish-Regular.ttf")
+	if serif == null:
+		serif = load("res://assets/fonts/Baloo2.ttf")
 	if serif != null:
 		_reveal.add_theme_font_override("normal_font", serif)
 		_reveal.add_theme_font_override("bold_font", serif)
@@ -388,6 +391,7 @@ func _build_hud() -> void:
 	putt.configure(roster, meter_host, _mirror)
 
 	executor.setup(_reveal, cam)
+	executor.embody(self, board, seed_value)   # B2-HOOK: give the host a body (F6/F7)
 	# The endgame kit escalates music + light on the final Deed (juice floor).
 	final_kit = FinalStretch.attach(self, null, {"ticks": false})
 	_refresh_hud()
@@ -536,6 +540,7 @@ func _run_night() -> void:
 		if round_num >= 60:
 			break   # safety cap — a night must always end
 	await _will_reading()
+	await ProcessionEulogy.deliver(self, executor)   # B2-HOOK: procedural closing eulogy (F33)
 	await _heir_crowned()
 	_emit_tally()
 
@@ -625,12 +630,18 @@ func _capture_showcase() -> void:
 	cam.look_at(gp + outward * 0.9 + Vector3(0, 0.85, 0), Vector3.UP)
 	print("SHOWCASE grave_detail cam=", cam.global_position)
 	await _cap_snap("grave_detail")
+	if executor.has_body():
+		await executor.showcase_gestures(self)   # B2-HOOK: host idle + gesture stills (F7)
 	cam.global_position = _cam_home
 	cam.look_at(board.CENTER, Vector3.UP)
 
 func _round() -> void:
 	_phase = "roll"
 	_hide_announce()
+	executor.begin_round()   # B2-HOOK: page-turn the ledger between rounds (F7)
+	if not _fast:
+		_reveal_seat = -1
+		executor.aside(Executor.ROUND_OPENER, Color(0.82, 0.80, 0.92), [round_num])   # B2-HOOK: dead-air aside (F9)
 	# --- ROLL: all live pawns putt at once (own corner meter). ---
 	# Windowed capture: pose the four corner meters mid-charge for a clean shot
 	# before the live roll (the fast soak resolves a real roll in a few frames).
@@ -689,6 +700,7 @@ func _round() -> void:
 	for seat in order:
 		await _reveal_landing(seat)
 	executor.clear_banner()
+	executor.settle_body()   # B2-HOOK: host eases home after the cascade (F7)
 	executor.reset_camera(_cam_home, board.CENTER, 0.4 if not _fast else 0.0)
 	_refresh_hud()
 
@@ -754,6 +766,7 @@ func _reveal_landing(seat: int) -> void:
 	_apply_reveal_badge(seat)
 	if not _fast:
 		executor.push_to(board.reveal_anchor(idx), board.pawns[seat].global_position)
+		await executor.anticipate(idx, seat == _round_codicil_seat)   # B2-HOOK: comic-timing wind-up (F8)
 	var col: Color = roster[seat].color
 	var name := String(roster[seat].name)
 	if seat == _round_codicil_seat:
@@ -1033,6 +1046,7 @@ func _sim_placements() -> Array:
 func _house_awakens() -> void:
 	_phase = "house"
 	executor.clear_banner()
+	executor.gesture_house_rise()   # B2-HOOK: the host rises (F7)
 	_announce_text("THE HOUSE AWAKENS\n\n" + Executor.pick(Executor.HOUSE_AWAKENS, rng),
 		Color(1, 0.4, 0.35))
 	if final_kit:
