@@ -55,7 +55,12 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
   res://tools/sfx_audition.tscn` then answer the 9 MORNING CALLS in
   docs/design/21-sfx-overhaul.md.
 
-  **DECISION CARDS (batched, multiple-choice):** doc 21 §MORNING CALLS
+  **DECISION CARDS — ✅ RATIFIED as-decided by Alex 2026-07-16 ("decision
+  cards were good as decided"), from the road, no playtest yet. SFX calls
+  stand, board rulings stand, Meshy quirks (WELCOME MUT doormat, green-man
+  waypoint) stay as canon, gothic serif choice delegated to the director
+  (night 5 will pick an OFL face for the Executor's lower-thirds).**
+  Original cards for reference: doc 21 §MORNING CALLS
   (SFX, 9 items) · doc 18's eight board calls (all made by me — override
   any) · Meshy quirks kept for your veto: the DOORMAT trophy reads
   "WELCOME MUT", the waypoint stone grew a green-man face · gothic serif
