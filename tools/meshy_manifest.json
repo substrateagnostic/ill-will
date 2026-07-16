@@ -194,7 +194,7 @@
   {
     "id": "npc_mourner_hooded",
     "category": "NPC_TROUPE",
-    "prompt": "A hooded weeping mourner figure in a long dark cloak, hands clasped together in front holding a small handkerchief, head bowed, standing neutral pose, no legs mid-stride, slightly oversized head for readability",
+    "prompt": "A hooded weeping mourner figure shrouded in a full-length floor-sweeping dark mourning cloak that completely hides the legs and feet, hands clasped together in front holding a small handkerchief, head bowed, standing neutral pose, slightly oversized head for readability",
     "target_height_hint": 1.75
   },
   {
@@ -218,7 +218,7 @@
   {
     "id": "npc_crow_flapping",
     "category": "NPC_TROUPE",
-    "prompt": "A black crow with wings fully spread mid-flap, dynamic flying pose, glossy feathers, single distinct object",
+    "prompt": "A black crow mid-flap with both wings raised high above its back in a strong V shape, mid downstroke, chunky rounded bird body clearly visible below the raised wings, glossy black feathers, single distinct object",
     "target_height_hint": 0.4
   },
   {
@@ -248,7 +248,7 @@
   {
     "id": "relic_funerary_urn",
     "category": "PLACEHOLDER_SWEEP",
-    "prompt": "An ornate lidded funerary ash urn, ceremonial and ancient, engraved metal body with a domed lid and small handles, dark aged bronze finish",
+    "prompt": "A tall slender lidded funerary ash urn, much taller than wide, narrow footed base flaring up to a rounded shoulder and a small domed lid, engraved dark aged bronze, ceremonial vase silhouette",
     "target_height_hint": 0.55
   }
 ]

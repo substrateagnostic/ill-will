@@ -17,6 +17,10 @@ extends Node3D
 ## --only=a,b,c                   probe only these GLBs (basenames, no .glb) —
 ##                                single/few-prop close-up audition. Additive,
 ##                                default behavior is unchanged when omitted.
+## --animate                      play each instanced GLB's first animation
+##                                (looped) so rigged/animated models can be
+##                                judged from shots at different frames.
+##                                Additive; static GLBs are unaffected.
 
 const MESHY_DIR := "res://assets/models/meshy/"
 const PED_TOP := 0.5
@@ -27,6 +31,7 @@ const GROUP_FRAME_STEP := 60
 var _n_groups := 4
 var _probe_dir := MESHY_DIR
 var _only: PackedStringArray = []
+var _animate := false
 
 func _ready() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -36,6 +41,8 @@ func _ready() -> void:
 			_n_groups = maxi(1, int(arg.trim_prefix("--groups=")))
 		elif arg.begins_with("--only="):
 			_only = arg.trim_prefix("--only=").split(",")
+		elif arg == "--animate":
+			_animate = true
 
 	_build_env()
 	var cam := Camera3D.new()
@@ -65,6 +72,13 @@ func _ready() -> void:
 			continue
 		var inst: Node3D = res.instantiate()
 		add_child(inst)
+		if _animate:
+			var anim: AnimationPlayer = inst.find_child("AnimationPlayer", true, false)
+			if anim != null and anim.get_animation_list().size() > 0:
+				var first: String = anim.get_animation_list()[0]
+				anim.get_animation(first).loop_mode = Animation.LOOP_LINEAR
+				anim.play(first)
+				print("PROBE_ANIM %s playing '%s' (%.2fs)" % [n, first, anim.get_animation(first).length])
 		var aabb := _merged_aabb(inst)
 		# rest the model's base on the pedestal top, centred over the pedestal
 		var c := aabb.get_center()
