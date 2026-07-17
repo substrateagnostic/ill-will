@@ -526,6 +526,68 @@ func _build_surround() -> void:
 	wall.material_override = wmat
 	wall.position.y = -5.0
 	add_child(wall)
+	_build_pit_bottom()
+
+
+## W3 — THE WELL GETS A BOTTOM. The round-5 ring-out drops losers into flat black;
+## this heaps reused grave GLBs on the pit floor (the table top, ~y=-9.3), tilted
+## and jumbled like a bone pile, and washes them in ONE faint sickly-green glow so
+## the elimination REVEALS where the losers go instead of swallowing them. It all
+## sits far below the play surface and inside the well wall (r<=9.3) — no collision,
+## no per-frame cost, one shadowless omni whose spill stays under the discs.
+func _build_pit_bottom() -> void:
+	var floor_y := -9.25
+	# Director note: the warm tabletop material under the well read as a SHALLOW
+	# brown floor — the pit needs its own darkness before anything can read as
+	# depth. A near-black disc caps the table inside the well wall; everything
+	# below the rim now falls toward black, and only the green pool interrupts it.
+	var dark := MeshInstance3D.new()
+	var disc := CylinderMesh.new()
+	disc.top_radius = 9.25
+	disc.bottom_radius = 9.25
+	disc.height = 0.05
+	dark.mesh = disc
+	var dmat := StandardMaterial3D.new()
+	dmat.albedo_color = Color(0.015, 0.02, 0.02)
+	dmat.roughness = 1.0
+	dark.material_override = dmat
+	dark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	dark.position = Vector3(0, floor_y - 0.04, 0)
+	add_child(dark)
+	# id, x, z, height, tilt_deg, tilt_axis_deg, yaw — a tighter, SMALLER heap
+	# (scaled ~0.6, pulled inward) so from 12+ units above it reads as a distant
+	# pile at the bottom of a shaft, not furniture on a floor.
+	var bones := [
+		["grave_mausoleum_front",   0.4,  4.6, 1.3, 58.0,  20.0, 190.0],
+		["grave_tilted_slab",      -2.4,  3.7, 1.1, 72.0, -30.0, 200.0],
+		["grave_headstone_cracked", 2.5,  3.3, 0.9, 80.0,  60.0, 150.0],
+		["grave_tilted_slab",      -4.3,  1.6, 1.1, 64.0,  10.0, 240.0],
+		["grave_small_obelisk",     4.2,  1.0, 1.0, 84.0, 110.0, 300.0],
+		["grave_tilted_slab",       0.1,  0.0, 1.1, 40.0, -50.0, 175.0],
+		["grave_headstone_cracked",-1.8, -2.7, 0.9, 78.0, 130.0,  90.0],
+		["grave_tilted_slab",       3.1, -2.1, 1.1, 66.0,  40.0, 120.0],
+		["grave_headstone_cracked", 5.5,  4.2, 0.8, 82.0, -20.0, 210.0],
+		["grave_tilted_slab",      -5.4,  3.4, 1.1, 70.0,  70.0, 260.0],
+	]
+	for b in bones:
+		var glb := "res://assets/models/meshy/generated/%s.glb" % str(b[0])
+		if not ResourceLoader.exists(glb):
+			continue
+		var w := MeshyProp.instance(glb, float(b[3]), float(b[6]))
+		w.position = Vector3(float(b[1]), floor_y, float(b[2]))
+		var ax := deg_to_rad(float(b[5]))
+		w.rotate(Vector3(cos(ax), 0.0, sin(ax)), deg_to_rad(float(b[4])))
+		add_child(w)
+	# the sickly glow that makes the heap read from far above (shadowless, cheap):
+	# tighter and hotter than v1 — over the black floor it pools as a green well-
+	# bottom light instead of vanishing into the warm table material.
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(0.34, 0.95, 0.42)
+	glow.light_energy = 3.6
+	glow.omni_range = 11.0
+	glow.shadow_enabled = false
+	glow.position = Vector3(0.3, -8.1, 1.8)
+	add_child(glow)
 
 
 func _build_ui() -> void:

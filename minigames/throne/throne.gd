@@ -1068,6 +1068,7 @@ func _build_stage() -> void:
 	_build_throne()
 	_build_pillars_and_torches()
 	_build_walls()
+	_build_stained_glass()   # W3: kill the dead black over the back wall
 
 func _build_floor() -> void:
 	var floor_body := StaticBody3D.new()
@@ -1232,6 +1233,129 @@ func _build_walls() -> void:
 		mi.mesh = bm
 		mi.material_override = wmat
 		body.add_child(mi)
+
+## W3 — STAINED-GLASS WINDOW. At this pitch the camera looks over the 3.4m back
+## wall into pure black. A tall plum-and-gold pointed-arch window rises behind AND
+## above the throne: procedural emissive panes over dark leading, so it BLOOMS
+## under the CANDLELIT AGX glow and backs the flung-crown climax. The back wall
+## (z=-6.2) occludes its lower body, so only the crown of the window shows over
+## the wall. No new asset, no collision. One shadowless plum omni (nested under
+## the window root so the arena torch-flicker loop never grabs it) spills onto the
+## throne. Purely decorative.
+func _build_stained_glass() -> void:
+	# AGX crushes bright saturated panes toward white, so the gold is amber-shifted
+	# and every emission energy stays moderate — the plum-and-gold must survive the
+	# tonemap as COLOUR, not blow to a white slab (cf. echo_chamber's ring note).
+	var plum := Color(0.52, 0.20, 0.62)
+	var gold := Color(1.0, 0.68, 0.24)
+	var deep := Color(0.34, 0.13, 0.50)
+	var lead := Color(0.03, 0.02, 0.05)
+	var root := Node3D.new()
+	root.name = "StainedGlass"
+	root.position = Vector3(0, 0, -6.62)   # just behind the back wall (z=-6.2)
+	arena.add_child(root)
+	# Director note: alone in the void the lit window read as a floating
+	# billboard. A full-width, barely-lit stone upper wall now rises from the
+	# 3.4m wall line to above the arch — it catches the window's own plum spill,
+	# so the glass sits IN architecture instead of hovering over a gap.
+	var stone := StandardMaterial3D.new()
+	stone.albedo_color = Color(0.085, 0.07, 0.075)
+	stone.roughness = 1.0
+	var upper := MeshInstance3D.new()
+	var uq := QuadMesh.new()
+	uq.size = Vector2(13.2, 7.4)
+	upper.mesh = uq
+	upper.material_override = stone
+	upper.position = Vector3(0, 6.6, -0.2)
+	upper.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(upper)
+	# dark leading backing (rectangular body + pointed arch) a touch further back
+	_glass_quad(root, Vector2(4.34, 5.34), Vector3(0, 5.0, -0.12), lead, 0.0)
+	_glass_prism(root, Vector3(4.34, 2.34, 0.06), Vector3(0, 8.6, -0.12), lead, 0.0)
+	# two slim flanking lancets — dimmer siblings that widen the composition so
+	# the great window reads as part of a clerestory, not a lone screen
+	for side in [-1.0, 1.0]:
+		_glass_quad(root, Vector2(1.06, 3.3), Vector3(side * 3.6, 4.9, -0.12), lead, 0.0)
+		_glass_quad(root, Vector2(0.82, 3.0), Vector3(side * 3.6, 4.9, 0.0),
+			plum if side < 0.0 else deep, 1.1)
+		_glass_prism(root, Vector3(0.82, 0.7, 0.05), Vector3(side * 3.6, 6.75, 0.0), gold, 1.3)
+	# body panes: 3 cols x 5 rows, alternating plum/gold with a bright core column
+	var cols := 3
+	var rows := 5
+	var bw := 4.0
+	var bh := 5.0
+	var gap := 0.14
+	var pw := bw / float(cols) - gap
+	var ph := bh / float(rows) - gap
+	for r in rows:
+		for c in cols:
+			var cx := -bw * 0.5 + (float(c) + 0.5) * (bw / float(cols))
+			var cy := 2.5 + (float(r) + 0.5) * (bh / float(rows))
+			var col := plum if (r + c) % 2 == 0 else gold
+			if c == 1:
+				col = deep if r % 2 == 0 else gold
+			_glass_quad(root, Vector2(pw, ph), Vector3(cx, cy, 0.0), col, 1.9)
+	# a gold rose at the heart (a focal point for the flung crown to bloom against)
+	_glass_disc(root, 0.7, Vector3(0, 5.0, 0.03), gold, 2.4)
+	# the pointed arch: two panes narrowing to the apex over the dark leading
+	_glass_prism(root, Vector3(3.6, 2.0, 0.04), Vector3(0, 8.5, 0.0), plum, 1.8)
+	_glass_prism(root, Vector3(1.7, 1.5, 0.05), Vector3(0, 8.3, 0.02), gold, 2.2)
+	# one shadowless plum omni spilling from the window onto the throne (child of
+	# root => not a direct arena child => the torch-flicker loop leaves it alone)
+	var spill := OmniLight3D.new()
+	spill.light_color = Color(0.6, 0.35, 0.8)
+	spill.light_energy = 1.5
+	spill.omni_range = 9.0
+	spill.shadow_enabled = false
+	spill.position = Vector3(0, 4.6, 1.22)   # local -> world (0, 4.6, -5.4)
+	root.add_child(spill)
+
+## An emissive glass pane (QuadMesh, faces +Z toward the camera). emis<=0 => a
+## flat unlit backing (the dark leading). Shadowless, no collision.
+func _glass_quad(parent: Node3D, size: Vector2, pos: Vector3, color: Color, emis: float) -> void:
+	var mi := MeshInstance3D.new()
+	var qm := QuadMesh.new()
+	qm.size = size
+	mi.mesh = qm
+	mi.material_override = _glass_mat(color, emis)
+	mi.position = pos
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+
+## A triangular pane (PrismMesh, apex +Y, flat face toward +Z) for the arch.
+func _glass_prism(parent: Node3D, size: Vector3, pos: Vector3, color: Color, emis: float) -> void:
+	var mi := MeshInstance3D.new()
+	var pm := PrismMesh.new()
+	pm.size = size
+	mi.mesh = pm
+	mi.material_override = _glass_mat(color, emis)
+	mi.position = pos
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+
+## A round pane (thin cylinder rotated to face +Z) — the rose at the window heart.
+func _glass_disc(parent: Node3D, radius: float, pos: Vector3, color: Color, emis: float) -> void:
+	var mi := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = radius
+	cm.bottom_radius = radius
+	cm.height = 0.04
+	mi.mesh = cm
+	mi.rotation.x = deg_to_rad(90.0)
+	mi.material_override = _glass_mat(color, emis)
+	mi.position = pos
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	parent.add_child(mi)
+
+func _glass_mat(color: Color, emis: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.albedo_color = color
+	m.roughness = 0.55
+	if emis > 0.0:
+		m.emission_enabled = true
+		m.emission = color
+		m.emission_energy_multiplier = emis
+	return m
 
 func _process(delta: float) -> void:
 	# torch flicker (visual only; does not touch gameplay state)

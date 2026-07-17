@@ -24,7 +24,7 @@ extends Node3D
 ## the matching const at its .glb and the member adopts it with no other change.
 
 # ---------------------------------------------------------------- swap-consts
-const CROW_GLB := ""    # "" -> tinted seagull stand-in. A crow may land tonight.
+const CROW_GLB := "res://assets/models/meshy/generated/npc_crow_perched.glb"  # the crow landed (W3): real perched silhouette, no longer a tinted gull
 const SEAGULL_GLB := "res://assets/models/meshy/seagull.glb"
 const GROUNDSKEEPER_GLB := ""   # "" -> KayKit Barbarian, re-tinted muted brown
 const MOURNER_GLB := ""         # "" -> KayKit walker under the ghost shader

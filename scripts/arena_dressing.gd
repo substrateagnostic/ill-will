@@ -43,6 +43,15 @@ static func prop(parent: Node3D, id: String, height: float, pos: Vector3,
 		parent.add_child(l)
 	return node
 
+## THE ESTATE'S SIGNATURE BIRD, perched. `npc_crow_perched` (black, folded wings,
+## alert) is the motif crow — drop it onto the TOP of an existing horizon prop so
+## the same silhouette recurs across the anthology. `pos` is the perch point (the
+## prop's crown, not its base): the crow is seated base-at-y=0 there. NEVER the
+## airborne/flapping variant (director-banned) — perched only. Static, unlit, no
+## collision. No-op with a warning if the GLB is missing (presentation-only).
+static func crow(parent: Node3D, pos: Vector3, yaw_deg := 0.0, height := 0.44) -> Node3D:
+	return prop(parent, "npc_crow_perched", height, pos, yaw_deg)
+
 ## A low, dark, unshaded mound/skerry to ground dressing that floats above a
 ## void or ocean (tilt's sea, greed's black vault) — a cheap silhouette shape,
 ## not meant to be looked at directly. Top sits at `pos.y + height * 0.5`.
