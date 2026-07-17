@@ -163,9 +163,6 @@ var _bell_app := false             # chute-approach drama live
 var _bell_app_ticks := 0           # rising ticks played (drives pitch +0.06)
 var _bell_app_t := 0.0
 var _strobe_base := 0.9            # chute pad emission at rest
-var _tick_players: Array = []      # local pitched pool (bell ticks; séance style)
-var _tick_next := 0
-var _tick_stream: AudioStream = null
 # THE FINAL STRETCH kit (doc 09 §Q1): the CLOSING BELL *is* greed's final
 # stretch — the bell keeps its ticks/banners (ticks:false, no double-trigger,
 # doc 09's reconciliation rule); the kit adds the missing music escalation
@@ -1111,26 +1108,10 @@ func _drive_strobe(ci: int, t: float) -> void:
 
 
 ## Exact-pitch tick (the Sfx pool randomizes pitch; the bell needs a LADDER).
-## Same lazy local-pool trick as the séance's _play_pitched.
+## R9: swapped from a raw `card` sample pulled straight off the bank to the
+## purpose-built, declicked `tick_countdown` family via Sfx.play_pitched.
 func _bell_tick(pitch: float, db: float) -> void:
-	if _tick_players.is_empty():
-		for i in 3:
-			var p := AudioStreamPlayer.new()
-			p.bus = "SFX"
-			add_child(p)
-			_tick_players.append(p)
-	if _tick_stream == null:
-		var bank: Dictionary = Sfx.BANK
-		if bank.has("card") and not (bank["card"] as Array).is_empty():
-			_tick_stream = load("res://assets/audio/%s.ogg" % str(bank["card"][0]))
-	if _tick_stream == null:
-		return
-	var p: AudioStreamPlayer = _tick_players[_tick_next]
-	_tick_next = (_tick_next + 1) % _tick_players.size()
-	p.stream = _tick_stream
-	p.pitch_scale = pitch
-	p.volume_db = db
-	p.play()
+	Sfx.play_pitched("tick_countdown", pitch, db)
 
 
 # ===========================================================================
