@@ -176,3 +176,61 @@ Untouched: crows, seagull, atmosphere, moody lantern, the ghost queue's door.
 | 3 rigs (5 each) | 15 |
 | 4 preset animations (3 each) | 12 |
 | **Rigging-wave total** | **27** |
+
+---
+
+# ARENA HERO PROPS (night 6, lane Z3) — TILT ocean + echo_chamber well
+
+Four hero props to upgrade the arena-reveal work (lane W3 builds zero-forge
+placeholders in parallel; these swap in after director review). Same pipeline —
+`meshy-6`, preview → refine, PBR off, house-style suffix, `tools/meshy_forge.ps1`
+against manifest entries `category: ARENA_HERO`. Ran with `-Only` against a
+**scratch** `-ReportPath` (never the shared `meshy_forge_report.json`, which the
+`Save-Report` rewrite would otherwise clobber to 4 items — the documented
+footgun); results then hand-merged **additively** into the ledger.
+
+## Round 1 (4 props, 120cr, 0 API failures)
+
+Contact sheet: `docs/verify/shots/meshy_hero_Z3_overview.png` (full row + 1.8 m
+REF), `_keeps.png` (bone heap / grasping hands / colossus hand close-up),
+`_colossus_leviathan_v1.png` (colossus hand + leviathan v1).
+Probe: `godot --path . tools/asset_probe.tscn -- --dir=res://assets/models/meshy/generated/
+--only=sea_drowned_colossus_hand,sea_leviathan_fin,pit_bone_heap,pit_grasping_hands
+--groups=4 --shots=45,72,132,192,252 --outdir=verify_out/hero_Z3`.
+
+| Prop | Probe AABB (normalized) | Verdict |
+|---|---|---|
+| `sea_drowned_colossus_hand` | 0.68 × 1.91 × 0.52 | **KEEP** — weathered stone hand + forearm rising vertically, fingers half-open, reads as a colossal statue breaking the surface. Menacing at the TILT splash zone. |
+| `pit_bone_heap` | 1.81 × 0.41 × 1.91 | **KEEP** — low wide mound of jumbled bones with several skulls prominent on the crown; reads clearly from directly above for echo_chamber's well bottom. |
+| `pit_grasping_hands` | 1.14 × 1.90 × 1.13 | **KEEP** — cluster of skeletal hands/forearms splayed and reaching up from a dirt mound; comic-macabre, not gory. Strong funny read — the audition winner for the well bottom. |
+| `sea_leviathan_fin` | 0.75 × 0.74 × 1.91 | **MISS → re-roll** — generated a whole crested sea creature (visible head + legs), not a mostly-submerged dorsal-ridge silhouette. |
+
+## Round 2 — leviathan re-roll (30cr) → REJECTED
+
+Adjusted prompt hard toward an isolated headless fin ("ONLY the fin… no head,
+no face, no legs, no body… like a submarine sail"). Re-roll still wrong:
+`docs/verify/shots/meshy_hero_Z3_leviathan_reject_v2.png` — a chaotic spiky mass
+with a stray white bone/tooth protrusion at the base; no clean fin silhouette.
+
+**Verdict: REJECT `sea_leviathan_fin`** (one re-roll spent, per house rule).
+Meshy keeps composing a full animal / spiky clutter instead of a smooth arch.
+For this specific shape — a slow, smooth, mostly-submerged spine hump reading at
+distance — a **hand-built extruded fin primitive (lane W3) will beat generative**.
+Rejected GLB + textures NOT shipped; both v1 and v2 task ids recorded in
+`meshy_forge_report.json → retired_generations`. The dual-use LAST WILL
+purple-sea humps should use the same hand-built silhouette.
+
+## Credits (arena-hero batch, lane Z3)
+
+| Run | Credits |
+|---|---|
+| Round 1 (4 props × 30) | 120 |
+| Round 2 (leviathan re-roll) | 30 |
+| **Batch total** | **150** |
+| ...of which shipped (3 KEEP × 30) | 90 |
+| ...of which retired (leviathan v1+v2) | 60 |
+
+Balance: **1610 before → 1490 after the 4-prop round → 1460 final** (Δ 150
+total incl. the leviathan re-roll; confirmed via GET /openapi/v1/balance).
+Ample — no top-up needed. Ledger merge is additive: 42→45 items, 7→9 retired,
+summary/note updated.

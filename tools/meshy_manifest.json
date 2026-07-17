@@ -250,5 +250,23 @@
     "category": "PLACEHOLDER_SWEEP",
     "prompt": "A tall slender lidded funerary ash urn, much taller than wide, narrow footed base flaring up to a rounded shoulder and a small domed lid, engraved dark aged bronze, ceremonial vase silhouette",
     "target_height_hint": 0.55
+  },
+  {
+    "id": "sea_drowned_colossus_hand",
+    "category": "ARENA_HERO",
+    "prompt": "A colossal ancient stone statue hand and forearm breaking upward through the water surface, huge fingers half-open and reaching toward the sky, weathered grey estate stone crusted with barnacles and clinging seaweed, monumental and imposing, a single giant hand rising from a broken cracked wrist, dramatic threatening silhouette",
+    "target_height_hint": 5.0
+  },
+  {
+    "id": "pit_bone_heap",
+    "category": "ARENA_HERO",
+    "prompt": "A low mound heap of old weathered bones and round skulls piled together, a jumbled pile of femurs ribs and skulls, dry aged ivory bone, macabre crypt ossuary pile clearly readable when seen from directly above, a single low rounded mound",
+    "target_height_hint": 0.7
+  },
+  {
+    "id": "pit_grasping_hands",
+    "category": "ARENA_HERO",
+    "prompt": "A cluster of several skeletal bony hands on withered forearms reaching straight up out of the ground, fingers splayed and grasping upward at different heights, pale weathered bone, comic spooky graveyard pose not gory, grouped tightly together rising from a small dirt mound base, single grouped object",
+    "target_height_hint": 0.9
   }
 ]
