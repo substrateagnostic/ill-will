@@ -411,12 +411,15 @@ func _start_match() -> void:
 # =====================================================================
 func _physics_process(delta: float) -> void:
 	if _shake > 0.001:
-		cam.h_offset = rng.randf_range(-1, 1) * _shake * 0.3
+		var jx := rng.randf_range(-1, 1)
+		cam.h_offset = jx * _shake * 0.3
 		cam.v_offset = rng.randf_range(-1, 1) * _shake * 0.3
+		ShakeKit.roll(cam, _shake, jx)   # rotational force, reusing the jitter above
 		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+		ShakeKit.clear(cam)
 
 	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
 	if _mirror:
@@ -742,6 +745,8 @@ func _dethrone(slayer: int, dir: Vector3) -> void:
 		Sfx.play("death", -3.0)
 		_flash_banner("%s DETHRONES %s" % [players[slayer].name, players[fallen].name], players[slayer].color, 1.8)
 		_shake = maxf(_shake, 0.95)
+		PlayerInput.rumble_hit(fallen, 0.95)   # RUMBLE: the dethroned pad takes the fall
+		PlayerInput.rumble_hit(slayer, 0.45)   # the usurper feels the blow land
 		_time_hit(0.2, 0.6)      # slow-mo beat as the crown tumbles down the steps
 		# DECIDING MOMENT camera language (doc 09 §9.3/Q2): sync a fov punch
 		# 49->44->49 to the same 0.6s window — LL's "cheap KO camera" lesson.

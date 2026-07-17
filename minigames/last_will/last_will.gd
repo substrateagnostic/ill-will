@@ -591,12 +591,15 @@ func _physics_process(delta: float) -> void:
 		return
 	game_time += delta
 	if _shake > 0.001:
-		cam.h_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.3
+		var jx := _fx_rng.randf_range(-1, 1)
+		cam.h_offset = jx * _shake * 0.3
 		cam.v_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.3
+		ShakeKit.roll(cam, _shake, jx)   # rotational force, reusing the jitter above
 		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+		ShakeKit.clear(cam)
 
 	match phase:
 		Phase.INTRO:
@@ -1023,6 +1026,9 @@ func _on_pawn_died(index: int, cause: String) -> void:
 		Sfx.play("death")
 		_spawn_burst(pawn.global_position + Vector3(0, 0.4, 0), players[index].color, 30)
 		_shake = maxf(_shake, 0.5)
+		PlayerInput.rumble_hit(index, 0.5)   # RUMBLE: a death on the funeral road
+		if kev_killer >= 0 and kev_killer != index:
+			PlayerInput.rumble_hit(kev_killer, 0.3)
 		# THE DECIDING MOMENT (doc 09 §10.2/§Q2): a death that leaves <=1 racer
 		# with lives gets the deep freeze (the will theater's own -6 fov beat
 		# follows it); ordinary deaths demote to 0.5x/0.2s.
@@ -1320,6 +1326,10 @@ func _on_finish(i: int) -> void:
 		_flash_exec(EXEC_CRYPT, 4.0)
 		_spawn_burst(pawns[i].global_position + Vector3(0, 1.2, 0), players[i].color, 30)
 		VerifyCapture.snap("finish")
+		# THE DECIDING MOMENT (doc 09 §Q2): first-to-the-crypt is this race's whole
+		# identity — give the win the shared fov punch + newsreel capture, like every
+		# other game's climax. Self-gates on reduced-motion inside the kit.
+		FinalStretch.fov_punch(cam, _cam_base_fov, 6.0, 0.8, "TO THE CRYPT")
 	# probate closes: pending drafts are dropped with regrets
 	if not _will_queue.is_empty():
 		_will_queue.clear()
@@ -2464,12 +2474,15 @@ func _mirror_tick(delta: float) -> void:
 		return
 	game_time += delta
 	if _shake > 0.001:
-		cam.h_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.3
+		var jx := _fx_rng.randf_range(-1, 1)
+		cam.h_offset = jx * _shake * 0.3
 		cam.v_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.3
+		ShakeKit.roll(cam, _shake, jx)   # rotational force, reusing the jitter above
 		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+		ShakeKit.clear(cam)
 	var racing := phase == Phase.RACE
 	if racing:
 		race_elapsed += delta       # resynced every apply; drives the hard-cap

@@ -451,8 +451,10 @@ func _process(delta: float) -> void:
 	cam.global_transform = _cam_base
 	if _shake > 0.002:
 		_shake = maxf(0.0, _shake - delta * 1.4)
-		cam.position += Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
-			fx_rng.randf_range(-1, 1)) * _shake * 0.4
+		var j := Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
+			fx_rng.randf_range(-1, 1))
+		cam.position += j * _shake * 0.4
+		ShakeKit.roll(cam, _shake, j.x)   # rotational force, reusing the jitter above
 	if widow:
 		widow.tick(delta, game_t)
 	for p in players:
@@ -588,6 +590,9 @@ func _catch(victim: int) -> void:
 	me.flash_pop()
 	if not _reduced_motion():
 		_shake = maxf(_shake, 0.5)
+	PlayerInput.rumble_hit(victim, 0.5)   # RUMBLE: the "gotcha" freeze-catch, the game's core verb
+	if killer >= 0 and killer != victim:
+		PlayerInput.rumble_hit(killer, 0.3)
 	Sfx.play("crush", -2.0)
 	Sfx.play("death", -6.0)
 	var deciding := _is_deciding_catch(victim, dropped)

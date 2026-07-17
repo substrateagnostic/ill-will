@@ -373,8 +373,10 @@ func _process(delta: float) -> void:
 	cam.global_transform = _cam_base
 	if _shake > 0.002:
 		_shake = maxf(0.0, _shake - delta * 1.4)
-		cam.position += Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
-			fx_rng.randf_range(-1, 1)) * _shake * 0.35
+		var j := Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
+			fx_rng.randf_range(-1, 1))
+		cam.position += j * _shake * 0.35
+		ShakeKit.roll(cam, _shake, j.x)   # rotational force, reusing the jitter above
 	# HUD timer (host); the mirror rides the snapshot
 	if not _mirror:
 		if phase == Phase.PLAY:
@@ -532,6 +534,8 @@ func _drop_team(t: int, cause: String) -> void:
 	if not _reduced_motion() and not _no_juice:
 		_shake = maxf(_shake, 0.4)
 		_time_hit(0.4, 0.22)
+		for slot in team.slots:   # RUMBLE: both bearers feel the coffin hit the ground
+			PlayerInput.rumble_hit(int(carriers[slot].roster_index), 0.4)
 	# a drop on the downhill = a RUNAWAY
 	if float(team.pos2.y) <= DOWN_Z0 and float(team.pos2.y) >= DOWN_Z1 + -2.0:
 		team.phase = TeamPhase.RUNAWAY
@@ -593,6 +597,11 @@ func _team_finish(t: int) -> void:
 	_finish_order.append(t)
 	if winner_team < 0:
 		winner_team = t
+		# THE DECIDING MOMENT (doc 09 §Q2): the coffin crossing into the crypt is the
+		# win — give it the shared fov punch + newsreel capture. Skipped on the
+		# byte-stable tally path; self-gates on reduced-motion inside the kit.
+		if not _no_juice:
+			FinalStretch.fov_punch(cam, 60.0, 6.0, 0.8, "TO THE CRYPT")
 	Sfx.play("bell_toll", -1.0)
 	_cap_event("finish")
 	_log("finish team=%d t=%.2f" % [t, game_t])

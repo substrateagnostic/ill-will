@@ -1230,11 +1230,14 @@ func _process(delta: float) -> void:
 	# camera shake (static rig + additive offset)
 	if camera:
 		if _shake > 0.002:
-			var off := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * _shake * 0.35
+			var jx := randf_range(-1, 1)
+			var off := Vector3(jx, randf_range(-1, 1), 0) * _shake * 0.35
 			camera.position = _cam_base + off
+			ShakeKit.roll(camera, _shake, jx)   # rotational force, reusing the jitter above
 			_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
 		else:
 			camera.position = _cam_base
+			ShakeKit.clear(camera)
 	# perf watchdog (spec: >8ms -> thin oldest ghosts / drop shadows)
 	_perf_accum += Performance.get_monitor(Performance.TIME_PROCESS)
 	_perf_frames += 1
@@ -1425,6 +1428,7 @@ func _on_death(victim: int, is_fall: bool, killer: int = -1, cause: String = "sh
 		_meddle.add_ghost(victim, str(_names[victim]), _colors[victim], fighters[victim].global_position)
 		_refresh_meddle_hints()
 	_shake = maxf(_shake, 0.7 if self_echo else 0.55)
+	PlayerInput.rumble_hit(victim, 0.7 if self_echo else 0.55)   # RUMBLE: the KO'd pad feels it
 	_spawn_death_fx(fighters[victim].global_position, _colors[victim])
 	# THE DECIDING MOMENT (doc 09 §Q2): a KO inside the final round's dying 10
 	# seconds decides the match — there is no time to answer it. Deep freeze +

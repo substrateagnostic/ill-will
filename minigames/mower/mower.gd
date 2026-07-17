@@ -638,6 +638,10 @@ func _enter_overtime() -> void:
 	Sfx.play("grudge")
 	Sfx.play("round_over", -4.0)
 	_shake = maxf(_shake, 0.25)
+	# THE DECIDING MOMENT (doc 09 §Q2): OVERTIME is mower's sudden-death stakes-spike
+	# — punch the camera in (the tally's own pull-BACK survey comes later on the
+	# freeze beat). Self-gates on reduced-motion inside the kit.
+	FinalStretch.fov_punch(cam, 52.0, 6.0, 0.8, "OVERTIME")
 	_log("overtime t=%.1f" % round_t)
 
 func _end_round() -> void:
@@ -762,11 +766,14 @@ func _process(delta: float) -> void:
 	# camera shake
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - delta * 1.4)
-		cam.h_offset = randf_range(-1, 1) * _shake * 0.25
+		var jx := randf_range(-1, 1)
+		cam.h_offset = jx * _shake * 0.25
 		cam.v_offset = randf_range(-1, 1) * _shake * 0.25
+		ShakeKit.roll(cam, _shake, jx)   # rotational force, reusing the jitter above
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+		ShakeKit.clear(cam)
 	# engine put-put: stagger ticks across mowers so it reads as chugging
 	_engine_t -= delta
 	if _engine_t <= 0.0 and phase == Phase.PLAY and not mowers.is_empty():

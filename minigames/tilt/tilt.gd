@@ -509,15 +509,18 @@ func _tick_splats() -> void:
 func _process(delta: float) -> void:
 	if phase == Phase.WAITING:
 		return
-	# camera: subtle roll WITH the platter (<= 3 deg) + shake
+	# camera: subtle roll WITH the platter (<= 3 deg) + a shake-driven force roll
+	# (ShakeKit) folded into the same rotate — reusing the shake jitter, no new draw.
 	var roll := clampf(platter.tilt.x * 0.14, -deg_to_rad(3.0), deg_to_rad(3.0))
 	cam.global_transform = _cam_base
-	cam.rotate_object_local(Vector3(0, 0, 1), roll)
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - delta * 1.1)
-		cam.position += Vector3(
+		var j := Vector3(
 			fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
-			fx_rng.randf_range(-1, 1)) * _shake * 0.35
+			fx_rng.randf_range(-1, 1))
+		roll += deg_to_rad(ShakeKit.MAX_ROLL_DEG) * clampf(_shake, 0.0, 1.0) * j.x
+		cam.position += j * _shake * 0.35
+	cam.rotate_object_local(Vector3(0, 0, 1), roll)
 	# coin twirl + splat fade
 	for c in loose_coins:
 		(c.node as Node3D).rotation.y += 2.5 * delta
@@ -715,6 +718,9 @@ func _on_edge_fall(p: int) -> void:
 		_kill_events.append({"killer": shover, "victim": p, "cause": "ring_out"})
 	Sfx.play("death")
 	_shake = maxf(_shake, 0.3)
+	PlayerInput.rumble_hit(p, 0.45)   # RUMBLE: the faller feels the plunge off the platter
+	if shover >= 0 and shover != p:
+		PlayerInput.rumble_hit(shover, 0.25)
 	# THE DECIDING MOMENT (doc 09 §Q2): the fall that ENDS the round gets the
 	# deep freeze + fov punch; every other fall gets the demoted 0.5x/0.2s
 	# beat (doc 08's anti-goal — deep slow-mo is reserved, not routine).

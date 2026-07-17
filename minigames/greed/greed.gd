@@ -562,8 +562,10 @@ func _process(delta: float) -> void:
 	cam.global_transform = _cam_base
 	if _shake > 0.002:
 		_shake = maxf(0.0, _shake - delta * 1.4)
-		cam.position += Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
-			fx_rng.randf_range(-1, 1)) * _shake * 0.4
+		var j := Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
+			fx_rng.randf_range(-1, 1))
+		cam.position += j * _shake * 0.4
+		ShakeKit.roll(cam, _shake, j.x)   # rotational force, reusing the jitter above
 	if pot:
 		pot.tick(delta)
 	for p in players:
@@ -731,6 +733,8 @@ func _drop_carrier(victim: int, tackler: int) -> void:
 	_spark_burst(drop_pos + Vector3(0, 1.0, 0), kdir, roster[tackler].color, 1.0)
 	if not _reduced_motion():
 		_shake = maxf(_shake, 0.45)
+	PlayerInput.rumble_hit(victim, 0.45)    # RUMBLE: mugged — the carrier feels the tackle
+	PlayerInput.rumble_hit(tackler, 0.25)   # the mugger feels the steal land
 	_coin_burst(drop_pos + Vector3(0, 1.0, 0), 22)
 	Sfx.play("splat", -1.0)
 	Sfx.play("death", -6.0)
@@ -778,6 +782,11 @@ func _do_bank(p: int) -> void:
 	carrier_index = -1
 	# ceremony
 	_bank_ceremony(p, amount)
+	# THE DECIDING MOMENT (doc 09 §Q2): a bank under the closing bell — LAST BANKS,
+	# greed's make-or-break beat — earns the shared fov punch + newsreel capture the
+	# other games fire on their climax. Self-gates on reduced-motion inside the kit.
+	if _bell_last:
+		FinalStretch.fov_punch(cam, 56.0, 6.0, 0.8, "LAST BANKS")
 	_ev_banks += 1
 	_ev_last_bank = [p, amount]
 	_set_bell_approach(false)
