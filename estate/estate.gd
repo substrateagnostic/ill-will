@@ -333,7 +333,7 @@ var _title_layer: Control = null
 ## PLAY = the full game, immediately. Resumes an in-progress run at its
 ## between-nights rest; otherwise begins a fresh run at night one.
 func _play_pressed() -> void:
-	Sfx.play("confirm")
+	Sfx.play("ui_confirm")
 	_hide_title()
 	_fill_empty_seats_with_bots()
 	PlayerInput.save_setup()
@@ -358,7 +358,7 @@ func _play_pressed() -> void:
 func _build_play_panel() -> void:
 	phase = Phase.LOBBY
 	_hide_title()
-	Sfx.play("card")
+	Sfx.play("ui_move")
 	_clear_panel("PLAY — how does the estate settle its debts tonight?", Color(1, 0.9, 0.5))
 	# --- THE PROCESSION: the featured night mode ---
 	var proc_btn := Button.new()
@@ -390,7 +390,7 @@ func _build_play_panel() -> void:
 	dial.custom_minimum_size = Vector2(220, 44)
 	dial.text = _deed_goal_label()
 	dial.pressed.connect(func():
-		Sfx.play("card")
+		Sfx.play("ui_move")
 		_cycle_deed_goal()
 		dial.text = _deed_goal_label())
 	dial_row.add_child(dial)
@@ -478,7 +478,7 @@ func _enter_procession() -> void:
 func _build_slot_panel() -> void:
 	phase = Phase.LOBBY
 	_hide_title()
-	Sfx.play("card")
+	Sfx.play("ui_move")
 	_clear_panel("THE THREE ESTATES — pick where tonight happens", Color(0.9, 0.95, 0.9))
 	for n in [1, 2, 3]:
 		var row := HBoxContainer.new()
@@ -496,7 +496,7 @@ func _build_slot_panel() -> void:
 		load_btn.custom_minimum_size = Vector2(170, 46)
 		load_btn.text = "PLAY THIS ESTATE"
 		load_btn.pressed.connect(func():
-			Sfx.play("confirm")
+			Sfx.play("ui_confirm")
 			EstateState.load_slot(n)
 			EstateState.pending_play = true
 			get_tree().reload_current_scene())
@@ -609,21 +609,21 @@ func _enter_title_swap() -> void:
 	settings.text = "SETTINGS"
 	settings.custom_minimum_size = Vector2(160, 56)
 	settings.pressed.connect(func():
-		Sfx.play("card")
+		Sfx.play("ui_move")
 		PartySetup.toggle())
 	row.add_child(settings)
 	var mini := Button.new()
 	mini.text = "MINIGAMES"
 	mini.custom_minimum_size = Vector2(170, 56)
 	mini.pressed.connect(func():
-		Sfx.play("card")
+		Sfx.play("ui_move")
 		_enter_selector())
 	row.add_child(mini)
 	var ward := Button.new()
 	ward.text = "WARDROBE"
 	ward.custom_minimum_size = Vector2(160, 56)
 	ward.pressed.connect(func():
-		Sfx.play("card")
+		Sfx.play("ui_move")
 		phase = Phase.LOBBY
 		_hide_title()
 		_build_wardrobe_panel())
@@ -744,7 +744,7 @@ func _build_lobby_panel() -> void:
 		status_btn.disabled = status == "REMOTE"
 		status_btn.pressed.connect(func():
 			_cycle_seat_status(i)
-			Sfx.play("card")
+			Sfx.play("ui_move")
 			_build_lobby_panel())
 		row.add_child(status_btn)
 		var dev_btn := Button.new()
@@ -767,7 +767,7 @@ func _build_lobby_panel() -> void:
 			dev_btn.pressed.connect(func():
 				PlayerInput.assign(i, _next_free_device(i))
 				PlayerInput.set_bot(i, false)
-				Sfx.play("card")
+				Sfx.play("ui_move")
 				_build_lobby_panel())
 		row.add_child(dev_btn)
 		var chip := _make_ready_chip()
@@ -795,7 +795,7 @@ func _build_lobby_panel() -> void:
 		var opts := [3, 5, 7]
 		EstateState.night_length = opts[(opts.find(EstateState.night_length) + 1) % opts.size()]
 		len_btn.text = "NIGHT: %d GAMES" % EstateState.night_length
-		Sfx.play("card"))
+		Sfx.play("ui_move"))
 	btn_row.add_child(len_btn)
 	var start_btn := Button.new()
 	start_btn.name = "StartBtn"
@@ -869,7 +869,7 @@ func _start_night_from_lobby() -> void:
 	$Trail.reset_pawns()
 	banner.visible = false
 	$UI/TopBar.visible = true
-	Sfx.play("confirm")
+	Sfx.play("ui_confirm")
 	if EstateState.nights_played > 0:
 		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.5)
 	_enter_grounds()
@@ -997,13 +997,13 @@ func _try_start_night_from_lobby() -> void:
 	if waiting.is_empty():
 		_start_night_from_lobby()
 		return
-	Sfx.play("invalid")
+	Sfx.play("ui_error")
 	_flash("WAITING ON %s - HOST MAY HOLD START" % ", ".join(_seat_names(waiting)), Color(1.0, 0.72, 0.35), 2.0)
 
 func _force_start_night_from_lobby() -> void:
 	if phase != Phase.LOBBY:
 		return
-	Sfx.play("confirm")
+	Sfx.play("ui_confirm")
 	_start_night_from_lobby()
 
 func _seat_names(seats: Array) -> Array:
@@ -1041,7 +1041,7 @@ func _claim_seat_for_device(dev: int) -> int:
 			_lobby_ready.erase(i)
 			_join_ready_lock[i] = true
 			PlayerInput.save_setup()
-			Sfx.play("confirm")
+			Sfx.play("ui_confirm")
 			var glyph: String = PartySetup.DEVICE_NAMES.get(dev, "A DEVICE")
 			_flash("%s JOINS THE PARTY (%s)" % [GameState.PLAYER_NAMES[i], glyph], GameState.PLAYER_COLORS[i], 2.2)
 			# NIT 4: the join flash fades on its own; do NOT restore the "ILL WILL"
@@ -1079,7 +1079,7 @@ func _release_lobby_seat(seat: int) -> void:
 	_lobby_ready.erase(seat)
 	_join_ready_lock.erase(seat)
 	PlayerInput.save_setup()
-	Sfx.play("card")
+	Sfx.play("ui_move")
 	_flash("%s LEAVES THE COUCH" % GameState.PLAYER_NAMES[seat], GameState.PLAYER_COLORS[seat], 1.8)
 	if phase == Phase.LOBBY:
 		_build_lobby_panel()
@@ -1112,7 +1112,7 @@ func _poll_lobby_ready() -> void:
 			_lobby_ready[i] = not _lobby_ready.get(i, false)
 			if _netprobe != "":
 				print("NETPROBE toggle seat=%d ready=%s pf=%d" % [i, str(_lobby_ready[i]), pf])
-			Sfx.play("card")
+			Sfx.play("ui_move")
 			var row := phase_box.get_node_or_null("SeatRow%d" % i)
 			if row:
 				var chip := row.get_node_or_null("ReadyChip")

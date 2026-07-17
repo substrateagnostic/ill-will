@@ -26,10 +26,10 @@ static func host_night_pressed(estate) -> void:
 	if not NetSession.is_online():
 		var err: int = NetSession.host_night()
 		if err != OK:
-			Sfx.play("invalid")
+			Sfx.play("ui_error")
 			estate._flash("THE ESTATE COULD NOT OPEN ITS DOORS (port %d is otherwise engaged)" % NetSession.DEFAULT_PORT, Color(0.9, 0.6, 0.6), 3.0)
 			return
-	Sfx.play("confirm")
+	Sfx.play("ui_confirm")
 	estate._enter_lobby()
 
 ## A guest knocked. Seat policy is the shell's: first BOT/EMPTY chair becomes
@@ -48,7 +48,7 @@ static func on_seat_requested(estate, peer_id: int) -> void:
 			estate._lobby_ready.erase(i)
 			estate._join_ready_lock.erase(i)
 			NetSession.grant_seat(peer_id, i)
-			Sfx.play("confirm")
+			Sfx.play("ui_confirm")
 			estate._flash("%s JOINS FROM AFAR" % GameState.PLAYER_NAMES[i], GameState.PLAYER_COLORS[i], 2.2)
 			estate.get_tree().create_timer(2.3).timeout.connect(func():
 				if estate.get_phase_name() == "LOBBY":
@@ -84,11 +84,11 @@ static func on_panel_intent(estate, seat: int, intent: Dictionary) -> void:
 			if estate._ready_gate_active and seat in estate._ready_gate_needed:
 				if not estate._ready_gate_ready.get(seat, false):
 					estate._ready_gate_ready[seat] = true
-					Sfx.play("confirm")
+					Sfx.play("ui_confirm")
 					estate._refresh_ready_gate_countdown()
 			elif estate.get_phase_name() == "LOBBY" or estate.get_phase_name() == "GROUNDS":
 				estate._lobby_ready[seat] = not estate._lobby_ready.get(seat, false)
-				Sfx.play("card")
+				Sfx.play("ui_move")
 				if estate.get_phase_name() == "LOBBY":
 					estate._build_lobby_panel()
 		"bid":
@@ -226,7 +226,7 @@ static func build_walker_state(estate, seq: int) -> Dictionary:
 static func build_join_panel(estate, lobby_phase: int) -> void:
 	estate.phase = lobby_phase
 	estate._hide_title()
-	Sfx.play("card")
+	Sfx.play("ui_move")
 	estate._clear_panel("JOIN A NIGHT — the host reads you their code", Color(0.9, 0.95, 0.9))
 	var entry := LineEdit.new()
 	entry.name = "JoinEntry"
@@ -251,10 +251,10 @@ static func build_join_panel(estate, lobby_phase: int) -> void:
 	join.pressed.connect(func():
 		var err: int = NetSession.join_night(entry.text)
 		if err != OK:
-			Sfx.play("invalid")
+			Sfx.play("ui_error")
 			status.text = "that code does not parse — check it with the host"
 		else:
-			Sfx.play("card")
+			Sfx.play("ui_move")
 			status.text = "knocking at the estate gate...")
 	row.add_child(join)
 	var back := Button.new()
@@ -468,7 +468,7 @@ static func client_build_panel(estate, client_last_state: Dictionary) -> void:
 	ready_btn.text = "READY"
 	ready_btn.custom_minimum_size = Vector2(200, 52)
 	ready_btn.pressed.connect(func():
-		Sfx.play("card")
+		Sfx.play("ui_move")
 		NetSession.send_panel_intent({"kind": "ready_toggle"}))
 	btn_row.add_child(ready_btn)
 	var leave_btn := Button.new()

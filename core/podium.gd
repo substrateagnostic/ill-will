@@ -211,6 +211,11 @@ func stage_entries(entries: Array) -> void:
 		add_child(tag)
 	_confetti()
 	Sfx.play("match_win")
+	# R9 — THE FIRST DUCKING SCAFFOLD's first caller: dip the Music bus under the
+	# sting so it (and the deferred toll below) actually cut through the light
+	# bed instead of fighting it. Bus-level, so it never touches play_slot's own
+	# crossfade; ~1.5s hold comfortably covers the 0.5s toll deferral below.
+	Music.duck(-6.0, 1.5)
 	# A single distant toll layered UNDER the sting — the estate tolling for an
 	# heir. Additive (never replaces match_win); deferred a beat so it reads as a
 	# far bell after the flourish. Both host and mirror reach here, so both ring.

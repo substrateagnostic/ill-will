@@ -35,9 +35,6 @@ var escalated := false
 var _timer_label: Label = null
 var _use_vignette := true
 var _use_ticks := true
-var _tick_players: Array = []
-var _tick_next := 0
-var _tick_stream: AudioStream = null
 var _last_tick_s := -1
 var _base_font_size := -1
 var _vig_mat: ShaderMaterial = null
@@ -110,8 +107,17 @@ func tick(seconds_left: float) -> void:
 ## BEFORE the reduced-motion gate: the moment is worth remembering even for a
 ## player who has asked the camera to hold still. `context` names the still
 ## (default THE DECIDING MOMENT) and rides into the newsreel's intertitle card.
-static func fov_punch(cam: Camera3D, base_fov: float, depth := 6.0, dur := 0.8, context := "") -> void:
+##
+## R9: one tasteful stinger rides along with the punch — the visual language
+## for this moment shipped long ago, the audio language didn't. `stinger`
+## defaults to the ambiguous `stinger_reveal` cue (a caller who knows the
+## moment is a clean win/loss may pass stinger_win/stinger_lose/stinger_dread
+## instead); pass "" to opt out. Plays before the reduced-motion gate, same as
+## the capture above — it's a sound, not a camera move, so it isn't motion.
+static func fov_punch(cam: Camera3D, base_fov: float, depth := 6.0, dur := 0.8, context := "", stinger := "stinger_reveal") -> void:
 	MomentScribe.capture("deciding", context if context != "" else "THE DECIDING MOMENT", 3)
+	if stinger != "":
+		Sfx.play(stinger)
 	if cam == null or not motion_ok():
 		return
 	var tw := cam.create_tween()
@@ -143,27 +149,11 @@ func _process(delta: float) -> void:
 	_vig_now = lerpf(_vig_now, target, 1.0 - exp(-3.0 * delta))
 	_vig_mat.set_shader_parameter("strength", _vig_now)
 
-## Exact-pitch tick voice pool (the Sfx pool wobbles pitch; a LADDER needs
-## exact steps — greed's `_bell_tick` precedent, generalized here).
+## Exact-pitch tick (R9: swapped from a repurposed UI click to the
+## purpose-built, declicked `tick_countdown` family — Sfx.play_pitched
+## already supports an exact pitch for a LADDER; no local voice pool needed).
 func _play_tick(pitch: float) -> void:
-	if _tick_players.is_empty():
-		for i in 2:
-			var p := AudioStreamPlayer.new()
-			p.bus = "SFX"
-			add_child(p)
-			_tick_players.append(p)
-	if _tick_stream == null:
-		var wav := "res://assets/audio/click_001.wav"
-		_tick_stream = load(wav) if ResourceLoader.exists(wav) \
-				else load("res://assets/audio/click_001.ogg")
-	if _tick_stream == null:
-		return
-	var p: AudioStreamPlayer = _tick_players[_tick_next]
-	_tick_next = (_tick_next + 1) % _tick_players.size()
-	p.stream = _tick_stream
-	p.pitch_scale = pitch
-	p.volume_db = TICK_DB
-	p.play()
+	Sfx.play_pitched("tick_countdown", pitch, TICK_DB)
 
 ## Timer pulse: a font-size punch (layout-safe for any anchor preset, unlike
 ## a scale pop on a full-rect label). Reduced-motion drops the pulse, keeps

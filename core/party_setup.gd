@@ -212,7 +212,7 @@ func quit_to_title() -> void:
 	PlayerInput.save_setup()
 	_save_prefs()
 	Music.stop()
-	Sfx.play("card")
+	Sfx.play("ui_back")
 	free_stray_root_nodes()
 	get_tree().change_scene_to_file("res://estate/estate.tscn")
 
@@ -251,7 +251,7 @@ func _input(event: InputEvent) -> void:
 		PlayerInput.set_key_binding(_bind_device, _listen_action, event.physical_keycode)
 		_stop_listen()
 		_rebuild_controls()
-		Sfx.play("confirm")
+		Sfx.play("ui_confirm")
 		return
 	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
 		toggle()
@@ -453,14 +453,14 @@ func _reclaim_disconnected_seat(device: int) -> void:
 	PlayerInput.assign(_disconnect_seat, device)
 	PlayerInput.set_bot(_disconnect_seat, false)
 	PlayerInput.save_setup()
-	Sfx.play("confirm")
+	Sfx.play("ui_confirm")
 	_end_disconnect_overlay()
 
 func _convert_disconnected_seat_to_bot() -> void:
 	PlayerInput.set_bot(_disconnect_seat, true)
 	PlayerInput.assign(_disconnect_seat, -99)
 	PlayerInput.save_setup()
-	Sfx.play("card")
+	Sfx.play("ui_move")
 	_end_disconnect_overlay()
 
 func _end_disconnect_overlay() -> void:
@@ -537,7 +537,7 @@ func _on_net_host_pause(paused: bool) -> void:
 	if _hostpause_root == null:
 		return
 	_hostpause_root.visible = paused
-	Sfx.play("card", -6.0)
+	Sfx.play("ui_move", -6.0)
 
 ## The wire went dark while the curtain was up — drop it so a guest is not left
 ## staring at "held breath" after it has already been kicked back to the title.
@@ -611,7 +611,7 @@ func _rebuild_seats() -> void:
 		bot_btn.pressed.connect(func():
 			PlayerInput.set_bot(i, not PlayerInput.is_bot(i))
 			bot_btn.text = "BOT" if PlayerInput.is_bot(i) else "HUMAN"
-			Sfx.play("card"))
+			Sfx.play("ui_move"))
 		row.add_child(bot_btn)
 		var dev_btn := Button.new()
 		dev_btn.custom_minimum_size = Vector2(240, 48)
@@ -621,7 +621,7 @@ func _rebuild_seats() -> void:
 			var next: int = DEVICE_CYCLE[(cur + 1) % DEVICE_CYCLE.size()]
 			PlayerInput.assign(i, next)
 			dev_btn.text = DEVICE_NAMES.get(next, "UNASSIGNED")
-			Sfx.play("card"))
+			Sfx.play("ui_move"))
 		row.add_child(dev_btn)
 		_seats_box.add_child(row)
 	var hint := Label.new()
@@ -686,7 +686,7 @@ func _rebuild_controls() -> void:
 	reset.pressed.connect(func():
 		PlayerInput.reset_key_bindings(_bind_device)
 		_rebuild_controls()
-		Sfx.play("card"))
+		Sfx.play("ui_move"))
 	var reset_c := CenterContainer.new()
 	reset_c.add_child(reset)
 	_controls_box.add_child(reset_c)
@@ -708,7 +708,7 @@ func _rebuild_controls() -> void:
 		sw.button_pressed = PlayerInput.pad_swapped(pad)
 		sw.toggled.connect(func(v: bool):
 			PlayerInput.set_pad_swap(pad, v)
-			Sfx.play("card"))
+			Sfx.play("ui_move"))
 		var sc := CenterContainer.new()
 		sc.add_child(sw)
 		_controls_box.add_child(sc)
@@ -744,7 +744,7 @@ func _build_game_tab() -> Control:
 	nights.selected = maxi(0, [3, 5, 7].find(int(pref("night_length", 3))))
 	nights.item_selected.connect(func(idx: int):
 		set_pref("night_length", [3, 5, 7][idx])
-		Sfx.play("card"))
+		Sfx.play("ui_move"))
 	row1.add_child(nights)
 	v.add_child(row1)
 	var row2 := HBoxContainer.new()
@@ -760,7 +760,7 @@ func _build_game_tab() -> Control:
 	rounds.selected = maxi(0, [2, 3, 4, 5].find(int(pref("mg_rounds", 4))))
 	rounds.item_selected.connect(func(idx: int):
 		set_pref("mg_rounds", [2, 3, 4, 5][idx])
-		Sfx.play("card"))
+		Sfx.play("ui_move"))
 	row2.add_child(rounds)
 	v.add_child(row2)
 	var theater := CheckButton.new()
@@ -768,7 +768,7 @@ func _build_game_tab() -> Control:
 	theater.button_pressed = bool(pref("theater_in_pool", false))
 	theater.toggled.connect(func(on: bool):
 		set_pref("theater_in_pool", on)
-		Sfx.play("card"))
+		Sfx.play("ui_move"))
 	var tc := CenterContainer.new()
 	tc.add_child(theater)
 	v.add_child(tc)
@@ -822,7 +822,7 @@ func _volume_row(label: String, key: String, def: float, bus_name: String) -> Co
 		_apply_volume(bus_name, v)
 		pct.text = "%d%%" % roundi(v * 100)
 		if bus_name == "SFX":
-			Sfx.play("card", -6.0))
+			Sfx.play("ui_move", -6.0))
 	row.add_child(s)
 	row.add_child(pct)
 	return row
@@ -849,7 +849,7 @@ func _build_video_tab() -> Control:
 	ob.item_selected.connect(func(idx: int):
 		_prefs["video_mode"] = modes[idx]
 		_apply_video_prefs()
-		Sfx.play("card"))
+		Sfx.play("ui_move"))
 	row.add_child(ob)
 	v.add_child(row)
 	var vs := CheckButton.new()
@@ -858,7 +858,7 @@ func _build_video_tab() -> Control:
 	vs.toggled.connect(func(on: bool):
 		_prefs["vsync"] = on
 		_apply_video_prefs()
-		Sfx.play("card"))
+		Sfx.play("ui_move"))
 	var vc := CenterContainer.new()
 	vc.add_child(vs)
 	v.add_child(vc)
@@ -883,7 +883,7 @@ func _build_access_tab() -> Control:
 	shake.button_pressed = bool(pref("screen_shake", true))
 	shake.toggled.connect(func(on: bool):
 		_prefs["screen_shake"] = on
-		Sfx.play("card"))
+		Sfx.play("ui_move"))
 	var sc := CenterContainer.new()
 	sc.add_child(shake)
 	v.add_child(sc)
@@ -903,7 +903,7 @@ func _build_access_tab() -> Control:
 		var id: String = PALETTE_IDS[idx]
 		_prefs["palette"] = id
 		GameState.apply_palette(id)
-		Sfx.play("card"))
+		Sfx.play("ui_move"))
 	prow.add_child(pob)
 	v.add_child(prow)
 	# UI SCALE — persists to pref "ui_scale", drives content_scale_factor.
