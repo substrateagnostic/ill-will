@@ -15,6 +15,17 @@ const SPIN_DUR := 2.2
 const HOLD := 0.55
 const DIAM := 384.0
 
+# THE STOP BUTTON (W6) — a prominent, entirely powerless control. Presentation
+# only: the wheel's outcome is decided by the sim before it ever spins, so this
+# button does nothing to it and emits nothing to the net mirror. It depresses,
+# waits a beat, and files one deadpan line. The lines escalate by press count and
+# hold at the last, across the whole night (the estate keeps count).
+const STOP_TOAST := [
+	"The wheel has received your input.",
+	"The wheel will proceed.",
+	"The wheel appreciates your continued involvement.",
+]
+
 # Wedge tints — a purple séance family, each distinct so the four read apart
 # (title text rides on top; never colour alone).
 const WEDGE_COLORS: Array[Color] = [
@@ -28,6 +39,13 @@ var fast := false
 var _needle := 0.0                 # radians, 0 = up, clockwise
 var _landed := -1                  # slot to highlight once settled (-1 = none)
 var _titles: Array[String] = []
+# STOP button (W6). Built once when the dial is interactive (windowed, not fast);
+# a child of the dial so it fades and hides exactly with it, and never draws in a
+# headless/fast run.
+var _stop_btn: Button = null
+var _toast: Label = null
+var _toast_tw: Tween = null
+var _stop_count := 0
 
 func setup(host: Control, slot_titles: Array, is_fast: bool) -> void:
 	fast = is_fast
@@ -43,6 +61,80 @@ func setup(host: Control, slot_titles: Array, is_fast: bool) -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	visible = false
 	host.add_child(self)
+	# The dial is only ever interactive in a real windowed sitting; the fast soak
+	# and any headless run never build the button, so it can't touch the receipt.
+	if not fast and DisplayServer.get_name() != "headless":
+		_build_stop_ui()
+
+## The powerless STOP control + its deadpan toast. Both children of the dial, so
+## the dial's visibility and modulate carry them.
+func _build_stop_ui() -> void:
+	_stop_btn = Button.new()
+	_stop_btn.text = "STOP"
+	_stop_btn.focus_mode = Control.FOCUS_NONE
+	_stop_btn.custom_minimum_size = Vector2(184, 58)
+	_stop_btn.size = _stop_btn.custom_minimum_size
+	_stop_btn.pivot_offset = _stop_btn.custom_minimum_size * 0.5
+	_stop_btn.add_theme_font_size_override("font_size", 26)
+	# Centred horizontally, just below the disc (the dial sits above screen centre,
+	# so this lands near centre — prominent, clear of the wedges).
+	_stop_btn.position = Vector2(DIAM * 0.5 - 92.0, DIAM + 8.0)
+	_stop_btn.pressed.connect(_on_stop_pressed)
+	add_child(_stop_btn)
+	_toast = Label.new()
+	_toast.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_toast.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_toast.custom_minimum_size = Vector2(DIAM + 80.0, 0)
+	_toast.size = Vector2(DIAM + 80.0, 40.0)
+	_toast.position = Vector2(-40.0, DIAM + 78.0)
+	_toast.add_theme_font_size_override("font_size", 21)
+	_toast.add_theme_color_override("font_color", Color(0.92, 0.87, 0.76))
+	_toast.add_theme_color_override("font_outline_color", Color(0.05, 0.04, 0.07))
+	_toast.add_theme_constant_override("outline_size", 6)
+	_toast.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_toast.visible = false
+	add_child(_toast)
+
+## Press → depress → a beat → a deadpan toast. Never touches _landed / the spin /
+## the sim; sends nothing across the wire. Pure joy (W6).
+func _on_stop_pressed() -> void:
+	if _stop_btn != null:
+		_stop_btn.scale = Vector2(0.93, 0.93)
+		var tw := create_tween()
+		tw.tween_property(_stop_btn, "scale", Vector2.ONE, 0.18) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	Sfx.play("card", -8.0)
+	var idx := mini(_stop_count, STOP_TOAST.size() - 1)
+	_stop_count += 1
+	var line: String = STOP_TOAST[idx]
+	get_tree().create_timer(0.35).timeout.connect(func() -> void: _show_toast(line))
+
+func _show_toast(text: String) -> void:
+	if _toast == null:
+		return
+	_toast.text = text
+	_toast.visible = true
+	_toast.modulate.a = 0.0
+	if _toast_tw != null and _toast_tw.is_valid():
+		_toast_tw.kill()
+	_toast_tw = create_tween()
+	_toast_tw.tween_property(_toast, "modulate:a", 1.0, 0.2)
+	_toast_tw.tween_interval(2.4)
+	_toast_tw.tween_property(_toast, "modulate:a", 0.0, 0.4)
+	_toast_tw.tween_callback(func() -> void:
+		if _toast != null:
+			_toast.visible = false)
+
+## --- dev capture (W6): windowed-only, drives the button for a screenshot. ---
+func debug_show() -> void:
+	_needle = 0.0
+	_landed = -1
+	visible = true
+	modulate.a = 1.0
+	queue_redraw()
+
+func debug_press_stop() -> void:
+	_on_stop_pressed()
 
 ## Spin the needle to the pre-decided slot and settle. Async; the caller awaits
 ## it so the outcome text lands AFTER the wheel does. Instant/no-op under fast.
