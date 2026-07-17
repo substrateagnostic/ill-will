@@ -1392,6 +1392,20 @@ func _build_drowned_graveyard() -> void:
 	# a crow on the drowned mausoleum's crown (top ~OCEAN_Y + show, nudged along
 	# the lean); the tilt makes it read as clinging to a sinking tomb
 	ArenaDressing.crow(self, Vector3(3.1, OCEAN_Y + 1.7, 12.7), 210.0, 0.5)
+	# Z3 HERO — THE DROWNED COLOSSUS. A colossal stone hand + forearm breaks the
+	# surface among the graves, fingers half-open toward the platter: whoever was
+	# buried in this sea was not buried whole. Same sink math as the graves, same
+	# no-collision/no-light contract; at r≈12 it frames the fall without ever
+	# entering the play volume.
+	# (placement note: the play camera at (0,15.5,14.5) crops the NEAR water —
+	# anything past z≈9 exits the bottom of frame. The hand rises in the far-left
+	# open water, in clear view between the platter rim and the mausoleum skerry.)
+	var hand_vis := 6.5
+	var hand_show := 4.6
+	var hand := ArenaDressing.prop(self, "sea_drowned_colossus_hand", hand_vis,
+		Vector3(-11.5, OCEAN_Y - (hand_vis - hand_show), -5.5), 330.0)
+	if hand != null:
+		hand.rotate(Vector3(1.0, 0.0, 0.2).normalized(), deg_to_rad(7.0))
 
 ## W3 — ONE SLOW THING CIRCLING. A dark half-submerged back + dorsal fin cutting a
 ## lazy loop through the open water outside the drowned graves: threatening, a

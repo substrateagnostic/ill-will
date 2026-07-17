@@ -554,39 +554,42 @@ func _build_pit_bottom() -> void:
 	dark.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	dark.position = Vector3(0, floor_y - 0.04, 0)
 	add_child(dark)
-	# id, x, z, height, tilt_deg, tilt_axis_deg, yaw — a tighter, SMALLER heap
-	# (scaled ~0.6, pulled inward) so from 12+ units above it reads as a distant
-	# pile at the bottom of a shaft, not furniture on a floor.
-	var bones := [
-		["grave_mausoleum_front",   0.4,  4.6, 1.3, 58.0,  20.0, 190.0],
-		["grave_tilted_slab",      -2.4,  3.7, 1.1, 72.0, -30.0, 200.0],
-		["grave_headstone_cracked", 2.5,  3.3, 0.9, 80.0,  60.0, 150.0],
-		["grave_tilted_slab",      -4.3,  1.6, 1.1, 64.0,  10.0, 240.0],
-		["grave_small_obelisk",     4.2,  1.0, 1.0, 84.0, 110.0, 300.0],
-		["grave_tilted_slab",       0.1,  0.0, 1.1, 40.0, -50.0, 175.0],
-		["grave_headstone_cracked",-1.8, -2.7, 0.9, 78.0, 130.0,  90.0],
-		["grave_tilted_slab",       3.1, -2.1, 1.1, 66.0,  40.0, 120.0],
-		["grave_headstone_cracked", 5.5,  4.2, 0.8, 82.0, -20.0, 210.0],
-		["grave_tilted_slab",      -5.4,  3.4, 1.1, 70.0,  70.0, 260.0],
+	# Z3 HERO — the real bones. A forged bone heap (skulls up, reads from directly
+	# above) is the centerpiece; forged grasping skeletal hands reach out of the
+	# dark around it; a few sunken slabs keep the crypt vintage. White bone under
+	# the green pool over the black floor — the reveal the round-5 fall deserves.
+	# id, x, z, visual_height, yaw  (+ optional tilt via the pairs below)
+	var relics := [
+		["pit_bone_heap",           0.3,  1.8, 1.0, 200.0],
+		["pit_grasping_hands",     -3.1,  3.4, 1.6,  40.0],
+		["pit_grasping_hands",      3.4, -0.6, 1.4, 250.0],
+		["pit_grasping_hands",     -0.9, -3.0, 1.2, 130.0],
+		["grave_tilted_slab",      -4.6,  0.2, 1.1,  240.0],
+		["grave_headstone_cracked", 4.8,  3.6, 0.9,  150.0],
+		["grave_tilted_slab",       2.2,  4.8, 1.0,  120.0],
 	]
-	for b in bones:
+	var tilts := {4: [64.0, 10.0], 5: [80.0, 60.0], 6: [66.0, 40.0]}   # slabs lie fallen
+	for idx in relics.size():
+		var b: Array = relics[idx]
 		var glb := "res://assets/models/meshy/generated/%s.glb" % str(b[0])
 		if not ResourceLoader.exists(glb):
 			continue
-		var w := MeshyProp.instance(glb, float(b[3]), float(b[6]))
+		var w := MeshyProp.instance(glb, float(b[3]), float(b[4]))
 		w.position = Vector3(float(b[1]), floor_y, float(b[2]))
-		var ax := deg_to_rad(float(b[5]))
-		w.rotate(Vector3(cos(ax), 0.0, sin(ax)), deg_to_rad(float(b[4])))
+		if tilts.has(idx):
+			var t: Array = tilts[idx]
+			var ax := deg_to_rad(float(t[1]))
+			w.rotate(Vector3(cos(ax), 0.0, sin(ax)), deg_to_rad(float(t[0])))
 		add_child(w)
-	# the sickly glow that makes the heap read from far above (shadowless, cheap):
-	# tighter and hotter than v1 — over the black floor it pools as a green well-
-	# bottom light instead of vanishing into the warm table material.
+	# the sickly glow that makes the bones read from far above (shadowless, cheap):
+	# hot green pooled over the black floor — white bone catches it and nothing
+	# else down there does.
 	var glow := OmniLight3D.new()
 	glow.light_color = Color(0.34, 0.95, 0.42)
-	glow.light_energy = 3.6
-	glow.omni_range = 11.0
+	glow.light_energy = 4.2
+	glow.omni_range = 12.0
 	glow.shadow_enabled = false
-	glow.position = Vector3(0.3, -8.1, 1.8)
+	glow.position = Vector3(0.3, -8.0, 1.6)
 	add_child(glow)
 
 
