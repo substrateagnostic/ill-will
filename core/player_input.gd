@@ -351,6 +351,46 @@ func get_aim_stick(p: int) -> Vector2:
 	var v := Vector2(Input.get_joy_axis(d, JOY_AXIS_RIGHT_X), Input.get_joy_axis(d, JOY_AXIS_RIGHT_Y))
 	return v if v.length() > 0.25 else Vector2.ZERO
 
+## ----- controller rumble (couch haptics; JUICE W5, first in project) ----------
+##
+## The physical channel orthogonal to screenshake: each pad buzzes independently,
+## so a 4-player couch game can tell EACH player "that hit was yours" without a
+## shared-screen tradeoff. Presentation ONLY — it drives Input.start_joy_vibration
+## and nothing else, never sim state / rng / the clock, so a headless receipt (all
+## bots) is byte-identical whether a pad is plugged in or not.
+##
+## Guarded to a no-op for every seat that has no local pad to shake: bots, remote
+## peers (their own client rumbles from mirrored facts), keyboard halves (-1/-2),
+## mouse/shared (-3/-4), unassigned (-99), and under headless. Only a real local
+## gamepad (device id >= 0) vibrates. Durations are hard-capped at 0.4s — the house
+## rule is impact PULSES, never a continuous motor (which drains pads and numbs).
+
+const RUMBLE_MAX_DUR := 0.4
+
+## Buzz seat `p`'s pad. weak/strong are the two motor magnitudes in [0,1] (weak =
+## the light high-freq motor, strong = the heavy low-freq one); dur in seconds,
+## capped at RUMBLE_MAX_DUR. Godot auto-stops the motor after `dur`.
+func rumble(p: int, weak: float, strong: float, dur: float) -> void:
+	if is_bot(p) or _remote.has(p):
+		return
+	var d := device_of(p)
+	if d < 0:
+		return                       # keyboard / mouse / shared / unassigned: no pad
+	if DisplayServer.get_name() == "headless":
+		return
+	Input.start_joy_vibration(d, clampf(weak, 0.0, 1.0), clampf(strong, 0.0, 1.0),
+		clampf(dur, 0.0, RUMBLE_MAX_DUR))
+
+## Convenience for the HIT KIT: a pad pulse derived from the SAME 0..1 magnitude a
+## site already feeds the screenshake (`_shake = maxf(_shake, mag)`), so haptics
+## and shake escalate together. Light hits tick the high-freq motor; heavy hits lean
+## on the low-freq motor and hold a hair longer (still <= 0.4s). No-op if mag<=0.
+func rumble_hit(p: int, mag: float) -> void:
+	var s := clampf(mag, 0.0, 1.0)
+	if s <= 0.0:
+		return
+	rumble(p, 0.35 * s, s, clampf(0.10 + 0.28 * s, 0.0, RUMBLE_MAX_DUR))
+
 ## Verification hook (--aimprobe): pin a synthetic world-space aim for player p.
 ## Pass Vector3.ZERO to clear. Never called during normal play.
 func set_debug_aim(p: int, world_dir: Vector3) -> void:

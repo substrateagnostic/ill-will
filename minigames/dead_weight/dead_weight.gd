@@ -609,6 +609,9 @@ func _on_fighter_fell(index: int) -> void:
 		_spawn_death_fx(death_pos, players[index].color)
 		_flash_banner(credit_line, credit_color, 2.0)
 		_shake = maxf(_shake, 0.5)
+		PlayerInput.rumble_hit(index, 0.5)   # RUMBLE: the KO'd body feels it
+		if kill_killer >= 0 and kill_killer != index:
+			PlayerInput.rumble_hit(kill_killer, 0.3)
 		# THE DECIDING MOMENT (doc 09 §8.2/§Q2): the fall that leaves one body
 		# standing gets the deep freeze + fov punch ("LAST ONE STANDING" rides
 		# the round banner below); ordinary falls demote to 0.5x/0.2s.

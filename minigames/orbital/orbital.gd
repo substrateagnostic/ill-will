@@ -838,12 +838,15 @@ func _do_kill(pw: OrbPawn, bb: OrbBall) -> void:
 	Sfx.play("splat")
 	Sfx.play("death")
 	_kill_impact(bb.vel.length())  # speed-scaled VISUAL punch; sim slow-mo unchanged
+	PlayerInput.rumble_hit(victim, 0.7)   # RUMBLE: the orbited pawn (haptic only; camera basis untouched)
 	_spawn_burst(pw.body_center(), pawn_color(victim), 30)
 	if killer == victim:
 		_flash_banner("%s ORBITED THEMSELF" % pawn_name(victim), pawn_color(victim), 2.2)
 	elif killer >= 0:
 		kills[killer] += 1
 		_points[killer] += KILL_POINTS
+		PlayerInput.rumble_hit(killer, 0.35)   # RUMBLE: the thrower feels the hit connect
+
 		if ball_age > GHOST_AGE:
 			_currency.append({"type": "royalty", "player": killer, "amount": 1,
 				"reason": "ghost orbit kill (%ds old)" % int(ball_age)})

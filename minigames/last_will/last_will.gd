@@ -1026,6 +1026,9 @@ func _on_pawn_died(index: int, cause: String) -> void:
 		Sfx.play("death")
 		_spawn_burst(pawn.global_position + Vector3(0, 0.4, 0), players[index].color, 30)
 		_shake = maxf(_shake, 0.5)
+		PlayerInput.rumble_hit(index, 0.5)   # RUMBLE: a death on the funeral road
+		if kev_killer >= 0 and kev_killer != index:
+			PlayerInput.rumble_hit(kev_killer, 0.3)
 		# THE DECIDING MOMENT (doc 09 §10.2/§Q2): a death that leaves <=1 racer
 		# with lives gets the deep freeze (the will theater's own -6 fov beat
 		# follows it); ordinary deaths demote to 0.5x/0.2s.

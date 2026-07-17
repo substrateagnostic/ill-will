@@ -534,6 +534,8 @@ func _drop_team(t: int, cause: String) -> void:
 	if not _reduced_motion() and not _no_juice:
 		_shake = maxf(_shake, 0.4)
 		_time_hit(0.4, 0.22)
+		for slot in team.slots:   # RUMBLE: both bearers feel the coffin hit the ground
+			PlayerInput.rumble_hit(int(carriers[slot].roster_index), 0.4)
 	# a drop on the downhill = a RUNAWAY
 	if float(team.pos2.y) <= DOWN_Z0 and float(team.pos2.y) >= DOWN_Z1 + -2.0:
 		team.phase = TeamPhase.RUNAWAY

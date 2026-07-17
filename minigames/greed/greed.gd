@@ -736,6 +736,8 @@ func _drop_carrier(victim: int, tackler: int) -> void:
 	_spark_burst(drop_pos + Vector3(0, 1.0, 0), kdir, roster[tackler].color, 1.0)
 	if not _reduced_motion():
 		_shake = maxf(_shake, 0.45)
+	PlayerInput.rumble_hit(victim, 0.45)    # RUMBLE: mugged — the carrier feels the tackle
+	PlayerInput.rumble_hit(tackler, 0.25)   # the mugger feels the steal land
 	_coin_burst(drop_pos + Vector3(0, 1.0, 0), 22)
 	Sfx.play("splat", -1.0)
 	Sfx.play("death", -6.0)

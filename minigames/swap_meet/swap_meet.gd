@@ -1071,6 +1071,9 @@ func _do_swap(a: SwapKart, b: SwapKart, golden: bool) -> void:
 	_swap_fx(pos_a, a.color, b.color)
 	_swap_fx(pos_b, b.color, a.color)
 	_shake = maxf(_shake, 0.55 if golden else 0.4)
+	# RUMBLE: both karts feel their kinematic souls yanked out from under them
+	PlayerInput.rumble_hit(a.index, 0.55 if golden else 0.4)
+	PlayerInput.rumble_hit(b.index, 0.55 if golden else 0.4)
 	Sfx.play("sink")
 	Sfx.play("bumper", -4.0)
 	# accounting

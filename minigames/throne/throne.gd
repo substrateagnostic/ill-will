@@ -745,6 +745,8 @@ func _dethrone(slayer: int, dir: Vector3) -> void:
 		Sfx.play("death", -3.0)
 		_flash_banner("%s DETHRONES %s" % [players[slayer].name, players[fallen].name], players[slayer].color, 1.8)
 		_shake = maxf(_shake, 0.95)
+		PlayerInput.rumble_hit(fallen, 0.95)   # RUMBLE: the dethroned pad takes the fall
+		PlayerInput.rumble_hit(slayer, 0.45)   # the usurper feels the blow land
 		_time_hit(0.2, 0.6)      # slow-mo beat as the crown tumbles down the steps
 		# DECIDING MOMENT camera language (doc 09 §9.3/Q2): sync a fov punch
 		# 49->44->49 to the same 0.6s window — LL's "cheap KO camera" lesson.

@@ -718,6 +718,9 @@ func _on_edge_fall(p: int) -> void:
 		_kill_events.append({"killer": shover, "victim": p, "cause": "ring_out"})
 	Sfx.play("death")
 	_shake = maxf(_shake, 0.3)
+	PlayerInput.rumble_hit(p, 0.45)   # RUMBLE: the faller feels the plunge off the platter
+	if shover >= 0 and shover != p:
+		PlayerInput.rumble_hit(shover, 0.25)
 	# THE DECIDING MOMENT (doc 09 §Q2): the fall that ENDS the round gets the
 	# deep freeze + fov punch; every other fall gets the demoted 0.5x/0.2s
 	# beat (doc 08's anti-goal — deep slow-mo is reserved, not routine).

@@ -590,6 +590,9 @@ func _catch(victim: int) -> void:
 	me.flash_pop()
 	if not _reduced_motion():
 		_shake = maxf(_shake, 0.5)
+	PlayerInput.rumble_hit(victim, 0.5)   # RUMBLE: the "gotcha" freeze-catch, the game's core verb
+	if killer >= 0 and killer != victim:
+		PlayerInput.rumble_hit(killer, 0.3)
 	Sfx.play("crush", -2.0)
 	Sfx.play("death", -6.0)
 	var deciding := _is_deciding_catch(victim, dropped)

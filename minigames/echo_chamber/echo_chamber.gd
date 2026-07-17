@@ -1314,6 +1314,7 @@ func _on_death(victim: int, is_fall: bool, killer: int = -1, cause: String = "sh
 		_meddle.add_ghost(victim, str(_names[victim]), _colors[victim], fighters[victim].global_position)
 		_refresh_meddle_hints()
 	_shake = maxf(_shake, 0.7 if self_echo else 0.55)
+	PlayerInput.rumble_hit(victim, 0.7 if self_echo else 0.55)   # RUMBLE: the KO'd pad feels it
 	_spawn_death_fx(fighters[victim].global_position, _colors[victim])
 	# THE DECIDING MOMENT (doc 09 §Q2): a KO inside the final round's dying 10
 	# seconds decides the match — there is no time to answer it. Deep freeze +
