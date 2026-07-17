@@ -10,6 +10,16 @@ extends Node
 ## These are copied from scripts/ball.gd and scripts/putt_controller.gd.  The
 ## board projection is analytic because the rail is one-dimensional; its meter
 ## bands are computed from that exact distance, never from hand-tuned buckets.
+##
+## W8 — THE RESHUFFLED GREEN (night 6, Alex's call): the six band WINDOWS stay
+## where the physics puts them, but the VALUE printed on each window is drawn
+## fresh every roll (one shared permutation for all four seats, dealt from the
+## host's roll rng and mirrored in _net_state). Fixed ascending values had
+## turned the putt into muscle memory — release-past-half was always 4. Now
+## every roll is a read: find the number you need, then time the needle to
+## THAT window. The physics beneath is untouched; the estate merely re-deals
+## the lawn. (This deliberately re-froze the seed-7 receipt — the deal consumes
+## rng — see the W8 commit for the old/new records.)
 
 signal seat_released(seat: int, power: float, release_tick: int, spaces: int)
 signal all_released(results: Array)
@@ -38,6 +48,9 @@ class PuttMeter:
 	var ratio := 0.0
 	var released := false
 	var result_spaces := 0
+	# W8: the roll's dealt band values, window-order left→right (index 0 = the
+	# nearest window). Colors and numerals travel with the VALUE, not the window.
+	var bands: Array[int] = [1, 2, 3, 4, 5, 6]
 
 	func _ready() -> void:
 		mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -68,17 +81,18 @@ class PuttMeter:
 			var half := ProcessionPawnPutt.ratio_for_distance(SPACE_DISTANCE * SWEET_HALF_SPACE)
 			var rr := Rect2(bar.position.x + (center - half) * bar.size.x, bar.position.y,
 				maxf(3.0, half * 2.0 * bar.size.x), bar.size.y)
-			var c := Color("65d58b") if n <= 3 else Color("f4c95d")
+			var val: int = bands[n - 1] if n - 1 < bands.size() else n
+			var c := Color("65d58b") if val <= 3 else Color("f4c95d")
 			draw_rect(rr, Color(c.r, c.g, c.b, 0.56), true)
-			draw_string(font, Vector2(rr.position.x + 2, bar.position.y + 22), str(n),
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Color(0.06, 0.05, 0.08))
+			draw_string(font, Vector2(rr.position.x + 2, bar.position.y + 22), str(val),
+				HORIZONTAL_ALIGNMENT_LEFT, -1, 18, Color(0.06, 0.05, 0.08))
 		var fill := Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y))
 		draw_rect(fill, Color(pcolor.r, pcolor.g, pcolor.b, 0.34), true)
 		var needle_x := bar.position.x + bar.size.x * ratio
 		draw_line(Vector2(needle_x, bar.position.y - 4),
 			Vector2(needle_x, bar.end.y + 4), Color.WHITE, 4.0)
 		draw_rect(bar, Color(0.82, 0.72, 0.42), false, 2.0)   # gold bar frame
-		var foot := "HOLD A · RELEASE ON A BAND"
+		var foot := "HOLD A · PICK YOUR NUMBER"
 		if released:
 			foot = "SEALED — %d SPACE%s" % [result_spaces, "" if result_spaces == 1 else "S"]
 		# Full hint fits: the box is wider and the footer set at 18px inside a
@@ -114,6 +128,9 @@ var bot_start_ticks: Array[int] = []
 var bot_target_ratios: Array[float] = []
 var meters: Array = []
 var _net_intents := {}
+# W8: this roll's dealt value order, window-index → printed value. One shared
+# deal for all four seats (host deals in begin_roll, mirrors receive it).
+var band_order: Array[int] = [1, 2, 3, 4, 5, 6]
 
 func configure(players: Array, ui_parent: Control, net_mirror := false) -> void:
 	roster = players
@@ -135,13 +152,25 @@ func begin_roll(targets: Array[int], rng: RandomNumberGenerator) -> void:
 	roll_tick = 0
 	_net_intents.clear()
 	_reset_arrays()
+	# W8: deal this roll's green — one shared permutation of the printed values.
+	# Drawn from the host's roll rng (deterministic per seed; mirrors never deal,
+	# they receive band_order via _net_apply).
+	band_order = [1, 2, 3, 4, 5, 6]
+	for k in range(band_order.size() - 1, 0, -1):
+		var j := rng.randi_range(0, k)
+		var tmp: int = band_order[k]
+		band_order[k] = band_order[j]
+		band_order[j] = tmp
 	for i in roster.size():
 		bot_enabled[i] = bool((roster[i] as Dictionary).get("bot", false))
 		var target := clampi(int(targets[i]) if i < targets.size() else 3, 1, TARGET_SPACES)
+		# W8: bots want a VALUE; aim at whichever window it was dealt to.
+		var phys := band_order.find(target) + 1
 		var jitter := rng.randf_range(-0.012, 0.012)
-		bot_target_ratios[i] = clampf(ratio_for_spaces(float(target)) + jitter, 0.0, 1.0)
+		bot_target_ratios[i] = clampf(ratio_for_spaces(float(phys)) + jitter, 0.0, 1.0)
 		bot_start_ticks[i] = rng.randi_range(18, 58)
 		var m: PuttMeter = meters[i]
+		m.bands = band_order.duplicate()
 		m.visible = true
 		m.set_readout(0.0, false, 0)
 
@@ -158,6 +187,7 @@ func stage_midcharge(values: Array[float]) -> void:
 		var ratio := float(values[i]) if i < values.size() else 0.5
 		ratios[i] = ratio
 		var m: PuttMeter = meters[i]
+		m.bands = band_order.duplicate()
 		m.visible = true
 		m.set_readout(ratio, false, 0)
 
@@ -229,7 +259,7 @@ func _release(i: int, power: float, tick: int) -> void:
 	powers[i] = clampf(power, MIN_SPEED, MAX_SPEED)
 	release_ticks[i] = tick
 	ratios[i] = ratio_for_speed(powers[i])
-	spaces[i] = spaces_for_power(powers[i])
+	spaces[i] = value_for_physical(spaces_for_power(powers[i]))
 	(meters[i] as PuttMeter).set_readout(ratios[i], true, spaces[i])
 	Sfx.play("putt", -9.0 + 8.0 * ratios[i], 0.0)
 	seat_released.emit(i, powers[i], tick, spaces[i])
@@ -302,7 +332,8 @@ func _place_meter(m: Control, i: int) -> void:
 func _net_state() -> Dictionary:
 	return {"active": active, "tick": roll_tick, "ratios": ratios.duplicate(),
 		"powers": powers.duplicate(), "released": released.duplicate(),
-		"release_ticks": release_ticks.duplicate(), "spaces": spaces.duplicate()}
+		"release_ticks": release_ticks.duplicate(), "spaces": spaces.duplicate(),
+		"bands": band_order.duplicate()}
 
 func _net_apply(state: Dictionary) -> void:
 	active = bool(state.get("active", false))
@@ -312,8 +343,12 @@ func _net_apply(state: Dictionary) -> void:
 	released.assign(state.get("released", []))
 	release_ticks.assign(state.get("release_ticks", []))
 	spaces.assign(state.get("spaces", []))
+	# W8: mirrors never deal — they wear the host's green verbatim.
+	if state.has("bands"):
+		band_order.assign(state.get("bands", []))
 	for i in mini(meters.size(), ratios.size()):
 		var m: PuttMeter = meters[i]
+		m.bands = band_order.duplicate()
 		m.visible = active or (i < released.size() and released[i])
 		m.set_readout(ratios[i], i < released.size() and released[i],
 			spaces[i] if i < spaces.size() else 0)
@@ -328,8 +363,16 @@ func preview_spaces(seat: int) -> int:
 	if seat < released.size() and released[seat]:
 		return spaces[seat] if seat < spaces.size() else 0
 	if seat < holding.size() and holding[seat] and ratios[seat] > 0.02:
-		return spaces_for_power(speed_for_ratio(ratios[seat]))
+		return value_for_physical(spaces_for_power(speed_for_ratio(ratios[seat])))
 	return 0
+
+## W8: the printed value of a physical band window. Windows 1..6 wear this
+## roll's dealt values; the over-slam window (a max-power release projects past
+## band 6) keeps its raw count — the lawn re-deals its numbers, not its physics.
+func value_for_physical(phys: int) -> int:
+	if phys >= 1 and phys <= TARGET_SPACES and phys - 1 < band_order.size():
+		return band_order[phys - 1]
+	return phys
 
 static func projected_distance(speed: float) -> float:
 	# The 1-D rail projection of Par's frozen exponential roll.
