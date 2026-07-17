@@ -26,6 +26,8 @@ const BoardFx := preload("res://estate/procession/board_fx.gd")
 const SeanceWheelScene := preload("res://estate/procession/seance_wheel.gd")
 const MinigameRouletteScene := preload("res://estate/procession/minigame_roulette.gd")
 const VendettaStakes := preload("res://estate/procession/vendetta_stakes.gd")
+const TextFit := preload("res://estate/procession/text_fit.gd")
+const Minimap := preload("res://estate/procession/board_minimap.gd")
 
 const CHAR_SCENES := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -106,6 +108,7 @@ var _mirror := false
 var _preset_explicit := false
 var _capture := false            # windowed: pose beats + snap for screenshots
 var _vendettatest := false       # dev flag: force the board-drama presentation with bot data (screenshots)
+var _longnames := false          # dev flag (W9): worst-case long names to stress the text surfaces
 var _drama_prng := RandomNumberGenerator.new()   # PRESENTATION stream: interim lines + epitaph pick, never the sim rng
 var _epitaphs: Array = []        # per seat: epitaph String a duel winner hung ("" = none)
 var _epitaph_tags := {}          # seat -> Label3D (the persistent gravestone tag riding the pawn)
@@ -132,21 +135,39 @@ var _ui: CanvasLayer
 var _topbar: Control
 var _chiprow: Control
 var _reveal: RichTextLabel
+var _reveal_font: Font                  # the reveal band's face (for measuring the fit)
 var _lowerthird: PanelContainer         # dark scrim housing the reveal line
 var _reveal_badge: PlayerBadge          # affected-player portrait in the lower-third
 var _reveal_seat := -1                  # seat the current reveal line is about (-1 = none)
+var _minimap: Minimap                   # F-mini: corner board inset (place read)
 var _announce: Label
 var _announce_scrim: Control            # dark band behind the centre ceremony cards
 var _round_lbl: Label
 var _codicil_lbl: Label
 var _chips: Array = []               # per seat: {badge, grudge_lbl, deeds_lbl}
-var _cam_home := Vector3(0, 23, 23)
+var _cam_home := Vector3(-3.4, 23.5, 23.0)   # 3/4 overview; matches board_camera._home_pos
 
-# Lower-third geometry (anchored bottom-centre; slides up on show).
+# Lower-third geometry (anchored bottom-centre; slides up on show). The band's
+# BOTTOM edge is pinned; its TOP grows upward to fit long copy (the eulogy and the
+# estate's wordier reveals), so no line is ever clipped by the frame. LT_REST_TOP
+# is the one-line resting height; _lt_top holds the current (possibly grown) top.
 const LT_HALF_W := 620.0
 const LT_REST_TOP := -338.0
 const LT_REST_BOTTOM := -196.0
 const LT_SLIDE := 34.0
+const LT_MAX_TOP := -560.0               # ceiling: the band never grows past this
+const LT_VPAD := 30.0                    # panel + margin padding around the text
+const REVEAL_FONT_MAX := 34              # reveal band: comfortable size for short lines
+const REVEAL_FONT_MIN := 24              # reveal band: floor once the band has grown fully
+var _lt_top := LT_REST_TOP               # current band top (recomputed per show)
+
+# Centre ceremony-card fit (the readings / reckoning / crown). The card is a fixed
+# band; long clause lines + long names are fitted DOWN into it so the whole block
+# reads without spilling past the scrim.
+const ANNOUNCE_FONT_MAX := 46
+const ANNOUNCE_FONT_MIN := 22
+const ANNOUNCE_FIT_W := 1120.0           # inner width the card wraps at
+const ANNOUNCE_FIT_H := 344.0            # inner height the card must fit within
 
 # ---- will clauses (announced at night start, paid at the reading) ----
 var clauses: Array = []
@@ -212,6 +233,8 @@ func _boot(config: Dictionary) -> void:
 	if _preset_explicit and decision_layer:
 		deed_goal = maxi(1, int(preset.get("deed_goal", deed_goal)))
 	roster = config.get("roster", []) if config.has("roster") else _default_roster()
+	if _longnames:
+		_apply_longnames()   # W9: stress the text surfaces with worst-case names
 	_init_arrays()
 	_build_world()
 	_build_hud()
@@ -244,6 +267,8 @@ func _parse_cli() -> void:
 			_fast = false         # keep ceremonies at full length (for capture)
 		elif arg == "--vendettatest":
 			_vendettatest = true  # force the board-drama presentation with bot data (see _boot)
+		elif arg == "--longnames":
+			_longnames = true     # W9: force worst-case long names to stress the text surfaces
 
 func _default_roster() -> Array:
 	var out: Array = []
@@ -258,6 +283,17 @@ func _default_roster() -> Array:
 			"bot": is_bot,
 		})
 	return out
+
+## W9 dev flag: overwrite the roster names with worst-case long strings so a
+## windowed capture exercises every text surface (reveals, readings, reckoning,
+## the crown) against the longest content the boxes could ever hold. Presentation
+## test only — names are display strings, never part of the sim/receipt.
+func _apply_longnames() -> void:
+	var long := [
+		"ALEXANDRA-WORTHINGTON", "BARTHOLOMEW THE THIRD",
+		"CLEMENTINE ASHWORTH-VANE", "MONTGOMERY DUPONT IV"]
+	for i in roster.size():
+		roster[i].name = String(long[i % long.size()])
 
 func _init_arrays() -> void:
 	var n := roster.size()
@@ -435,7 +471,8 @@ func _build_hud() -> void:
 	if serif != null:
 		_reveal.add_theme_font_override("normal_font", serif)
 		_reveal.add_theme_font_override("bold_font", serif)
-	_reveal.add_theme_font_size_override("normal_font_size", 34)
+	_reveal_font = serif if serif != null else ThemeDB.fallback_font
+	_reveal.add_theme_font_size_override("normal_font_size", REVEAL_FONT_MAX)
 	_reveal.add_theme_color_override("default_color", Color(0.96, 0.94, 0.88))
 	_reveal.visible = false
 	lt_row.add_child(_reveal)
@@ -466,6 +503,21 @@ func _build_hud() -> void:
 	_announce.add_theme_constant_override("outline_size", 10)
 	_announce.visible = false
 	_ui.add_child(_announce)
+
+	# THE DRIVE inset (W9) — a small parchment minimap pinned top-left, below the
+	# status bar. Shown during MOVE/REVEAL (place legibility while the camera is
+	# pushed in); hidden for the roll, where the corner meters live. Renders from
+	# the same mirrored data the board already holds, so a net guest sees it too.
+	_minimap = Minimap.new()
+	_minimap.name = "Minimap"
+	_minimap.anchor_left = 0.0; _minimap.anchor_right = 0.0
+	_minimap.anchor_top = 0.0; _minimap.anchor_bottom = 0.0
+	_minimap.offset_left = 24.0; _minimap.offset_top = 66.0
+	_minimap.offset_right = 24.0 + Minimap.PANEL_W
+	_minimap.offset_bottom = 66.0 + Minimap.PANEL_H
+	_minimap.visible = false
+	_ui.add_child(_minimap)
+	_minimap.configure(board, roster)
 
 	# A dedicated full-rect Control hosts the four corner putt meters.
 	var meter_host := Control.new()
@@ -499,6 +551,7 @@ func _build_hud() -> void:
 	roulette.setup(_fx_host)
 
 	executor.setup(_reveal, cam)
+	executor.after_say = _fit_reveal_band      # fit + grow the band for every line
 	executor.embody(self, board, seed_value)   # B2-HOOK: give the host a body (F6/F7)
 	# The endgame kit escalates music + light on the final Deed (juice floor).
 	final_kit = FinalStretch.attach(self, null, {"ticks": false})
@@ -560,11 +613,31 @@ func _refresh_hud() -> void:
 	for i in _chips.size():
 		var extra := "  ×%d" % moved_total[i] if not decision_layer else ""
 		_chips[i].grudge.text = "%d♠  ◆%d%s" % [grudge[i], deeds[i], extra]
+	_sync_minimap()
+
+## Show THE DRIVE inset only during MOVE/REVEAL (place legibility while the camera
+## is pushed in), and feed it the current logical positions + Codicil berth. The
+## roll owns the corners (meters); ceremonies own the centre (cards). Presentation
+## only — reads mirrored state, never the sim.
+func _sync_minimap() -> void:
+	if _minimap == null:
+		return
+	var show := (_phase == "move" or _phase == "reveal") and (board == null or board.visible)
+	_minimap.visible = show
+	if show:
+		_minimap.set_state(positions, board.beacon_index if board else 0)
 
 func _announce_text(text: String, color := Color(0.95, 0.95, 1.0), hold := 2.0) -> void:
 	if _announce == null:
 		return
 	_announce.text = text
+	# Fit the whole multi-line block into the card with the REAL face the label
+	# draws in, so a wordy reading or a long name shrinks to fit instead of
+	# spilling past the scrim. Deterministic (no rng) — safe on the receipt path.
+	var font := _announce.get_theme_font("font")
+	var size := TextFit.fit_size(font, text, ANNOUNCE_FIT_W, ANNOUNCE_FIT_H,
+		ANNOUNCE_FONT_MAX, ANNOUNCE_FONT_MIN)
+	_announce.add_theme_font_size_override("font_size", size)
 	_announce.add_theme_color_override("font_color", color)
 	_announce.visible = true
 	if _announce_scrim:
@@ -628,21 +701,51 @@ func _on_reveal_vis_changed() -> void:
 		_lowerthird.visible = false
 		_lowerthird.modulate.a = 0.0
 
-## 0.25s slide-up + fade for the reveal band (skipped under the fast soak).
+## Fit the reveal band to the CURRENT line: shrink the face just enough for width,
+## then grow the band UPWARD (bottom pinned) so every line fits without clipping.
+## Called from executor.say() before the band is shown, and again on each new line
+## while it stays up (the eulogy cadence), gliding the height between lines.
+## Deterministic geometry only — never touches rng or the tally.
+func _fit_reveal_band() -> void:
+	if _reveal == null or _lowerthird == null or _reveal_font == null:
+		return
+	_apply_reveal_badge(_reveal_seat)   # badge state set before we measure the width
+	var text := _reveal.get_parsed_text()
+	var badge_w := 86.0 if (_reveal_badge and _reveal_badge.visible) else 0.0
+	var inner_w := (LT_HALF_W * 2.0) - 52.0 - badge_w      # 26px side margins + badge
+	var avail_h := (LT_REST_BOTTOM - LT_MAX_TOP) - LT_VPAD  # tallest inner the band allows
+	var size := TextFit.fit_size(_reveal_font, text, inner_w, avail_h,
+		REVEAL_FONT_MAX, REVEAL_FONT_MIN)
+	_reveal.add_theme_font_size_override("normal_font_size", size)
+	var needed := TextFit.wrapped_height(_reveal_font, text, inner_w, size) + LT_VPAD
+	var band_h := clampf(needed, LT_REST_BOTTOM - LT_REST_TOP, LT_REST_BOTTOM - LT_MAX_TOP)
+	_lt_top = LT_REST_BOTTOM - band_h
+	# Already on-screen (line-to-line, e.g. the eulogy): glide to the new height.
+	# The reveal-from-hidden case is animated by _slide_in_lowerthird using _lt_top.
+	if _lowerthird.visible:
+		if _fast:
+			_lowerthird.offset_top = _lt_top
+		else:
+			var tw := _lowerthird.create_tween()
+			tw.tween_property(_lowerthird, "offset_top", _lt_top, 0.18) \
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+
+## 0.25s slide-up + fade for the reveal band (skipped under the fast soak). Slides
+## to the fitted top (_lt_top) so a grown band rises to its full height.
 func _slide_in_lowerthird() -> void:
 	if _lowerthird == null:
 		return
-	_lowerthird.offset_top = LT_REST_TOP + LT_SLIDE
+	_lowerthird.offset_top = _lt_top + LT_SLIDE
 	_lowerthird.offset_bottom = LT_REST_BOTTOM + LT_SLIDE
 	if _fast:
-		_lowerthird.offset_top = LT_REST_TOP
+		_lowerthird.offset_top = _lt_top
 		_lowerthird.offset_bottom = LT_REST_BOTTOM
 		_lowerthird.modulate.a = 1.0
 		return
 	_lowerthird.modulate.a = 0.0
 	var tw := _lowerthird.create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(_lowerthird, "offset_top", LT_REST_TOP, 0.25) \
+	tw.tween_property(_lowerthird, "offset_top", _lt_top, 0.25) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_lowerthird, "offset_bottom", LT_REST_BOTTOM, 0.25) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -772,6 +875,7 @@ func _capture_showcase() -> void:
 func _round() -> void:
 	_phase = "roll"
 	_hide_announce()
+	_sync_minimap()          # the roll owns the corners — hide the inset
 	executor.begin_round()   # B2-HOOK: page-turn the ledger between rounds (F7)
 	if not _fast:
 		_reveal_seat = -1
@@ -828,6 +932,7 @@ func _round() -> void:
 		positions[i] = posmod(positions[i] + moved[i], BoardPath.SPACES)
 		moved_total[i] += moved[i]
 		stats[i].moved += moved[i]
+	_sync_minimap()   # THE DRIVE inset lights up for the travel + reveal
 	if not _fast:
 		for tw in tweens:
 			if tw and tw.is_valid():
@@ -1308,6 +1413,13 @@ func _sealed_stakes(a: int, b: int) -> Array:
 	var fill := [0.0, 0.0]
 	var hold_t := [0.0, 0.0]
 	var auto_target := [0.0, 0.0]
+	# The VENDETTA proclamation is up in the lower-third as we arrive; let it read a
+	# beat, then CLEAR it so the sealed-stakes overlay owns the screen alone. The two
+	# were sharing the lower band and the banner clipped mid-sentence behind the
+	# overlay (director note W9). Host-only human path — never the soak, so the extra
+	# beat cannot touch the byte-identical receipt.
+	await _beat(1.1)
+	executor.clear_banner()
 	# Non-human sides pre-decide (bot/remote hidden roll), then auto-charge visibly.
 	for k in 2:
 		if not human[k]:
