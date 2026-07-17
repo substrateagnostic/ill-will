@@ -25,6 +25,7 @@ const BoardCamera := preload("res://estate/procession/board_camera.gd")
 const BoardFx := preload("res://estate/procession/board_fx.gd")
 const SeanceWheelScene := preload("res://estate/procession/seance_wheel.gd")
 const MinigameRouletteScene := preload("res://estate/procession/minigame_roulette.gd")
+const VendettaStakes := preload("res://estate/procession/vendetta_stakes.gd")
 
 const CHAR_SCENES := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -33,6 +34,33 @@ const CHAR_SCENES := [
 	"res://assets/models/kaykit/Rogue.glb",
 ]
 const REVEAL_BEAT := 2.2
+const RAISE_TIME := 2.5              # sealed-stakes hold-to-raise window (seconds)
+# One-word-ish epitaphs the duel winner hangs on the loser's pawn for the rest of
+# the night, in the estate's gravestone register (doc 26): death is a filing, not
+# a scream; affection is logged as liability. Chosen from the PRESENTATION rng.
+const EPITAPHS := [
+	"BRIEFLY MOURNED",
+	"SURVIVED BY NO ONE",
+	"PENDING PROBATE",
+	"FILED UNDER LOSS",
+	"DIED IN ARREARS",
+	"NOT NAMED IN THE WILL",
+	"LATE, AND UNLAMENTED",
+	"SETTLED IN FULL",
+	"OF NO FIXED ESTATE",
+	"NO KNOWN HEIRS",
+	"REMAINDERED",
+	"HERE, UNDER PROTEST",
+]
+# Dry framing lines for THE INTERIM READING (Voice A: full sentences, two beats,
+# no exclamation, death administrative). Drawn from the PRESENTATION rng only, so
+# the interim beat never touches the sim stream even when it does render.
+const INTERIM_LINES := [
+	"A provisional accounting, read aloud so no one may later claim surprise.",
+	"The estate pauses over the running clauses. Nothing here is final, and nothing here is forgiven.",
+	"An interim reckoning. The leaders are noted, in pencil, and watched.",
+	"The estate reads the standing so far. It has read worse, to worse people.",
+]
 # F24 reveal-cascade reactions: waiting-player button -> attributed glyph.
 const REACT_COOLDOWN_MS := 550
 const REACT_MAP := {"b": "HA!", "up": "OOH", "down": "OOF"}
@@ -77,6 +105,11 @@ var _minisim := true
 var _mirror := false
 var _preset_explicit := false
 var _capture := false            # windowed: pose beats + snap for screenshots
+var _vendettatest := false       # dev flag: force the board-drama presentation with bot data (screenshots)
+var _drama_prng := RandomNumberGenerator.new()   # PRESENTATION stream: interim lines + epitaph pick, never the sim rng
+var _epitaphs: Array = []        # per seat: epitaph String a duel winner hung ("" = none)
+var _epitaph_tags := {}          # seat -> Label3D (the persistent gravestone tag riding the pawn)
+var _stakes_ui: VendettaStakes = null   # sealed-stakes overlay (lazy; windowed only)
 var _phase := "boot"
 var _round_codicil_seat := -1   # who claims the Codicil this round (pass-or-land)
 var _preview_active := false    # F29: live putt target reticles during the roll
@@ -154,6 +187,11 @@ func _autostart() -> void:
 # --------------------------------------------------------------------------
 func _boot(config: Dictionary) -> void:
 	_parse_cli()
+	# The board-drama probe forces the presentation path (interim reading + sealed
+	# stake meters) with bot data, at full ceremony length, so a windowed capture
+	# can screenshot beats an all-bot soak skips by design. Never on the receipt.
+	if _vendettatest:
+		_fast = false
 	_mirror = NetSession.is_client()
 	_capture = _autoplay and DisplayServer.get_name() != "headless"
 	if config.has("seed"):
@@ -164,6 +202,9 @@ func _boot(config: Dictionary) -> void:
 		preset_id = String(config.preset)
 		_preset_explicit = true
 	rng.seed = seed_value
+	# A presentation stream of our own for the board-drama flourishes — distinct
+	# from the sim rng AND the executor's, so no flourish shifts the receipt.
+	_drama_prng.seed = seed_value * 2246822519 + 3266489917
 	var preset := Presets.get_preset(preset_id) if _preset_explicit \
 		else Presets.from_goal(deed_goal)
 	decision_layer = bool(preset.get("decision_layer", true))
@@ -201,6 +242,8 @@ func _parse_cli() -> void:
 			_minisim = false     # launch real modules even under autoplay
 		elif arg == "--slowsim":
 			_fast = false         # keep ceremonies at full length (for capture)
+		elif arg == "--vendettatest":
+			_vendettatest = true  # force the board-drama presentation with bot data (see _boot)
 
 func _default_roster() -> Array:
 	var out: Array = []
@@ -223,7 +266,10 @@ func _init_arrays() -> void:
 	for i in n:
 		_react_last[i] = -100000
 	items.clear(); stats.clear()
+	_epitaphs.clear()
+	_epitaphs.resize(n)
 	for i in n:
+		_epitaphs[i] = ""
 		grudge[i] = EstateState.STARTING_GRUDGE + 3   # a small float so turn 1 has stakes
 		deeds[i] = 0
 		positions[i] = 0
@@ -882,7 +928,7 @@ func _reveal_landing(seat: int) -> void:
 			Spaces.STALL: _resolve_stall(seat, name, col)
 			Spaces.SEANCE: await _resolve_seance(seat, name, col)
 			Spaces.TOLLGATE: _resolve_tollgate(seat, name, col)
-			Spaces.VENDETTA: _resolve_vendetta(seat, name, col)
+			Spaces.VENDETTA: await _resolve_vendetta(seat, name, col)
 			_: executor.say(Executor.pick(Executor.BLANK, rng, [name]), col)
 	_refresh_hud()
 	_push_net()
@@ -1086,9 +1132,22 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	if nemesis < 0:
 		executor.say("%s reaches the vendetta stone alone. No blood today." % name, col)
 		return
-	var s_a := _stake_for(seat)
-	var s_b := _stake_for(nemesis)
-	executor.say(Executor.pick(Executor.VENDETTA, rng, [name, roster[nemesis].name]), col)
+	# THE STAKE (doc 18 signature 1v1). Bots + remote guests roll the old hidden
+	# 0–3 (via _stake_for → sim rng). LOCAL HUMANS raise their own stake, sealed
+	# and simultaneous, over ~2.5s (_sealed_stakes). The all-bot soak has no local
+	# human, so it always takes the else branch below — same three draws, same
+	# order (stake, stake, VENDETTA line) — and the receipt stays frozen.
+	var s_a: int
+	var s_b: int
+	if _drama_visible() and (_is_local_human(seat) or _is_local_human(nemesis) or _vendettatest):
+		executor.say(Executor.pick(Executor.VENDETTA, rng, [name, roster[nemesis].name]), col)
+		var sealed: Array = await _sealed_stakes(seat, nemesis)
+		s_a = int(sealed[0])
+		s_b = int(sealed[1])
+	else:
+		s_a = _stake_for(seat)
+		s_b = _stake_for(nemesis)
+		executor.say(Executor.pick(Executor.VENDETTA, rng, [name, roster[nemesis].name]), col)
 	# sealed stakes resolve visibly: higher stake takes the difference.
 	var win := seat if s_a >= s_b else nemesis
 	var lose := nemesis if win == seat else seat
@@ -1108,6 +1167,11 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	# A decisive vendetta is a deciding beat for the newsreel (F5).
 	MomentScribe.capture("vendetta", "%s BREAKS %s (%d♠)" % [
 		roster[win].name, roster[lose].name, moved_g], 2, [win, lose], "procession")
+	# THE EPITAPH (doc 18): the winner hangs a seeded gravestone tag on the loser's
+	# pawn for the rest of the night. Gated inside _hang_epitaph — never in the soak.
+	_hang_epitaph(lose, win)
+	if _capture and String(_epitaphs[lose]) != "":
+		await _snap_epitaph(lose)
 
 ## THE DEED MONEY-SHOT (F17). The economy's climax: hero push into the Codicil, a
 ## gold flare, a wax-sealed Deed flying to the buyer's chip, the price draining
@@ -1180,9 +1244,11 @@ func _path_crosses(from_idx: int, moved: int, target: int) -> bool:
 			return true
 	return false
 
+## Bot / remote-guest stake: a hidden 0–3 roll from the sim rng, capped by the
+## seat's purse. LOCAL HUMAN seats never reach this — they raise their own stake
+## sealed (see _sealed_stakes). The all-bot verification soak has no humans, so it
+## always draws here, in the same order it always did — the receipt stays frozen.
 func _stake_for(seat: int) -> int:
-	if bool(roster[seat].bot):
-		return clampi(rng.randi_range(0, 3), 0, grudge[seat])
 	return clampi(rng.randi_range(0, 3), 0, grudge[seat])
 
 func _deed_leader(exclude: int) -> int:
@@ -1199,6 +1265,223 @@ func _flash_line(text: String, col: Color, seat := -1) -> void:
 		_reveal_seat = seat
 		_apply_reveal_badge(seat)
 		executor.say(text, col)
+
+# --------------------------------------------------------------------------
+# BOARD DRAMA (W1) — gating + the sealed stake + the epitaph + the interim read.
+# Every player-facing beat below is gated by _drama_visible(): SKIPPED entirely
+# under the headless soak and any all-bot table (the "a soak never sees it" idiom
+# from estate.gd READY_GATE_TIME), so the byte-identical receipt never renders one
+# and never draws the sim rng for one. --vendettatest forces the path with bot
+# data so a windowed capture can screenshot what an all-bot run hides.
+# --------------------------------------------------------------------------
+## Any LOCAL human at the table? Bots and remote guests both read false.
+func _has_human() -> bool:
+	for i in roster.size():
+		if not bool(roster[i].bot) and not _is_remote_seat(i):
+			return true
+	return false
+
+func _is_remote_seat(seat: int) -> bool:
+	return PlayerInput.has_method("is_remote") and PlayerInput.is_remote(seat)
+
+## A seat that raises its own sealed stake — a local human, never a bot or a guest
+## attending from a distant house (they keep the hidden roll, per the doctrine).
+func _is_local_human(seat: int) -> bool:
+	return not bool(roster[seat].bot) and not _is_remote_seat(seat)
+
+## The one gate for all board-drama presentation: never headless, and either a
+## real human is present or the dev probe is forcing it with bot data.
+func _drama_visible() -> bool:
+	if DisplayServer.get_name() == "headless":
+		return false
+	return _has_human() or _vendettatest
+
+## THE SEALED VENDETTA. Collects both 0–3 stakes: local humans raise their own by
+## holding (A) over ~2.5s (released level = stake, hidden behind a wax seal until
+## the reveal); bots + remote guests keep the hidden sim-rng roll (_stake_for),
+## only *rendered* here. Both reveal together, a beat between. Returns [s_a, s_b].
+func _sealed_stakes(a: int, b: int) -> Array:
+	var seats := [a, b]
+	var human := [_is_local_human(a), _is_local_human(b)]
+	var stake := [0, 0]
+	var sealed := [false, false]
+	var fill := [0.0, 0.0]
+	var hold_t := [0.0, 0.0]
+	var auto_target := [0.0, 0.0]
+	# Non-human sides pre-decide (bot/remote hidden roll), then auto-charge visibly.
+	for k in 2:
+		if not human[k]:
+			stake[k] = _stake_for(seats[k])
+			auto_target[k] = float(stake[k]) / 3.0
+	_ensure_stakes_ui()
+	_stakes_ui.show_duel(_stake_info(a), _stake_info(b))
+	var cap_mid := _capture
+	# In capture, hold the raise phase open long enough that the mid-raise snap
+	# lands with pips lit, even when both auto sides pick low. Zero in real play.
+	var min_raise := 0.9 if _capture else 0.0
+	var elapsed := 0.0
+	while not (sealed[0] and sealed[1]) and elapsed < RAISE_TIME + 0.6:
+		var dt := get_process_delta_time()
+		for k in 2:
+			if sealed[k]:
+				continue
+			var s: int = seats[k]
+			if human[k]:
+				if PlayerInput.is_down(s, "a"):
+					hold_t[k] += dt
+					fill[k] = clampf(hold_t[k] / RAISE_TIME, 0.0, 1.0)
+					_stakes_ui.set_fill(k, fill[k])
+					if hold_t[k] >= RAISE_TIME:
+						stake[k] = _level_from_fill(fill[k], s)
+						sealed[k] = true
+						_stakes_ui.set_sealed(k)
+				elif hold_t[k] > 0.0:
+					stake[k] = _level_from_fill(fill[k], s)
+					sealed[k] = true
+					_stakes_ui.set_sealed(k)
+			else:
+				fill[k] = minf(fill[k] + dt / maxf(0.4, RAISE_TIME * 0.55), auto_target[k])
+				_stakes_ui.set_fill(k, fill[k])
+				if fill[k] >= auto_target[k] - 0.001 and elapsed >= min_raise:
+					sealed[k] = true
+					_stakes_ui.set_sealed(k)
+		elapsed += dt
+		if cap_mid and elapsed > 0.5:
+			cap_mid = false
+			await _cap_snap("vendetta_raise")
+		await get_tree().process_frame
+	# Window expired: seal anyone who never committed (a silent human stakes 0).
+	for k in 2:
+		if not sealed[k]:
+			if human[k]:
+				stake[k] = _level_from_fill(fill[k], seats[k])
+			sealed[k] = true
+			_stakes_ui.set_sealed(k)
+	# Reveal both, together, with a beat between the two flips.
+	_stakes_ui.reveal(0, stake[0])
+	if _capture:
+		await _cap_snap("vendetta_reveal")
+	await _beat(0.9)
+	_stakes_ui.reveal(1, stake[1])
+	await _beat(1.2)
+	_stakes_ui.hide_all()
+	return [stake[0], stake[1]]
+
+## A local human's released charge → a 0–3 stake, capped by the purse (matching
+## _stake_for's grudge clamp so a raise can never bid more than a roll could).
+func _level_from_fill(f: float, seat: int) -> int:
+	return clampi(int(round(clampf(f, 0.0, 1.0) * 3.0)), 0, grudge[seat])
+
+## The per-duelist panel descriptor the sealed-stakes overlay renders from.
+func _stake_info(seat: int) -> Dictionary:
+	return {"name": String(roster[seat].name), "color": roster[seat].color,
+		"glyph": PlayerBadge.glyph(seat), "human": _is_local_human(seat)}
+
+## Lazily build the sealed-stakes overlay (windowed only; the soak never calls it).
+func _ensure_stakes_ui() -> void:
+	if _stakes_ui != null and is_instance_valid(_stakes_ui):
+		return
+	_stakes_ui = VendettaStakes.new()
+	_ui.add_child(_stakes_ui)
+	_stakes_ui.setup()
+
+## THE INTERIM READING (doc 18). The will clauses are announced at minute 0 and
+## paid at the end with nothing visible between; each HOUSE AWAKENS, the Executor
+## reads the running leaders so the secret race is felt all night. Presentation
+## only, PRESENTATION rng only, gated out of the soak entirely.
+func _interim_reading() -> void:
+	if not _drama_visible():
+		return
+	executor.clear_banner()
+	# His framing line first (lower-third, his voice), then the standings card.
+	executor.say(String(INTERIM_LINES[_drama_prng.randi_range(0, INTERIM_LINES.size() - 1)]),
+		Color(0.85, 0.78, 1.0))
+	await _beat(1.8)
+	executor.clear_banner()
+	var lines: Array[String] = []
+	for c in clauses:
+		var lead := _stat_leader(String(c.stat))
+		if lead >= 0:
+			lines.append("◆ %s — %s leads, %s" % [
+				c.title, roster[lead].name, _interim_metric(String(c.stat), lead)])
+		else:
+			lines.append("◆ %s — still contested. No one leads." % c.title)
+	_announce_text("THE INTERIM READING\n\n" + "\n".join(lines)
+		+ "\n\nProvisional. The estate reserves the right to change its mind.",
+		Color(0.85, 0.78, 1.0))
+	if _capture:
+		await _cap_snap("interim_reading")
+	await _beat(3.0)
+	_hide_announce()
+
+## The running value for a clause, phrased for the interim card (no rng).
+func _interim_metric(stat: String, seat: int) -> String:
+	var v := int(stats[seat].get(stat, 0))
+	match stat:
+		"moved": return "%d stones walked" % v
+		"lost": return "%d♠ bled" % v
+		"duels": return "%d taken on the board" % v
+	return "%d" % v
+
+## THE EPITAPH. The duel winner hangs a seeded gravestone tag on the loser's pawn
+## for the rest of the night, and — in real play only — files one line to the
+## estate's graffiti. Gated: the soak never reaches here (no drama, no rng, no
+## estate write), so it can never perturb the receipt or a real user's ledger.
+func _hang_epitaph(loser: int, winner: int) -> void:
+	if not _drama_visible():
+		return
+	var epitaph := String(EPITAPHS[_drama_prng.randi_range(0, EPITAPHS.size() - 1)])
+	_epitaphs[loser] = epitaph
+	_render_epitaph(loser, epitaph)
+	# The estate keeps the last word — persisted at heir-crowning, like the heir
+	# monument, and only when this is real play (autoplay probes never write).
+	if not _autoplay:
+		EstateState.add_graffiti("%s had the last word over %s: “%s”. The estate filed it." % [
+			String(roster[winner].name), String(roster[loser].name), epitaph])
+
+## Ride a small IM Fell gravestone tag on the loser's pawn (matches the pawn
+## name-tag idiom; a child of the pawn node so it follows every hop). Reused if the
+## seat already carries one — a fresh defeat re-carves the stone.
+func _render_epitaph(seat: int, epitaph: String) -> void:
+	if board == null or not board.pawns.has(seat):
+		return
+	var pawn: Node3D = board.pawns[seat]
+	var tag: Label3D
+	if _epitaph_tags.has(seat) and is_instance_valid(_epitaph_tags[seat]):
+		tag = _epitaph_tags[seat]
+	else:
+		tag = Label3D.new()
+		tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		tag.font_size = 30
+		tag.pixel_size = 0.0056
+		tag.outline_size = 12
+		tag.outline_modulate = Color(0, 0, 0, 0.92)
+		tag.modulate = Color(0.86, 0.83, 0.74)   # bone / carved parchment
+		tag.position = Vector3(0, 1.9, 0)          # above the name tag (1.5)
+		var serif: FontFile = load("res://assets/fonts/IMFellEnglish-Regular.ttf")
+		if serif != null:
+			tag.font = serif
+		pawn.add_child(tag)
+		_epitaph_tags[seat] = tag
+	tag.text = "“%s”" % epitaph
+
+## Windowed capture only: pose a close hero on the freshly-carved loser so the
+## epitaph tag reads in the verification still, then hand the camera back to the
+## director (the cascade's next shot re-activates it). Never headless.
+func _snap_epitaph(loser: int) -> void:
+	if not _capture or board == null or not board.pawns.has(loser):
+		return
+	board_camera.hold()
+	var pawn: Node3D = board.pawns[loser]
+	var p := pawn.global_position
+	var out := p - board.CENTER
+	out.y = 0.0
+	out = out.normalized() if out.length() > 0.01 else Vector3.BACK
+	# A closer, gently raked-down hero so the carved tag (y≈1.9) reads centred with
+	# ground behind it, not the distant manor label.
+	cam.global_position = p + out * 2.3 + Vector3(0, 2.9, 0)
+	cam.look_at(p + Vector3(0, 1.75, 0), Vector3.UP)
+	await _cap_snap("epitaph")
 
 # --------------------------------------------------------------------------
 # MINIGAME BLOCK  (every 2nd round)
@@ -1333,6 +1616,9 @@ func _house_awakens() -> void:
 	_push_net()
 	await _beat(2.2)
 	_hide_announce()
+	# THE INTERIM READING (W1): read the running will-clause leaders so the secret
+	# race announced at minute 0 is felt all night. Skipped under the soak/all-bots.
+	await _interim_reading()
 	if final_kit and final_kit.has_method("round_reset"):
 		final_kit.round_reset()
 
