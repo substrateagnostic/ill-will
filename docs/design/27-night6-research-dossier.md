@@ -89,6 +89,37 @@ what the fleet found, what night 6 builds, and what's queued for Alex.
   idiom. Also: dead_weight's furniture-hurling poltergeist can cause void
   deaths — in tension with mischief-not-murder.
 
+## R10 — the cold second-model read (GPT-5.6 via Codex)
+
+Landed after the wave launched; converges with R1 on the central wound —
+**agency inversion**: the most emotionally consequential board outcomes
+(contested deeds, item targeting, vendetta stakes) are settled by seat order
+or RNG, so resentment attaches to the rules instead of another player,
+starving the grudge premise of stories. W1 fixes the vendetta half tonight.
+Unique finds, all queued for Alex:
+
+- **Board profiles + no-repeat docket**: blocks pass `rounds: 2` blindly to a
+  with-replacement pool, producing 90s GREED next to 13s PALLBEARERS runs.
+  Give every game a 60–90s board format + eligibility, pre-deal the docket.
+- **Contested Codicil = seat-index bias**: simultaneous affordable crossings
+  award to the first seat index; tied clause stats silently favor low seats.
+  Fix = exact-landing priority, then smallest putt error, visible tiebreak.
+  ⚠ sim change — would re-freeze receipts; needs a deliberate receipt bump.
+- **The auction isn't an auction**: second-round "auction" hands everyone a
+  random free item; the promised spite-bidding never happens. Reuse the
+  8-second bid surface for three visible sabotage lots.
+- **Finish-rule honesty**: "first to the required deeds is crowned" isn't
+  reliably true once will clauses pay out; crown the threshold claimant,
+  make clauses visible side-goals (the Interim Reading is the first step).
+- **Procession settlement gap**: the board writes heir monument + graffiti but
+  skips newsreel archive, ledger, chronicle, night count, nemesis record on
+  its way back to the title. Also: toll graves can compound onto one player —
+  cap income monuments at one grave per player.
+- **LETTERS OF ADMINISTRATION** (adjacent-genre idea): gacha pity as probate
+  paperwork — a visible claim card stamped each time you can't afford a
+  reached Codicil or lose a contested filing; three stamps = uncontested
+  first refusal on your next affordable filing. No free deeds, pure theme.
+
 ## Corrections the fleet made to the director's brief
 
 - TILT is not floating over nothing (B8 gave it an ocean + skerries); the gap
