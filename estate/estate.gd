@@ -284,6 +284,7 @@ func _ready() -> void:
 	_redraw_monuments()
 	_redraw_graffiti()
 	banner.visible = false
+	_apply_night_grounds()
 	_saved_env = $WorldEnvironment.environment
 	_net_wire_signals()
 	if start_night_now:
@@ -297,6 +298,33 @@ func _ready() -> void:
 		_hide_title()
 		_enter_lobby()
 	_booted = true   # NIT 6: from here on, scene swaps play the iris wipe
+
+## NIGHT GROUNDS (night 6, Alex's tonal call): the walkabout joins the night.
+## The title hero shot (MOONLIT, darker) and the procession board (MOONLIT)
+## were already night; the daylight hub between them was the one lights-up
+## jolt in the flow. Swap the .tscn's FILMIC day env for the house MOONLIT
+## look and turn the warm sun into the moon key BEFORE _saved_env is captured,
+## so every existing swap-out/restore cycle round-trips the night untouched.
+func _apply_night_grounds() -> void:
+	$WorldEnvironment.environment = EnvKit.build_environment(EnvKit._merged(EnvKit.MOONLIT, {
+		"bg_mode": "sky",         # open grounds: graded night sky, not flat void
+		"ambient_energy": 0.32,   # playable hub — brighter than the title's 0.24 hero drop
+		"exposure": 0.9,          # sink the lawn's day-green toward the board's night plum
+		"fog_density": 0.008,     # a breath of ground haze; monuments stay readable
+	}))
+	var sun := $Sun as DirectionalLight3D
+	sun.light_color = Color(0.62, 0.72, 1.0)
+	sun.light_energy = 0.6
+	# Warm counter-fill (MOONLIT's fill spec) so faces and stone don't go dead
+	# blue. A child of $Sun: every existing `$Sun.visible` toggle carries it,
+	# so it can never leak into a minigame's own rig.
+	var fill := DirectionalLight3D.new()
+	fill.name = "MoonFill"
+	fill.light_color = Color(1.0, 0.83, 0.62)
+	fill.light_energy = 0.22
+	fill.shadow_enabled = false
+	sun.add_child(fill)
+	fill.global_rotation_degrees = Vector3(-24, -135, 0)
 
 ## ----- TITLE SCREEN (front door; PLAY -> straight into the night) -----
 
