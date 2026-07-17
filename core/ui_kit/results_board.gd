@@ -37,7 +37,7 @@ extends CanvasLayer
 ## opts (all optional):
 ##   title:String, subtitle:String
 ##   score_type:ScoreType        # POINTS | PERCENT | TIME  (default POINTS)
-##   win_title:String            # template, {name} substituted (default "{name} WINS")
+##   win_title:String            # template, {name} substituted (default "{name} INHERITS")
 ##   accent:Color                # title/subtitle tint (default GOLD)
 ##   skip_seats:Array            # seats allowed to hold-A to skip (default: rows' players)
 ##   protect_winner:bool         # default true (item 22)
@@ -109,7 +109,9 @@ func present(rows: Array, opts: Dictionary = {}) -> void:
 	_score_type = int(opts.get("score_type", ScoreType.POINTS))
 	_reduced = bool(opts.get("reduced_motion", not FinalStretch.motion_ok()))
 	_skip_seats = opts.get("skip_seats", _players_of(rows))
-	_title.text = str(opts.get("title", ""))
+	# W6 (FINAL DISPOSITION rename): the shared results header, in probate voice, as
+	# the default any game inherits when it names no title of its own.
+	_title.text = str(opts.get("title", "FINAL DISPOSITION"))
 	_title.visible = _title.text != ""
 	_subtitle.text = str(opts.get("subtitle", ""))
 	_subtitle.visible = _subtitle.text != ""
@@ -305,7 +307,7 @@ func _winner_beat() -> void:
 	# frame the ceremony holds on and the frame verify captures.
 	for rw in _row_widgets:
 		(rw.row as Control).modulate = Color(1, 1, 1, 1)
-	var tmpl := str(_opts.get("win_title", "{name} WINS"))
+	var tmpl := str(_opts.get("win_title", "{name} INHERITS"))
 	_winner_banner.text = tmpl.replace("{name}", nm)
 	_winner_banner.add_theme_color_override("font_color", col)
 	# NIT 2 — SEQUENTIAL BEAT EXCLUSIVITY: the "calculating" title + subtitle

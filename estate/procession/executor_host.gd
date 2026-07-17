@@ -121,6 +121,49 @@ const ROUND_OPENER := [
 	"Round %d. The dead keep excellent time, and worse company.",
 ]
 
+# --- THE NON-PLAY VOICE (W6) --------------------------------------------------
+# The Executor's register, extended to the moments when nobody is playing: the
+# pause overlay, a long idle at a menu desk, and the quit-confirm. Surfaced by
+# core/party_setup.gd (the shell overlay), drawn via the same seeded pick(). These
+# are LOCAL UI narration only — they never touch the sim stream or the net mirror,
+# so they carry no receipt weight. Composure stays flat; the codicil does the work.
+
+## Fires once when the settings/pause overlay is opened mid-night. One line, on
+## the pause screen. No %s.
+const PAUSE := [
+	"The estate pauses. The estate has nowhere in particular to be.",
+	"The proceedings are suspended at your request. The estate files the interruption and waits.",
+	"The estate holds. It has held longer, for less, and remembers each occasion.",
+	"A recess is noted. The dead do not observe recesses, but the estate will indulge you.",
+	"The night is paused. Nothing is resolved; nothing ever is, but especially not now.",
+	"The estate sets down its pen. It does not lose its place. It never loses its place.",
+	"You have stopped the clock. The estate keeps a second clock, for occasions such as this.",
+	"The record is held open. The estate will not read ahead. The estate has already read ahead.",
+]
+## Fires after a long true idle at a menu desk awaiting the couch. Exactly one
+## %s per line (the kept-waiting seat's name); pass [name].
+const IDLE := [
+	"The estate notes %s has not moved in some time. It is used to being kept waiting. It has never once been kept waiting so thoroughly.",
+	"%s has yet to act. The estate marks the delay in the margin, where it keeps the other delays.",
+	"The estate awaits %s. Its patience is a matter of record, and the record is long.",
+	"Nothing has been decided by %s. The estate finds this consistent with the evening so far.",
+	"%s deliberates. The estate admires deliberation, up to a point, and has quietly noted the point.",
+	"The estate holds a place for %s. The place is not going anywhere, and increasingly, neither is the night.",
+	"%s takes their time. The estate has time to spare, and no one left to spend it on.",
+	"Still no word from %s. The estate has re-read the will while waiting and found no mention of hurry.",
+]
+## Fires when a departure is initiated at the quit-confirm. No %s.
+const QUIT_CONFIRM := [
+	"Departures are processed in the order received. The estate does not take them personally. It writes them down.",
+	"You are leaving. The estate has a form for this. The estate has a form for everything, which is the whole tragedy of it.",
+	"A guest withdraws. The estate marks the seat vacant and the grudges outstanding.",
+	"The exit is noted. The estate keeps the door for those who return, and a longer file for those who do not.",
+	"You wish to go. The estate will not stop you. The estate has never successfully stopped anyone.",
+	"Withdrawal acknowledged. The estate settles your account to zero and rounds the sentiment down.",
+	"One less at the table. The estate redistributes nothing, which is its custom, and reopens the will.",
+	"The night releases you. The estate does not. The estate merely lets you believe it has.",
+]
+
 # --- THE BODY (doc 24 F6/F7) --------------------------------------------------
 const Body := preload("res://estate/procession/executor_body.gd")
 

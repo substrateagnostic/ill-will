@@ -16,6 +16,14 @@ const BIND_ACTIONS := ["up", "left", "down", "right", "a", "b"]
 const PALETTE_IDS := ["classic", "deutan", "protan", "tritan"]
 const PALETTE_LABELS := ["CLASSIC", "DEUTERANOPIA", "PROTANOPIA", "TRITANOPIA"]
 
+# THE EXECUTOR NARRATES WHEN YOU STOP PLAYING (W6, the Stanley Parable device).
+# The estate's non-play voice — pause, a long idle at a menu desk, quit-confirm —
+# drawn from the Executor's seeded pools. Local UI narration only: it never
+# touches the sim stream or the net mirror and carries no receipt weight.
+const Executor := preload("res://estate/procession/executor_host.gd")
+const IDLE_SECS := 20.0            # true idle at a menu desk before the estate speaks
+const NARR_PARCHMENT := Color(0.92, 0.87, 0.76)
+
 var panel: PanelContainer
 var tabs: TabContainer
 var open := false
@@ -58,6 +66,18 @@ var _pause_btn_held: Dictionary = {}
 # purely by NetSession.host_pause_changed and only ever shows on a client.
 var _hostpause_root: Control = null
 
+# W6 — the non-play voice. _pause_line rides on the settings panel; _narrate_label
+# is a bottom caption for idle + quit-confirm. Seeded from a local presentation rng
+# (no receipt weight). Idle bookkeeping tracks the last meaningful input so the
+# estate only speaks after a true lull, and only once per lull.
+var _pause_line: Label = null
+var _narrate_root: Control = null
+var _narrate_label: Label = null
+var _narrate_tw: Tween = null
+var _narr_rng := RandomNumberGenerator.new()
+var _last_input_ms := 0
+var _idle_narrated := false
+
 func _ready() -> void:
 	layer = 90
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -91,6 +111,15 @@ func _ready() -> void:
 	title.add_theme_font_size_override("font_size", 26)
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(title)
+	# W6 — the Executor's one line for the pause screen. Set fresh each open.
+	_pause_line = Label.new()
+	_pause_line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_pause_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_pause_line.custom_minimum_size = Vector2(820, 0)
+	_pause_line.add_theme_font_size_override("font_size", 16)
+	_pause_line.add_theme_color_override("font_color", NARR_PARCHMENT)
+	_pause_line.modulate.a = 0.82
+	box.add_child(_pause_line)
 	tabs = TabContainer.new()
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	box.add_child(tabs)
@@ -111,9 +140,13 @@ func _ready() -> void:
 	quit_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	quit_row.add_theme_constant_override("separation", 12)
 	var quit_btn: Button = Button.new()
-	quit_btn.text = "QUIT TO TITLE  (forfeits the current game)"
+	# W6 (FINAL DISPOSITION rename): the escape hatch, in the estate's dialect. The
+	# parenthetical keeps the functional warning; only the display verb goes probate.
+	quit_btn.text = "LEAVE THE ESTATE  (forfeits the night)"
 	quit_btn.custom_minimum_size = Vector2(0, 44)
-	quit_btn.button_down.connect(func(): _quit_button_held = true)
+	quit_btn.button_down.connect(func():
+		_quit_button_held = true
+		_show_quit_line())
 	quit_btn.button_up.connect(func(): _quit_button_held = false)
 	quit_row.add_child(quit_btn)
 	_quit_hold = HoldConfirm.new()
@@ -125,6 +158,9 @@ func _ready() -> void:
 	box.add_child(quit_row)
 	_build_disconnect_overlay()
 	_build_hostpause_overlay()
+	_build_narrate_overlay()
+	_narr_rng.randomize()
+	_last_input_ms = Time.get_ticks_msec()
 	# The front-end director (title composition + attract mode) rides this
 	# always-on autoload so it survives scene reloads and needs no estate.gd edit.
 	var fe := FrontEndDirector.new()
@@ -140,6 +176,40 @@ func _ready() -> void:
 				if not open:
 					toggle()
 				tabs.current_tab = clampi(t, 0, tabs.get_tab_count() - 1))
+		elif arg == "--w6idle":
+			# W6 dev capture: seat a local human, drop the estate to a menu desk, then
+			# force one idle-narration line (bypassing the 20s wait) and snap it.
+			get_tree().create_timer(1.2).timeout.connect(func():
+				PlayerInput.assign(0, -1)
+				PlayerInput.set_bot(0, false)
+				for i in range(1, 4):
+					PlayerInput.set_bot(i, true)
+				var est: Node = get_tree().current_scene
+				if est != null and est.has_method("_enter_grounds"):
+					est.call("_enter_grounds")
+				get_tree().create_timer(0.8).timeout.connect(func():
+					_show_idle_line(0)
+					get_tree().create_timer(0.6).timeout.connect(func():
+						VerifyCapture.snap("w6_idle")
+						get_tree().create_timer(0.6).timeout.connect(get_tree().quit))))
+		elif arg == "--w6quit":
+			# W6 dev capture: open the pause overlay (shows the pause line + the renamed
+			# LEAVE THE ESTATE button), fire the quit-confirm caption, and snap.
+			get_tree().create_timer(1.0).timeout.connect(func():
+				if not open:
+					toggle()
+				_show_quit_line()
+				get_tree().create_timer(0.6).timeout.connect(func():
+					VerifyCapture.snap("w6_quit")
+					get_tree().create_timer(0.6).timeout.connect(get_tree().quit)))
+		elif arg == "--w6wheelstop":
+			# W6 dev capture: build the séance-wheel STOP button on a blank overlay and
+			# drive three presses, snapping each escalating toast. Self-contained.
+			get_tree().create_timer(1.0).timeout.connect(_w6_wheel_demo)
+		elif arg == "--w6finaldisp":
+			# W6 dev capture: the shared results board with NO title supplied, so it shows
+			# the FINAL DISPOSITION default header and the {name} INHERITS winner default.
+			get_tree().create_timer(1.0).timeout.connect(_w6_finaldisp_demo)
 		elif arg.begins_with("--fake-disconnect="):
 			# Dev-only: a real pad-unplug can't be simulated headlessly, so this
 			# seats a local human on a phantom gamepad and fires the SAME overlay
@@ -239,6 +309,8 @@ func free_stray_root_nodes() -> int:
 	return freed
 
 func _input(event: InputEvent) -> void:
+	if _is_meaningful_input(event):
+		_mark_input()   # W6 idle timer: any real activity resets the lull
 	if _disconnect_active:
 		if event is InputEventKey and event.pressed:
 			get_viewport().set_input_as_handled()
@@ -265,10 +337,14 @@ func toggle() -> void:
 	if _settings_scrim != null:
 		_settings_scrim.visible = open
 	get_tree().paused = open
+	_mark_input()
 	# Tell the guests the estate held its breath (host only — a guest's own ESC
 	# pauses just its local tree and must never freeze the shared table).
 	_net_reflect_host_pause(open)
 	if open:
+		# W6 — one Executor line for the pause screen, fresh each open (never headless).
+		if _pause_line != null and DisplayServer.get_name() != "headless":
+			_pause_line.text = Executor.pick(Executor.PAUSE, _narr_rng)
 		_hide_phase_panel()
 		_rebuild_seats()
 		_rebuild_controls()
@@ -302,6 +378,7 @@ func _process(delta: float) -> void:
 	if _quit_hold != null:
 		var quit_held: bool = open and not _disconnect_active and _quit_button_held
 		_quit_hold.tick(quit_held, delta)
+	_update_idle()
 
 ## GAMEPAD PAUSE — the single cert-grade gap doc 25 names: KEY_ESCAPE was the ONLY
 ## thing that opened the pause overlay, so a controller-only player could never
@@ -332,6 +409,164 @@ func _poll_pause_buttons() -> void:
 ## remote seats). An unseated or all-bot table is never paused from a pad.
 func _pad_can_pause(pad: int) -> bool:
 	return _local_human_seat_for_device(pad) >= 0
+
+## ----- W6: the Executor narrates when you stop playing -----
+
+## True only for input that counts as a player doing something — so stick drift and
+## empty motion events never keep the idle timer from firing.
+func _is_meaningful_input(event: InputEvent) -> bool:
+	if event is InputEventKey:
+		return event.pressed
+	if event is InputEventMouseButton:
+		return event.pressed
+	if event is InputEventMouseMotion:
+		return true
+	if event is InputEventJoypadButton:
+		return event.pressed
+	if event is InputEventJoypadMotion:
+		return absf(event.axis_value) > 0.3
+	return false
+
+func _mark_input() -> void:
+	_last_input_ms = Time.get_ticks_msec()
+	_idle_narrated = false
+
+## Fire the patience line after a true lull at a menu desk. Gated hard so it never
+## interrupts a live game, never fires headless, and never fires with no local human
+## on the couch (an all-bot attract stays silent).
+func _update_idle() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	if open or _disconnect_active or _idle_narrated:
+		return
+	if Input.is_anything_pressed():
+		_mark_input()
+		return
+	if not _idle_surface_ok():
+		return
+	var seat := _first_local_human_seat()
+	if seat < 0:
+		return
+	if Time.get_ticks_msec() - _last_input_ms >= int(IDLE_SECS * 1000.0):
+		_idle_narrated = true
+		_show_idle_line(seat)
+
+## A menu desk awaiting the couch — the LOBBY/GROUNDS/AUCTION/CHOOSING/TILES phases,
+## where the estate's own panel is up and no game is running. Excludes the live game,
+## the reveal ceremonies, and the title.
+func _idle_surface_ok() -> bool:
+	var scene: Node = get_tree().current_scene
+	if scene == null or scene.scene_file_path != "res://estate/estate.tscn":
+		return false
+	if _gameplay_running():
+		return false
+	var pp = scene.get("phase_panel")
+	if pp == null or not (pp is Control) or not (pp as Control).visible:
+		return false
+	if scene.has_method("get_phase_name"):
+		var ph := str(scene.call("get_phase_name"))
+		if not (ph in ["LOBBY", "GROUNDS", "TILES", "AUCTION", "CHOOSING"]):
+			return false
+	return true
+
+func _first_local_human_seat() -> int:
+	for i: int in range(GameState.player_count):
+		if PlayerInput.is_bot(i) or PlayerInput.is_remote(i) or NetSession.is_seat_remote(i):
+			continue
+		return i
+	return -1
+
+func _show_idle_line(seat: int) -> void:
+	if seat < 0 or seat >= GameState.PLAYER_NAMES.size():
+		return
+	var nm := str(GameState.PLAYER_NAMES[seat])
+	_narrate(Executor.pick(Executor.IDLE, _narr_rng, [nm]), 6.5)
+
+func _show_quit_line() -> void:
+	if DisplayServer.get_name() == "headless":
+		return
+	_narrate(Executor.pick(Executor.QUIT_CONFIRM, _narr_rng), 5.5)
+
+## The bottom-centre caption the idle + quit-confirm lines ride on. Built once,
+## hidden; PROCESS_MODE_ALWAYS so a quit-confirm line reads while the tree is paused.
+func _build_narrate_overlay() -> void:
+	_narrate_root = Control.new()
+	_narrate_root.name = "W6Narration"
+	_narrate_root.process_mode = Node.PROCESS_MODE_ALWAYS
+	_narrate_root.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_narrate_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_narrate_root)
+	_narrate_label = Label.new()
+	_narrate_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_narrate_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_narrate_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_narrate_label.anchor_left = 0.12
+	_narrate_label.anchor_right = 0.88
+	_narrate_label.anchor_top = 0.82
+	_narrate_label.anchor_bottom = 0.94
+	_narrate_label.add_theme_font_size_override("font_size", 22)
+	_narrate_label.add_theme_color_override("font_color", NARR_PARCHMENT)
+	_narrate_label.add_theme_color_override("font_outline_color", Color(0.05, 0.04, 0.07))
+	_narrate_label.add_theme_constant_override("outline_size", 7)
+	_narrate_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_narrate_label.visible = false
+	_narrate_root.add_child(_narrate_label)
+
+func _narrate(text: String, hold: float) -> void:
+	if _narrate_label == null:
+		return
+	_narrate_label.text = text
+	_narrate_label.visible = true
+	_narrate_label.modulate.a = 0.0
+	if _narrate_tw != null and _narrate_tw.is_valid():
+		_narrate_tw.kill()
+	_narrate_tw = create_tween()
+	_narrate_tw.tween_property(_narrate_label, "modulate:a", 1.0, 0.35)
+	_narrate_tw.tween_interval(hold)
+	_narrate_tw.tween_property(_narrate_label, "modulate:a", 0.0, 0.6)
+	_narrate_tw.tween_callback(func() -> void:
+		if _narrate_label != null:
+			_narrate_label.visible = false)
+
+## W6 dev capture: a self-contained séance-wheel STOP demo (windowed only).
+func _w6_wheel_demo() -> void:
+	var host := Control.new()
+	host.set_anchors_preset(Control.PRESET_FULL_RECT)
+	host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(host)
+	var dim := ColorRect.new()
+	dim.color = Color(0.03, 0.02, 0.05, 0.92)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.add_child(dim)
+	var wheel: Node = load("res://estate/procession/seance_wheel.gd").new()
+	wheel.setup(host, ["MERCIFUL DRAFT", "EQUAL SHARES", "ROAD LEVY", "FAVORED MEDIUM"], false)
+	wheel.debug_show()
+	await get_tree().create_timer(0.5).timeout
+	for i in 3:
+		wheel.debug_press_stop()
+		await get_tree().create_timer(0.55).timeout
+		VerifyCapture.snap("w6_wheelstop_%d" % (i + 1))
+	await get_tree().create_timer(0.6).timeout
+	get_tree().quit()
+
+## W6 dev capture: the shared results board driven with default labels only.
+func _w6_finaldisp_demo() -> void:
+	var board: Node = load("res://core/ui_kit/results_board.gd").new()
+	get_tree().root.add_child(board)
+	var rows := [
+		{"player": 1, "score": 58.0, "name": "BLUE", "callout": "sole heir"},
+		{"player": 0, "score": 41.0, "name": "RED"},
+		{"player": 2, "score": 33.0, "name": "GOLD"},
+		{"player": 3, "score": 12.0, "name": "MINT"},
+	]
+	board.present(rows, {"score_type": 0})   # no title / win_title -> the new defaults
+	await get_tree().create_timer(1.0).timeout
+	VerifyCapture.snap("w6_finaldisp")       # header: FINAL DISPOSITION
+	await get_tree().create_timer(4.0).timeout
+	VerifyCapture.snap("w6_finaldisp_winner")  # winner: BLUE INHERITS
+	await get_tree().create_timer(0.8).timeout
+	get_tree().quit()
 
 ## ----- controller disconnect safety (global couch overlay) -----
 
