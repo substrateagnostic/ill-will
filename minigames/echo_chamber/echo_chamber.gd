@@ -44,6 +44,22 @@ const PARRY_STAGGER_T := 0.6
 const MEDDLE_GUST_R := 3.2
 const MEDDLE_GUST_STAGGER := 0.22
 
+const GAME_INTRO := {
+	"name": "ECHO CHAMBER",
+	"goal": "Fight beside your own ghost — your past round replays and still earns you points when it lands a hit.",
+	"accent": Color(0.55, 0.85, 0.95),
+	"controls": [
+		{"action": "move", "label": "MOVE"},
+		{"action": "a", "label": "STRIKE (hold: HEAVY)"},
+		{"action": "b", "label": "DASH (hold: PARRY)"},
+		{"action": "jump", "label": "HOP (cosmetic)"},
+	],
+	"tips": [
+		"Every translucent fighter is somebody's own past round, replaying blow for blow — yours included.",
+		"Hold STRIKE to charge a heavy swing; hold DASH to parry and riposte.",
+	],
+}
+
 const DEFAULT_CHARS := [
 	"res://assets/models/kaykit/Barbarian.glb",
 	"res://assets/models/kaykit/Knight.glb",
@@ -71,6 +87,8 @@ var _ring_test := false            # dev: park fighter 0 outside the ring to fil
 var _ringtest_state := 0
 var _meddle_shot := false          # dev: force a seat-0 ghost-meddle wisp for a windowed shot
 var _meddle_shot_done := false
+var _intro_card: IntroCard = null
+var _intro_card_active := false    # true while the GAME_INTRO card blocks round 1 from starting
 var _names: Dictionary = {}
 var _colors: Dictionary = {}
 
@@ -262,17 +280,46 @@ func begin(config: Dictionary) -> void:
 	# per match now that the roster/bot map is known (docs/verify/realkeys-VERIFY.md).
 	if controls_label != null:
 		controls_label.text = _controls_bar()
-		# show it for the opening seconds, then declutter (real-time timer so the
-		# hit-pause slow-mos never stretch the reveal)
-		get_tree().create_timer(8.5, true, false, true).timeout.connect(func() -> void:
-			if is_instance_valid(controls_label):
-				controls_label.visible = false)
 	print("ECHO_BEGIN players=%d seed=%d bots=%s round_len=%.1f" % [roster.size(), _seed, str(_bots), round_len])
 	if not _ring_test and not _aim_probe_on:
 		_stretch = FinalStretch.attach(self, timer_label)
-	_enter_intro(1)
+	# NIT 7 idiom: intro card at load; headless evidence/test/probe/capture keep sync start.
+	if _ring_test or _aim_probe_on or _cap_on or _meddle_shot:
+		_reveal_controls_bar()
+		_enter_intro(1)
+	else:
+		if controls_label != null:
+			controls_label.visible = false   # revealed once the intro card clears (no double-gate)
+		_present_intro_card()
 	if _aim_probe_on:
 		_run_aim_probe()
+
+
+## Show the persistent real-keys hint bar for the opening seconds, then declutter
+## (real-time timer so the hit-pause slow-mos never stretch the reveal).
+func _reveal_controls_bar() -> void:
+	if controls_label == null:
+		return
+	controls_label.visible = true
+	get_tree().create_timer(8.5, true, false, true).timeout.connect(func() -> void:
+		if is_instance_valid(controls_label):
+			controls_label.visible = false)
+
+
+func _present_intro_card() -> void:
+	_intro_card_active = true
+	_intro_card = IntroCard.new()
+	add_child(_intro_card)
+	_intro_card.started.connect(_dismiss_intro_card)
+	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	spec["seats"] = _human_seats()
+	_intro_card.present(spec)
+
+
+func _dismiss_intro_card() -> void:
+	_intro_card_active = false
+	_reveal_controls_bar()
+	_enter_intro(1)
 
 
 func _parse_args() -> void:
@@ -922,6 +969,8 @@ func _physics_process(delta: float) -> void:
 	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
 	if _mirror:
 		_mirror_tick(delta)
+		return
+	if _intro_card_active:
 		return
 	match state:
 		St.INTRO:

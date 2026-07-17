@@ -63,10 +63,26 @@ const BOUNDARY_R := 13.0
 const CAM_POS := Vector3(-0.2, 0.2, 17.6)
 const CAM_FOV := 46.0
 
+const GAME_INTRO := {
+	"name": "ORBITAL DODGEBALL",
+	"goal": "Dodgeball on three tiny planets. Every throw orbits forever and can still kill you.",
+	"accent": Color(1.0, 0.85, 0.25),
+	"controls": [
+		{"action": "move", "label": "WALK the surface"},
+		{"action": "a", "label": "HOLD: AIM+THROW · TAP: CATCH"},
+		{"action": "b", "label": "JUMP the gap"},
+	],
+	"tips": [
+		"A throw never truly leaves — it just keeps orbiting the cluster until physics or a body stops it.",
+		"Hop near the gap between two planets to jump to the next one.",
+	],
+}
+
 var config := {}
 var rng := RandomNumberGenerator.new()
 var phase := Phase.WAIT
 var now := 0.0
+var _intro_card: IntroCard = null
 var match_len := MATCH_LEN
 var time_left := MATCH_LEN
 
@@ -289,7 +305,26 @@ func begin(cfg: Dictionary) -> void:
 		NetSession.set_aim_provider(_net_aim)
 		print("ORB_MIRROR boot players=%d my_seat=%d" % [pawns.size(), NetSession.my_seat()])
 		return
+	# NIT 7 idiom: intro card at load; headless evidence/test/probe keep sync start.
+	if _test_mode != "" or _autoquit:
+		_start_match()
+	else:
+		_hint_label.visible = false   # revealed once the intro card clears (no double-gate)
+		_present_intro_card()
+
+
+func _present_intro_card() -> void:
+	_intro_card = IntroCard.new()
+	add_child(_intro_card)
+	_intro_card.started.connect(_start_match)
+	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	spec["seats"] = _human_seats()
+	_intro_card.present(spec)
+
+
+func _start_match() -> void:
 	phase = Phase.PLAY
+	_hint_label.visible = true
 	if _test_mode == "":
 		_stretch = FinalStretch.attach(self, _timer_label, {"vignette": false})
 		_stretch.play_started()   # FINAL STRETCH: light bed over the void
