@@ -1423,18 +1423,33 @@ func _build_world() -> void:
 	_env.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	_env.ambient_light_color = Color(1.0, 0.88, 0.72)
 	_env.ambient_light_energy = _amb_warm
-	_env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+	# HOUSE LOOK conversion (night 6, R3 seam): the last game on FILMIC joins
+	# the anthology's AGX standard — candle flames and relic glows roll off to
+	# COLORED bloom instead of clipping white, and deep shadows stay neutral.
+	# Style-only: the watch-dim mechanic's reactive energies (_amb_warm /
+	# _sun_warm tweens) are untouched, so the Widow's lighting tell is intact.
+	_env.tonemap_mode = Environment.TONE_MAPPER_AGX
+	_env.tonemap_exposure = 1.05
+	_env.tonemap_white = 1.0
 	_env.glow_enabled = true
-	_env.glow_intensity = 0.6
-	_env.glow_bloom = 0.15
-	_env.glow_hdr_threshold = 0.92
+	_env.glow_intensity = 0.65
+	_env.glow_bloom = 0.07
+	_env.glow_hdr_threshold = 0.95
+	_env.fog_enabled = true
+	_env.fog_light_color = Color(0.13, 0.08, 0.055)
+	_env.fog_density = 0.010
+	_env.fog_sky_affect = 0.0
+	_env.ssao_enabled = true
+	_env.ssao_radius = 0.7
+	_env.ssao_intensity = 2.1
+	_env.ssao_power = 1.8
 	var we := WorldEnvironment.new()
 	we.environment = _env
 	add_child(we)
 
 	sun.rotation_degrees = Vector3(-52, 24, 0)
 	sun.light_energy = _sun_warm
-	sun.light_color = Color(1.0, 0.9, 0.75)
+	sun.light_color = Color(1.0, 0.80, 0.55)
 	sun.shadow_enabled = true
 
 	var fill := DirectionalLight3D.new()
