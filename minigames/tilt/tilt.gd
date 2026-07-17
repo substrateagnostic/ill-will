@@ -1320,6 +1320,8 @@ func _build_world() -> void:
 	cam.fov = 50.0
 	_cam_base = cam.global_transform
 	_build_b8_horizon()  # B8-HOOK: distant shoreline dressing (arena_dressing.gd)
+	_build_drowned_graveyard()  # W3: the near sea stops being empty
+	_build_deep_threat()        # W3: one slow thing circling below
 
 ## B8 ARENA DRESSING — a coastline glimpsed across the night sea, so the
 ## platter reads as tilting off the estate's own grounds instead of floating
@@ -1356,6 +1358,81 @@ func _build_b8_horizon() -> void:
 			var light := {} if not sk.get("light", false) else \
 				{"color": Color(1.0, 0.8, 0.5), "energy": 0.9, "range": 5.0}
 			ArenaDressing.prop(self, str(spec[0]), float(spec[1]), pos, yaw, light)
+	# the estate's crow keeps vigil on the nearest skerry's cracked headstone
+	# (335 deg, r15) and on the far mausoleum (215 deg, r17) — motif, not lit
+	ArenaDressing.crow(self, Vector3(13.59, 1.02, -6.34), 200.0, 0.42)
+	ArenaDressing.crow(self, Vector3(-13.9, 2.5, -9.76), 150.0, 0.46)
+
+## W3 — THE NEAR SEA STOPS BEING EMPTY. Drowned heirs break the night surface in
+## the front + side water (the far arc already carries the skerries): reused grave
+## GLBs, tilted and SUNK so only their tops show above OCEAN_Y. Everything sits at
+## radius >= 9 — well outside the r=7 platter play volume — with no collision and
+## no light, so the fall silhouettes against a graveyard instead of a flat disc.
+## A crow keeps vigil on the tallest drowned marker.
+func _build_drowned_graveyard() -> void:
+	# id, x, z, visual_height, show_above_surface, tilt_deg, tilt_axis_deg, yaw
+	var graves := [
+		["grave_mausoleum_front",   3.6, 12.4, 2.6, 1.6, 15.0, -40.0, 190.0],
+		["grave_tilted_slab",      -3.4, 11.2, 2.0, 1.3, 24.0,  30.0, 205.0],
+		["grave_headstone_cracked", 8.2, 10.0, 1.4, 1.0, 30.0,  70.0, 150.0],
+		["grave_tilted_slab",      -9.2,  6.2, 2.0, 1.2, 26.0, -20.0, 245.0],
+		["grave_headstone_cracked",11.2,  5.0, 1.3, 0.9, 32.0, 110.0, 300.0],
+		["grave_tilted_slab",     -12.2,  1.6, 2.0, 1.1, 20.0,  15.0, 260.0],
+		["grave_headstone_cracked", 0.6, 14.2, 1.4, 1.1, 18.0, -60.0, 175.0],
+	]
+	for g in graves:
+		var vis_h := float(g[3])
+		var show := float(g[4])
+		var base_y := OCEAN_Y - (vis_h - show)   # sink it so only `show` pokes out
+		var node := ArenaDressing.prop(self, str(g[0]), vis_h,
+			Vector3(float(g[1]), base_y, float(g[2])), float(g[7]))
+		if node != null:
+			var ax := deg_to_rad(float(g[6]))
+			node.rotate(Vector3(cos(ax), 0.0, sin(ax)), deg_to_rad(float(g[5])))
+	# a crow on the drowned mausoleum's crown (top ~OCEAN_Y + show, nudged along
+	# the lean); the tilt makes it read as clinging to a sinking tomb
+	ArenaDressing.crow(self, Vector3(3.1, OCEAN_Y + 1.7, 12.7), 210.0, 0.5)
+
+## W3 — ONE SLOW THING CIRCLING. A dark half-submerged back + dorsal fin cutting a
+## lazy loop through the open water outside the drowned graves: threatening, a
+## little funny, and the payoff the fall was missing. PRESENTATION ONLY — a
+## looping Tween on a pivot (never the sim rng, never physics), unlit, no
+## collision, so the idle/edge/gull receipts stay byte-identical.
+func _build_deep_threat() -> void:
+	var pivot := Node3D.new()
+	pivot.name = "DeepThreat"
+	pivot.position = Vector3(0.0, OCEAN_Y, 0.0)
+	add_child(pivot)
+	var body := Node3D.new()
+	body.position = Vector3(15.0, 0.0, 0.0)   # out on the arm, past the graves
+	pivot.add_child(body)
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Color(0.02, 0.04, 0.06)
+	dark.roughness = 1.0
+	# the back — a long flat ellipsoid, its spine just breaking the surface
+	var back := MeshInstance3D.new()
+	var sm := SphereMesh.new()
+	sm.radius = 1.3
+	sm.height = 2.2
+	back.mesh = sm
+	back.scale = Vector3(1.0, 0.5, 3.2)
+	back.position.y = -0.4
+	back.material_override = dark
+	back.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	body.add_child(back)
+	# the dorsal fin — a thin dark triangle rising above the waterline, its base
+	# aligned with the direction of travel (tangent = body-local Z)
+	var fin := MeshInstance3D.new()
+	var pm := PrismMesh.new()
+	pm.size = Vector3(1.5, 1.5, 0.16)
+	fin.mesh = pm
+	fin.material_override = dark
+	fin.position.y = 0.55
+	fin.rotation.y = deg_to_rad(90.0)
+	fin.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	body.add_child(fin)
+	var tw := create_tween().set_loops()
+	tw.tween_property(pivot, "rotation:y", TAU, 24.0).from(0.0)
 
 ## Deciding-moment standard (doc 09 §Q2): ordinary falls demoted to 0.5x/0.2s
 ## (was a flat 0.35x/0.32s on EVERY fall); the round-ending fall promotes to

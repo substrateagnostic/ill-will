@@ -1325,35 +1325,79 @@ func _build_mourners() -> void:
 	_mourner_node = Node3D.new()
 	_mourner_node.visible = false
 	add_child(_mourner_node)
-	# two short lines of hooded mourners that converge from both verges
-	_mourner_left = _build_mourner_line()
-	_mourner_right = _build_mourner_line()
+	# two short lines of hooded mourners that converge from both verges. Each line
+	# faces its direction of travel so they read as crossing the road as they close.
+	_mourner_left = _build_mourner_line(90.0)     # walks +x toward centre
+	_mourner_right = _build_mourner_line(-90.0)    # walks -x toward centre
 	_mourner_node.add_child(_mourner_left)
 	_mourner_node.add_child(_mourner_right)
 
 
-func _build_mourner_line() -> Node3D:
+# W3: real mourners. The crude grey capsules become the forged, Meshy-RIGGED
+# hooded/elderly figures — feet at native y=0, scaled by target/native (NEVER
+# AABB-sized: a skinned mesh reads ~1/100). Per rank: a hooded bower, the weary
+# elder, a hooded idler; each still carries its pale candle so the procession
+# reads at night, and each falls back to the static GLB then a capsule if a rig
+# is ever absent. Presentation only — the mourner-sweep hazard reads MOURNER_Z +
+# the phase, never these node transforms, so the sim is untouched.
+const MOURNER_RIGS := [
+	{"anim": ["res://assets/models/meshy/generated/npc_mourner_hooded_bow.glb",
+		"res://assets/models/meshy/generated/npc_mourner_hooded_idle.glb"],
+		"native": 1.75, "static": "res://assets/models/meshy/generated/npc_mourner_hooded.glb"},
+	{"anim": ["res://assets/models/meshy/generated/npc_mourner_elderly_idle.glb"],
+		"native": 1.65, "static": "res://assets/models/meshy/generated/npc_mourner_elderly.glb"},
+	{"anim": ["res://assets/models/meshy/generated/npc_mourner_hooded_idle.glb"],
+		"native": 1.75, "static": "res://assets/models/meshy/generated/npc_mourner_hooded.glb"},
+]
+
+func _build_mourner_line(yaw_deg: float) -> Node3D:
 	var line := Node3D.new()
 	for i in 3:
-		var m := MeshInstance3D.new()
-		var cap := CapsuleMesh.new()
-		cap.radius = 0.24
-		cap.height = 1.5
-		m.mesh = cap
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.08, 0.07, 0.1)
-		mat.roughness = 0.95
-		m.material_override = mat
-		m.position = Vector3(0, 0.75, (i - 1) * 0.55)
+		var rig: Dictionary = MOURNER_RIGS[i]
+		var m := _rigged_mourner(rig["anim"], float(rig["native"]), 1.55)
+		if m != null:
+			m.rotation.y = deg_to_rad(yaw_deg)      # rig is instanced at yaw 0
+		elif ResourceLoader.exists(str(rig["static"])):
+			m = MeshyProp.instance(str(rig["static"]), 1.55, yaw_deg)
+		else:
+			m = _capsule_mourner()
+		m.position = Vector3(0, 0, (i - 1) * 0.55)
 		line.add_child(m)
-		# a pale candle each, so the procession reads at night
+		# a pale candle each (held a touch forward), so the procession reads at night
 		var c := OmniLight3D.new()
 		c.light_color = Color(1.0, 0.72, 0.4)
 		c.light_energy = 0.5
 		c.omni_range = 1.6
-		c.position = Vector3(0, 1.3, (i - 1) * 0.55)
+		c.position = Vector3(0.22, 1.15, (i - 1) * 0.55)
 		line.add_child(c)
 	return line
+
+
+## First animated rig path that resolves, instanced skinned (feet at native y=0,
+## scaled target/native, first clip looping) — or null so the caller falls back.
+func _rigged_mourner(anim_paths: Array, native: float, height: float) -> Node3D:
+	for p in anim_paths:
+		if ResourceLoader.exists(str(p)):
+			return MeshyProp.instance_rigged(str(p), native, height)
+	return null
+
+
+## Legacy grey-capsule mourner, wrapped so its feet sit at the wrapper's y=0
+## (matching the rigged/static figures). Defensive fallback only.
+func _capsule_mourner() -> Node3D:
+	var w := Node3D.new()
+	var m := MeshInstance3D.new()
+	var cap := CapsuleMesh.new()
+	cap.radius = 0.24
+	cap.height = 1.5
+	m.mesh = cap
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.08, 0.07, 0.1)
+	mat.roughness = 0.95
+	m.material_override = mat
+	m.position.y = 0.75
+	w.add_child(m)
+	return w
 
 
 func _scatter_graves() -> void:
@@ -1385,6 +1429,11 @@ func _scatter_graves() -> void:
 				mi.material_override = mat
 				mi.position = Vector3(float(x), 0.5, float(z))
 				add_child(mi)
+	# W3: the estate's crow perched on the nearest headstones (motif, unlit) — the
+	# procession is watched. Tops of the z=12 / z=6.5 rows, closest to camera.
+	ArenaDressing.crow(self, Vector3(0.0, 1.22, 12.0), 200.0, 0.42)
+	ArenaDressing.crow(self, Vector3(-8.4, 1.22, 6.5), 150.0, 0.4)
+	ArenaDressing.crow(self, Vector3(8.4, 1.22, -5.0), 240.0, 0.4)
 	# a couple of dead trees + lampposts for atmosphere
 	for spec in [["estate_dead_tree", -9.5, 3.0, 3.4], ["estate_dead_tree", 9.5, -8.0, 3.2],
 			["estate_lamppost", -7.6, -3.0, 2.6], ["estate_lamppost", 7.6, 8.0, 2.6]]:

@@ -287,6 +287,11 @@ func _build_b8_horizon() -> void:
 		var light := {} if str(r[0]) != "estate_lamppost" else \
 			{"color": Color(1.0, 0.8, 0.5), "energy": 1.0, "range": 5.5}
 		ArenaDressing.prop(self, str(r[0]), float(r[1]), r[2], float(r[3]), light)
+	# W3: the estate's crow perched on the horizon stones — a night lawn wants a
+	# bird. Silhouetted on the back lamppost + the two flanking headstones.
+	ArenaDressing.crow(self, Vector3(0, 2.62, -MowerLawn.HZ - 2.6), 168.0, 0.42)
+	ArenaDressing.crow(self, Vector3(-MowerLawn.HX - 2.2, 1.12, 0), -40.0, 0.4)
+	ArenaDressing.crow(self, Vector3(MowerLawn.HX + 2.2, 1.02, -MowerLawn.HZ * 0.5), 205.0, 0.4)
 
 ## Low hedge walls around the lawn so the arena reads as enclosed grounds.
 func _build_hedges() -> void:

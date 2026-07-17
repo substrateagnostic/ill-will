@@ -600,6 +600,13 @@ func _build_b8_horizon() -> void:
 	ArenaDressing.prop(self, "estate_iron_gate", 2.2, Vector3(-19.0, 0, 9.0), 100.0)
 	for hs in [Vector3(16.5, 0, -16.0), Vector3(-16.5, 0, -16.5)]:
 		ArenaDressing.prop(self, "estate_hedge_topiary", 1.4, hs, 0.0)
+	# W3: the estate's crow perched on the lamppost heads — the night market gets
+	# its motif bird looking down over the karts (silhouette only, unlit). Sized up
+	# a touch: this arena's camera is a steep y=28.5 top-down, so a smaller bird
+	# would vanish to a speck.
+	ArenaDressing.crow(self, Vector3(23.0, 2.64, 0), 200.0, 0.66)
+	ArenaDressing.crow(self, Vector3(-23.0, 2.64, 3.0), 150.0, 0.66)
+	ArenaDressing.crow(self, Vector3(14.0, 2.64, -15.0), 120.0, 0.6)
 
 func _build_decor() -> void:
 	var castle: PackedScene = load("res://assets/models/minigolf/castle.glb")

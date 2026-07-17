@@ -479,6 +479,47 @@ func _build_surround() -> void:
 	wall.material_override = wmat
 	wall.position.y = -5.0
 	add_child(wall)
+	_build_pit_bottom()
+
+
+## W3 — THE WELL GETS A BOTTOM. The round-5 ring-out drops losers into flat black;
+## this heaps reused grave GLBs on the pit floor (the table top, ~y=-9.3), tilted
+## and jumbled like a bone pile, and washes them in ONE faint sickly-green glow so
+## the elimination REVEALS where the losers go instead of swallowing them. It all
+## sits far below the play surface and inside the well wall (r<=9.3) — no collision,
+## no per-frame cost, one shadowless omni whose spill stays under the discs.
+func _build_pit_bottom() -> void:
+	var floor_y := -9.3
+	# id, x, z, height, tilt_deg, tilt_axis_deg, yaw
+	var bones := [
+		["grave_mausoleum_front",   0.5,  6.2, 2.2, 58.0,  20.0, 190.0],
+		["grave_tilted_slab",      -3.2,  5.0, 1.9, 72.0, -30.0, 200.0],
+		["grave_headstone_cracked", 3.4,  4.4, 1.5, 80.0,  60.0, 150.0],
+		["grave_tilted_slab",      -5.8,  2.2, 1.8, 64.0,  10.0, 240.0],
+		["grave_small_obelisk",     5.6,  1.4, 1.6, 84.0, 110.0, 300.0],
+		["grave_tilted_slab",       0.2,  0.0, 1.8, 40.0, -50.0, 175.0],
+		["grave_headstone_cracked",-2.4, -3.6, 1.5, 78.0, 130.0,  90.0],
+		["grave_tilted_slab",       4.2, -2.8, 1.8, 66.0,  40.0, 120.0],
+		["grave_headstone_cracked", 7.4,  5.6, 1.4, 82.0, -20.0, 210.0],
+		["grave_tilted_slab",      -7.2,  4.6, 1.8, 70.0,  70.0, 260.0],
+	]
+	for b in bones:
+		var glb := "res://assets/models/meshy/generated/%s.glb" % str(b[0])
+		if not ResourceLoader.exists(glb):
+			continue
+		var w := MeshyProp.instance(glb, float(b[3]), float(b[6]))
+		w.position = Vector3(float(b[1]), floor_y, float(b[2]))
+		var ax := deg_to_rad(float(b[5]))
+		w.rotate(Vector3(cos(ax), 0.0, sin(ax)), deg_to_rad(float(b[4])))
+		add_child(w)
+	# the sickly glow that makes the heap read from far above (shadowless, cheap)
+	var glow := OmniLight3D.new()
+	glow.light_color = Color(0.38, 0.92, 0.46)
+	glow.light_energy = 2.2
+	glow.omni_range = 15.0
+	glow.shadow_enabled = false
+	glow.position = Vector3(0.5, -7.6, 2.6)
+	add_child(glow)
 
 
 func _build_ui() -> void:

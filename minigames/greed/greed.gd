@@ -1733,6 +1733,10 @@ func _build_b8_dressing() -> void:
 	for side in [-1.0, 1.0]:
 		ArenaDressing.prop(self, "stone_lantern", 1.5, Vector3(side * 2.6, 0, -10.6), 0.0,
 			{"color": Color(1.0, 0.78, 0.45), "energy": 0.6, "range": 4.0, "height": 1.6})
+	# W3: the estate's crow perched atop the iron gate + a broken column, a dark
+	# silhouette watching the heist from the antechamber (motif, unlit)
+	ArenaDressing.crow(self, Vector3(0.7, 2.55, -11.0), 176.0, 0.42)
+	ArenaDressing.crow(self, Vector3(-9.0, 2.85, -9.0), 150.0, 0.4)
 
 
 func _build_walls() -> void:
