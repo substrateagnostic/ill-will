@@ -14,6 +14,11 @@ extends Control
 const PANEL_W := 300.0
 const PANEL_H := 158.0
 const PANEL_GAP := 34.0
+# The whole cluster rides a touch above dead centre so it clears the reveal
+# lower-third's band even on shorter viewports (the two used to share the lower
+# strip). The lower-third is also suppressed while this overlay is up.
+const LIFT := 46.0
+const TextFit := preload("res://estate/procession/text_fit.gd")
 
 var _header: Label
 var _scrim: PanelContainer
@@ -45,8 +50,10 @@ class StakePanel:
 		draw_style_box(box, Rect2(Vector2.ZERO, size))
 		var font := ThemeDB.fallback_font
 		# Owner header strip — colour band + badge glyph + name (never colour alone).
+		# The name ellipsizes so a long mourner never bleeds past the panel frame.
 		draw_rect(Rect2(6, 6, size.x - 12, 30), Color(pcolor.r, pcolor.g, pcolor.b, 0.22), true)
-		draw_string(font, Vector2(16, 30), "%s  %s" % [glyph, pname],
+		var head := "%s  %s" % [glyph, TextFit.ellipsize(font, pname, size.x - 56.0, 22)]
+		draw_string(font, Vector2(16, 30), head,
 			HORIZONTAL_ALIGNMENT_LEFT, size.x - 24, 22, pcolor.lerp(Color.WHITE, 0.18))
 		var pip_y := 52.0
 		var pip_h := 44.0
@@ -93,7 +100,7 @@ func setup() -> void:
 	_scrim.anchor_top = 0.5; _scrim.anchor_bottom = 0.5
 	var half_w := PANEL_W + PANEL_GAP * 0.5 + 40.0
 	_scrim.offset_left = -half_w; _scrim.offset_right = half_w
-	_scrim.offset_top = -168.0; _scrim.offset_bottom = 130.0
+	_scrim.offset_top = -168.0 - LIFT; _scrim.offset_bottom = 130.0 - LIFT
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.03, 0.03, 0.05, 0.78)
 	sb.set_corner_radius_all(14)
@@ -107,7 +114,7 @@ func setup() -> void:
 	_header.anchor_left = 0.5; _header.anchor_right = 0.5
 	_header.anchor_top = 0.5; _header.anchor_bottom = 0.5
 	_header.offset_left = -360.0; _header.offset_right = 360.0
-	_header.offset_top = -150.0; _header.offset_bottom = -108.0
+	_header.offset_top = -150.0 - LIFT; _header.offset_bottom = -108.0 - LIFT
 	_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_header.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_header.text = "A SEALED VENDETTA — RAISE, THEN RELEASE"
@@ -123,7 +130,7 @@ func setup() -> void:
 		p.anchor_top = 0.5; p.anchor_bottom = 0.5
 		var lx := PANEL_GAP * 0.5 if k == 1 else -PANEL_W - PANEL_GAP * 0.5
 		p.offset_left = lx; p.offset_right = lx + PANEL_W
-		p.offset_top = -60.0; p.offset_bottom = -60.0 + PANEL_H
+		p.offset_top = -60.0 - LIFT; p.offset_bottom = -60.0 + PANEL_H - LIFT
 		add_child(p)
 		_panels.append(p)
 	visible = false

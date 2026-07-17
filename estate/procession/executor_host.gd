@@ -177,6 +177,7 @@ const MOOD_WATCH := 4
 const MOOD_RISE := 5
 
 var banner: RichTextLabel = null   # procession supplies the reveal banner
+var after_say := Callable()        # procession hook: fit + grow the band per line
 var cam: Camera3D = null           # procession supplies the live camera
 var body: ProcessionExecutorBody = null   # the embodied host (null when headless)
 var board: ProcessionBoardPath = null     # supplies stone positions for gestures
@@ -208,8 +209,13 @@ func embody(world: Node3D, board_ref: ProcessionBoardPath, prng_seed: int) -> vo
 	out.y = 0.0
 	out = out.normalized() if out.length() > 0.01 else Vector3.FORWARD
 	var right := out.cross(Vector3.UP).normalized()
-	# Off to the gate's side, clear of the crooked signpost, presiding over the loop.
-	var stand := gate + out * 0.30 + right * 4.4
+	# Seat him just inside the gate on the drive apron, near-centred in the gate's
+	# CLEAR lane — the old gate-SIDE spot (right * 4.4) put him in the narrow
+	# corridor between the crooked signpost and the space-1 shrine lantern, and his
+	# arm clipped one or the other (director note W9). Pulled ~2.2m toward the loop
+	# (‑out) and barely off-centre, he presides with the manor arch as his backdrop
+	# and daylight on both sides. He still faces CENTER, so every landing reads.
+	var stand := gate - out * 2.2 + right * 0.5
 	stand.y = gate.y
 	body.stand_at(stand, board.CENTER)
 
@@ -334,9 +340,13 @@ func say(text: String, color: Color) -> void:
 		return
 	banner.clear()
 	banner.push_color(color)
-	banner.push_font_size(40)
 	banner.append_text(text)
 	banner.pop_all()
+	# The band fits its font + grows to hold this line BEFORE it slides in, so the
+	# estate's wordier proclamations (and the eulogy) never clip. The band's own
+	# `normal_font_size` theme size now governs — no inline push fighting the fit.
+	if after_say.is_valid():
+		after_say.call()
 	banner.visible = true
 
 func clear_banner() -> void:

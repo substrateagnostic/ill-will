@@ -26,11 +26,14 @@ var board: ProcessionBoardPath = null
 var fast := false
 
 var _driving := false                 # when false, procession poses the cam directly
-var _base_pos := Vector3(0, 23, 23)
+# A gentle 3/4 overview (a touch off the drive's axis) instead of a dead-centre,
+# perfectly-symmetric head-on — reads more cinematic while still showing the whole
+# loop. Kept in lock-step with procession._cam_home so director + posed shots agree.
+var _base_pos := Vector3(-3.4, 23.5, 23.0)
 var _base_look := Vector3(0, 0, -3)
 var _tw: Tween = null
 var _t := 0.0                          # handheld clock (seconds, wall time)
-var _home_pos := Vector3(0, 23, 23)
+var _home_pos := Vector3(-3.4, 23.5, 23.0)
 var _home_look := Vector3(0, 0, -3)
 
 func setup(camera: Camera3D, board_path: ProcessionBoardPath, is_fast: bool) -> void:
@@ -146,9 +149,14 @@ func move_travel(dur := 0.9) -> void:
 	var end := c + Vector3(3.2, 8.4, 23.2)
 	var look := c + Vector3(0, 1.1, 0)
 	_kill_tween()
-	_base_pos = start
-	_base_look = look
-	_tw = create_tween().set_parallel(true)
+	# Ease DOWN from wherever we were (usually the whole-board overview) into the
+	# low raking start, THEN push laterally along the drive — no hard cut into the
+	# dolly (the old code snapped _base_pos to `start`, a visible jump each round).
+	_tw = create_tween()
+	_tw.tween_method(_set_base_pos, _base_pos, start, 0.35) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_tw.parallel().tween_method(_set_base_look, _base_look, look, 0.35) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	_tw.tween_method(_set_base_pos, start, end, dur) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 
@@ -165,13 +173,16 @@ func landing_push(shot: Dictionary) -> void:
 	# Overshoot: nudge 12% closer to the subject, then settle back to the anchor.
 	var overshoot: Vector3 = look + (pos - look) * 0.88
 	_kill_tween()
-	_base_look = look   # the aim leads; handheld rides on top
+	# Ease the AIM from the previous shot's look into this landing (the old code
+	# snapped _base_look, so the frame's aim cut between reveals). The aim leads the
+	# push and handheld rides on top.
+	var from_look := _base_look
 	_tw = create_tween()
 	_tw.tween_method(_set_base_pos, _base_pos, overshoot, 0.38) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	_tw.tween_method(_set_base_pos, overshoot, pos, 0.16) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_tw.parallel().tween_method(_set_base_look, _base_look, look, 0.38) \
+	_tw.parallel().tween_method(_set_base_look, from_look, look, 0.38) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 ## TWO_SHOT (F3/F14) — frame two pawns facing off (vendetta), holding both in
