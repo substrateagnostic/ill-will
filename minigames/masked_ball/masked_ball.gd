@@ -128,12 +128,29 @@ const REVEAL_TICK_DB := -6.0
 # waltz metronome (presentation only): oom-pah-pah at 0.62s a beat
 const WALTZ_BEAT := 0.62
 
+const GAME_INTRO := {
+	"name": "MASKED BALL",
+	"goal": "Find yourself among twenty identical dancers, then curtsy for points or unmask a human.",
+	"accent": Color(0.92, 0.82, 1.0),
+	"controls": [
+		{"action": "move", "label": "DRIFT (crowd speed)"},
+		{"action": "a", "label": "CURTSY (scores in the circle)"},
+		{"action": "b", "label": "UNMASK (one mark)"},
+	],
+	"tips": [
+		"Your own dancer answers your stick the instant you move — the crowd merely wanders.",
+		"Feather the stick below a full drift and only your mask glints, privately.",
+		"Marking empty air still costs your one mark. Aim before you spend it.",
+	],
+}
+
 var phase: int = Phase.WAITING
 var game_time := 0.0
 var rng := RandomNumberGenerator.new()        # match setup draws
 var crowd_rng := RandomNumberGenerator.new()  # NPC brains, fixed tick order
 var _fx_rng := RandomNumberGenerator.new()    # visual/flavor only, never logic
 var bots: MBBots
+var _intro_card: IntroCard = null
 
 var roster: Array = []
 var players: Array = []     # {index,name,color,device,is_bot,points,pips,
@@ -333,6 +350,23 @@ func begin(config: Dictionary) -> void:
 		str(players.map(func(p): return p.is_bot)), _waltz_len])
 	for i in players.size():
 		print("MB_SELF seat=%d %s body=%d" % [i, players[i].name, _body_of[i]])
+	# NIT 7 idiom: intro card at load; headless evidence/capture/probe keep sync start.
+	if _tally or _snaps or _netdemo:
+		_start_waltz_intro()
+	else:
+		_present_intro_card()
+
+
+func _present_intro_card() -> void:
+	_intro_card = IntroCard.new()
+	add_child(_intro_card)
+	_intro_card.started.connect(_start_waltz_intro)
+	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	spec["seats"] = _human_seats()
+	_intro_card.present(spec)
+
+
+func _start_waltz_intro() -> void:
 	phase = Phase.INTRO
 	_intro_t = 0.0
 	phase_label.text = "MASKED BALL"

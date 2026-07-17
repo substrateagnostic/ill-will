@@ -117,6 +117,21 @@ const ROLL_STEP := 0.12         # one planchette rattle every 0.12s
 const LEDGER_STAGGER := 0.5     # settlement rows read out one beat apart
 const REVEAL_FINISH_T := 11.1   # was 9.6; +1.5s room for the staggered ledger
 
+const GAME_INTRO := {
+	"name": "THE SÉANCE",
+	"goal": "Guide the planchette to the word together. One of you was paid to make it fail.",
+	"accent": Color(0.8, 0.75, 1.0),
+	"controls": [
+		{"action": "move", "label": "GUIDE THE PLANCHETTE"},
+		{"action": "a", "label": "CHANT ON THE PULSE"},
+		{"action": "b", "label": "SURGE (anonymous)"},
+	],
+	"tips": [
+		"Whoever's paid up front sees the word too — sabotage has to look like an honest mistake.",
+		"Every hand pulls the same shared planchette. Nobody can see whose is pulling it wrong.",
+	],
+}
+
 var phase: int = Phase.WAITING
 var game_time := 0.0
 var rng := RandomNumberGenerator.new()
@@ -241,6 +256,7 @@ var _time_token := 0
 var _banner_token := 0
 var _sub_token := 0
 var _ui: SeanceUI
+var _intro_card: IntroCard = null
 
 @onready var cam: Camera3D = $CameraRig/Camera3D
 @onready var banner: Label = $UI/Banner
@@ -386,6 +402,23 @@ func begin(config: Dictionary) -> void:
 	if not _practice:
 		_currency.append({"type": "grudge", "player": charlatan, "amount": FEE_GRUDGE,
 			"reason": "took the spirits' coin to bury the seance"})
+	# NIT 7 idiom: intro card at load; headless evidence keeps the sync start.
+	if _tally:
+		_start_cast_intro()
+	else:
+		_present_intro_card()
+
+
+func _present_intro_card() -> void:
+	_intro_card = IntroCard.new()
+	add_child(_intro_card)
+	_intro_card.started.connect(_start_cast_intro)
+	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	spec["seats"] = _human_seats()
+	_intro_card.present(spec)
+
+
+func _start_cast_intro() -> void:
 	phase = Phase.INTRO
 	_intro_t = 0.0
 	phase_label.text = "THE SEANCE"

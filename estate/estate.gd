@@ -12,9 +12,9 @@ const TILE_COST := 2
 ## (the double-gate collapse, morning menu #4 / doc 14 §5).
 const MODULES := {
 	"par": {"name": "PAR FOR THE CURSE", "scene": "res://scenes/main.tscn", "mode": "gamestate"},
-	"echo": {"name": "ECHO CHAMBER", "scene": "res://minigames/echo_chamber/echo_chamber.tscn", "mode": "contract"},
+	"echo": {"name": "ECHO CHAMBER", "scene": "res://minigames/echo_chamber/echo_chamber.tscn", "mode": "contract", "intro": true},
 	"tilt": {"name": "TILT", "scene": "res://minigames/tilt/tilt.tscn", "mode": "contract", "intro": true},
-	"orbital": {"name": "ORBITAL DODGEBALL", "scene": "res://minigames/orbital/orbital.tscn", "mode": "contract"},
+	"orbital": {"name": "ORBITAL DODGEBALL", "scene": "res://minigames/orbital/orbital.tscn", "mode": "contract", "intro": true},
 	"mower": {"name": "MOWER MAYHEM", "scene": "res://minigames/mower/mower.tscn", "mode": "contract", "intro": true},
 	"greed": {"name": "GREED INC.", "scene": "res://minigames/greed/greed.tscn", "mode": "contract", "intro": true},
 	"swap": {"name": "SWAP MEET", "scene": "res://minigames/swap_meet/swap_meet.tscn", "mode": "contract"},
@@ -22,9 +22,9 @@ const MODULES := {
 	"throne": {"name": "THE THRONE", "scene": "res://minigames/throne/throne.tscn", "mode": "contract", "intro": true},
 	"lastwill": {"name": "LAST WILL", "scene": "res://minigames/last_will/last_will.tscn", "mode": "contract", "intro": true},
 	"widowsgaze": {"name": "THE WIDOW'S GAZE", "scene": "res://minigames/widows_gaze/widows_gaze.tscn", "mode": "contract", "intro": true},
-	"seance": {"name": "THE SÉANCE", "scene": "res://minigames/seance/seance.tscn", "mode": "contract", "theater": true},
+	"seance": {"name": "THE SÉANCE", "scene": "res://minigames/seance/seance.tscn", "mode": "contract", "theater": true, "intro": true},
 	"understudy": {"name": "THE UNDERSTUDY", "scene": "res://minigames/understudy/understudy.tscn", "mode": "contract", "theater": true, "intro": true},
-	"maskedball": {"name": "MASKED BALL", "scene": "res://minigames/masked_ball/masked_ball.tscn", "mode": "contract", "theater": true},
+	"maskedball": {"name": "MASKED BALL", "scene": "res://minigames/masked_ball/masked_ball.tscn", "mode": "contract", "theater": true, "intro": true},
 	"pallbearers": {"name": "PALLBEARERS", "scene": "res://minigames/pallbearers/pallbearers.tscn", "mode": "contract", "intro": true},  # B7-HOOK
 	"mock": {"name": "EXHIBITION MATCH", "scene": "res://estate/mock_game.tscn", "mode": "contract"},
 }
