@@ -633,6 +633,10 @@ func _enter_overtime() -> void:
 	Sfx.play("grudge")
 	Sfx.play("round_over", -4.0)
 	_shake = maxf(_shake, 0.25)
+	# THE DECIDING MOMENT (doc 09 §Q2): OVERTIME is mower's sudden-death stakes-spike
+	# — punch the camera in (the tally's own pull-BACK survey comes later on the
+	# freeze beat). Self-gates on reduced-motion inside the kit.
+	FinalStretch.fov_punch(cam, 52.0, 6.0, 0.8, "OVERTIME")
 	_log("overtime t=%.1f" % round_t)
 
 func _end_round() -> void:

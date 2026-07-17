@@ -140,6 +140,15 @@ var _banner_gen := 0
 ## (reduced-motion) preference, the HIT KIT pattern.
 var _impact_amp := 0.0        # 0..1 kill punch, decays each frame
 var _impact_decay := 10.0     # faster ball -> quicker decay (deeper, shorter)
+var _decide_fov_ms := 0       # FINAL ORBIT: real-time deadline while the shared fov_punch owns the lens
+
+# NOTE (JUICE W5): orbital is the one game DELIBERATELY exempted from the house
+# rotational-shake roll. Its sim reads _cam.global_basis as the screen-relative
+# control frame (screen_right/up, get_aim_screen), so rolling the camera would
+# rotate that frame and perturb bot movement -- a determinism break (proven: it
+# desynced the --fast receipt run-to-run). Translation shake (h/v_offset) is safe
+# because it never touches the basis. The fov punch below is safe for the same
+# reason the existing _impact_amp fov beat is: fov never enters the control frame.
 var _vig_strength := 0.0      # smoothed danger-vignette strength
 var _vignette: ColorRect
 var _vig_mat: ShaderMaterial
@@ -947,6 +956,13 @@ func on_ball_rest(bb: OrbBall) -> void:
 func _final_orbit() -> void:
 	_net_fo = 1   # wire fact: the mirror's kit escalates + tints off this flip
 	_stretch.escalate()
+	# THE DECIDING MOMENT (doc 09 §Q2): FINAL ORBIT is orbital's sudden-death spike.
+	# The shared fov punch owns the lens for its window; the per-frame _impact_amp fov
+	# driver stands aside via _decide_fov_ms so the punch actually reads. fov never
+	# enters the sim's control frame, so this stays byte-identical (unlike a roll).
+	if _motion_ok():
+		_decide_fov_ms = Time.get_ticks_msec() + 900
+	FinalStretch.fov_punch(_cam, CAM_FOV, 6.0, 0.9, "FINAL ORBIT")
 	_flash_banner("FINAL ORBIT", Color(1.0, 0.45, 0.3), 2.4)
 	_flash_event("THE ESTATE CALLS TIME. OLD ORBITS STILL KILL.", Color(1.0, 0.75, 0.65))
 	if _star_mat != null:
@@ -1095,10 +1111,12 @@ func _process(delta: float) -> void:
 	# heat-scaled rate. Motion-gated; the sim's slow-mo beat is untouched.
 	if _impact_amp > 0.001:
 		_impact_amp = lerpf(_impact_amp, 0.0, 1.0 - exp(-_impact_decay * delta))
-		_cam.fov = CAM_FOV - (_impact_amp * 3.5 if motion_ok else 0.0)
+		if Time.get_ticks_msec() >= _decide_fov_ms:   # yield to a FINAL ORBIT punch
+			_cam.fov = CAM_FOV - (_impact_amp * 3.5 if motion_ok else 0.0)
 	else:
 		_impact_amp = 0.0
-		_cam.fov = CAM_FOV
+		if Time.get_ticks_msec() >= _decide_fov_ms:   # yield to a FINAL ORBIT punch
+			_cam.fov = CAM_FOV
 	_update_threat_audio(delta)
 	_update_vignette(delta)
 	# probe-night evidence latch (has_guests only, once): a top-heat ball

@@ -1323,6 +1323,10 @@ func _on_finish(i: int) -> void:
 		_flash_exec(EXEC_CRYPT, 4.0)
 		_spawn_burst(pawns[i].global_position + Vector3(0, 1.2, 0), players[i].color, 30)
 		VerifyCapture.snap("finish")
+		# THE DECIDING MOMENT (doc 09 §Q2): first-to-the-crypt is this race's whole
+		# identity — give the win the shared fov punch + newsreel capture, like every
+		# other game's climax. Self-gates on reduced-motion inside the kit.
+		FinalStretch.fov_punch(cam, _cam_base_fov, 6.0, 0.8, "TO THE CRYPT")
 	# probate closes: pending drafts are dropped with regrets
 	if not _will_queue.is_empty():
 		_will_queue.clear()

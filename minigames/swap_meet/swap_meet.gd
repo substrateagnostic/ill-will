@@ -824,6 +824,11 @@ func _finish_kart(kart: SwapKart) -> void:
 		Sfx.play("round_over")
 		_confetti(kart.center(), kart.color)
 		_flash_banner("[color=%s]%s[/color] FINISHES P%d!" % [kart.color.to_html(false), kart.pname, kart.finish_place], 1.6)
+		# THE DECIDING MOMENT (doc 09 §Q2): a clean (non-photo) win still deserves the
+		# shared fov punch + newsreel capture — the photo-finish path owns its own
+		# camera below. Self-gates on reduced-motion inside the kit.
+		if kart.finish_place == 1:
+			FinalStretch.fov_punch(_cam, CAM_FOV, 6.0, 0.8, "THE FINISH")
 	print("FINISH t=%.1f p=%d place=%d laps=%s" % [race_t, kart.index, kart.finish_place, str(kart.lap_times)])
 	_update_score_rows()
 
@@ -853,6 +858,10 @@ func _try_photo_finish(winner: SwapKart) -> bool:
 func _photo_finish(winner: SwapKart, chaser: SwapKart, margin_units: float, est_delta: float) -> void:
 	_freeze_ticks = maxi(_freeze_ticks, PHOTO_FREEZE_TICKS)   # 10-tick line freeze
 	_shake = maxf(_shake, 0.5)
+	# THE ESTATE'S MEMORY (doc 09 §Q2): the photo finish keeps its bespoke, tuned
+	# _fov_punch below, but route the deciding-moment newsreel still through the
+	# shared chokepoint so the money shot reaches the album like every other climax.
+	MomentScribe.capture("deciding", "PHOTO FINISH", 3)
 	_fov_punch(38.0, 0.85)                                    # camera punch to the line
 	_flashbulb()
 	Sfx.play("bumper", -2.0)

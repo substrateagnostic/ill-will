@@ -595,6 +595,11 @@ func _team_finish(t: int) -> void:
 	_finish_order.append(t)
 	if winner_team < 0:
 		winner_team = t
+		# THE DECIDING MOMENT (doc 09 §Q2): the coffin crossing into the crypt is the
+		# win — give it the shared fov punch + newsreel capture. Skipped on the
+		# byte-stable tally path; self-gates on reduced-motion inside the kit.
+		if not _no_juice:
+			FinalStretch.fov_punch(cam, 60.0, 6.0, 0.8, "TO THE CRYPT")
 	Sfx.play("bell_toll", -1.0)
 	_cap_event("finish")
 	_log("finish team=%d t=%.2f" % [t, game_t])

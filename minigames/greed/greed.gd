@@ -783,6 +783,11 @@ func _do_bank(p: int) -> void:
 	carrier_index = -1
 	# ceremony
 	_bank_ceremony(p, amount)
+	# THE DECIDING MOMENT (doc 09 §Q2): a bank under the closing bell — LAST BANKS,
+	# greed's make-or-break beat — earns the shared fov punch + newsreel capture the
+	# other games fire on their climax. Self-gates on reduced-motion inside the kit.
+	if _bell_last:
+		FinalStretch.fov_punch(cam, 56.0, 6.0, 0.8, "LAST BANKS")
 	_ev_banks += 1
 	_ev_last_bank = [p, amount]
 	_set_bell_approach(false)
