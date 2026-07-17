@@ -112,6 +112,13 @@ var _house_rules_countdown := 0.0
 var _house_rules_ready := {}       # seat -> bool: pressed A to continue
 var _house_rules_needed: Array = []  # local human seats that must press A
 
+# ----- THE STANDING GRUDGE card (W2 saga): the night-open review of the
+# standing accounts. Shown once before the first auction of each night on a
+# human table (soaks/guests skip). Deduped by night so the button's re-entry
+# into _enter_auction does not re-raise it.
+var _standing_grudge_active := false
+var _standing_grudge_night := -1
+
 @onready var cam: Camera3D = $Camera3D
 @onready var top_bar: HBoxContainer = $UI/TopBar/Row
 @onready var phase_panel: PanelContainer = $UI/PhasePanel
@@ -209,6 +216,14 @@ func _ready() -> void:
 			HowtoCards.schedule_ready_test(self)
 		elif arg == "--houserulestest":
 			HowtoCards.schedule_house_rules_test(self)
+		elif arg == "--grudgetest":
+			SagaCards.schedule_standing_grudge_test(self)
+		elif arg == "--funeralstatstest":
+			SagaCards.schedule_funeral_stats_test(self)
+		elif arg == "--runovertest":
+			SagaCards.schedule_run_over_test(self)
+		elif arg == "--eulogyreceipttest":
+			SagaCards.schedule_eulogy_receipt_test(self)
 		elif arg == "--readylobbytest":
 			# Windowed lobby proof: an EMPTY chair (dim) + a READY chip + a
 			# waiting START button. Self-contained backup/restore of the seats.
@@ -1463,9 +1478,10 @@ func _process(delta: float) -> void:
 		_poll_ready_gate(delta)
 	if _house_rules_active:
 		_poll_house_rules(delta)
-	# The HOUSE RULES card can be up while phase is still GROUNDS (the --estate
-	# boot default) — suppress lobby join/ready polling so its A means "continue".
-	if (phase == Phase.LOBBY or phase == Phase.GROUNDS) and not _house_rules_active:
+	# The HOUSE RULES / STANDING GRUDGE cards can be up while phase is still
+	# GROUNDS (the --estate boot default) — suppress lobby join/ready polling so
+	# the table's input belongs to the card, not a stray seat toggle.
+	if (phase == Phase.LOBBY or phase == Phase.GROUNDS) and not _house_rules_active and not _standing_grudge_active:
 		if _strolling:
 			_poll_stroll()
 		else:
@@ -1690,6 +1706,11 @@ func _enter_auction() -> void:
 	# A brand-new estate meets THE HOUSE RULES before its first auction. The card
 	# marks itself shown and re-enters here when dismissed (flag now blocks it).
 	if _maybe_show_house_rules():
+		return
+	# THE STANDING GRUDGE (W2): night 2+ opens on a review of the standing
+	# accounts. Same re-entry contract as the house rules — dismiss returns here,
+	# the per-night flag now blocks a second raise.
+	if SagaCards.maybe_show_standing_grudge(self):
 		return
 	phase = Phase.AUCTION
 	_net_set_ceremony({})
@@ -2214,6 +2235,20 @@ func _enter_will_reading(champ) -> void:
 		chl.add_theme_color_override("font_color", Color(0.75, 0.72, 0.85))
 		chl.modulate.a = 0.0
 		phase_box.add_child(chl)
+	# EULOGY AS ITEMISED RECEIPT (W2): the reading closes on a transaction block.
+	# The estate does not mourn; it processes. These fade in last with the same
+	# stagger (they start at modulate.a == 0, like the rows above).
+	for r in SagaCards.eulogy_receipt_lines():
+		var rl := Label.new()
+		rl.text = String(r.get("text", ""))
+		rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		rl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		rl.custom_minimum_size = Vector2(680, 0)
+		var is_head: bool = bool(r.get("header", false))
+		rl.add_theme_font_size_override("font_size", 17 if is_head else 15)
+		rl.add_theme_color_override("font_color", Color(0.86, 0.78, 0.52) if is_head else Color(0.78, 0.73, 0.58))
+		rl.modulate.a = 0.0
+		phase_box.add_child(rl)
 	# The superlative cards travel as composed lines — the guest's reading is
 	# word-for-word the couch's, sequenced by the same stagger.
 	_net_set_ceremony({"stage": "will", "champ": champ.index, "head": head.text,
@@ -2346,14 +2381,77 @@ func _run_over(p: int) -> void:
 	l.custom_minimum_size = Vector2(700, 0)
 	l.add_theme_color_override("font_color", pl.color)
 	phase_box.add_child(l)
+	# FUNERAL STATISTICS (W2): the heir named, the estate closes its books with an
+	# itemised audit before anyone is let back to the title.
 	var btn := Button.new()
-	btn.text = "RETURN TO THE TITLE"
-	btn.pressed.connect(func():
-		GameState.reset_match()
-		_enter_title())
+	btn.text = "THE FINAL AUDIT"
+	btn.pressed.connect(func(): _enter_funeral_statistics(p))
 	phase_box.add_child(btn)
+	btn.grab_focus()
 	if _all_bots():
 		get_tree().create_timer(4.0).timeout.connect(func():
+			if phase == Phase.NIGHT_END:
+				_enter_funeral_statistics(p))
+
+## Dev-only: the saga verification hooks stage NIGHT_END ceremony cards directly
+## (the enum is not reachable through the instance from another script).
+func _dev_set_phase_night_end() -> void:
+	phase = Phase.NIGHT_END
+
+## The run-end audit: the estate totts up the whole tenure aloud — nights kept,
+## monuments raised, reprisals settled, kindnesses (none), then the heir and a
+## souring commendation — read with the will-reading's fade-in stagger. Read-only
+## over what the slot already holds. Ends at the title, where the estate lives.
+func _enter_funeral_statistics(heir_idx: int) -> void:
+	if phase != Phase.NIGHT_END:
+		return
+	Music.play_slot("ceremony")
+	_clear_panel("THE FINAL AUDIT", Color(0.9, 0.8, 0.4))
+	var sub := Label.new()
+	sub.text = "The manor has changed hands. The estate closes its books in full."
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub.custom_minimum_size = Vector2(720, 0)
+	sub.add_theme_font_size_override("font_size", 16)
+	sub.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
+	sub.modulate.a = 0.0
+	phase_box.add_child(sub)
+	for item in SagaCards.funeral_audit_lines(heir_idx):
+		var il := Label.new()
+		il.text = "·  " + String(item.get("text", ""))
+		il.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		il.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		il.custom_minimum_size = Vector2(720, 0)
+		il.add_theme_font_size_override("font_size", 18)
+		var who: int = int(item.get("who", -1))
+		if who >= 0 and who < GameState.PLAYER_COLORS.size():
+			il.add_theme_color_override("font_color", GameState.PLAYER_COLORS[who])
+		else:
+			il.add_theme_color_override("font_color", Color(0.82, 0.79, 0.7))
+		il.modulate.a = 0.0
+		phase_box.add_child(il)
+	var i := 0
+	for c in phase_box.get_children():
+		if c is Label and c.modulate.a == 0.0:
+			var tw := create_tween()
+			tw.tween_interval(0.4 * i)
+			tw.tween_property(c, "modulate:a", 1.0, 0.3)
+			i += 1
+	print("FUNERAL_AUDIT heir=%s nights=%d monuments=%d" % [
+		GameState.PLAYER_NAMES[heir_idx], EstateState.nights_played, EstateState.monuments.size()])
+	await get_tree().create_timer(0.4 * i + 0.6).timeout
+	VerifyCapture.snap("funeral_audit")
+	if phase != Phase.NIGHT_END:
+		return
+	var done := Button.new()
+	done.text = "RETURN TO THE TITLE"
+	done.pressed.connect(func():
+		GameState.reset_match()
+		_enter_title())
+	phase_box.add_child(done)
+	done.grab_focus()
+	if _all_bots():
+		get_tree().create_timer(3.0).timeout.connect(func():
 			if phase == Phase.NIGHT_END:
 				GameState.reset_match()
 				_enter_title())
