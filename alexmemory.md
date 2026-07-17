@@ -6,6 +6,89 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🌙🌙🌙🌙🌙🌙 MORNING MENU #6 — THE SIXTH WATCH (2026-07-17). The night
+  the fleet went out, and everything came back.**
+
+  **THE SHAPE:** a 10-lane research fleet first (Fable ×2, Opus ×3, Sonnet
+  ×4, GPT-5.6 via Codex — full dossier at docs/design/27, raw reports in
+  docs/design/research-night6/), then 8 build lanes + 4 director builds.
+  **11 merges + 3 direct commits, every receipt green at every gate, zip
+  rebuilt.** Your real save was never touched (verified; fresh backup
+  .bak-night6; all bot runs used a scratch slot 3).
+
+  **YOUR THREE CALLS, SHIPPED:**
+  1. **Moonlit walkabout** — title → hub → board is one continuous night.
+  2. **THE RESHUFFLED GREEN (W8)** — the putt bands re-deal every roll:
+     same six physics windows, values dealt fresh (one shared layout, all
+     seats), bots aim at wherever their number landed, colors travel with
+     values, "HOLD A · PICK YOUR NUMBER". ⚠ This deliberately RE-FROZE the
+     receipt: seed 7 is now **HEIR MINT, 21 rounds** (was BLUE/17) —
+     commit ac2b2a1 records both worlds.
+  3. **PROCESSION AAA PASS (W9)** — every ceremony text surface is now
+     overflow-proof (tested with "CLEMENTINE ASHWORTH-VANE"-grade names),
+     **THE DRIVE minimap** (parchment corner inset: stones, pawn glyphs,
+     Codicil diamond, gate) rides MOVE/REVEAL and mirrors to guests, the
+     Executor no longer clips his lantern (re-seated in the gate's clear
+     lane), and the board camera opens on a gentle 3/4 with eased dollies
+     instead of hard cuts.
+
+  **THE REST OF THE NIGHT:**
+  - **BOARD DRAMA (W1):** THE INTERIM READING (will-clause leaders read at
+    each HOUSE AWAKENS — the 25-minute lottery is now a race you can see);
+    **sealed vendetta stakes** — humans hold-to-raise 0–3 under a wax seal,
+    revealed with a beat (bots/remote keep RNG, so soaks stay pure); the
+    duel winner hangs an **epitaph** on the loser's pawn ("BRIEFLY
+    MOURNED") for the night.
+  - **CEREMONY SAGA (W2):** THE STANDING GRUDGE night-open card (your
+    5-night history finally gets performed — reigning heir, streaks, the
+    winless, armed reprisals); **THE FINAL AUDIT** at run-end ("Kindnesses
+    recorded: none. The estate had budgeted for this."); the eulogy closes
+    as an itemised receipt ("Remains: reallocated.").
+  - **ARENA REVEALS (W3+Z3, 150cr, balance 1460 — no top-up needed):**
+    crows on every outdoor horizon (the motif bird was in zero arenas);
+    TILT's sea holds a drowned-heirs graveyard, a circling fin, and **the
+    drowned colossus hand** you asked about; echo's round-5 ring-out
+    reveals a green-lit bone heap + grasping hands at the well bottom;
+    the throne got its stained-glass clerestory; PALLBEARERS' capsule
+    mourners are real rigged mourners now. The leviathan was honestly
+    rejected twice (Meshy kept giving it legs). WIDOW'S GAZE joined the
+    house AGX look (last FILMIC holdout; the watch-dim tell untouched).
+  - **SOUND + FEEL (W4+W5):** the countdown tick finally plays its
+    purpose-built sample (most-heard SFX in the game); stingers ride every
+    deciding-moment camera punch; menus speak the shipped-but-orphaned
+    ui_* family; the podium bell ducks the music; rotational screenshake
+    house-wide; fov punches for the six punchless games; and the
+    project's **first controller rumble** — bring a pad tomorrow. (W5
+    caught + exempted a real one: rolling orbital's camera desyncs its
+    sim — the camera basis IS its control frame. Documented in-code.)
+  - **STANLEY HOOKS (W6):** the Executor narrates when you pause, idle
+    20s, or quit ("The estate has never successfully stopped anyone.");
+    the séance wheel's STOP button — press it; RESULTS surfaces read
+    FINAL DISPOSITION / {NAME} INHERITS; QUIT is LEAVE THE ESTATE.
+  - **INTRO CARDS (W7):** masked_ball, séance ("One of you was paid to
+    make it fail."), orbital, echo — the four worst-taught games teach
+    themselves now. Plus the PALLBEARERS double-card bug is dead.
+
+  **PLAYTHROUGH NOTES FOR TODAY:**
+  - A capture run reset the shell's party_setup.json to all-bots — one
+    visit to the SEATS tab fixes it (your save slots were never touched).
+  - Night 6's Standing Grudge on your real save will read compact (GOLD
+    reigning with 1, MINT winless ×3) — correct; it grows with history.
+  - Known nits (flagged, not built): pawn nametags cluster at the gate on
+    round 1; putt-meter names clip past ~18 chars; the will-reading's
+    bottom line kisses the frame at absolute-max name length; mower's
+    "TALLYING..." is the last generic results title.
+
+  **DECISIONS QUEUED (research dossier, doc 27 — none built, all scoped):**
+  THE DISINHERITED (Dokapon-style opt-in last-place power, the big swing);
+  THE RECORDS (walk-up almanac lectern); "PREVIOUSLY, ON THE ESTATE"
+  (Newsreel cold-open recap); THE BEQUEST (wax-seal parcels at the will);
+  VISITATION HOURS (return ceremony); prediction/side-bet layer (3 shapes,
+  doctrine-safe); Codicil contested-crossing seat-bias fix (sim change =
+  another receipt bump — bundle with the next one); board-length profiles
+  + no-repeat game docket (GPT-5.6's sharpest find); LETTERS OF
+  ADMINISTRATION (pity as probate paperwork).
+
 - **🌤️ AFTERNOON ENCORE (2026-07-16, pre-Chicago).** You asked for the
   podium, the Executor's body, and rigging at the director's discretion.
   Delivered, 4 merges, receipts green, zip rebuilt:
@@ -27,10 +110,8 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
     style_02 retarget proven) — a characterful re-pick (e.g. Dozing
     Elderly, id 38) is now a report-only change. No raking clip exists;
     Old Rake keeps his prop honestly.
-  - **YOUR TONAL CALL, WHEN YOU'RE BACK:** the title is moonlit now, but
-    pressing NEW GAME still walks into the bright-daylight hub. Keep the
-    day/night snap (the grounds "wake up" for the living), or moonlight
-    the walkabout too? One EnvKit call either way.
+  - ~~YOUR TONAL CALL~~ **ANSWERED 07-17: moonlit walkabout, shipped
+    night 6** ("much better moon. I mean mood.").
 
 - **☀️☀️☀️☀️☀️ MORNING MENU #5 — THE FIFTH WATCH (2026-07-16). The night
   the estate became a broadcast — and survived a Windows update.**
