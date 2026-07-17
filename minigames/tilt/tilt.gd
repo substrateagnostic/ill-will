@@ -509,15 +509,18 @@ func _tick_splats() -> void:
 func _process(delta: float) -> void:
 	if phase == Phase.WAITING:
 		return
-	# camera: subtle roll WITH the platter (<= 3 deg) + shake
+	# camera: subtle roll WITH the platter (<= 3 deg) + a shake-driven force roll
+	# (ShakeKit) folded into the same rotate — reusing the shake jitter, no new draw.
 	var roll := clampf(platter.tilt.x * 0.14, -deg_to_rad(3.0), deg_to_rad(3.0))
 	cam.global_transform = _cam_base
-	cam.rotate_object_local(Vector3(0, 0, 1), roll)
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - delta * 1.1)
-		cam.position += Vector3(
+		var j := Vector3(
 			fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
-			fx_rng.randf_range(-1, 1)) * _shake * 0.35
+			fx_rng.randf_range(-1, 1))
+		roll += deg_to_rad(ShakeKit.MAX_ROLL_DEG) * clampf(_shake, 0.0, 1.0) * j.x
+		cam.position += j * _shake * 0.35
+	cam.rotate_object_local(Vector3(0, 0, 1), roll)
 	# coin twirl + splat fade
 	for c in loose_coins:
 		(c.node as Node3D).rotation.y += 2.5 * delta

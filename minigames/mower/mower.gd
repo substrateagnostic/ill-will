@@ -757,11 +757,14 @@ func _process(delta: float) -> void:
 	# camera shake
 	if _shake > 0.0:
 		_shake = maxf(0.0, _shake - delta * 1.4)
-		cam.h_offset = randf_range(-1, 1) * _shake * 0.25
+		var jx := randf_range(-1, 1)
+		cam.h_offset = jx * _shake * 0.25
 		cam.v_offset = randf_range(-1, 1) * _shake * 0.25
+		ShakeKit.roll(cam, _shake, jx)   # rotational force, reusing the jitter above
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+		ShakeKit.clear(cam)
 	# engine put-put: stagger ticks across mowers so it reads as chugging
 	_engine_t -= delta
 	if _engine_t <= 0.0 and phase == Phase.PLAY and not mowers.is_empty():

@@ -893,12 +893,15 @@ func _ghost_hint_line(i: int) -> String:
 func _physics_process(delta: float) -> void:
 	game_time += delta
 	if _shake > 0.001:
-		cam.h_offset = rng.randf_range(-1, 1) * _shake * 0.3
+		var jx := rng.randf_range(-1, 1)
+		cam.h_offset = jx * _shake * 0.3
 		cam.v_offset = rng.randf_range(-1, 1) * _shake * 0.3
+		ShakeKit.roll(cam, _shake, jx)   # rotational force, reusing the jitter above
 		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+		ShakeKit.clear(cam)
 
 	# THE HOUSE GUARD (spec §4.3): a mirror never simulates. Interp + juice only.
 	if _mirror:

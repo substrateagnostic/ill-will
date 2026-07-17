@@ -1116,11 +1116,14 @@ func _process(delta: float) -> void:
 	# camera shake (static rig + additive offset)
 	if camera:
 		if _shake > 0.002:
-			var off := Vector3(randf_range(-1, 1), randf_range(-1, 1), 0) * _shake * 0.35
+			var jx := randf_range(-1, 1)
+			var off := Vector3(jx, randf_range(-1, 1), 0) * _shake * 0.35
 			camera.position = _cam_base + off
+			ShakeKit.roll(camera, _shake, jx)   # rotational force, reusing the jitter above
 			_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
 		else:
 			camera.position = _cam_base
+			ShakeKit.clear(camera)
 	# perf watchdog (spec: >8ms -> thin oldest ghosts / drop shadows)
 	_perf_accum += Performance.get_monitor(Performance.TIME_PROCESS)
 	_perf_frames += 1

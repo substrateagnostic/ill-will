@@ -591,12 +591,15 @@ func _physics_process(delta: float) -> void:
 		return
 	game_time += delta
 	if _shake > 0.001:
-		cam.h_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.3
+		var jx := _fx_rng.randf_range(-1, 1)
+		cam.h_offset = jx * _shake * 0.3
 		cam.v_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.3
+		ShakeKit.roll(cam, _shake, jx)   # rotational force, reusing the jitter above
 		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+		ShakeKit.clear(cam)
 
 	match phase:
 		Phase.INTRO:
@@ -2464,12 +2467,15 @@ func _mirror_tick(delta: float) -> void:
 		return
 	game_time += delta
 	if _shake > 0.001:
-		cam.h_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.3
+		var jx := _fx_rng.randf_range(-1, 1)
+		cam.h_offset = jx * _shake * 0.3
 		cam.v_offset = _fx_rng.randf_range(-1, 1) * _shake * 0.3
+		ShakeKit.roll(cam, _shake, jx)   # rotational force, reusing the jitter above
 		_shake = lerpf(_shake, 0.0, 1.0 - exp(-6.0 * delta))
 	else:
 		cam.h_offset = 0.0
 		cam.v_offset = 0.0
+		ShakeKit.clear(cam)
 	var racing := phase == Phase.RACE
 	if racing:
 		race_elapsed += delta       # resynced every apply; drives the hard-cap

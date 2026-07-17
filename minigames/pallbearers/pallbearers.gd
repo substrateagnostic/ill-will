@@ -373,8 +373,10 @@ func _process(delta: float) -> void:
 	cam.global_transform = _cam_base
 	if _shake > 0.002:
 		_shake = maxf(0.0, _shake - delta * 1.4)
-		cam.position += Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
-			fx_rng.randf_range(-1, 1)) * _shake * 0.35
+		var j := Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
+			fx_rng.randf_range(-1, 1))
+		cam.position += j * _shake * 0.35
+		ShakeKit.roll(cam, _shake, j.x)   # rotational force, reusing the jitter above
 	# HUD timer (host); the mirror rides the snapshot
 	if not _mirror:
 		if phase == Phase.PLAY:

@@ -565,8 +565,10 @@ func _process(delta: float) -> void:
 	cam.global_transform = _cam_base
 	if _shake > 0.002:
 		_shake = maxf(0.0, _shake - delta * 1.4)
-		cam.position += Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
-			fx_rng.randf_range(-1, 1)) * _shake * 0.4
+		var j := Vector3(fx_rng.randf_range(-1, 1), fx_rng.randf_range(-1, 1),
+			fx_rng.randf_range(-1, 1))
+		cam.position += j * _shake * 0.4
+		ShakeKit.roll(cam, _shake, j.x)   # rotational force, reusing the jitter above
 	if pot:
 		pot.tick(delta)
 	for p in players:

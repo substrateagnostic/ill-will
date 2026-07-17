@@ -1602,12 +1602,15 @@ func _process(delta: float) -> void:
 	if _hint_label.visible and now > 9.0:
 		_hint_label.visible = false
 	if _shake > 0.002:
-		_cam.h_offset = randf_range(-1.0, 1.0) * _shake * 0.35
+		var jx := randf_range(-1.0, 1.0)
+		_cam.h_offset = jx * _shake * 0.35
 		_cam.v_offset = randf_range(-1.0, 1.0) * _shake * 0.35
+		ShakeKit.roll(_cam, _shake, jx)   # rotational force, reusing the jitter above
 		_shake = lerpf(_shake, 0.0, 1.0 - exp(-5.0 * delta))
 	else:
 		_cam.h_offset = 0.0
 		_cam.v_offset = 0.0
+		ShakeKit.clear(_cam)
 	# shortcut arrow bob
 	var arrow := track.get_node_or_null("ScArrow")
 	if arrow != null:
