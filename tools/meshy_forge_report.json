@@ -591,16 +591,58 @@
                       "consumed_credits":  30,
                       "glb_path":  "assets/models/meshy/generated/relic_funerary_urn.glb",
                       "error":  null
+                  },
+                  {
+                      "id":  "sea_drowned_colossus_hand",
+                      "category":  "ARENA_HERO",
+                      "status":  "ok",
+                      "preview_task_id":  "019f6ea0-3d45-7917-9368-6d5aa1b64c86",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f6ea5-b5de-7d09-95fd-bd3c3f7c1c32",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "assets/models/meshy/generated/sea_drowned_colossus_hand.glb",
+                      "error":  null
+                  },
+                  {
+                      "id":  "pit_bone_heap",
+                      "category":  "ARENA_HERO",
+                      "status":  "ok",
+                      "preview_task_id":  "019f6ea0-4db2-7924-ad9d-5727e3acc044",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f6ea5-ba6b-7a06-b3e0-999d11ead85a",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "assets/models/meshy/generated/pit_bone_heap.glb",
+                      "error":  null
+                  },
+                  {
+                      "id":  "pit_grasping_hands",
+                      "category":  "ARENA_HERO",
+                      "status":  "ok",
+                      "preview_task_id":  "019f6ea0-56f3-76e4-9b6f-36033be4786f",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f6ea5-bcc1-7a07-a8c9-405934317db7",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "assets/models/meshy/generated/pit_grasping_hands.glb",
+                      "error":  null
                   }
               ],
     "summary":  {
-                    "total":  42,
-                    "ok":  42,
+                    "total":  45,
+                    "ok":  45,
                     "preview_only":  0,
                     "failed":  0,
                     "resumed_skip":  0,
-                    "total_credits_shipped_assets":  1260,
-                    "total_credits_actual_spend":  1470
+                    "total_credits_shipped_assets":  1350,
+                    "total_credits_actual_spend":  1620
                 },
     "retired_generations":  [
                                 {
@@ -651,7 +693,21 @@
                                     "preview_task_id":  "019f69e8-97be-71cf-adcd-68211a2c607d",
                                     "refine_task_id":  "019f69ec-b570-7bb1-84f6-100ff69f3380",
                                     "consumed_credits":  30
+                                },
+                                {
+                                    "id":  "sea_leviathan_fin",
+                                    "reason":  "v1 off-shape: full crested sea creature with visible head and legs, not a dorsal-ridge silhouette",
+                                    "preview_task_id":  "019f6ea0-459d-7bfd-8864-fd28b32c7ec8",
+                                    "refine_task_id":  "019f6ea5-b824-7a05-84ae-3933e4c2ffbc",
+                                    "consumed_credits":  30
+                                },
+                                {
+                                    "id":  "sea_leviathan_fin",
+                                    "reason":  "v2 re-roll still wrong: chaotic spiky mass with a stray white bone/tooth protrusion, no clean fin silhouette - REJECTED (lane Z3), GLB not shipped",
+                                    "preview_task_id":  "019f6eab-5311-7e02-bbf5-8c174797bf3c",
+                                    "refine_task_id":  "019f6ead-8641-7e89-b078-5347b85d31c7",
+                                    "consumed_credits":  30
                                 }
                             ],
-    "note":  "All 32 shipped assets generated on meshy-6 (lowpoly, tri, 8k polycount, PBR off). 4 ids regenerated once after contact-sheet review; retired v1 task ids above. Actual cumulative spend 1080 credits (32x30 shipped + 4x30 retired). | 2026-07-16 NPC-troupe/board-dressing batch: 10 props x30cr = 300cr, 0 failures, appended by the forge lane (the -Only run had clobbered this report down to 10 items; 32-item history restored from git and merged)."
+    "note":  "All 32 shipped assets generated on meshy-6 (lowpoly, tri, 8k polycount, PBR off). 4 ids regenerated once after contact-sheet review; retired v1 task ids above. Actual cumulative spend 1080 credits (32x30 shipped + 4x30 retired). | 2026-07-16 NPC-troupe/board-dressing batch: 10 props x30cr = 300cr, 0 failures, appended by the forge lane (the -Only run had clobbered this report down to 10 items; 32-item history restored from git and merged). | 2026-07-17 lane Z3 ARENA_HERO batch: 4 props forged, 150cr (4x30 + 1 leviathan re-roll). 3 KEEP (sea_drowned_colossus_hand, pit_bone_heap, pit_grasping_hands); sea_leviathan_fin REJECTED after 1 re-roll (v1 whole crested creature w/ head+legs; v2 spiky mass w/ stray bone) - neither reads as a mostly-submerged dorsal ridge; GLB not shipped, both task ids in retired_generations."
 }
