@@ -1254,9 +1254,31 @@ func _build_stained_glass() -> void:
 	root.name = "StainedGlass"
 	root.position = Vector3(0, 0, -6.62)   # just behind the back wall (z=-6.2)
 	arena.add_child(root)
+	# Director note: alone in the void the lit window read as a floating
+	# billboard. A full-width, barely-lit stone upper wall now rises from the
+	# 3.4m wall line to above the arch — it catches the window's own plum spill,
+	# so the glass sits IN architecture instead of hovering over a gap.
+	var stone := StandardMaterial3D.new()
+	stone.albedo_color = Color(0.085, 0.07, 0.075)
+	stone.roughness = 1.0
+	var upper := MeshInstance3D.new()
+	var uq := QuadMesh.new()
+	uq.size = Vector2(13.2, 7.4)
+	upper.mesh = uq
+	upper.material_override = stone
+	upper.position = Vector3(0, 6.6, -0.2)
+	upper.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(upper)
 	# dark leading backing (rectangular body + pointed arch) a touch further back
 	_glass_quad(root, Vector2(4.34, 5.34), Vector3(0, 5.0, -0.12), lead, 0.0)
 	_glass_prism(root, Vector3(4.34, 2.34, 0.06), Vector3(0, 8.6, -0.12), lead, 0.0)
+	# two slim flanking lancets — dimmer siblings that widen the composition so
+	# the great window reads as part of a clerestory, not a lone screen
+	for side in [-1.0, 1.0]:
+		_glass_quad(root, Vector2(1.06, 3.3), Vector3(side * 3.6, 4.9, -0.12), lead, 0.0)
+		_glass_quad(root, Vector2(0.82, 3.0), Vector3(side * 3.6, 4.9, 0.0),
+			plum if side < 0.0 else deep, 1.1)
+		_glass_prism(root, Vector3(0.82, 0.7, 0.05), Vector3(side * 3.6, 6.75, 0.0), gold, 1.3)
 	# body panes: 3 cols x 5 rows, alternating plum/gold with a bright core column
 	var cols := 3
 	var rows := 5
