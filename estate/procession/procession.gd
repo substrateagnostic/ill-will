@@ -140,6 +140,7 @@ var night_final_rank: Array[int] = []  # board rank on the LAST night (finale ti
 var letters: Array = []             # per seat: LETTERS OF ADMINISTRATION active tonight
 var _mini_pool: Array = []          # per-night draw-without-replacement pool
 var _invitation_pick := ""          # THE INVITATION override for the next draw
+var _interlude1_pick := ""          # interlude 1's game — later interludes may not repeat it (doc 28 §2)
 var _started := false
 var _autoplay := false
 var _fast := false
@@ -400,6 +401,7 @@ func _init_arrays() -> void:
 		letters.append(false)
 	_mini_pool = MINIGAME_ORDER.duplicate()
 	_invitation_pick = ""
+	_interlude1_pick = ""
 	pending_die.resize(n)
 	pending_lucky.resize(n)
 	for i in n:
@@ -1005,6 +1007,9 @@ func _run_match() -> void:
 		await _run_night_cycles()
 		await _night_settlement()
 		if night_index < match_nights:
+			# P3 (doc 28 §2): between nights, after the will reading + LAST
+			# RITES, the grounds offer ONE more game before the board resets.
+			await _interlude_minigame()
 			_board_reset()
 	await _finale()
 
@@ -2969,6 +2974,71 @@ func _minigame_block() -> void:
 	if placements.is_empty():
 		return   # module error already surfaced — the cycle is voided, never randomized
 	await _settle_minigame(mid, placements)
+
+## THE INTERLUDE GROUNDS MINIGAME (P3, doc 28 §2): between nights, after the
+## will reading + LAST RITES, one more game on the grounds. Interlude 1 is
+## drawn RANDOM from the games not yet played that night; every later
+## interlude is picked by the current DOORMAT (bottom wreaths — announced,
+## a dignity beat, not a hidden hand), never repeating interlude 1's pick.
+## Placements pay the normal cycle settlement (pennies + wreaths), landing
+## AFTER the night record — the night reads as scored, the match feels it.
+## Bots pick from the EVENT stream (seeded); a human doormat draws nothing.
+func _interlude_minigame() -> void:
+	_phase = "interlude"
+	executor.clear_banner()
+	var pool := _mini_pool.duplicate()   # games not yet played tonight
+	if pool.is_empty():
+		pool = MINIGAME_ORDER.duplicate()
+	var pick := ""
+	if _interlude1_pick == "":
+		# --- interlude 1: the estate deals (EVENT stream, one randi) ---
+		pick = String(pool[_event_rng.randi_range(0, pool.size() - 1)])
+		_interlude1_pick = pick
+		if not _fast:
+			_reveal_seat = -1
+			executor.say(Dialog.text("procession.interlude.random_line") \
+				% String((MINIGAMES[pick] as Dictionary).name), Color(0.85, 0.78, 1.0))
+			await _beat(2.0)
+			executor.clear_banner()
+	else:
+		# --- interlude 2+: the DOORMAT's privilege (no repeat of interlude 1) ---
+		pool.erase(_interlude1_pick)
+		if pool.is_empty():
+			pool = MINIGAME_ORDER.duplicate()
+			pool.erase(_interlude1_pick)
+		var doormat := int(_roll_order().back())
+		if _is_local_human(doormat) and _drama_visible():
+			var entries: Array = []
+			for id in pool:
+				entries.append({"label": String((MINIGAMES[String(id)] as Dictionary).name)})
+			var p: int = await _pick_prompt(
+				Dialog.text("procession.interlude.doormat_header") % roster[doormat].name,
+				Dialog.text("procession.interlude.doormat_sub"), roster[doormat].color,
+				entries, Dialog.text("procession.interlude.deal_label"), false, 12.0)
+			# A declined privilege hands the deal back to the estate (seeded).
+			pick = String(pool[_event_rng.randi_range(0, pool.size() - 1)]) if p < 0 \
+				else String(pool[p])
+		else:
+			pick = String(pool[_event_rng.randi_range(0, pool.size() - 1)])   # bots pick seeded
+		if not _fast:
+			_reveal_seat = doormat
+			executor.say(Dialog.text("procession.interlude.doormat_line") % [
+				roster[doormat].name, String((MINIGAMES[pick] as Dictionary).name)],
+				roster[doormat].color)
+			await _beat(2.0)
+			executor.clear_banner()
+	if not _fast:
+		_announce_text(Dialog.text("procession.interlude.header") + "\n\n"
+			+ Dialog.text("procession.interlude.card_line") \
+			% String((MINIGAMES[pick] as Dictionary).name), Color(1, 0.88, 0.5))
+		if _capture and night_index == 1:
+			await _cap_snap("interlude_card")
+		await _beat(2.2)
+		_hide_announce()
+	_mini_pool.erase(pick)
+	var placements: Array = await _run_minigame(pick)
+	if not placements.is_empty():
+		await _settle_minigame(pick, placements)
 
 ## Draw the cycle's game: without replacement per night (pool refills at night
 ## start); THE INVITATION's pick takes the slot and leaves the pool intact
