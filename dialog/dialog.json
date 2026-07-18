@@ -570,6 +570,35 @@
     },
     "mini": {
       "error": "%s has misfiled its results.\nThe estate refuses to guess — no pay this cycle."
+    },
+    "items": {
+      "header": "%s — SPEND AN ITEM?",
+      "keep_label": "KEEP THEM",
+      "lucky": "%s arms a LUCKY PENNY — +3 on this roll.",
+      "lucky_spent": "%s rides the LUCKY PENNY (+%d stones).",
+      "veil": "%s's BLACK VEIL swallows the harm.",
+      "veil_grave": "%s's BLACK VEIL swallows the grave. The estate files a complaint.",
+      "writ": "%s unseals a %s WRIT — the die widens for this roll.",
+      "shovel": "%s digs ahead four stones with the PALLBEARER'S SHOVEL. Nothing dares trigger.",
+      "wisp": "A WILL-O’-THE-WISP carries %s up the road.",
+      "crow": "%s's CROW'S CUT strips %d%s from %s.",
+      "crow_blocked": "The crows descend on %s — and find only a BLACK VEIL.",
+      "bell": "THE FUNERAL BELL tolls. %s is dragged back four stones.",
+      "bell_blocked": "THE FUNERAL BELL tolls — but %s walks on beneath a BLACK VEIL.",
+      "debt_set": "%s lays a WREATH OF DEBT upon this stone.",
+      "debt_paid": "%s lands on a WREATH OF DEBT — %d%s owed to %s.",
+      "invitation": "%s seals THE INVITATION. The next game will be %s.",
+      "invitation_header": "%s — CHOOSE THE NEXT GAME",
+      "crow_header": "%s — CHOOSE THE MARK",
+      "box_full": "%s's hands are full. The box keeps its secrets."
+    },
+    "cart": {
+      "header": "THE PEDDLER'S CART",
+      "sub": "%s — %d%s · %d/%d held",
+      "leave_label": "LEAVE THE CART",
+      "buy": "%s buys %s (−%d%s).",
+      "discount_letters": "The LETTERS OF ADMINISTRATION entitle %s to a mercy discount. It is so noted.",
+      "discount_last": "The estate notes who trails the wreaths. %s shops at a mercy discount."
     }
   }
 }

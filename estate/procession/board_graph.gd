@@ -977,6 +977,54 @@ func clear_heatmap() -> void:
 	for m in _heat_markers:
 		(m.root as Node3D).visible = false
 
+# --------------------------------------------------------------------------
+# WREATH OF DEBT markers (P2 cart item): an owner-coloured coin ring on the
+# trapped stone — announced sabotage is VISIBLE sabotage (Pro Rules).
+# --------------------------------------------------------------------------
+var _debt_markers := {}            # node_id -> Node3D
+
+func set_debt_marker(node_id: int, color: Color) -> void:
+	clear_debt_marker(node_id)
+	var root := Node3D.new()
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.52
+	tm.outer_radius = 0.70
+	tm.rings = 6
+	tm.ring_segments = 20
+	ring.mesh = tm
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.emission_enabled = true
+	mat.emission = color
+	mat.emission_energy_multiplier = 2.6
+	mat.albedo_color = color
+	ring.material_override = mat
+	ring.rotation_degrees.x = 90.0
+	root.add_child(ring)
+	var tag := Label3D.new()
+	tag.text = "DEBT"
+	tag.font_size = 34
+	tag.pixel_size = 0.005
+	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	tag.outline_size = 10
+	tag.outline_modulate = Color(0, 0, 0, 0.9)
+	tag.modulate = color.lerp(Color.WHITE, 0.25)
+	tag.position = Vector3(0, 0.55, 0)
+	root.add_child(tag)
+	add_child(root)
+	root.global_position = space_pos(node_id) + Vector3(0, 0.16, 0)
+	_debt_markers[node_id] = root
+
+func clear_debt_marker(node_id: int) -> void:
+	if _debt_markers.has(node_id):
+		(_debt_markers[node_id] as Node3D).queue_free()
+		_debt_markers.erase(node_id)
+
+func clear_all_debt_markers() -> void:
+	for n in _debt_markers.keys():
+		clear_debt_marker(int(n))
+
 func _make_heat_marker() -> Dictionary:
 	var root := Node3D.new()
 	var ring := MeshInstance3D.new()

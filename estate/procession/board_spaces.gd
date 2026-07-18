@@ -111,7 +111,45 @@ const ITEMS := [
 	{"id": "mourning_pin", "name": "MOURNING PIN", "rule": "+1 SPACE ON YOUR NEXT PUTT"},
 	{"id": "black_ribbon", "name": "BLACK RIBBON", "rule": "DEED LEADER −1 SPACE NEXT PUTT"},
 	{"id": "grave_salt", "name": "GRAVE SALT", "rule": "CANCEL YOUR NEXT GRAVE LOSS"},
+]   # ring-era free items — RETIRED with the priced cart (kept so old saves parse)
+
+# ---- THE PEDDLER'S CART, PRICED (P2; doc 28 §6, d8-scaled magnitudes). ----
+# kind drives the guardrails: max ONE die/movement item armed per turn
+# ("boost"/"movement"/"die"), offensive items ("offense"/"trap") never stack
+# on the same target in the same roll, inventory cap 3. BLACK VEIL is passive
+# (spends itself on your next hazard). Prices are the announced rulebook —
+# wreath LAST place shops at 30% off, announced, never hidden.
+const INV_CAP := 3
+const CART_WARES := [
+	{"id": "lucky_penny", "name": "LUCKY PENNY", "cost": 5, "kind": "boost",
+		"rule": "+3 ON YOUR NEXT ROLL"},
+	{"id": "black_veil", "name": "BLACK VEIL", "cost": 5, "kind": "defense",
+		"rule": "NEGATES YOUR NEXT HAZARD (SPENDS ITSELF)"},
+	{"id": "shovel", "name": "PALLBEARER'S SHOVEL", "cost": 7, "kind": "movement",
+		"rule": "DIG AHEAD 4 STONES · NOTHING TRIGGERS ON THE WAY"},
+	{"id": "writ_d10", "name": "d10 WRIT", "cost": 8, "kind": "die",
+		"rule": "YOUR NEXT ROLL IS A d10"},
+	{"id": "crows_cut", "name": "CROW'S CUT", "cost": 10, "kind": "offense",
+		"rule": "STEAL 5 PENNIES FROM A CHOSEN RIVAL"},
+	{"id": "funeral_bell", "name": "FUNERAL BELL", "cost": 12, "kind": "offense",
+		"rule": "THE TRACK LEADER SLIPS BACK 4 · HOME PAWNS ARE BEYOND REACH"},
+	{"id": "writ_d12", "name": "d12 WRIT", "cost": 14, "kind": "die",
+		"rule": "YOUR NEXT ROLL IS A d12"},
+	{"id": "wreath_debt", "name": "WREATH OF DEBT", "cost": 20, "kind": "trap",
+		"rule": "TRAP THIS STONE · FIRST RIVAL LANDING PAYS YOU 5"},
+	{"id": "invitation", "name": "THE INVITATION", "cost": 22, "kind": "pick",
+		"rule": "CHOOSE THE NEXT MINIGAME"},
+	{"id": "wisp", "name": "WILL-O'-THE-WISP", "cost": 25, "kind": "movement",
+		"rule": "TELEPORT TO THE NEXT FIXTURE ON YOUR ROAD"},
 ]
+# GRAVE GOODS boxes hand out the cheap tier free (modern MP's lesson).
+const BOX_POOL := ["lucky_penny", "black_veil", "shovel"]
+
+static func ware(id: String) -> Dictionary:
+	for w in CART_WARES:
+		if String((w as Dictionary).id) == id:
+			return w as Dictionary
+	return {"id": id, "name": id.to_upper(), "cost": 0, "kind": "boost", "rule": ""}
 
 static func fact(type: String) -> Dictionary:
 	return TABLE.get(type, TABLE[BLANK]) as Dictionary
