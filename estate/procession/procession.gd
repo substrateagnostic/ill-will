@@ -1,6 +1,6 @@
 extends Node3D
 ## THE PROCESSION — ILL WILL's board night, rebuilt on the doc-28 graph board.
-## One wake per session: putt your pawn from the LYCHGATE to the MANOR GATE
+## One wake per session: roll your pawn from the LYCHGATE to the MANOR GATE
 ## through three route personalities (GARDEN ROW / HOLLOW WOODS / WEEPING
 ## VALLEY) joined by two CROSSROADS. The first pawn through the gate rings
 ## THE FINAL BELL — everyone else gets exactly one more turn, then the night
@@ -12,11 +12,19 @@ extends Node3D
 ## NAMED rng streams (Codex correction #2, night 7):
 ##   LAYOUT — board topology; seeded from board DATA, never the night seed
 ##            (board_graph.gd), so --boardgraphtest is night-independent.
-##   ROLL   — _roll_rng: putt band deals, bot aim, bot crossroads choices.
-##   EVENT  — _event_rng: séance slots, item draws, minigame pick/minisim,
-##            house-awakens draws, bot vendetta stakes.
+##   ROLL   — _roll_rng: LAST BREATH turn streams (one child stream seeded per
+##            turn: crit band deal, period jitter, the face draw), bot aim
+##            scans, bot crossroads choices.
+##   EVENT  — _event_rng: séance slots, item draws + bot shop/item policy,
+##            minigame pick/minisim, award draws + tie-breaks, house-awakens.
 ##   VOICE/DRAMA — _voice_rng/_drama_prng: Executor line picks + board-drama
 ##            flourishes. Presentation only; can never shift the tally.
+##
+## P2 (this lane): the roll is THE LAST BREATH meter — SEQUENTIAL, one seat at
+## a time in wreath-standings order LEADER FIRST (doc 28 §8 law 1), d8 base,
+## with the always-on AIM HEATMAP painting live landing probabilities down the
+## roller's road. pawn_putt.gd stays on disk untouched (Par receipts reference
+## its constants) — it is simply no longer wired here.
 ##
 ## The Codicil is RETIRED as a purchase stop (doc 28 §1); codicil.gd stays on
 ## disk, unwired. The ring (board_path.gd) is retired the same way. This
@@ -26,7 +34,7 @@ extends Node3D
 ## simulates, mirrors render truth.
 
 const BoardGraph := preload("res://estate/procession/board_graph.gd")
-const PawnPutt := preload("res://estate/procession/pawn_putt.gd")
+const LastBreath := preload("res://estate/procession/last_breath.gd")
 const Executor := preload("res://estate/procession/executor_host.gd")
 const Spaces := preload("res://estate/procession/board_spaces.gd")
 const BoardCamera := preload("res://estate/procession/board_camera.gd")
@@ -81,7 +89,9 @@ signal night_over(tally: Dictionary)
 # ---- night state (the tally reads out of these) ----
 var seed_value := 0
 var roster: Array = []
-var grudge: Array[int] = []
+var grudge: Array[int] = []         # PENNIES on screen (internal name kept — RC §3:
+                                    # 14 minigame receipts reference "grudge")
+var wreaths: Array[int] = []        # THE victory currency (doc 28 §6) — persists all match
 var deeds: Array[int] = []          # will-clause trophies only (Codicil retired)
 var positions: Array[int] = []      # per seat: current GRAPH NODE id
 var moved_total: Array[int] = []
@@ -112,15 +122,20 @@ var _epitaphs: Array = []        # per seat: epitaph String a duel winner hung (
 var _epitaph_tags := {}          # seat -> Label3D (the persistent gravestone tag riding the pawn)
 var _stakes_ui: VendettaStakes = null   # sealed-stakes overlay (lazy; windowed only)
 var _phase := "boot"
-var _preview_active := false    # F29: live putt target reticles during the roll
 var _react_last: Array[int] = []   # F24: per-seat last-reaction wall-clock (cooldown)
 var _reacted_demo := false         # F24: capture fires the reaction demo once
 var _prompt_demoed := false        # capture poses the crossroads prompt once (screenshot b)
+var _breath_posed := false         # capture poses the meter + heatmap once (P2 screenshot a)
 var _arrived_this_round: Array = []   # seats whose walk crossed the gate THIS round
+# ---- THE LAST BREATH turn state (P2) ----
+const N_FACES_BASE := 8            # doc 28 §5: d8 locked (WRITs widen per roll)
+var _breath_faces: Array = []      # all_released payload for the turn in flight
+var _heat_seat := -1               # seat whose aim the heatmap paints (-1 = off)
+var _heat_frame := 0               # coarse update cadence (every 3rd frame)
 
 # ---- nodes ---- (concrete types so method returns infer without annotation)
 var board: ProcessionBoardGraph
-var putt: ProcessionPawnPutt
+var breath: ProcessionLastBreath
 var executor: ProcessionExecutor
 var cam: Camera3D
 var board_camera: ProcessionCamera    # F1: the named-shot camera director
@@ -173,20 +188,43 @@ var clauses: Array = []
 func _ready() -> void:
 	call_deferred("_autostart")
 
-## F29: while the roll is live, paint each charging seat's projected landing stone
-## with a seat-coloured reticle + rule tooltip, so steering at a space is a real
-## decision. Forks in the preview walk follow the seat's PREFERRED road (the
-## same no-rng strategy read the bots use), so the reticle is honest about the
-## likeliest destination without consuming any stream. Presentation only.
+## THE AIM HEATMAP (P2, always-on — producer-locked). While the active seat's
+## LAST BREATH needle sweeps, the reachable stones down their road glow with the
+## LIVE landing distribution from the meter's side-effect-free weights read
+## (current_weights() picks the crit kernel iff the needle sits in the band, so
+## crit sharpening is reflected as it happens). Coarse cadence (every 3rd
+## frame) is plenty — the read is for a couch, not a scope. Presentation only:
+## never consumes any stream, never mutates sim state.
 func _process(_delta: float) -> void:
-	if _fast or not _preview_active or putt == null or board == null:
+	if _fast or board == null or breath == null:
 		return
-	for i in roster.size():
-		var sp := putt.preview_spaces(i)
-		if sp > 0 and not bool(arrived[i]):
-			board.set_putt_preview(i, _preview_dest(i, sp), roster[i].color)
-		else:
-			board.clear_putt_preview(i)
+	if _heat_seat < 0:
+		return
+	_heat_frame += 1
+	if _heat_frame % 3 != 0:
+		return
+	_paint_heatmap(_heat_seat)
+
+## One heatmap frame: face f lands at _preview_dest(seat, f + pending bonus)
+## down the seat's preferred road (the same no-rng walk the bots use), glowing
+## by probability (w normalized to the likeliest face) with a percent tag.
+func _paint_heatmap(seat: int) -> void:
+	var weights: Array[float] = breath.current_weights()
+	var bonus := _pending_steps_bonus(seat)
+	var entries: Array = []
+	var wmax := 0.0001
+	for w in weights:
+		wmax = maxf(wmax, float(w))
+	for f in weights.size():
+		entries.append({"node": _preview_dest(seat, f + 1 + bonus), "face": f + 1,
+			"p": float(weights[f]), "w": float(weights[f]) / wmax})
+	board.show_heatmap(entries, roster[seat].color)
+
+## Announced movement bonuses that shift every face's landing (LUCKY PENNY —
+## P2 item pass). Kept honest: the heatmap must glow the stones you will
+## actually reach.
+func _pending_steps_bonus(_seat: int) -> int:
+	return 0
 
 ## estate.gd (merge path) calls this with a real roster BEFORE the deferred
 ## _autostart fires; the flag makes the two entry points mutually exclusive.
@@ -238,9 +276,9 @@ func _boot(config: Dictionary) -> void:
 	_build_world()
 	_build_hud()
 	_choose_clauses()
-	# The soak compresses real time: pawn_putt is frame/tick-based, so a higher
-	# time_scale changes only how fast the same ticks elapse — the tally stays
-	# byte-identical. Interactive/windowed play runs at 1.0.
+	# The soak compresses real time: under _fast the LAST BREATH queue resolves
+	# in a single frame per turn (no live sweep), so time_scale only speeds the
+	# ceremonies — the tally stays byte-identical. Windowed play runs at 1.0.
 	if _autoplay and _fast:
 		Engine.time_scale = 8.0
 	print("PROCESSION boot seed=%d board=%s turn_cap=%d players=%d autoplay=%s minisim=%s" % [
@@ -301,6 +339,9 @@ func _apply_longnames() -> void:
 func _init_arrays() -> void:
 	var n := roster.size()
 	grudge.resize(n); deeds.resize(n); positions.resize(n); moved_total.resize(n)
+	wreaths.resize(n)
+	for i in n:
+		wreaths[i] = 0
 	_react_last.resize(n)
 	for i in n:
 		_react_last[i] = -100000
@@ -358,8 +399,13 @@ func _build_world() -> void:
 	add_child(board_camera)
 	board_camera.setup(cam, board, _fast)
 
-	putt = PawnPutt.new()
-	add_child(putt)
+	# THE LAST BREATH (P2): the sequential roll meter. It owns its own
+	# CanvasLayer (never occludable, RD §5), so it needs no HUD host.
+	breath = LastBreath.new()
+	add_child(breath)
+	breath.configure(roster, _mirror)
+	breath._fast = _fast
+	breath.all_released.connect(_on_breath_released)
 
 	executor = Executor.new()
 	add_child(executor)
@@ -522,14 +568,6 @@ func _build_hud() -> void:
 	_minimap.visible = false
 	_ui.add_child(_minimap)
 	_minimap.configure(board, roster)
-
-	# A dedicated full-rect Control hosts the four corner putt meters.
-	var meter_host := Control.new()
-	meter_host.name = "MeterHost"
-	meter_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	meter_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ui.add_child(meter_host)
-	putt.configure(roster, meter_host, _mirror)
 
 	# The FX layer rides ABOVE the chips so flying numbers + the Deed token land
 	# on the HUD (F10/F11/F17). A full-rect, input-transparent Control.
@@ -840,13 +878,6 @@ func _intro() -> void:
 	_hide_announce()
 	executor.clear_banner()
 
-## Capture only: snap the live putt-target reticles a beat into the roll, without
-## blocking the roll's all_released await.
-func _snap_putt_preview_later() -> void:
-	await _beat(0.85)
-	if _preview_active:
-		await _cap_snap("putt_preview")
-
 ## Any human tap (A or B) breaks the opening flyover — the director polls this
 ## each frame during its tour. All-bots (autoplay/capture) never trips it, so the
 ## full tour plays for the verification screenshots.
@@ -883,121 +914,193 @@ func _capture_showcase() -> void:
 	cam.global_position = _cam_home
 	cam.look_at(board.CENTER, Vector3.UP)
 
+## ONE ROUND, SEQUENTIAL (doc 28 §2/§8 law 1): every live seat takes a full
+## turn — roll on THE LAST BREATH, walk, resolve — one at a time, in current
+## wreath-standings order LEADER FIRST (leader commits blind, trailers act
+## informed). Home pawns sit their turns out entirely (the simultaneous-roll
+## wart died with pawn_putt).
 func _round() -> void:
 	_phase = "roll"
 	_hide_announce()
-	_sync_minimap()          # the roll owns the corners — hide the inset
+	_sync_minimap()
+	_arrived_this_round.clear()
 	executor.begin_round()   # B2-HOOK: page-turn the ledger between rounds (F7)
 	if not _fast:
 		_reveal_seat = -1
 		executor.aside(Executor.ROUND_OPENER, Color(0.82, 0.80, 0.92), [round_num])   # B2-HOOK: dead-air aside (F9)
-	# --- ROLL: all live pawns putt at once (own corner meter). ---
-	# Windowed capture: pose the four corner meters mid-charge for a clean shot
-	# before the live roll (the fast soak resolves a real roll in a few frames).
-	if _capture and round_num == 1:
-		putt.stage_midcharge([0.42, 0.58, 0.50, 0.64])
-		await _cap_snap("putt_meters")
-		putt.end_roll_visuals()
-	var targets := _bot_targets()
-	putt.begin_roll(targets, _roll_rng)
-	_preview_active = true   # F29: live target reticles follow each charging meter
-	if not _capture:
-		VerifyCapture.snap("putt_meters")
-	elif round_num == 2:
-		# Fire-and-forget so the delayed snap never sits between begin_roll and the
-		# all_released await (which would risk missing the signal). Round 2 spreads
-		# the pawns down the roads so the reticles land at distinct stones.
-		_snap_putt_preview_later()
-	var results: Array = await putt.all_released
-	_preview_active = false
-	board.clear_all_putt_previews()
-	putt.end_roll_visuals()
-	# spaces per seat, adjusted by held items (announced when spent). Pawns
-	# already HOME roll with the table (pawn_putt meters all seats) but their
-	# result is discarded — home pawns are beyond the reach of the road.
-	var moved: Array[int] = []
-	moved.resize(roster.size())
-	for i in roster.size():
-		moved[i] = 1
-	for r in results:
-		var seat := int(r.seat)
-		moved[seat] = int(r.spaces)
-	_apply_item_movement(moved)
-	for i in roster.size():
-		if bool(arrived[i]):
-			moved[i] = 0
-
-	# --- WALK RESOLUTION: node-to-node along each seat's road. A walk that
-	# reaches a CROSSROADS picks a branch — humans via the A/B/C prompt, bots
-	# by strategy (leader → safe, trailers → gamble; ROLL stream). Seat order,
-	# so the stream stays deterministic. Excess movement past the gate is
-	# forfeited (the manor does not do refunds). ---
-	_phase = "move"
-	_arrived_this_round.clear()
-	var paths: Array = []
-	for i in roster.size():
-		var path: Array = await _resolve_walk(i, moved[i])
-		paths.append(path)
-		moved[i] = path.size()   # the true stones walked (gate clamps)
-	# --- MOVE: every pawn travels at once; the low raking dolly TRAVELS (F2). ---
-	board_camera.move_travel(0.9)
-	var tweens: Array = []
-	for i in roster.size():
-		if (paths[i] as Array).is_empty():
+		await _beat(0.9)
+	for seat in _roll_order():
+		if bool(arrived[seat]):
 			continue
-		_pay_passthrough_tolls(i, paths[i] as Array)
-		var tw: Tween = board.advance_pawn_path(i, paths[i] as Array)
-		tweens.append(tw)
-		positions[i] = int((paths[i] as Array).back())
-		(trail[i] as Array).append_array(paths[i] as Array)
-		moved_total[i] += moved[i]
-		stats[i].moved += moved[i]
-		if board.type_at(positions[i]) == Spaces.GATE and not bool(arrived[i]):
-			arrived[i] = true
-			arrival_order.append(i)
-			_arrived_this_round.append(i)
-	_sync_minimap()   # THE DRIVE inset lights up for the travel + reveal
-	if not _fast:
-		for tw in tweens:
-			if tw and tw.is_valid():
-				await tw.finished
-	else:
-		for i in roster.size():
-			board.seat_pawn(i, positions[i])
-	if _capture and round_num == 1:
-		await _cap_snap("drive_minimap")   # THE DRIVE ribbons, first travel beat
-	_push_net()
-
-	# --- THE FINAL BELL: the first crossing this night rings it. ---
-	if bell_round < 0 and not _arrived_this_round.is_empty():
-		bell_round = round_num
-		var ringer := int(_arrived_this_round[0])
-		if final_kit:
-			final_kit.escalate()
-		Sfx.play("match_win", -4.0)
-		MomentScribe.capture("final_bell", "%s RINGS THE FINAL BELL" % roster[ringer].name,
-			3, [ringer], "procession")
-		if not _fast:
-			board_camera.landing_push(board.reveal_shot(board.gate_id(), Spaces.GATE))
-			_announce_text(Dialog.text("procession.bell.header") + "\n\n"
-				+ Dialog.text("procession.bell.rung") % roster[ringer].name,
-				Color(1, 0.85, 0.4))
-			if _capture:
-				await _cap_snap("final_bell")
-			await _beat(2.6)
-			_hide_announce()
-
-	# --- REVEAL: staggered Executor cascade, one landing at a time. Seats that
-	# did not walk (home already) have no landing to reveal. ---
-	_phase = "reveal"
-	var order := _reveal_order(moved)
-	for seat in order:
-		if moved[seat] > 0:
-			await _reveal_landing(seat)
+		await _take_turn(seat)
 	executor.clear_banner()
 	executor.settle_body()   # B2-HOOK: host eases home after the cascade (F7)
 	board_camera.whole_board(0.5)   # camera belongs to the director (F1-F3)
 	_refresh_hud()
+
+## Roll order = CURRENT WREATH STANDINGS, leader first (doc 28 §8 law 1).
+## Every tie explicit and stable: wreaths desc → pennies desc → seat asc.
+func _roll_order() -> Array:
+	var order: Array = []
+	for i in roster.size():
+		order.append(i)
+	order.sort_custom(func(a, b):
+		if wreaths[a] != wreaths[b]:
+			return wreaths[a] > wreaths[b]
+		if grudge[a] != grudge[b]:
+			return grudge[a] > grudge[b]
+		return a < b)
+	return order
+
+## ONE TURN: frame the roller, roll THE LAST BREATH (heatmap live), walk the
+## stones (forks prompt/strategize), ring the bell on a crossing, reveal the
+## landing. The whole table watches one seat at a time — the reveal cascade
+## is now inline with the turn.
+func _take_turn(seat: int) -> void:
+	_phase = "roll"
+	_sync_minimap()
+	if not _fast:
+		_frame_roller(seat)
+	# Windowed capture: pose the meter + heatmap once for the verification
+	# still (the fast soak resolves a live roll in a single frame).
+	if _capture and not _breath_posed:
+		_breath_posed = true
+		await _pose_breath_shot(seat)
+	var face := await _roll_breath(seat, N_FACES_BASE)
+	var steps := _apply_turn_items(seat, face)
+	# --- WALK: node-to-node along the seat's road; forks prompt humans, bots
+	# draw strategy from the ROLL stream. Excess past the gate is forfeited. ---
+	_phase = "move"
+	var path: Array = await _resolve_walk(seat, steps)
+	if not path.is_empty():
+		_pay_passthrough_tolls(seat, path)
+		board_camera.move_travel(0.9)
+		var tw: Tween = board.advance_pawn_path(seat, path)
+		positions[seat] = int(path.back())
+		(trail[seat] as Array).append_array(path)
+		moved_total[seat] += path.size()
+		stats[seat].moved += path.size()
+		if board.type_at(positions[seat]) == Spaces.GATE and not bool(arrived[seat]):
+			arrived[seat] = true
+			arrival_order.append(seat)
+			_arrived_this_round.append(seat)
+		_sync_minimap()   # THE DRIVE inset lights up for the travel + reveal
+		if not _fast and tw and tw.is_valid():
+			await tw.finished
+		elif _fast:
+			board.seat_pawn(seat, positions[seat])
+	if _capture and round_num == 1 and seat == _roll_order().back():
+		await _cap_snap("drive_minimap")   # THE DRIVE ribbons, first travel beat
+	_push_net()
+	# --- THE FINAL BELL: the first crossing this night rings it, mid-round —
+	# the rest of the queue still takes this turn (phase completes), then one
+	# more full round for everyone (doc 28 §15 roll-phase completion). ---
+	if bell_round < 0 and _arrived_this_round.has(seat):
+		await _ring_bell(seat)
+	# --- REVEAL: the landing, Executor voice, type-aware close-up. ---
+	_phase = "reveal"
+	if not path.is_empty():
+		await _reveal_landing(seat)
+	if breath.meter != null:
+		breath.meter.visible = false
+
+func _ring_bell(ringer: int) -> void:
+	bell_round = round_num
+	if final_kit:
+		final_kit.escalate()
+	Sfx.play("match_win", -4.0)
+	MomentScribe.capture("final_bell", "%s RINGS THE FINAL BELL" % roster[ringer].name,
+		3, [ringer], "procession")
+	if not _fast:
+		board_camera.landing_push(board.reveal_shot(board.gate_id(), Spaces.GATE))
+		_announce_text(Dialog.text("procession.bell.header") + "\n\n"
+			+ Dialog.text("procession.bell.rung") % roster[ringer].name,
+			Color(1, 0.85, 0.4))
+		if _capture:
+			await _cap_snap("final_bell")
+		await _beat(2.6)
+		_hide_announce()
+
+# --------------------------------------------------------------------------
+# THE LAST BREATH turn plumbing (P2)
+# --------------------------------------------------------------------------
+## Run one seat's roll on the meter. Each turn gets its OWN child stream seeded
+## from the ROLL stream (one randi here), so the meter's documented consumption
+## (crit band + period + one face draw) can never smear across turns, and bot
+## brains (a separate salt-derived stream inside the component) re-deal per
+## turn. Returns the face (1..n_faces).
+func _roll_breath(seat: int, n_faces: int) -> int:
+	var turn_rng := RandomNumberGenerator.new()
+	turn_rng.seed = _roll_rng.randi()
+	_breath_faces = []
+	_heat_seat = seat
+	breath.begin_night_roll([seat], _turn_targets(seat, n_faces), turn_rng, n_faces)
+	while _breath_faces.is_empty():
+		await get_tree().process_frame
+	_heat_seat = -1
+	board.clear_heatmap()
+	return clampi(int(_breath_faces[seat]), 1, n_faces)
+
+func _on_breath_released(faces: Array) -> void:
+	_breath_faces = faces
+
+## The bot's wanted face for this turn: the highest-value stone reachable in
+## 1..n_faces down its preferred road (previewed with the same no-rng walk the
+## heatmap uses); a small ROLL-stream jitter keeps four bots distinct.
+## Humans aim by hand — their slot is inert.
+func _turn_targets(seat: int, n_faces: int) -> Array:
+	var out: Array = []
+	out.resize(roster.size())
+	out.fill(3)
+	if not bool(roster[seat].bot):
+		return out
+	var best_n := 1
+	var best_v := -999.0
+	for n in range(1, n_faces + 1):
+		var v: float = Spaces.bot_value(board.type_at(_preview_dest(seat, n)))
+		v += _roll_rng.randf_range(-0.6, 0.6)
+		if v > best_v:
+			best_v = v
+			best_n = n
+	out[seat] = best_n
+	return out
+
+## Frame the active roller: a raised shot from behind their stone looking down
+## the road, so the meter (bottom-center) and the glowing heatmap stones share
+## the frame. P3's over-shoulder minifig camera replaces this.
+func _frame_roller(seat: int) -> void:
+	var here := board.space_pos(positions[seat])
+	var ahead := board.space_pos(_preview_dest(seat, 4))
+	var dir := ahead - here
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.1 else Vector3.FORWARD
+	board_camera.landing_push({"pos": here - dir * 5.4 + Vector3(0, 4.6, 0),
+		"look": here + dir * 3.4 + Vector3(0, 0.4, 0)})
+
+## Windowed capture only: pose the meter mid-sweep with the crit band telegraphed
+## and the heatmap lit at the same needle position, snap, tear down. Never
+## touches any rng stream (weights_for_p is side-effect-free).
+func _pose_breath_shot(seat: int) -> void:
+	if breath.meter == null:
+		return
+	var pose_p := 0.62
+	breath.meter.retarget(seat, String(roster[seat].name), roster[seat].color, 0.5, N_FACES_BASE)
+	breath.meter.set_needle(0.3)     # sweep past the crit band once…
+	breath.meter.set_needle(pose_p)  # …so the tell is drawn at the pose
+	breath.meter.visible = true
+	var weights: Array[float] = breath.weights_for_p(pose_p, N_FACES_BASE)
+	var wmax := 0.0001
+	for w in weights:
+		wmax = maxf(wmax, float(w))
+	var entries: Array = []
+	for f in weights.size():
+		entries.append({"node": _preview_dest(seat, f + 1), "face": f + 1,
+			"p": float(weights[f]), "w": float(weights[f]) / wmax})
+	board.show_heatmap(entries, roster[seat].color)
+	await _beat(0.5)
+	await _cap_snap("breath_heatmap")
+	board.clear_heatmap()
+	breath.meter.visible = false
 
 ## Walk `steps` stones from the seat's node, resolving forks. Returns the node
 ## path (may be shorter than steps: the gate ends every walk). Bot/soak fork
@@ -1103,37 +1206,19 @@ func _preview_dest(seat: int, n: int) -> int:
 		cur = step
 	return cur
 
-## Bots aim for the highest-value stone reachable in 1..6 (previewed down
-## their preferred road); a small ROLL-stream jitter keeps four bots distinct.
-## Fixed draw shape: exactly 6 floats per bot seat, every round.
-func _bot_targets() -> Array[int]:
-	var out: Array[int] = []
-	out.resize(roster.size())
-	for i in roster.size():
-		if not bool(roster[i].bot):
-			out[i] = 3
-			continue
-		var best_n := 1
-		var best_v := -999.0
-		for n in range(1, 7):
-			var v: float = Spaces.bot_value(board.type_at(_preview_dest(i, n)))
-			v += _roll_rng.randf_range(-0.6, 0.6)
-			if v > best_v:
-				best_v = v
-				best_n = n
-		out[i] = best_n
-	return out
-
-func _apply_item_movement(moved: Array[int]) -> void:
-	for i in roster.size():
-		if items[i].pin > 0:
-			items[i].pin -= 1
-			moved[i] += 1
-			_flash_line(Dialog.text("procession.narration.pin") % roster[i].name, roster[i].color, i)
-		if items[i].ribbon > 0:
-			items[i].ribbon -= 1
-			moved[i] = maxi(1, moved[i] - 1)
-			_flash_line(Dialog.text("procession.narration.ribbon") % roster[i].name, roster[i].color, i)
+## Movement adjustments from held items, applied to this turn's rolled face
+## (announced when spent). P2's priced item pass replaces the free pin/ribbon.
+func _apply_turn_items(seat: int, face: int) -> int:
+	var steps := face
+	if items[seat].pin > 0:
+		items[seat].pin -= 1
+		steps += 1
+		_flash_line(Dialog.text("procession.narration.pin") % roster[seat].name, roster[seat].color, seat)
+	if items[seat].ribbon > 0:
+		items[seat].ribbon -= 1
+		steps = maxi(1, steps - 1)
+		_flash_line(Dialog.text("procession.narration.ribbon") % roster[seat].name, roster[seat].color, seat)
+	return steps
 
 ## THE FERRYMAN'S TOLL, in passing: crossing a toll stone mid-walk pays 2♠ to
 ## the Ferryman (the estate; no player owns the river — doc 28 §6). Landing on
@@ -1152,16 +1237,6 @@ func _pay_passthrough_tolls(seat: int, path: Array) -> void:
 			if not _fast:
 				_flash_line(Dialog.text("procession.narration.ferry_pass") % roster[seat].name,
 					roster[seat].color, seat)
-
-func _reveal_order(moved: Array[int]) -> Array:
-	var order: Array = []
-	for i in roster.size():
-		order.append(i)
-	order.sort_custom(func(a, b):
-		if moved[a] != moved[b]:
-			return moved[a] < moved[b]
-		return a < b)
-	return order
 
 func _reveal_landing(seat: int) -> void:
 	var idx := positions[seat]
