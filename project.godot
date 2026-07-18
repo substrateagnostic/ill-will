@@ -19,6 +19,7 @@ config/windows_native_icon="res://assets/ui/illwill.ico"
 [autoload]
 
 Migrate="*res://core/migrate.gd"
+Dialog="*res://core/dialog.gd"
 GameState="*res://scripts/game_state.gd"
 Sfx="*res://scripts/sfx.gd"
 Ambience="*res://core/ambience.gd"

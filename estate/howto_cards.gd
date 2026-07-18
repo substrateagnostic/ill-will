@@ -7,33 +7,38 @@ extends RefCounted
 const HOUSE_RULES_TIME := 5.0
 
 ## How-to-Play cards (UFO 50 pattern): goal + LIVE controls per seat via
-## PlayerInput.describe_binding — the card can't lie about bindings.
+## PlayerInput.describe_binding — the card can't lie about bindings. The GOAL prose
+## now lives in dialog.json ("howto.goals.<id>") so Alex can rewrite it in one file;
+## this dict keeps only the per-seat control labels (a/b/jump), which mirror the
+## button legend and are not prose. goal_for(id) fetches the live goal line.
 const HOWTO := {
-	"par": {"goal": "Sabotage golf. Draft a trap, place it on the SHARED hole, then putt it yourself. Your trap's kills pay YOU royalties. Last round is CHAOS: everyone putts at once.", "a": "", "b": ""},
-	"echo": {"goal": "Duel beside your own GHOST — it replays your previous round. Shatter the others before the past catches up.", "a": "STRIKE", "b": "DASH (hold: PARRY)", "jump": "HOP (cosmetic — just for kicks)"},
-	"tilt": {"goal": "The floor is one platter and everyone's weight tilts it. Fall off and you return as a vengeful seagull.", "a": "SHOVE (answer to CLASH)", "b": "BRACE"},
-	"orbital": {"goal": "Dodgeball on a tiny planet. Throws ORBIT forever — a 45-second-old ball still kills, and its thrower still gets paid.", "a": "hold: AIM+THROW / tap: CATCH", "b": "JUMP the gap"},
-	"mower": {"goal": "Mow more lawn than anyone. Coverage is score; ramming is diplomacy.", "a": "RAM HORN", "b": "BOOST (wider cut)"},
-	"greed": {"goal": "One pot of gold, four sets of hands. Bank it down your chute; tackle whoever is richer.", "a": "GRAB / TACKLE", "b": "DASH", "jump": "HOP (cosmetic — just for kicks)"},
-	"swap": {"goal": "Kart race where your weapon TRADES PLACES with whoever it hits. The lead is a rumor.", "a": "THROW SWAP ORB", "b": "hold: DRIFT, release: BOOST"},
-	"deadweight": {"goal": "Sumo where the dead never leave — they possess the furniture and fling it at the living.", "a": "SHOVE", "b": "HOP"},
-	"throne": {"goal": "One throne, four claimants. Reigning scores. Decrees blast, guards defend, gravity votes last.", "a": "SHOVE / DECREE", "b": "DASH / GUARD", "jump": "HOP (cosmetic — just for kicks)"},
-	"lastwill": {"goal": "A funeral procession race: first to the crypt inherits. Every death freezes the world while the deceased writes a curse into the road.", "a": "SHOVE", "b": "HOP"},
-	"widowsgaze": {"goal": "Rob the wake. Creep the parlor for relics while the Widow weeps — FREEZE when she turns, or her gaze flings you back to the rope. A shove as the sting plays is a murder.", "a": "GRAB / BANK (hold)", "b": "SHOVE"},
-	"seance": {"goal": "A co-op séance: guide the planchette to the spirit's word — but one of you was paid in grudge to make it fail without getting caught. The Executor is the medium.", "a": "CHANT ON THE PULSE", "b": "SURGE (anonymous)"},
-	"understudy": {"goal": "Everyone knows tonight's play but the understudy, who must bluff along. Rehearse, interrogate, vote — the scoring never stalemates.", "a": "COMMIT (move = choose)", "b": "—"},
-	"maskedball": {"goal": "A crowd of identical masked dancers — four of them are you, and nobody is told which. Find yourself, dance like furniture, curtsy to the throne, and spend your one mark to unmask a human. Wrong guess: you flash.", "a": "CURTSY (scores in the circle)", "b": "UNMASK (one mark)"},
-	"pallbearers": {"goal": "The anthology's first TEAM race: 2v2, one coffin per pair. The coffin moves on the BLEND of both your sticks — sync to sprint, pull apart and the dead spill out. First pall to the crypt wins.", "a": "RESTUFF (mash on a drop)", "b": "", "jump": "HOP / HEAVE (both = clear mud)"},  # B7-HOOK
+	"par": {"a": "", "b": ""},
+	"echo": {"a": "STRIKE", "b": "DASH (hold: PARRY)", "jump": "HOP (cosmetic — just for kicks)"},
+	"tilt": {"a": "SHOVE (answer to CLASH)", "b": "BRACE"},
+	"orbital": {"a": "hold: AIM+THROW / tap: CATCH", "b": "JUMP the gap"},
+	"mower": {"a": "RAM HORN", "b": "BOOST (wider cut)"},
+	"greed": {"a": "GRAB / TACKLE", "b": "DASH", "jump": "HOP (cosmetic — just for kicks)"},
+	"swap": {"a": "THROW SWAP ORB", "b": "hold: DRIFT, release: BOOST"},
+	"deadweight": {"a": "SHOVE", "b": "HOP"},
+	"throne": {"a": "SHOVE / DECREE", "b": "DASH / GUARD", "jump": "HOP (cosmetic — just for kicks)"},
+	"lastwill": {"a": "SHOVE", "b": "HOP"},
+	"widowsgaze": {"a": "GRAB / BANK (hold)", "b": "SHOVE"},
+	"seance": {"a": "CHANT ON THE PULSE", "b": "SURGE (anonymous)"},
+	"understudy": {"a": "COMMIT (move = choose)", "b": "—"},
+	"maskedball": {"a": "CURTSY (scores in the circle)", "b": "UNMASK (one mark)"},
+	"pallbearers": {"a": "RESTUFF (mash on a drop)", "b": "", "jump": "HOP / HEAVE (both = clear mud)"},  # B7-HOOK
 }
+
+## The live goal line for a how-to / get-ready card, from dialog.json.
+static func goal_for(id: String) -> String:
+	return Dialog.text("howto.goals." + id)
 
 # Pre-game card header pool (doc 26 §1 #11) — "GET READY" is banned arcade hype
 # (rule 9). The estate seats you instead. Drawn via Voice.pick_fmt (local RNG,
-# presentation-only); each line carries exactly one %s for the game's name.
-const GET_READY_HEADS: PackedStringArray = [
-	"TAKE YOUR PLACES — %s",
-	"THE ESTATE IS SEATING YOU — %s",
-	"THE ESTATE WILL SEE YOU NOW — %s",
-]
+# presentation-only); each line carries exactly one %s for the game's name. The
+# lines live in dialog.json ("howto.get_ready_heads"); this getter fetches them.
+static var GET_READY_HEADS: PackedStringArray:
+	get: return PackedStringArray(Dialog.paras("howto.get_ready_heads"))
 
 static func schedule_howto_test(estate) -> void:
 	# Seat two keyboard humans + two bots so the CONTROLS TONIGHT rows render
@@ -207,7 +212,7 @@ static func show_howto(estate, modules: Dictionary, id: String) -> void:
 	estate._clear_panel(String(info.name), Color(1, 0.9, 0.5))
 	var how: Dictionary = HOWTO.get(id, {"goal": "?", "a": "A", "b": "B"})
 	var goal := Label.new()
-	goal.text = String(how.goal)
+	goal.text = goal_for(id)
 	goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	goal.custom_minimum_size = Vector2(680, 0)
 	goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -294,13 +299,14 @@ static func maybe_show_house_rules(estate) -> bool:
 	estate._show_house_rules()
 	return true
 
-## The card itself: the Executor's five-line primer on the economy a first-timer
-## needs, then a per-seat A-to-continue gate (the GET READY chip pattern).
+## The primer, PAGED (Alex's night-6 note: the estate's instructions ran too long
+## on one screen). The Nintendo pager shows the lead line, then each rule, one
+## screen at a time — press A / click to advance, or the countdown ring auto-
+## advances. The final page closes it and opens the night's first auction. All the
+## text lives in dialog.json ("howto.house_rules.*"). Guests hold on the prior
+## stage exactly as before (host-only chrome).
 static func show_house_rules(estate) -> void:
 	estate._house_rules_active = true
-	estate._house_rules_countdown = HOUSE_RULES_TIME
-	estate._house_rules_ready.clear()
-	estate._house_rules_needed.clear()
 	# Persist immediately: even if the night is abandoned on this card, the estate
 	# has now "explained itself once" and will not lecture this slot again.
 	EstateState.mark_house_rules_shown()
@@ -308,74 +314,29 @@ static func show_house_rules(estate) -> void:
 	Sfx.play("card")
 	estate._hide_title()
 	estate.banner.visible = false
-	estate._clear_panel("THE HOUSE RULES", Color(1, 0.85, 0.2))
-	var intro := Label.new()
-	intro.text = "You are new to the estate, so it will explain itself. Once. It keeps no patience for a slow study and less for a repeat question."
-	intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	intro.custom_minimum_size = Vector2(720, 0)
-	intro.add_theme_font_size_override("font_size", 16)
-	intro.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
-	estate.phase_box.add_child(intro)
-	var rules := [
-		"POINTS are the ladder. Place well in each game and the estate counts you among the worthy; place last and it counts you anyway.",
-		"♠ GRUDGE is spite made spendable — it buys your bids at THE AUCTION and the trap tiles you seed into the lawn.",
-		"ROYALTIES are the house's kindest cruelty: the traps and curses you author pay YOU, every time they take somebody else.",
-		"THE TRAIL climbs to the manor. First to the summit inherits it; the rest inherit the memory of the climb.",
-		"Every night closes at THE READING, where the ledger is totted up aloud and no one, on principle, is flattered.",
-	]
-	for line in rules:
-		var l := Label.new()
-		l.text = "·  " + line
-		l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		l.custom_minimum_size = Vector2(720, 0)
-		l.add_theme_font_size_override("font_size", 18)
-		estate.phase_box.add_child(l)
-	var sig := Label.new()
-	sig.text = "— The Executor"
-	sig.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sig.add_theme_font_size_override("font_size", 15)
-	sig.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
-	sig.modulate.a = 0.8
-	estate.phase_box.add_child(sig)
-	# Per-seat A-to-continue (GET READY chip pattern). Bots, remote guests and the
-	# shared/mouse seat (-3, no discrete A) count as ready on arrival.
+	estate.phase_panel.visible = false
+	var paras: Array = [Dialog.text("howto.house_rules.lead")]
+	paras.append_array(Dialog.paras("howto.house_rules.rules"))
+	# Any human seat with a discrete A can advance the pager; a shared/mouse seat
+	# (-3) uses the click, and the ring auto-advance covers everyone else.
+	var seats: Array = []
 	for i in EstateState.players.size():
-		if PlayerInput.is_bot(i) or NetSession.is_seat_remote(i):
-			continue
-		if PlayerInput.device_of(i) == -3:
-			estate._house_rules_ready[i] = true
-			continue
-		estate._house_rules_ready[i] = false
-		estate._house_rules_needed.append(i)
-		var row := HBoxContainer.new()
-		row.name = "RulesRow%d" % i
-		row.alignment = BoxContainer.ALIGNMENT_CENTER
-		row.add_theme_constant_override("separation", 8)
-		row.add_child(PlayerBadge.make(i, 16))
-		var nm := Label.new()
-		nm.text = GameState.PLAYER_NAMES[i]
-		nm.add_theme_font_size_override("font_size", 17)
-		nm.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
-		row.add_child(nm)
-		var chip: Label = estate._make_ready_chip()
-		chip.name = "RulesChip"
-		chip.text = "PRESS A"
-		chip.add_theme_color_override("font_color", Color(0.9, 0.8, 0.4))
-		chip.modulate.a = 0.85
-		row.add_child(chip)
-		estate.phase_box.add_child(row)
-	# Humans get time to actually READ the primer — 5s is the bots/auto cap,
-	# not a reading deadline. A pressing A still advances immediately.
-	if not estate._house_rules_needed.is_empty():
-		estate._house_rules_countdown = 45.0
-	var count := Label.new()
-	count.name = "RulesCountdown"
-	count.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	count.add_theme_font_size_override("font_size", 18)
-	count.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
-	estate.phase_box.add_child(count)
-	estate._refresh_house_rules_countdown()
+		if not PlayerInput.is_bot(i) and not NetSession.is_seat_remote(i) and PlayerInput.device_of(i) != -3:
+			seats.append(i)
+	var pager := DialogPager.new()
+	pager.name = "HouseRulesPager"
+	estate.add_child(pager)
+	pager.closed.connect(func() -> void:
+		estate._house_rules_active = false
+		estate._enter_auction())
+	pager.present(paras, {
+		"title": "THE HOUSE RULES",
+		"sig": Dialog.text("howto.house_rules.sig"),
+		"accent": Color(1, 0.85, 0.2),
+		"seats": seats,
+	})
+	# Verification still: let the first page render, then snap.
+	estate.get_tree().create_timer(0.4).timeout.connect(func() -> void: VerifyCapture.snap("house_rules"))
 
 static func all_house_rules_ready(estate) -> bool:
 	for i in estate._house_rules_needed:
@@ -398,6 +359,11 @@ static func refresh_house_rules_countdown(estate) -> void:
 			", ".join(waiting), ceili(maxf(estate._house_rules_countdown, 0.0))]
 
 static func poll_house_rules(estate, delta: float) -> void:
+	# HOUSE RULES is PAGED now — the DialogPager overlay owns input + auto-advance
+	# and calls _enter_auction itself when its last page closes. Nothing to poll
+	# while it is up. (Legacy per-seat gate below kept as an inert fallback.)
+	if estate.get_node_or_null("HouseRulesPager") != null:
+		return
 	estate._house_rules_countdown -= delta
 	for i in estate._house_rules_needed:
 		if not estate._house_rules_ready.get(i, false) and PlayerInput.just_pressed(i, "a"):
@@ -437,7 +403,7 @@ static func show_get_ready(estate, modules: Dictionary, ready_gate_time: float, 
 			else Voice.pick_fmt(GET_READY_HEADS, [String(info.name)]), Color(1, 0.9, 0.5))
 	if not minimal:
 		var goal := Label.new()
-		goal.text = String(how.goal)
+		goal.text = goal_for(id)
 		goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		goal.custom_minimum_size = Vector2(680, 0)
 		goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

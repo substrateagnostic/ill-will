@@ -349,19 +349,14 @@ func _default_config() -> Dictionary:
 
 # ui_kit intro card (doc 14 nit 7): shown at load, real key fallback, auto-starts
 # after 6s so bot soaks flow through.
+# name/goal/tips live in dialog.json ("intro.deadweight.*"), merged in at present
+# time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
-	"name": "DEAD WEIGHT",
-	"goal": "Sumo brawl in the attic. Shove rivals off — the fallen return as furniture-hurling ghosts.",
 	"accent": Color(0.62, 0.78, 0.95),
 	"controls": [
 		{"action": "move", "label": "MOVE"},
 		{"action": "a", "label": "SHOVE"},
 		{"action": "b", "label": "HOP"},
-	],
-	"tips": [
-		"Shove rivals over the edge; a HOP dodges a shove and repositions.",
-		"Fall off and you possess the furniture — hurl it at the living.",
-		"Last body standing takes the round.",
 	],
 }
 
@@ -371,6 +366,10 @@ func _intro_then(cb: Callable) -> void:
 	add_child(card)
 	card.started.connect(cb)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
+	spec["name"] = Dialog.text("intro.deadweight.name")
+	spec["goal"] = Dialog.text("intro.deadweight.goal")
+	spec["tips"] = Dialog.paras("intro.deadweight.tips")
 	spec["seats"] = _human_seats()
 	card.present(spec)
 

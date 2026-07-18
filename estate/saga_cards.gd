@@ -76,10 +76,10 @@ static func standing_grudge_lines() -> Array:
 		else:
 			break
 	if streak >= 2:
-		lines.append({"text": "The estate has answered to %s %s running." % [reigning, _plural(streak, "night")], "who": reign_idx})
-		lines.append({"text": "%s goes for the %s tonight. The estate keeps a chisel warm, on principle." % [reigning, _peat(streak + 1)], "who": reign_idx})
+		lines.append({"text": Dialog.text("saga.grudge.reign_streak_1") % [reigning, _plural(streak, "night")], "who": reign_idx})
+		lines.append({"text": Dialog.text("saga.grudge.reign_streak_2") % [reigning, _peat(streak + 1)], "who": reign_idx})
 	else:
-		lines.append({"text": "The estate answers, for now, to %s, with %s to their name." % [reigning, _plural(reign_wins, "night")], "who": reign_idx})
+		lines.append({"text": Dialog.text("saga.grudge.reign_single") % [reigning, _plural(reign_wins, "night")], "who": reign_idx})
 	# A sole leader in total nights, if it is not the reigning name, is noted too.
 	var best_wins: int = -1
 	var leaders: Array = []
@@ -92,7 +92,7 @@ static func standing_grudge_lines() -> Array:
 			leaders.append(String(nm))
 	if best_wins > 0 and leaders.size() == 1 and String(leaders[0]) != reigning:
 		var ldr: String = String(leaders[0])
-		lines.append({"text": "%s holds more nights than anyone, and holds them without apology." % ldr, "who": _name_idx(ldr)})
+		lines.append({"text": Dialog.text("saga.grudge.leader") % ldr, "who": _name_idx(ldr)})
 	# The winless: the one with the longest record of finishing last.
 	var winless: String = ""
 	var most_lasts: int = 0
@@ -104,7 +104,7 @@ static func standing_grudge_lines() -> Array:
 				most_lasts = l
 				winless = String(nm)
 	if winless != "":
-		lines.append({"text": "%s remains, in the estate's assessment, persistent." % winless, "who": _name_idx(winless)})
+		lines.append({"text": Dialog.text("saga.grudge.winless") % winless, "who": _name_idx(winless)})
 	# An armed reprisal (last night's nemesis, unsettled): the account left open.
 	var vend: Dictionary = EstateState.vendetta
 	if not vend.is_empty() and EstateState.vendetta_settled_by < 0:
@@ -113,7 +113,7 @@ static func standing_grudge_lines() -> Array:
 		if hunter >= 0 and prey >= 0:
 			var hn: String = GameState.PLAYER_NAMES[hunter]
 			var pn: String = GameState.PLAYER_NAMES[prey]
-			lines.append({"text": "A reprisal stands on the books: %s came for %s. The estate has left the matter open." % [hn, pn], "who": prey})
+			lines.append({"text": Dialog.text("saga.grudge.reprisal") % [hn, pn], "who": prey})
 	return lines
 
 ## The card. Mirrors the HOUSE RULES beat: local, host-only chrome (guests hold on
@@ -129,7 +129,7 @@ static func show_standing_grudge(estate) -> void:
 	estate.banner.visible = false
 	estate._clear_panel("THE STANDING GRUDGE", Color(0.9, 0.8, 0.4))
 	var sub := Label.new()
-	sub.text = "Before the night opens, the estate reviews the accounts still standing."
+	sub.text = Dialog.text("saga.grudge.sub")
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sub.custom_minimum_size = Vector2(720, 0)
@@ -148,7 +148,7 @@ static func show_standing_grudge(estate) -> void:
 			l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[who])
 		estate.phase_box.add_child(l)
 	var sig := Label.new()
-	sig.text = "— The Executor"
+	sig.text = Dialog.text("saga.grudge.sig")
 	sig.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sig.add_theme_font_size_override("font_size", 15)
 	sig.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
@@ -191,22 +191,22 @@ static func funeral_audit_lines(heir_idx: int) -> Array:
 		for aw in (e as Dictionary).get("awards", []):
 			if String((aw as Dictionary).get("title", "")) == "THE RECKONER":
 				reck += 1
-	lines.append({"text": "Tenure: %s kept, and counted." % _plural(nights, "night"), "who": -1})
+	lines.append({"text": Dialog.text("saga.audit.tenure") % _plural(nights, "night"), "who": -1})
 	if monuments > 0:
-		lines.append({"text": "Monuments raised: %d. The lawn is spoken for." % monuments, "who": -1})
+		lines.append({"text": Dialog.text("saga.audit.monuments_some") % monuments, "who": -1})
 	else:
-		lines.append({"text": "Monuments raised: none. The estate found the restraint suspicious.", "who": -1})
+		lines.append({"text": Dialog.text("saga.audit.monuments_none"), "who": -1})
 	if reck > 0:
-		lines.append({"text": "Grudges settled: %s. The estate keeps the remainder open." % _plural(reck, "account"), "who": -1})
+		lines.append({"text": Dialog.text("saga.audit.grudges_some") % _plural(reck, "account"), "who": -1})
 	else:
-		lines.append({"text": "Grudges settled: none. The estate keeps every one of them open.", "who": -1})
-	lines.append({"text": "Kindnesses recorded: none. The estate had budgeted for this.", "who": -1})
+		lines.append({"text": Dialog.text("saga.audit.grudges_none"), "who": -1})
+	lines.append({"text": Dialog.text("saga.audit.kindness"), "who": -1})
 	if heir_idx >= 0 and heir_idx < GameState.PLAYER_NAMES.size():
-		lines.append({"text": "The manor, and its debts, pass to %s." % GameState.PLAYER_NAMES[heir_idx], "who": heir_idx})
+		lines.append({"text": Dialog.text("saga.audit.heir") % GameState.PLAYER_NAMES[heir_idx], "who": heir_idx})
 	# The commendation: souring, and its arithmetic is the estate's own. Fewer
 	# reprisals settled reads as a lower class of griever; kindness never counts.
 	var pct: int = clampi(3 + reck * 5, 1, 40)
-	lines.append({"text": "The account ranks in the %s percentile of grievers. The estate rates it, in candour, actionable." % _ordinal(pct), "who": -1})
+	lines.append({"text": Dialog.text("saga.audit.rank") % _ordinal(pct), "who": -1})
 	return lines
 
 static func _ordinal(n: int) -> String:
@@ -226,10 +226,10 @@ static func _ordinal(n: int) -> String:
 ## as a stamped receipt at the foot of the reading.
 static func eulogy_receipt_lines() -> Array:
 	return [
-		{"text": "FUNERAL PROCESSED.", "header": true},
-		{"text": "Goodwill recognised: +1, provisional.", "header": false},
-		{"text": "Kindness logged to the liability column, pending audit.", "header": false},
-		{"text": "Remains: reallocated.", "header": false},
+		{"text": Dialog.text("saga.receipt.header"), "header": true},
+		{"text": Dialog.text("saga.receipt.goodwill"), "header": false},
+		{"text": Dialog.text("saga.receipt.kindness"), "header": false},
+		{"text": Dialog.text("saga.receipt.remains"), "header": false},
 	]
 
 # ---- verification hooks (dev-only, windowed; drive real card renders) ------

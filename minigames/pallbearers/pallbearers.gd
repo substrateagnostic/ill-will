@@ -95,19 +95,14 @@ const INTRO_TIME := 1.6
 const MATCH_END_HOLD := 8.0
 const CAM_FOV := 56.0
 
+# name/goal/tips live in dialog.json ("intro.pallbearers.*"), merged in at present
+# time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
-	"name": "PALLBEARERS",
-	"goal": "Carry the pall to the crypt first. You share one coffin — steer together or drop the dead.",
 	"accent": Color(0.9, 0.74, 0.34),
 	"controls": [
 		{"action": "move", "label": "CARRY (both steer)"},
 		{"action": "jump", "label": "HOP / HEAVE"},
 		{"action": "a", "label": "RESTUFF (mash)"},
-	],
-	"tips": [
-		"The coffin moves on the BLEND of both sticks. Pull the same way to sprint.",
-		"Both hop on the same beat to HEAVE over mud. Hop alone and you jostle the dead.",
-		"Drop on the downhill and the coffin bolts for the crypt without you. Chase it.",
 	],
 }
 
@@ -266,6 +261,10 @@ func _present_intro_card() -> void:
 	add_child(_intro_card)
 	_intro_card.started.connect(_start_round)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
+	spec["name"] = Dialog.text("intro.pallbearers.name")
+	spec["goal"] = Dialog.text("intro.pallbearers.goal")
+	spec["tips"] = Dialog.paras("intro.pallbearers.tips")
 	spec["seats"] = _human_seats()
 	if _cap_on:
 		spec["auto_secs"] = 2.4               # cap runs are all-bot; don't dwell

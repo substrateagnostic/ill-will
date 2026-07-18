@@ -117,18 +117,14 @@ const ROLL_STEP := 0.12         # one planchette rattle every 0.12s
 const LEDGER_STAGGER := 0.5     # settlement rows read out one beat apart
 const REVEAL_FINISH_T := 11.1   # was 9.6; +1.5s room for the staggered ledger
 
+# name/goal/tips live in dialog.json ("intro.seance.*"), merged in at present
+# time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
-	"name": "THE SÉANCE",
-	"goal": "Guide the planchette to the word together. One of you was paid to make it fail.",
 	"accent": Color(0.8, 0.75, 1.0),
 	"controls": [
 		{"action": "move", "label": "GUIDE THE PLANCHETTE"},
 		{"action": "a", "label": "CHANT ON THE PULSE"},
 		{"action": "b", "label": "SURGE (anonymous)"},
-	],
-	"tips": [
-		"Whoever's paid up front sees the word too — sabotage has to look like an honest mistake.",
-		"Every hand pulls the same shared planchette. Nobody can see whose is pulling it wrong.",
 	],
 }
 
@@ -414,6 +410,10 @@ func _present_intro_card() -> void:
 	add_child(_intro_card)
 	_intro_card.started.connect(_start_cast_intro)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
+	spec["name"] = Dialog.text("intro.seance.name")
+	spec["goal"] = Dialog.text("intro.seance.goal")
+	spec["tips"] = Dialog.paras("intro.seance.tips")
 	spec["seats"] = _human_seats()
 	_intro_card.present(spec)
 

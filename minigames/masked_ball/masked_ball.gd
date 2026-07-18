@@ -128,19 +128,14 @@ const REVEAL_TICK_DB := -6.0
 # waltz metronome (presentation only): oom-pah-pah at 0.62s a beat
 const WALTZ_BEAT := 0.62
 
+# name/goal/tips live in dialog.json ("intro.maskedball.*"), merged in at present
+# time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
-	"name": "MASKED BALL",
-	"goal": "Find yourself among twenty identical dancers, then curtsy for points or unmask a human.",
 	"accent": Color(0.92, 0.82, 1.0),
 	"controls": [
 		{"action": "move", "label": "DRIFT (crowd speed)"},
 		{"action": "a", "label": "CURTSY (scores in the circle)"},
 		{"action": "b", "label": "UNMASK (one mark)"},
-	],
-	"tips": [
-		"Your own dancer answers your stick the instant you move — the crowd merely wanders.",
-		"Feather the stick below a full drift and only your mask glints, privately.",
-		"Marking empty air still costs your one mark. Aim before you spend it.",
 	],
 }
 
@@ -362,6 +357,10 @@ func _present_intro_card() -> void:
 	add_child(_intro_card)
 	_intro_card.started.connect(_start_waltz_intro)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
+	spec["name"] = Dialog.text("intro.maskedball.name")
+	spec["goal"] = Dialog.text("intro.maskedball.goal")
+	spec["tips"] = Dialog.paras("intro.maskedball.tips")
 	spec["seats"] = _human_seats()
 	_intro_card.present(spec)
 

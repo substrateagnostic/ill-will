@@ -297,19 +297,14 @@ func _default_config() -> Dictionary:
 
 # ui_kit intro card (doc 14 nit 7): shown at load, real key fallback, auto-starts
 # after 6s so bot soaks flow through.
+# name/goal/tips live in dialog.json ("intro.lastwill.*"), merged in at present
+# time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
-	"name": "LAST WILL",
-	"goal": "A funeral race where DYING IS A POWER. Three lives each — first body to the crypt inherits.",
 	"accent": Color(0.72, 0.55, 0.95),
 	"controls": [
 		{"action": "move", "label": "RUN"},
 		{"action": "a", "label": "SHOVE"},
 		{"action": "b", "label": "HOP"},
-	],
-	"tips": [
-		"Spend a life as a curse or a boulder to wreck the leaders, then respawn ahead.",
-		"HOP the traps: pendulums, spinners, and the gust gates.",
-		"First through the crypt door takes the estate.",
 	],
 }
 
@@ -319,6 +314,10 @@ func _intro_then(cb: Callable) -> void:
 	add_child(card)
 	card.started.connect(cb)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
+	spec["name"] = Dialog.text("intro.lastwill.name")
+	spec["goal"] = Dialog.text("intro.lastwill.goal")
+	spec["tips"] = Dialog.paras("intro.lastwill.tips")
 	spec["seats"] = _human_seats()
 	card.present(spec)
 

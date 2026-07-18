@@ -44,19 +44,15 @@ const PARRY_STAGGER_T := 0.6
 const MEDDLE_GUST_R := 3.2
 const MEDDLE_GUST_STAGGER := 0.22
 
+# name/goal/tips live in dialog.json ("intro.echo.*"), merged in at present
+# time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
-	"name": "ECHO CHAMBER",
-	"goal": "Fight beside your own ghost — your past round replays and still earns you points when it lands a hit.",
 	"accent": Color(0.55, 0.85, 0.95),
 	"controls": [
 		{"action": "move", "label": "MOVE"},
 		{"action": "a", "label": "STRIKE (hold: HEAVY)"},
 		{"action": "b", "label": "DASH (hold: PARRY)"},
 		{"action": "jump", "label": "HOP (cosmetic)"},
-	],
-	"tips": [
-		"Every translucent fighter is somebody's own past round, replaying blow for blow — yours included.",
-		"Hold STRIKE to charge a heavy swing; hold DASH to parry and riposte.",
 	],
 }
 
@@ -312,6 +308,10 @@ func _present_intro_card() -> void:
 	add_child(_intro_card)
 	_intro_card.started.connect(_dismiss_intro_card)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
+	spec["name"] = Dialog.text("intro.echo.name")
+	spec["goal"] = Dialog.text("intro.echo.goal")
+	spec["tips"] = Dialog.paras("intro.echo.tips")
 	spec["seats"] = _human_seats()
 	_intro_card.present(spec)
 

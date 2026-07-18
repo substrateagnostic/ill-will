@@ -10,116 +10,48 @@ extends Node
 ## choices are drawn from a passed-in seeded RNG, so the couch and a net mirror
 ## hear the same eulogy.
 
-# ~40 dry line variants, pooled by the beat they narrate. %s slots are filled
-# by procession.gd with player names (already colour-tagged in the banner).
-const GREETING := [
-	"Good evening. You are all here for the reading, whether you know it or not.",
-	"Welcome to the procession. Please keep your grudges inside the carriage at all times.",
-	"The estate is open. The estate is always open. The estate is never glad to see you.",
-	"Four mourners, one manor, no witnesses worth the name. Let us begin.",
-]
-const SHRINE := [
-	"%s kneels at the shrine and is rewarded. The shrine will want that back.",
-	"The shrine blesses %s (+3♠). It has low standards and a long memory.",
-	"%s gains at the shrine. Piety pays, this once, under protest.",
-	"The saints smile on %s. The saints have never met them.",
-	"%s is favoured. The estate has logged the anomaly for review.",
-]
-const GRAVE := [
-	"%s weeps at the grave (−2♠). The grave has wept harder for less.",
-	"The weeping grave takes its due from %s. It does not itemise.",
-	"%s pays the ground what the ground is owed. Everyone does, eventually.",
-	"A grave for %s. Not theirs. Not yet. Two grudge, all the same.",
-	"%s mourns, briefly and expensively.",
-]
-const GRAVE_TOLL := [
-	"%s weeps on %s's monument — and %s collects the tears (%d♠).",
-	"The grave belongs to %s. %s learns this the way everyone does: by paying.",
-	"%s's headstone bills %s %d♠ for the trespass. The dead keep excellent books.",
-	"%s bleeds onto %s's stone; %s keeps the difference (%d♠), and the grudge.",
-]
-const STALL := [
-	"%s takes something sharp from the stall. No refunds, no receipts, no remorse.",
-	"The stall arms %s. The stall would like it noted it warned nobody.",
-	"%s pockets a grievance-in-a-box. Do use it responsibly, which is to say don't.",
-	"%s shops the stall. The estate approves of premeditation.",
-]
-const CODICIL := [
-	"%s buys a Deed. The ink is wet and already contested.",
-	"%s claims the Codicil. Somewhere a lawyer feels a disturbance and smiles.",
-	"A Deed to %s. Ownership is nine-tenths of the haunting.",
-	"%s pays the Codicil's price. The price, naturally, goes up.",
-	"%s takes a Deed and the Codicil takes a walk. Chase it.",
-	"%s signs for a Deed. The estate files it under acquisitions, and under grievances.",
-	"A Codicil passes to %s. The manor notes a new claimant, and sharpens its interest.",
-]
-const CODICIL_SHORT := [
-	"%s eyes the Codicil and finds the price beyond them. The estate is not a charity.",
-	"The Codicil declines %s for want of funds. Grieve, then earn.",
-	"%s reaches for the Deed and comes up short. The estate accepts grief, but not as tender.",
-	"The Codicil weighs %s's purse and finds it wanting. Come back richer, or come back bitter.",
-]
-const SEANCE := [
-	"The planchette moves. Nobody admits to pushing it. The estate has its suspicions.",
-	"A séance opens. The dead are, as ever, unhelpfully opinionated.",
-	"The circle turns for the whole table. Misery, at last, distributed fairly.",
-	"The medium speaks. The estate transcribes. Everyone pays attention or pays later.",
-]
-const TOLLGATE_TAKE := [
-	"%s owns the tollgate now. Congratulations on the paperwork.",
-	"The tollgate answers to %s. Passage will cost the rest of you dearly and often.",
-	"%s collects the pot and the deed to the gate. A landlord is born, unmourned.",
-	"%s inherits the tollgate. The estate wishes them the joy of collections.",
-]
-const TOLLGATE_PASS := [
-	"%s passes %s's gate and pays for the privilege (2♠).",
-	"The tollgate bills %s on the way through. %s does not rise to thank them.",
-]
-const VENDETTA := [
-	"%s and %s settle it the estate's way — quietly, and for money.",
-	"A vendetta ripens between %s and %s. The higher stake walks away heavier.",
-	"%s stares at %s across five spaces. Sealed bids. Old wounds. New debts.",
-	"%s and %s are found within five stones of an old debt. The estate calls the wager.",
-]
-const VENDETTA_RESULT := [
-	"%s out-stakes %s and takes the difference. Grudges compound.",
-	"%s wins the wager over %s. The estate admires a decisive cruelty.",
-	"The vendetta breaks %s's way. %s adds it to the list they keep.",
-	"%s collects from %s, with interest the estate did not trouble to name.",
-]
-const BLANK := [
-	"%s lands on nothing. A merciful administrative error.",
-	"%s finds bare stone. The estate resents the missed opportunity.",
-	"Nothing befalls %s. This is not the same as safety.",
-	"%s stands on plain flagstone. The estate has nothing to bill, and resents it.",
-	"Bare stone for %s. Even the grudges take the night off.",
-	"%s lands nowhere in particular. The ledger notes the absence, in ink.",
-]
-const HOUSE_AWAKENS := [
-	"THE HOUSE AWAKENS. The manor's shadow walks the drive. Reach a safe stone or fall behind.",
-	"Something in the house remembers you. Run for the marked stones.",
-	"The shadow sweeps the procession. It is not particular about whom it catches.",
-]
-const HOUSE_LOSER := [
-	"The shadow takes %s two steps back. The house keeps what it touches.",
-	"%s is caught in the dark and slips back. The estate does not offer a hand.",
-]
-const WILL_OPEN := [
-	"The estate has reviewed the evening's conduct and finds it, on the whole, actionable.",
-	"The will is read. It was written some time ago, and about all of you.",
-	"The estate has audited the evening and finds no one blameless. The will will now say so.",
-	"The reading begins. The estate has weighed the night and found it wanting, as forecast.",
-]
+# ~40 dry line variants, pooled by the beat they narrate. The lines themselves
+# now live in dialog.json (keys "executor.*") so Alex can rewrite the Executor's
+# whole register in one file; these getters just fetch the current pool. %s slots
+# are filled by procession.gd with player names (already colour-tagged in the
+# banner). pick() indexes by pool SIZE, so a seeded draw stays deterministic as
+# long as an edit keeps the same number of lines.
+static var GREETING: Array:
+	get: return Dialog.paras("executor.greeting")
+static var SHRINE: Array:
+	get: return Dialog.paras("executor.shrine")
+static var GRAVE: Array:
+	get: return Dialog.paras("executor.grave")
+static var GRAVE_TOLL: Array:
+	get: return Dialog.paras("executor.grave_toll")
+static var STALL: Array:
+	get: return Dialog.paras("executor.stall")
+static var CODICIL: Array:
+	get: return Dialog.paras("executor.codicil")
+static var CODICIL_SHORT: Array:
+	get: return Dialog.paras("executor.codicil_short")
+static var SEANCE: Array:
+	get: return Dialog.paras("executor.seance")
+static var TOLLGATE_TAKE: Array:
+	get: return Dialog.paras("executor.tollgate_take")
+static var TOLLGATE_PASS: Array:
+	get: return Dialog.paras("executor.tollgate_pass")
+static var VENDETTA: Array:
+	get: return Dialog.paras("executor.vendetta")
+static var VENDETTA_RESULT: Array:
+	get: return Dialog.paras("executor.vendetta_result")
+static var BLANK: Array:
+	get: return Dialog.paras("executor.blank")
+static var HOUSE_AWAKENS: Array:
+	get: return Dialog.paras("executor.house_awakens")
+static var HOUSE_LOSER: Array:
+	get: return Dialog.paras("executor.house_loser")
+static var WILL_OPEN: Array:
+	get: return Dialog.paras("executor.will_open")
 # Dry commentary for the dead air at the top of a round (F9). Drawn from the
 # PRESENTATION rng only (via aside()), so it never touches the sim stream.
-const ROUND_OPENER := [
-	"Round %d. The mourners take their marks; the estate takes notes.",
-	"The wake resumes at round %d. No one has yet asked to leave early.",
-	"Round %d begins. The estate turns a page it wrote in advance.",
-	"Round %d. The manor settles in to watch you spend.",
-	"Round %d. The drive is patient; the grudges, less so.",
-	"Round %d. The dead keep excellent time, and worse company.",
-]
+static var ROUND_OPENER: Array:
+	get: return Dialog.paras("executor.round_opener")
 
 # --- THE NON-PLAY VOICE (W6) --------------------------------------------------
 # The Executor's register, extended to the moments when nobody is playing: the
@@ -130,39 +62,15 @@ const ROUND_OPENER := [
 
 ## Fires once when the settings/pause overlay is opened mid-night. One line, on
 ## the pause screen. No %s.
-const PAUSE := [
-	"The estate pauses. The estate has nowhere in particular to be.",
-	"The proceedings are suspended at your request. The estate files the interruption and waits.",
-	"The estate holds. It has held longer, for less, and remembers each occasion.",
-	"A recess is noted. The dead do not observe recesses, but the estate will indulge you.",
-	"The night is paused. Nothing is resolved; nothing ever is, but especially not now.",
-	"The estate sets down its pen. It does not lose its place. It never loses its place.",
-	"You have stopped the clock. The estate keeps a second clock, for occasions such as this.",
-	"The record is held open. The estate will not read ahead. The estate has already read ahead.",
-]
+static var PAUSE: Array:
+	get: return Dialog.paras("executor.pause")
 ## Fires after a long true idle at a menu desk awaiting the couch. Exactly one
 ## %s per line (the kept-waiting seat's name); pass [name].
-const IDLE := [
-	"The estate notes %s has not moved in some time. It is used to being kept waiting. It has never once been kept waiting so thoroughly.",
-	"%s has yet to act. The estate marks the delay in the margin, where it keeps the other delays.",
-	"The estate awaits %s. Its patience is a matter of record, and the record is long.",
-	"Nothing has been decided by %s. The estate finds this consistent with the evening so far.",
-	"%s deliberates. The estate admires deliberation, up to a point, and has quietly noted the point.",
-	"The estate holds a place for %s. The place is not going anywhere, and increasingly, neither is the night.",
-	"%s takes their time. The estate has time to spare, and no one left to spend it on.",
-	"Still no word from %s. The estate has re-read the will while waiting and found no mention of hurry.",
-]
+static var IDLE: Array:
+	get: return Dialog.paras("executor.idle")
 ## Fires when a departure is initiated at the quit-confirm. No %s.
-const QUIT_CONFIRM := [
-	"Departures are processed in the order received. The estate does not take them personally. It writes them down.",
-	"You are leaving. The estate has a form for this. The estate has a form for everything, which is the whole tragedy of it.",
-	"A guest withdraws. The estate marks the seat vacant and the grudges outstanding.",
-	"The exit is noted. The estate keeps the door for those who return, and a longer file for those who do not.",
-	"You wish to go. The estate will not stop you. The estate has never successfully stopped anyone.",
-	"Withdrawal acknowledged. The estate settles your account to zero and rounds the sentiment down.",
-	"One less at the table. The estate redistributes nothing, which is its custom, and reopens the will.",
-	"The night releases you. The estate does not. The estate merely lets you believe it has.",
-]
+static var QUIT_CONFIRM: Array:
+	get: return Dialog.paras("executor.quit_confirm")
 
 # --- THE BODY (doc 24 F6/F7) --------------------------------------------------
 const Body := preload("res://estate/procession/executor_body.gd")

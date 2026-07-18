@@ -267,18 +267,13 @@ func _default_config() -> Dictionary:
 
 # ui_kit intro card (doc 14 nit 7): shown at load, real key fallback, auto-starts
 # after 6s so bot soaks flow through.
+# name/goal/tips live in dialog.json ("intro.understudy.*"), merged in at present
+# time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
-	"name": "THE UNDERSTUDY",
-	"goal": "Three know tonight's PLAY. One is faking. Spot the Understudy — or bluff through as one.",
 	"accent": Color(1, 0.85, 0.3),
 	"controls": [
 		{"action": "move", "label": "CHOOSE"},
 		{"action": "a", "label": "COMMIT"},
-	],
-	"tips": [
-		"On your cue, act out a beat of the play — vague enough to hide if you're faking.",
-		"Watch who over- or under-commits; the Understudy is only guessing.",
-		"Aim with the stick, lock your vote in with A.",
 	],
 }
 
@@ -288,6 +283,10 @@ func _intro_then(cb: Callable) -> void:
 	add_child(card)
 	card.started.connect(cb)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
+	spec["name"] = Dialog.text("intro.understudy.name")
+	spec["goal"] = Dialog.text("intro.understudy.goal")
+	spec["tips"] = Dialog.paras("intro.understudy.tips")
 	spec["seats"] = _human_seats()
 	card.present(spec)
 
