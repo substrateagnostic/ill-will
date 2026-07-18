@@ -325,9 +325,17 @@ func _input(event: InputEvent) -> void:
 		_rebuild_controls()
 		Sfx.play("ui_confirm")
 		return
-	if event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE:
-		toggle()
-		get_viewport().set_input_as_handled()
+	# ESC (keyboard) opens/closes the pause overlay; a gamepad B closes it while
+	# open — but never OPENS it, since B is a live in-game action and raising the
+	# pause screen is the Start button's job (_poll_pause_buttons). ui_cancel now
+	# carries both Escape and JOY_BUTTON_B (project.godot, GAMEPAD EVERYWHERE L1).
+	if event.is_action_pressed("ui_cancel"):
+		if open:
+			toggle()
+			get_viewport().set_input_as_handled()
+		elif event is InputEventKey:
+			toggle()
+			get_viewport().set_input_as_handled()
 
 func toggle() -> void:
 	if _disconnect_active:
@@ -348,6 +356,10 @@ func toggle() -> void:
 		_hide_phase_panel()
 		_rebuild_seats()
 		_rebuild_controls()
+		# GAMEPAD EVERYWHERE (L1): park the pad-focus cursor on the first control of
+		# the visible tab (deferred, so it lands after the tabs rebuild) — the pause
+		# overlay was mouse-only. B (ui_cancel) closes it; Start toggles it.
+		call_deferred("_focus_settings_deferred")
 	else:
 		_restore_phase_panel()
 		_stop_listen()
@@ -370,6 +382,12 @@ func _restore_phase_panel() -> void:
 	if _phase_panel_hidden != null and is_instance_valid(_phase_panel_hidden):
 		_phase_panel_hidden.visible = true
 	_phase_panel_hidden = null
+
+## Deferred by toggle(): give the opened pause overlay a pad-focus cursor on the
+## first control of its visible tab. No-op if it closed again before idle.
+func _focus_settings_deferred() -> void:
+	if open and panel != null:
+		UiFocus.grab_first(panel)
 
 func _process(delta: float) -> void:
 	_poll_pause_buttons()
