@@ -102,19 +102,14 @@ const VP_FED_WIDOW: PackedStringArray = [
 
 # ui_kit adoption (doc 14 nit 5): the Mario-Party intro card at load. Accent is
 # the widow's spectral violet. Feature-detected glyphs, real key fallback.
+# name/goal/tips live in dialog.json ("intro.widowsgaze.*"), merged in at present
+# time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
-	"name": "THE WIDOW'S GAZE",
-	"goal": "Rob the wake while she weeps. FREEZE when she turns — or be taken.",
 	"accent": Color(0.68, 0.5, 0.95),
 	"controls": [
 		{"action": "move", "label": "CREEP"},
 		{"action": "a", "label": "GRAB / BANK"},
 		{"action": "b", "label": "SHOVE"},
-	],
-	"tips": [
-		"Hold A by a relic to lift it, carry it home, press A at your chest to bank.",
-		"SHOVE a rival as the sting rises and the Widow does your murder for you.",
-		"Once she grows suspicious, a FALLING third note is a fake-out — hold.",
 	],
 }
 const WIDOW_VIOLET := Color(0.68, 0.5, 0.95)
@@ -312,6 +307,10 @@ func _present_intro_card() -> void:
 	add_child(_intro_card)
 	_intro_card.started.connect(_start_round)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
+	spec["name"] = Dialog.text("intro.widowsgaze.name")
+	spec["goal"] = Dialog.text("intro.widowsgaze.goal")
+	spec["tips"] = Dialog.paras("intro.widowsgaze.tips")
 	spec["seats"] = _human_seats()
 	_intro_card.present(spec)
 	if _vc != null:

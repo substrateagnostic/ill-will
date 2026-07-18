@@ -228,19 +228,14 @@ func _ready() -> void:
 
 # ui_kit intro card (doc 14 nit 7): shown at load, feature-detects glyphs, real
 # key fallback via describe_binding. Auto-starts after 6s so bot soaks flow through.
+# name/goal/tips live in dialog.json ("intro.greed.*"), merged in at present
+# time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
-	"name": "GREED INC.",
-	"goal": "The pot fills forever. Bank it at your chute — but carrying makes you a slow, glowing target.",
 	"accent": Color(1, 0.82, 0.2),
 	"controls": [
 		{"action": "move", "label": "MOVE"},
 		{"action": "a", "label": "GRAB / BANK"},
 		{"action": "b", "label": "DASH / TACKLE"},
-	],
-	"tips": [
-		"Carry the pot to YOUR chute and hold to bank the coins as points.",
-		"The longer you hold it, the more it leaks — and the bigger a target you are.",
-		"Tackle a carrier to knock the pot loose, then scoop the spill.",
 	],
 }
 
@@ -250,6 +245,10 @@ func _intro_then(cb: Callable) -> void:
 	add_child(card)
 	card.started.connect(cb)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
+	spec["name"] = Dialog.text("intro.greed.name")
+	spec["goal"] = Dialog.text("intro.greed.goal")
+	spec["tips"] = Dialog.paras("intro.greed.tips")
 	spec["seats"] = _human_seats()
 	card.present(spec)
 

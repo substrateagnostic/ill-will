@@ -5,7 +5,9 @@ extends CanvasLayer
 ## PlayerInput.describe_binding, texture glyphs via a global InputGlyphs class if
 ## one exists — feature-detected, NO hard dependency) + a rotating tip line + a
 ## READY ring: all listed players press A to start early, else auto-start after
-## `auto_secs` (default 6s) with a visible radial countdown. Skinnable accent.
+## `auto_secs` (default 12s) with a visible radial countdown. Skinnable accent.
+## (Was 6s; DOUBLED per Alex's night-6 playtest — fast readers could barely
+## finish a guide before it auto-advanced. 2x auto-advance reads comfortably.)
 ##
 ## Usage:
 ##   var card := IntroCard.new()
@@ -21,7 +23,7 @@ extends CanvasLayer
 ##                   {action="b", label="BOOST"}],
 ##       glyph_seat = 0,                          # seat to read bindings from (default first of `seats`)
 ##       tips = ["Ram a rival to steal their turf.", "Overtime doubles your cut."],
-##       auto_secs = 6.0,
+##       auto_secs = 12.0,
 ##   })
 
 signal started                                  ## ready reached (or auto-start elapsed)
@@ -34,7 +36,7 @@ const GOLD := Color(1, 0.85, 0.25)
 var _spec: Dictionary = {}
 var _seats: Array = []
 var _readied: Dictionary = {}
-var _auto_secs := 6.0
+var _auto_secs := 12.0
 var _elapsed := 0.0
 var _tip_t := 0.0
 var _tip_i := 0
@@ -60,7 +62,7 @@ func _ready() -> void:
 func present(spec: Dictionary) -> void:
 	_spec = spec
 	_seats = spec.get("seats", [])
-	_auto_secs = float(spec.get("auto_secs", 6.0))
+	_auto_secs = float(spec.get("auto_secs", 12.0))
 	_tips = spec.get("tips", [])
 	_accent = spec.get("accent", GOLD)
 	_build_ui()

@@ -63,18 +63,14 @@ const BOUNDARY_R := 13.0
 const CAM_POS := Vector3(-0.2, 0.2, 17.6)
 const CAM_FOV := 46.0
 
+# name/goal/tips live in dialog.json ("intro.orbital.*"), merged in at present
+# time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
-	"name": "ORBITAL DODGEBALL",
-	"goal": "Dodgeball on three tiny planets. Every throw orbits forever and can still kill you.",
 	"accent": Color(1.0, 0.85, 0.25),
 	"controls": [
 		{"action": "move", "label": "WALK the surface"},
 		{"action": "a", "label": "HOLD: AIM+THROW · TAP: CATCH"},
 		{"action": "b", "label": "JUMP the gap"},
-	],
-	"tips": [
-		"A throw never truly leaves — it just keeps orbiting the cluster until physics or a body stops it.",
-		"Hop near the gap between two planets to jump to the next one.",
 	],
 }
 
@@ -327,6 +323,10 @@ func _present_intro_card() -> void:
 	add_child(_intro_card)
 	_intro_card.started.connect(_start_match)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
+	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
+	spec["name"] = Dialog.text("intro.orbital.name")
+	spec["goal"] = Dialog.text("intro.orbital.goal")
+	spec["tips"] = Dialog.paras("intro.orbital.tips")
 	spec["seats"] = _human_seats()
 	_intro_card.present(spec)
 
