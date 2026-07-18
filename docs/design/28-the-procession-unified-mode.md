@@ -323,4 +323,82 @@ game; each phase merges only with receipts + screenshots per house rules.
 
 ---
 
-*Addendum slot reserved: R-E (Codex cold read) lands here when it returns.*
+## 15. ADDENDUM — R-E Codex cold read (GPT-5.6, 1h13m, adjudicated)
+
+Full report: Codex session 019f73a6-ce26-70d3-b537-e92b73402bbf. Independent
+architecture + economy proposal; converged with this doc on the graph board,
+honest sequential slider, two currencies, sabotage-led anti-snowball, and
+complete-the-phase arrival. Adjudication:
+
+**ADOPTED (now doctrine):**
+- **RunDirector architecture**: one director owns the whole 3-night match;
+  Procession demoted from self-running mode to board subsystem; estate.tscn
+  stays the sole shell. HubHost/BoardHost/MinigameHost/CeremonyHost split.
+- **Session-length correction**: single-pawn path ≈ 22-26 movement units
+  (not ~40), median finish in roll-phase 5-6, ≈5 scored minigames/night.
+  Track length is the tuning knob BEFORE payouts.
+- **AIM HEATMAP**: while the slider sweeps, upcoming stones glow with live
+  landing probability. The legibility flagship — makes low/mid rolls
+  situationally desirable (stores, boxes, safe forks) instead of
+  "right = always best," and it IS the downtime-as-thinking doctrine on
+  screen. Meter exposes weights_for_p() for this.
+- **Escalating arrival wreaths by night**: 8/5/3/1 → 10/6/3/2 → 12/7/4/2
+  (replaces flat 10/7/4/2) — night 3 can never be ceremonial.
+- **Separate seeded RNG streams**: board-layout / rolls / spaces-events /
+  minigame-draw / presentation. Adding a feature must never perturb an
+  unrelated receipt.
+- **d8/d10 WRITS** as shop items (temporary die-wideners; kernel is already
+  n_faces-general). Max one die/movement item per turn; inventory cap 3;
+  offensive items don't stack per target per roll.
+- **Resolution order rule**: movement items apply before travel; reposition
+  effects do NOT trigger crossed spaces (only the landing stone resolves).
+- **Roll-phase completion**: first crossing arms night end; the current
+  phase completes (equal roll counts) — composes with FINAL BELL's one
+  extra full turn.
+- **Un-finished ranking by weighted distance-to-finish** (precomputed per
+  node) — node indices are meaningless on a graph.
+- **Minigame catalog unification**: one registry (15 games), draw without
+  replacement, catalog metadata (launch_kind, team_shape, interlude_eligible);
+  team-aware settlement (Pallbearers' teammates get equal pay); tie policy
+  takes the lower award (no seat-index favoritism); validate results against
+  real roster count — never silently randomize a placement.
+- **Grand-total tie-break**: most board firsts → best night-3 board rank →
+  most minigame firsts → joint heirs (never a coin flip for the estate).
+
+**DECLINED (with reasons):**
+- *"Never convert leftover pennies to wreaths."* Codex fears hoarding; but
+  the producer spec explicitly counts leftover shop currency, and at 10:1
+  the stream is ~2-4 wreaths (< one arrival gap) while items convert
+  pennies at far better rates. KEPT, flagged for playtest watch.
+- *Two SEALED hidden awards.* Violates the announced-awards doctrine (R-A:
+  hidden bonus stars are the genre's #1 grievance; producer approved
+  announced races). Awards stay announced, races visible.
+
+**LANDMINE REGISTRY (build-phase contracts, from Codex + RC):**
+1. `night_length` currently means GAMES PER NIGHT, not nights — new model
+   needs match_nights=3 + a separate phase cap. Do not reuse the field.
+2. executor_host.gd voice pools are preloaded by core/party_setup.gd
+   globally — split voice from board-spatial behavior before retiring it.
+3. Par is a legacy launcher (no begin(); root-parented; GameState reset) —
+   keep a catalog-level adapter; PartySetup.free_stray_root_nodes() makes
+   root ownership safety-critical.
+4. EstateState.start_night() resets night fields — match wallets/victory
+   totals must live OUTSIDE that reset; night settlement still needs a
+   bounded legacy grant or the wardrobe economy starves.
+5. Save has no schema version; migrate.gd only copies files — archive an
+   active classic Trail run with an explicit notice, never reinterpret
+   stone indices as graph nodes.
+6. Auction removal crosses ≥7 files (estate.gd phases, saga_cards dismiss
+   target, howto pager promise, net_lobby bid mirror, verify_capture
+   chain, party_setup safe-phase list, music slot) — remove the whole
+   transition chain with replacement continuations.
+7. A module's final frame is a net contract (echo's 0.5s finish delay) —
+   the director transitions on the emitted signal, never on computed win.
+8. Private state stays private (send_module_private) — the unified snapshot
+   must not flatten Séance-style secrets into the public 20Hz stream.
+9. Online slider: mirrors render from shared roll_id/start-tick/period;
+   clients send a reliable STOP intent with observed tick, host validates —
+   never sample the 30Hz input stream (latency would become roll quality).
+10. "Scrap player voting" ≠ delete vote code by grep — Séance/Understudy
+    votes are minigame mechanics; the only meta-selection to remove is the
+    auction chooser.
