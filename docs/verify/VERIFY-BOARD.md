@@ -39,8 +39,9 @@ godot --headless --path . -- --procession --boardgraphtest
 
 frozen output (verified byte-identical across runs; LAYOUT stream is seeded
 from board DATA, never the night seed, so this is night-independent —
-**re-verified unchanged after the P2 lane**, whose board_graph additions are
-presentation-only marker pools):
+**re-verified unchanged after the P2 lane** (presentation-only marker pools)
+**and again after the P3 lane** (figurine pawns + ZF dressing + interludes:
+`checksum=b269c570` must never move, and did not)):
 
 ```
 BOARDGRAPH board=estate_procession nodes=76 edges=79
@@ -77,42 +78,59 @@ godot --headless --path . -- --procession --seed=7 --turncap=12 --autoplay=bots
 Any run that prints a `PROCESSION_TALLY` line is pre-P2. The same command
 today runs a full **3-night match** (match_nights defaults to 3).
 
-## 4. THE CANONICAL MATCH RECEIPT (P2, frozen)
+## 4. THE CANONICAL MATCH RECEIPT (P3, frozen)
 
 ```
 godot --headless --path . -- --procession --seed=7 --turncap=12 --nights=3 --autoplay=bots
 ```
 
-frozen result (verified deterministic ×3 — the PROCESSION_NIGHT /
-PROCESSION_MATCH / PROCESSION_HEIR lines hash identically run to run):
+**SUPERSEDED — the P2 match record** (sanctioned, this lane's brief): P3 adds
+the INTERLUDE GROUNDS MINIGAME between nights (doc 28 §2 — two more settled
+games per 3-night match, EVENT-stream draws), so the P2 record died with
+honor. Its final form, for the record: seed 7 → **HEIR RED, wreaths
+[61,32,45,48]**, board_firsts [3,0,0,0], night lines ending
+`"grudge":[70,71,98,81]`. Any run that prints a 3-night match with NO
+interlude settlements between nights is pre-P3.
+
+frozen result (P3 — verified deterministic ×3, the PROCESSION_NIGHT /
+PROCESSION_MATCH / PROCESSION_HEIR lines hash identically run to run; night 1
+is byte-identical to P2's night 1, since the first interlude lands only after
+its record prints):
 
 ```
 PROCESSION_NIGHT {"arrivals":[0,1,2],"awards":[["longest",0],["generous",-1],["bloodiest",2]],"bell_round":6,"grudge":[16,26,47,18],"letters":[false,false,false,false],"night":1,"rounds":7,"wreaths":[17,8,15,5]}
-PROCESSION_NIGHT {"arrivals":[0,2,3,1],"awards":[["longest",3],["mourned",3],["bloodiest",1]],"bell_round":6,"grudge":[42,57,67,53],"letters":[false,false,false,false],"night":2,"rounds":7,"wreaths":[32,20,24,22]}
-PROCESSION_NIGHT {"arrivals":[0,2,3,1],"awards":[["generous",0],["uninvited",3],["bloodiest",3]],"bell_round":6,"grudge":[70,71,98,81],"letters":[false,false,false,false],"night":3,"rounds":7,"wreaths":[54,25,36,40]}
-PROCESSION_MATCH {"board":"estate_procession","board_firsts":[3,0,0,0],"deeds":[2,1,0,3],"grudge":[70,71,98,81],"heir":0,"heir_name":"RED","heirs":[0],"mini_wins":[5,3,3,4],"moved":[86,85,93,90],"nights":3,"seed":7,"src":{"arrival":[30,9,16,8],"award":[8,4,4,16],"liquid":[7,7,9,8],"mini":[16,12,16,16]},"turn_cap":12,"wreaths":[61,32,45,48]}
-  seat 0 RED: ⚘61 (arr 30 + mini 16 + awd 8 + liq 7)  70¢  ◆2  moved=86  HEIR
-  seat 1 BLUE: ⚘32 (arr 9 + mini 12 + awd 4 + liq 7)  71¢  ◆1  moved=85
-  seat 2 GOLD: ⚘45 (arr 16 + mini 16 + awd 4 + liq 9)  98¢  ◆0  moved=93
-  seat 3 MINT: ⚘48 (arr 8 + mini 16 + awd 16 + liq 8)  81¢  ◆3  moved=90
-PROCESSION_HEIR RED (seed 7, 3 nights)
+PROCESSION_NIGHT {"arrivals":[2,3],"awards":[["generous",0],["uninvited",3],["longest",3]],"bell_round":5,"grudge":[18,56,44,63],"letters":[false,false,false,false],"night":2,"rounds":6,"wreaths":[26,16,30,26]}
+PROCESSION_NIGHT {"arrivals":[2,1],"awards":[["generous",2],["bloodiest",1],["uninvited",3]],"bell_round":5,"grudge":[17,86,57,78],"letters":[false,false,false,false],"night":3,"rounds":6,"wreaths":[35,33,51,36]}
+PROCESSION_MATCH {"board":"estate_procession","board_firsts":[1,0,2,0],"deeds":[2,1,1,2],"grudge":[17,86,57,78],"heir":2,"heir_name":"GOLD","heirs":[2],"mini_wins":[2,4,4,5],"moved":[73,82,83,82],"nights":3,"seed":7,"src":{"arrival":[14,15,25,9],"award":[8,4,8,12],"liquid":[1,8,5,7],"mini":[13,14,18,15]},"turn_cap":12,"wreaths":[36,41,56,43]}
+  seat 0 RED: ⚘36 (arr 14 + mini 13 + awd 8 + liq 1)  17¢  ◆2  moved=73
+  seat 1 BLUE: ⚘41 (arr 15 + mini 14 + awd 4 + liq 8)  86¢  ◆1  moved=82
+  seat 2 GOLD: ⚘56 (arr 25 + mini 18 + awd 8 + liq 5)  57¢  ◆1  moved=83  HEIR
+  seat 3 MINT: ⚘43 (arr 9 + mini 15 + awd 12 + liq 7)  78¢  ◆2  moved=82
+PROCESSION_HEIR GOLD (seed 7, 3 nights)
 ```
 
 Seed-sweep secondaries (single-run records, same command with the seed swapped):
 
 ```
-PROCESSION_MATCH … "seed":1  → wreaths=[41,45,56,38]  heir GOLD  board_firsts=[0,1,1,1]
-PROCESSION_HEIR GOLD (seed 1, 3 nights)
-PROCESSION_MATCH … "seed":11 → wreaths=[39,47,51,46]  heir GOLD  board_firsts=[0,1,1,1]
+PROCESSION_MATCH … "seed":1  → wreaths=[49,71,41,39]  heir BLUE  board_firsts=[0,3,0,0]
+PROCESSION_HEIR BLUE (seed 1, 3 nights)
+PROCESSION_MATCH … "seed":11 → wreaths=[30,36,69,59]  heir GOLD  board_firsts=[0,1,1,1]
 PROCESSION_HEIR GOLD (seed 11, 3 nights)
 ```
 
-Seed 11 is the LETTERS witness: BLUE (4 wreaths after night 1, zero wins)
+Seed 11 remains the LETTERS witness: BLUE (4 wreaths after night 1, zero wins)
 publicly accepts the LETTERS OF ADMINISTRATION on nights 2 and 3
-(`"letters":[false,true,false,false]`) and closes at 47 wreaths — the dignity
+(`"letters":[false,true,false,false]`) and closes at 36 wreaths — the dignity
 floor doing balance work, announced, never hidden.
 
-## 5. THE SINGLE-NIGHT RECEIPT (P2, frozen — `--nights=1`)
+Interlude rules in the record: interlude 1 is drawn RANDOM from the night's
+unplayed games; interlude 2 is picked by the current DOORMAT (bottom wreaths),
+never repeating interlude 1's pick — bots pick from the EVENT stream, a human
+doormat draws nothing (pure input). Settlements land AFTER the night record
+prints, so each PROCESSION_NIGHT line stays the board-night's own score.
+
+## 5. THE SINGLE-NIGHT RECEIPT (P2, frozen — `--nights=1`; **re-verified
+## byte-identical after P3** — a lone night has no between-nights interlude)
 
 ```
 godot --headless --path . -- --procession --seed=7 --turncap=12 --nights=1 --autoplay=bots
@@ -155,30 +173,47 @@ so a mixed table diverges from the soak only through their choices, as designed.
 ## 7. SCREENSHOTS (windowed capture)
 
 ```
-godot --path . -- --procession --seed=7 --turncap=12 --nights=1 --autoplay=bots --slowsim --outdir=verify_out/procession_p2
+godot --path . -- --procession --seed=7 --turncap=12 --nights=1 --autoplay=bots --slowsim --outdir=verify_out/procession_p3
+godot --path . -- --playmenutest --quitafter=500 --outdir=verify_out/procession_p3
 ```
 
 (`--slowsim` keeps ceremonies at full length so the announce cards render.)
 Exit `-1073741819` after the snaps is the known harmless shutdown segfault.
-Committed under `estate/procession/shots/`:
+Committed under `estate/procession/shots/` (P3 set):
 
-- `p2_breath_heatmap.png` — THE LAST BREATH meter in situ over the board, the
-  aim heatmap glowing landing percentages down the roller's road.
-- `p2_peddler_cart.png` — the priced cart UI: ten wares, prices, rules, purse.
-- `p2_night_awards.png` — the night-award announcement card (3 drawn races).
-- `p2_reading_totals.png` — THE READING finale's final accounting card.
+- `p3_figurine_pawns.png` — the four toy figurines on their stones (frozen
+  sculpt pose, seat-colour bases, glaze).
+- `p3_overshoulder_heatmap.png` — the over-shoulder roll frame: figurine
+  shoulder, heatmap percentages glowing down the road, meter bottom-center.
+- `p3_standings_drive.png` — the thinking budget in one frame: standings
+  strip (rank/route/items), THE DRIVE inset, the meter — all during a roll.
+- `p3_lychgate_dressed.png` / `p3_manor_gate_dressed.png` — the ZF hero
+  gates dressing the start and finish.
+- `p3_reaper_dormant.png` — THE REAPER looming motionless at the graveyard
+  edge, barely lit.
+- `p3_play_menu.png` — the simplified PLAY panel: THE PROCESSION only,
+  nights + turn-cap dials, GO.
 
-P1a's board shots (`boardgraph_full_board.png`, `boardgraph_crossroads_prompt.png`,
-`boardgraph_drive_minimap.png`) remain valid — topology unchanged.
+P2's shots (`p2_peddler_cart.png`, `p2_night_awards.png`,
+`p2_reading_totals.png`) remain valid; `p2_breath_heatmap.png` is superseded
+by the over-shoulder frame. P1a's board shots remain valid — topology
+unchanged.
 
 ## 8. DELIBERATELY LEFT FOR LATER LANES
 
-- **P3 (presentation):** figurine pawns, true over-shoulder roll camera (P2
-  ships a raised behind-the-roller frame), estate.gd hub surgery
-  (PLAY-menu Deed dial still feeds an ignored config key; `par` real-launch
-  catalog adapter — drawn today, simulated with an announced note), held-item
-  glyphs on the HUD chips, Estate Stirs events.
+- **Estate Stirs (doc 28 §4):** the topology-event pools + THE CRYPT; THE
+  REAPER stands dormant on the grounds until that lane wakes him.
 - **P5 (online):** `_net_state` does not yet carry wreaths/inventory/match
   fields; LAST BREATH mirror re-cert per landmine 9 (roll_id/start-tick,
   reliable STOP intent).
 - pawn_putt.gd stays on disk untouched (Par receipts reference its constants).
+- CLASSIC NIGHTS is retired at the **UI level only** (P3): the PLAY panel no
+  longer offers it, but its transition chain stays dormant on disk for the
+  excision lane (landmine 6 — remove with replacement continuations).
+
+**P3 probes:** `--parprobe` (with `--autoplay=bots`) exercises the legacy Par
+catalog adapter end-to-end — real root-parented launch, real
+finished(results), validated placements — recorded run: seed 7 →
+`PARPROBE placements=[0, 3, 1, 2]`, exit 0. Real couches (any local human)
+now play REAL minigames per cycle; probes and all-bot soaks keep the
+deterministic minisim unless `--realmini`.

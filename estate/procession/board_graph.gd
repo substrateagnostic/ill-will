@@ -110,6 +110,26 @@ const FB_GRAVE := "res://assets/models/meshy/broken_column.glb"
 const FB_COLUMN := "res://assets/models/meshy/broken_column.glb"
 const FB_HEARSE := "res://assets/models/meshy/go_kart.glb"
 
+# ---- ZF WAVE (P3): the doc-28 §4/§10-11 hero set, forged 2026-07-18 (tools/
+# meshy_forge_report.json "procession" entries). Statics scale by AABB via
+# _prop; RIGGED NPCs must use their NATIVE rig heights (a skinned export's
+# mesh AABB reads ~1/100 — meshy_forge_report note), via _rigged_npc below.
+const ZF_LYCHGATE := GEN_DIR + "lychgate.glb"
+const ZF_MANORGATE := GEN_DIR + "manor_gate.glb"
+const ZF_CART := GEN_DIR + "peddlers_cart.glb"
+const ZF_SHRINE := GEN_DIR + "checkpoint_shrine.glb"
+const ZF_CHEST := GEN_DIR + "grave_goods_chest.glb"
+const ZF_SKIFF := GEN_DIR + "ferryman_skiff.glb"
+const ZF_FERRYMAN := GEN_DIR + "npc_ferryman_idle.glb"      # native 1.85m
+const ZF_GRAVEDIGGER := GEN_DIR + "npc_gravedigger_idle.glb" # native 1.7m
+const ZF_WIDOW := GEN_DIR + "npc_widow_idle.glb"             # native 1.6m
+const ZF_REAPER_BASE := GEN_DIR + "npc_reaper.glb"           # the standing sculpt — dormant
+const ZF_SCYTHE := GEN_DIR + "reaper_scythe.glb"             # forged separately (hand-parent later)
+## THE REAPER's dormant post — the far graveyard edge beyond Weeping Valley,
+## outside every route bulge, barely lit. He activates in a future Estate
+## Stirs lane; tonight he is just... present.
+const REAPER_POST := Vector3(-25.0, 0.0, -13.0)
+
 # --------------------------------------------------------------------------
 # GRAPH STATE (filled by build() from generate())
 # --------------------------------------------------------------------------
@@ -740,6 +760,7 @@ func _outward(i: int) -> Vector3:
 	return perp.normalized()
 
 func _build_furniture() -> void:
+	var ferry_dressed := false
 	for n in nodes:
 		var i := int(n.id)
 		var type := String(n.type)
@@ -751,18 +772,30 @@ func _build_furniture() -> void:
 			S.OPEN_GRAVE:
 				_place(_prop(_grave_variant_for(i), FB_GRAVE, 1.7), here + out * 0.9 + Vector3(0, 0.06, 0))
 			S.GRAVE_GOODS:
-				_place(_prop(FB_CRATE, FB_CRATE, 0.9), here + out * 1.15 + Vector3(0, 0.06, 0))
+				# ZF: the grave-goods chest, scaled small — a coffer, not a crate.
+				_place(_prop(ZF_CHEST, FB_CRATE, 0.55), here + out * 1.1 + Vector3(0, 0.06, 0))
 				_place(_prop(FB_LANTERN, FB_LANTERN, 1.5), here + out * 1.15 + Vector3(0.7, 0.06, 0.2))
 			S.SEANCE:
 				_place(_prop(GEN_PLANCHETTE, FB_LANTERN, 0.35), here + out * 1.05 + Vector3(0, 0.06, 0))
 			S.FERRY_TOLL:
 				_place_facing(_prop(GEN_TOLLARCH, FB_TOLLARCH, 3.4), here + Vector3(0, 0.06, 0),
 					here + _flow_dir(i) * 4.0)
+				# ZF: THE FERRYMAN and his skiff hold the valley toll (first one only —
+				# one ferryman works this river; further tolls keep the bare arch).
+				if not ferry_dressed and route_of(i) == "valley":
+					ferry_dressed = true
+					var moor := here + out * 2.7 + Vector3(0, 0.02, 0)
+					_place_facing(_prop(ZF_SKIFF, FB_CRATE, 0.8), moor, moor + _flow_dir(i) * 4.0)
+					_place_facing(_rigged_npc(ZF_FERRYMAN, 1.85, 1.85),
+						here + out * 1.8 + Vector3(0, 0.04, 0), here)
 			S.CART:
-				_place_facing(_prop(GEN_HEARSE, FB_HEARSE, 2.1), here + out * 1.5 + Vector3(0, 0.06, 0), here)
+				# ZF: the hearse-drawn Peddler's Cart replaces the ring-era hearse.
+				_place_facing(_prop(ZF_CART, FB_HEARSE, 2.4), here + out * 1.6 + Vector3(0, 0.06, 0), here)
 				_place(_prop(FB_LANTERN, FB_LANTERN, 1.5), here + out * 2.3 + Vector3(0.5, 0.06, 0.3))
 			S.CROSSROADS:
 				_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), here + out * 1.4 + Vector3(0, 0.06, 0))
+				# ZF: a checkpoint shrine marks each crossroads landmark, opposite the post.
+				_place(_prop(ZF_SHRINE, FB_LANTERN, 2.5), here - out * 1.6 + Vector3(0, 0.06, 0))
 		# Sparse route-biome dressing every 4th stone, outboard.
 		if type == S.BLANK and i % 4 == 1:
 			match route_of(i):
@@ -773,9 +806,64 @@ func _build_furniture() -> void:
 				"valley":
 					_place(_prop([GEN_WELL, GEN_ANGEL, GEN_WHEELBARROW][posmod(i, 3)],
 						FB_COLUMN, 2.2), here + out * 2.7 + Vector3(0, 0.04, 0))
+	# ZF: the merge landmark gets its own shrine — the roads reunite in prayer.
+	var mg := int((graph.landmarks as Dictionary).merge)
+	_place(_prop(ZF_SHRINE, FB_LANTERN, 2.5),
+		space_pos(mg) + _outward(mg) * 1.8 + Vector3(0, 0.06, 0))
 	_build_lychgate()
 	_build_manor_gate()
+	_build_npc_troupe()
 	_build_perimeter()
+
+## ZF NPC troupe (doc 28 §10 — one beat each, never a cutscene). THE GRAVEDIGGER
+## idles by the Hollow Woods; THE WIDOW mourns along Garden Row. THE REAPER is
+## placed DORMANT and DISTANT — looming motionless at the far graveyard edge,
+## barely lit. He activates in a future Estate Stirs lane; tonight he is
+## just... present. All rigged instancing uses NATIVE heights (forge report).
+func _build_npc_troupe() -> void:
+	var dig_id := _route_mid_id("hollow")
+	_place_facing(_rigged_npc(ZF_GRAVEDIGGER, 1.7, 1.7),
+		space_pos(dig_id) + _outward(dig_id) * 3.2 + Vector3(0, 0.04, 0), space_pos(dig_id))
+	var wid_id := _route_mid_id("garden")
+	_place_facing(_rigged_npc(ZF_WIDOW, 1.6, 1.6),
+		space_pos(wid_id) + _outward(wid_id) * 3.0 + Vector3(0, 0.04, 0), space_pos(wid_id))
+	# THE REAPER — the standing sculpt, motionless at the graveyard's edge,
+	# facing across the valley toward the gate; his scythe planted beside him.
+	if ResourceLoader.exists(ZF_REAPER_BASE):
+		_place_facing(_prop(ZF_REAPER_BASE, FB_COLUMN, 4.1),
+			REAPER_POST, gate_pos() + Vector3(0, 0.0, 4.0))
+		_place(_prop(ZF_SCYTHE, FB_LANTERN, 3.6), REAPER_POST + Vector3(1.4, 0.0, 0.6))
+		# Barely lit: one faint, sickly pool so the silhouette reads at distance —
+		# never a hero light. (Existing kit only; shadows off, tight range.)
+		var pall := OmniLight3D.new()
+		pall.name = "ReaperPall"
+		pall.light_color = Color(0.52, 0.72, 0.62)
+		pall.light_energy = 0.5
+		pall.omni_range = 7.0
+		pall.shadow_enabled = false
+		add_child(pall)
+		pall.global_position = REAPER_POST + Vector3(0.6, 3.2, 0.6)
+
+## The node id at the middle of a route's first half (placement anchor).
+func _route_mid_id(tag: String) -> int:
+	var start := int((graph.half_a_start as Dictionary).get(tag, 0))
+	return start + int(route_info(tag).get("half_a", 1)) / 2
+
+## Instance a RIGGED Meshy NPC by its native rig height (never the AABB — a
+## skinned export's AABB reads ~1/100). `frozen` plays the first clip's first
+## frame and stops there (the dormant Reaper); otherwise the clip loops (idle
+## NPCs). Returns an empty wrapper when the asset is missing (fresh checkout).
+func _rigged_npc(path: String, native_h: float, target_h: float, frozen := false) -> Node3D:
+	if not ResourceLoader.exists(path):
+		return Node3D.new()
+	var npc := MeshyProp.instance_rigged(path, native_h, target_h, 0.0, not frozen)
+	if frozen:
+		var anim: AnimationPlayer = npc.find_child("AnimationPlayer", true, false)
+		if anim != null and anim.get_animation_list().size() > 0:
+			anim.play(String(anim.get_animation_list()[0]))
+			anim.seek(0.0, true)
+			anim.speed_scale = 0.0   # motionless — dormant until the Estate Stirs
+	return npc
 
 func _grave_variant_for(node_id: int) -> String:
 	return GRAVE_VARIANTS[posmod(node_id, GRAVE_VARIANTS.size())]
@@ -789,12 +877,12 @@ func _flow_dir(i: int) -> Vector3:
 	v.y = 0.0
 	return v.normalized() if v.length() > 0.01 else Vector3.FORWARD
 
-## THE LYCHGATE — the start: a covered iron arch over the first stone, the
+## THE LYCHGATE — the start: the ZF covered lychgate over the first stone, the
 ## hearse waiting beside it, a crooked signpost pointing up the road.
 func _build_lychgate() -> void:
 	var start := lychgate_pos()
 	var flow := _flow_dir(0)
-	_place_facing(_prop(GEN_TOLLARCH, FB_TOLLARCH, 4.2), start + Vector3(0, 0.06, 0), start + flow * 6.0)
+	_place_facing(_prop(ZF_LYCHGATE, FB_TOLLARCH, 4.4), start + Vector3(0, 0.06, 0), start + flow * 6.0)
 	_place_facing(_prop(GEN_HEARSE, FB_HEARSE, 2.1), start + Vector3(-3.0, 0.06, 1.2), start)
 	_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), start + Vector3(2.6, 0.06, 0.6))
 	var tag := Label3D.new()
@@ -808,13 +896,13 @@ func _build_lychgate() -> void:
 	tag.position = start + Vector3(0, 3.9, 0)
 	add_child(tag)
 
-## THE MANOR GATE — the finish: the grand arch, warm light, the bell's home.
+## THE MANOR GATE — the finish: the ZF grand arch, warm light, the bell's home.
 func _build_manor_gate() -> void:
 	var gate := gate_pos()
 	var back := (gate - CENTER)
 	back.y = 0.0
 	back = back.normalized() if back.length() > 0.01 else Vector3.BACK
-	_place_facing(_prop(GEN_TOLLARCH, FB_TOLLARCH, 5.4), gate + back * 1.4 + Vector3(0, 0.06, 0), CENTER)
+	_place_facing(_prop(ZF_MANORGATE, FB_TOLLARCH, 5.6), gate + back * 1.4 + Vector3(0, 0.06, 0), CENTER)
 	_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.6), gate + back * 0.8 + Vector3(3.2, 0.06, 0))
 	_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.6), gate + back * 0.8 + Vector3(-3.2, 0.06, 0))
 	# A warm pool of light on the finish — the one gold glow on the grounds
@@ -876,33 +964,128 @@ func _prop(gen_path: String, fallback_path: String, height: float, tint := Color
 	return wrap
 
 # --------------------------------------------------------------------------
-# PAWNS + MOVEMENT
+# PAWNS + MOVEMENT — FIGURINE PAWNS (P3, producer-locked, doc 28 §11 option b):
+# NOT walking mini-people. Toy-style figurines of the four characters, built
+# in-engine from each roster seat's character scene, frozen in a sculpt pose,
+# mounted on a round seat-coloured base with a slight ceramic glaze. They HOP
+# stone-to-stone with a dry woody clack. The fiction stays clean: you play a
+# board game ABOUT them while the characters heckle from the grounds.
 # --------------------------------------------------------------------------
+const FIGURINE_SCALE := 0.56       # KayKit adventurer -> toy read on a 0.86r stone
+const FIGURINE_POSE_T := 0.35      # freeze the Idle a beat in: a stance, not a T-pose
+const BASE_H := 0.10               # the round base's height (figurine feet sit here)
+
 func _make_pawn(pl: Dictionary) -> Node3D:
 	var root := Node3D.new()
-	var body := MeshInstance3D.new()
-	var bm := CapsuleMesh.new()
-	bm.radius = 0.28
-	bm.height = 1.0
-	body.mesh = bm
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = pl.color
-	mat.emission_enabled = true
-	mat.emission = Color(pl.color) * 0.4
-	mat.roughness = 0.4
-	body.material_override = mat
-	body.position.y = 0.62
-	root.add_child(body)
+	var col: Color = pl.color
+	# --- the round base: dark glazed puck + a seat-coloured emissive rim ---
+	var base := MeshInstance3D.new()
+	var bm := CylinderMesh.new()
+	bm.top_radius = 0.34
+	bm.bottom_radius = 0.38
+	bm.height = BASE_H
+	base.mesh = bm
+	var bmat := StandardMaterial3D.new()
+	bmat.albedo_color = Color(0.13, 0.125, 0.16).lerp(col, 0.10)
+	bmat.roughness = 0.22
+	bmat.metallic = 0.15
+	base.material_override = bmat
+	base.position.y = BASE_H * 0.5
+	root.add_child(base)
+	var rim := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.30
+	tm.outer_radius = 0.38
+	tm.rings = 6
+	tm.ring_segments = 24
+	rim.mesh = tm
+	var rmat := StandardMaterial3D.new()
+	rmat.albedo_color = col.darkened(0.15)
+	rmat.emission_enabled = true
+	rmat.emission = col
+	rmat.emission_energy_multiplier = 1.7
+	rmat.roughness = 0.35
+	rim.material_override = rmat
+	rim.rotation_degrees.x = 90.0
+	rim.position.y = BASE_H * 0.7
+	root.add_child(rim)
+	# --- the figurine: the seat's real character mesh, frozen mid-idle ---
+	var fig := _make_figurine(pl)
+	fig.position.y = BASE_H
+	root.add_child(fig)
 	var tag := Label3D.new()
 	tag.text = "%s %s" % [PlayerBadge.glyph(int(pl.index)), String(pl.name)]
 	tag.font_size = 42
 	tag.pixel_size = 0.007
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	tag.modulate = pl.color
+	tag.modulate = col
 	tag.outline_size = 10
 	tag.position.y = 1.5
 	root.add_child(tag)
 	return root
+
+## The sculpt: instance the seat's character scene, freeze its Idle a beat in
+## (play + seek + speed 0 — a pose, never a performance), glaze every mesh,
+## and carry the seat's wardrobe cosmetics onto the toy (hats ride skeletons,
+## so the frozen pose seats them correctly). Fallback: the old capsule, so a
+## missing character asset can never break a fresh checkout.
+func _make_figurine(pl: Dictionary) -> Node3D:
+	var wrap := Node3D.new()
+	wrap.name = "Figurine"
+	var path := String(pl.get("char_scene", ""))
+	if path == "" or not ResourceLoader.exists(path):
+		var body := MeshInstance3D.new()
+		var cm := CapsuleMesh.new()
+		cm.radius = 0.28
+		cm.height = 1.0
+		body.mesh = cm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = pl.color
+		mat.emission_enabled = true
+		mat.emission = Color(pl.color) * 0.4
+		body.material_override = mat
+		body.position.y = 0.52
+		wrap.add_child(body)
+		return wrap
+	var scene: PackedScene = load(path)
+	var model: Node3D = scene.instantiate()
+	model.scale = Vector3.ONE * FIGURINE_SCALE
+	wrap.add_child(model)
+	var anim: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
+	if anim != null:
+		var pose := ""
+		for cand in ["Idle", "Idle_A", "Cheer"]:
+			if anim.has_animation(cand):
+				pose = cand
+				break
+		if pose == "" and anim.get_animation_list().size() > 0:
+			pose = String(anim.get_animation_list()[0])
+		if pose != "":
+			anim.play(pose)
+			anim.seek(FIGURINE_POSE_T, true)
+			anim.speed_scale = 0.0   # frozen: a figurine, not an actor
+	Cosmetics.apply_to_character(wrap, int(pl.get("index", 0)))
+	_apply_glaze(wrap)
+	return wrap
+
+## A slight ceramic/glaze feel: every mesh gets a translucent glossy overlay
+## pass (rim-lit, low alpha) so the toys read as fired + painted under MOONLIT.
+static func _apply_glaze(node: Node) -> void:
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		(node as MeshInstance3D).material_overlay = _glaze_material()
+	for c in node.get_children():
+		_apply_glaze(c)
+
+static func _glaze_material() -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	m.albedo_color = Color(1.0, 1.0, 1.0, 0.07)
+	m.metallic = 0.55
+	m.roughness = 0.16
+	m.rim_enabled = true
+	m.rim = 0.45
+	m.rim_tint = 0.35
+	return m
 
 ## Seat offset so four pawns share a stone without z-fighting.
 func _seat_offset(seat: int) -> Vector3:
@@ -925,7 +1108,9 @@ func advance_pawn_path(seat: int, path: Array) -> Tween:
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		tw.tween_property(pawns[seat], "global_position", target, 0.11) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
-		tw.tween_callback(Sfx.play.bind("card", -12.0, 0.15))
+		# The figurine's clack: dry and woody (house bank, no new asset) — a toy
+		# base knocking on stone, not a card flip.
+		tw.tween_callback(Sfx.play.bind("impact_wood", -13.0, 0.2))
 	return tw
 
 # --------------------------------------------------------------------------

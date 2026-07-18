@@ -145,6 +145,18 @@ const CART_WARES := [
 # GRAVE GOODS boxes hand out the cheap tier free (modern MP's lesson).
 const BOX_POOL := ["lucky_penny", "black_veil", "shovel"]
 
+# P3 — held-item glyphs for the standings strip (doc 28 §9 thinking budget:
+# "what do they hold" at a glance). Short runes, safe in every house font.
+const WARE_GLYPHS := {
+	"lucky_penny": "+3", "black_veil": "VEIL", "shovel": "DIG",
+	"writ_d10": "d10", "writ_d12": "d12", "crows_cut": "CROW",
+	"funeral_bell": "BELL", "wreath_debt": "DEBT", "invitation": "INVT",
+	"wisp": "WISP",
+}
+
+static func ware_glyph(id: String) -> String:
+	return String(WARE_GLYPHS.get(id, id.substr(0, 4).to_upper()))
+
 static func ware(id: String) -> Dictionary:
 	for w in CART_WARES:
 		if String((w as Dictionary).id) == id:

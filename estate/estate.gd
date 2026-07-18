@@ -260,8 +260,8 @@ func _ready() -> void:
 					print("READYLOBBYTEST saves restored")
 					get_tree().quit()))
 		elif arg == "--playmenutest":
-			# Windowed proof: PLAY offers THE PROCESSION (featured) + the Deed-goal
-			# dial + CLASSIC NIGHTS.
+			# Windowed proof (P3): PLAY is THE PROCESSION only — the nights +
+			# turn-cap dials and GO. Classic is retired from this panel.
 			get_tree().create_timer(1.2).timeout.connect(func():
 				_build_play_panel()
 				get_tree().create_timer(0.4).timeout.connect(func():
@@ -379,22 +379,22 @@ func _play_pressed() -> void:
 		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.2)
 	_enter_auction()
 
-## PLAY: the estate offers THE PROCESSION as tonight's featured rite (with the
-## Deed-goal dial), and the classic auctioned-minigame run as the alternative.
+## PLAY (P3 hub simplification): THE PROCESSION is the game — one panel, the
+## night-count + turn-cap dials, and GO. CLASSIC NIGHTS is retired at the UI
+## level only (per the replacement-coverage rule its code stays dormant behind
+## the scenes for a later excision lane). The flow from here: seats/lobby →
+## walkabout → ready at the LYCHGATE → the match.
 func _build_play_panel() -> void:
 	phase = Phase.LOBBY
 	_hide_title()
 	Sfx.play("ui_move")
 	_clear_panel(Dialog.text("estate.play.header"), Color(1, 0.9, 0.5))
-	# --- THE PROCESSION: the featured night mode ---
-	var proc_btn := Button.new()
-	proc_btn.custom_minimum_size = Vector2(460, 78)
-	proc_btn.text = "THE PROCESSION"
-	proc_btn.add_theme_font_size_override("font_size", 30)
-	proc_btn.pressed.connect(_enter_procession)
-	var pc := CenterContainer.new()
-	pc.add_child(proc_btn)
-	phase_box.add_child(pc)
+	var proc_title := Label.new()
+	proc_title.text = "THE PROCESSION"
+	proc_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	proc_title.add_theme_font_size_override("font_size", 34)
+	proc_title.add_theme_color_override("font_color", Color(1, 0.88, 0.4))
+	phase_box.add_child(proc_title)
 	var proc_desc := Label.new()
 	proc_desc.text = Dialog.text("estate.play.procession_desc")
 	proc_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -403,49 +403,63 @@ func _build_play_panel() -> void:
 	proc_desc.add_theme_font_size_override("font_size", 15)
 	proc_desc.modulate.a = 0.8
 	phase_box.add_child(proc_desc)
-	# The Deed-goal dial (Short 4 / Full 6 / Vigil 9) — persisted like mg_rounds.
+	# The two match dials, persisted like mg_rounds: NIGHTS (1/2/3) and the
+	# TURN CAP backstop (8/12/16). Defaults are the doc-28 shipping shape.
 	var dial_row := HBoxContainer.new()
 	dial_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	dial_row.add_theme_constant_override("separation", 10)
-	var dial_lbl := Label.new()
-	dial_lbl.text = "NIGHT LENGTH:"
-	dial_lbl.add_theme_font_size_override("font_size", 15)
-	dial_lbl.modulate.a = 0.85
-	dial_row.add_child(dial_lbl)
-	var dial := Button.new()
-	dial.custom_minimum_size = Vector2(220, 44)
-	dial.text = _deed_goal_label()
-	dial.pressed.connect(func():
+	dial_row.add_theme_constant_override("separation", 12)
+	var nights_dial := Button.new()
+	nights_dial.custom_minimum_size = Vector2(200, 48)
+	nights_dial.text = "NIGHTS: %d" % _proc_nights()
+	nights_dial.pressed.connect(func():
 		Sfx.play("ui_move")
-		_cycle_deed_goal()
-		dial.text = _deed_goal_label())
-	dial_row.add_child(dial)
+		var opts := [1, 2, 3]
+		PartySetup.set_pref("proc_nights", opts[(opts.find(_proc_nights()) + 1) % opts.size()])
+		nights_dial.text = "NIGHTS: %d" % _proc_nights())
+	dial_row.add_child(nights_dial)
+	var cap_dial := Button.new()
+	cap_dial.custom_minimum_size = Vector2(200, 48)
+	cap_dial.text = "TURN CAP: %d" % _proc_turncap()
+	cap_dial.pressed.connect(func():
+		Sfx.play("ui_move")
+		var opts := [8, 12, 16]
+		PartySetup.set_pref("proc_turncap", opts[(opts.find(_proc_turncap()) + 1) % opts.size()])
+		cap_dial.text = "TURN CAP: %d" % _proc_turncap())
+	dial_row.add_child(cap_dial)
 	phase_box.add_child(dial_row)
 	var spacer := Control.new()
-	spacer.custom_minimum_size = Vector2(0, 14)
+	spacer.custom_minimum_size = Vector2(0, 12)
 	phase_box.add_child(spacer)
-	# --- CLASSIC NIGHTS: the auctioned-minigame run, still selectable ---
-	var classic_btn := Button.new()
-	classic_btn.custom_minimum_size = Vector2(360, 52)
-	classic_btn.text = "CLASSIC NIGHTS"
-	classic_btn.pressed.connect(_play_pressed)
-	var cc := CenterContainer.new()
-	cc.add_child(classic_btn)
-	phase_box.add_child(cc)
-	var classic_desc := Label.new()
-	classic_desc.text = Dialog.text("estate.play.classic_desc")
-	classic_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	classic_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	classic_desc.custom_minimum_size = Vector2(660, 0)
-	classic_desc.add_theme_font_size_override("font_size", 14)
-	classic_desc.modulate.a = 0.65
-	phase_box.add_child(classic_desc)
+	# GO — gather the mourners: seats first, then the walkabout, then the gate.
+	var go_btn := Button.new()
+	go_btn.custom_minimum_size = Vector2(460, 78)
+	go_btn.text = "GO — GATHER THE MOURNERS"
+	go_btn.add_theme_font_size_override("font_size", 28)
+	go_btn.pressed.connect(func():
+		Sfx.play("ui_confirm")
+		_procession_next = true
+		_enter_lobby())
+	var pc := CenterContainer.new()
+	pc.add_child(go_btn)
+	phase_box.add_child(pc)
 	var back := Button.new()
 	back.text = "BACK TO TITLE"
 	back.pressed.connect(_enter_title)
 	phase_box.add_child(back)
 
-## The Deed-goal dial: 4/6/9 = Short/Full/Vigil (doc 18/19), persisted in prefs.
+## P3: THE PROCESSION is what PLAY plays. The flag routes the lobby's START
+## and the walkabout's ready-up to the board match (classic's transitions stay
+## on disk, dormant, unreferenced by any live button).
+var _procession_next := true
+
+func _proc_nights() -> int:
+	return clampi(int(PartySetup.pref("proc_nights", 3)), 1, 3)
+
+func _proc_turncap() -> int:
+	return clampi(int(PartySetup.pref("proc_turncap", 12)), 4, 40)
+
+## RETIRED (P3): the ring-era Deed-goal dial. Kept on disk, unwired — the
+## Codicil died with the graph board (doc 28 §1); prefs key left untouched.
 const DEED_GOALS := [4, 6, 9]
 
 func _deed_goal_label() -> String:
@@ -491,8 +505,11 @@ func _enter_procession() -> void:
 			proc.queue_free()
 		cam.current = true
 		_enter_title(), CONNECT_ONE_SHOT)
+	# P3: the PLAY-panel dials feed the real match config (deed_goal retired
+	# with the Codicil — landmine 1: match_nights is its own field, never
+	# night_length).
 	proc.begin({"roster": roster, "seed": EstateState.rng.randi(),
-		"deed_goal": clampi(int(PartySetup.pref("deed_goal", 4)), 4, 9)})
+		"match_nights": _proc_nights(), "turn_cap": _proc_turncap()})
 	# ONLINE PHASE 2: fan the board to guests through the existing 20 Hz module
 	# pump exactly as for a contract minigame (procession exposes _net_state).
 	if NetSession.is_host() and proc.has_method("_net_state"):
@@ -827,15 +844,15 @@ func _build_lobby_panel() -> void:
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 16)
-	var len_btn := Button.new()
-	len_btn.custom_minimum_size = Vector2(170, 56)
-	len_btn.text = "NIGHT: %d GAMES" % EstateState.night_length
-	len_btn.pressed.connect(func():
-		var opts := [3, 5, 7]
-		EstateState.night_length = opts[(opts.find(EstateState.night_length) + 1) % opts.size()]
-		len_btn.text = "NIGHT: %d GAMES" % EstateState.night_length
-		Sfx.play("ui_move"))
-	btn_row.add_child(len_btn)
+	# P3: the classic games-per-night dial is retired from the lobby (UI level
+	# only). The panel instead reads back the PROCESSION match shape chosen on
+	# the PLAY panel — nights + turn cap, glanceable before START.
+	var match_lbl := Label.new()
+	match_lbl.text = "THE PROCESSION · %d NIGHT%s · CAP %d" % [
+		_proc_nights(), "" if _proc_nights() == 1 else "S", _proc_turncap()]
+	match_lbl.add_theme_font_size_override("font_size", 18)
+	match_lbl.add_theme_color_override("font_color", Color(1, 0.88, 0.4))
+	btn_row.add_child(match_lbl)
 	var start_btn := Button.new()
 	start_btn.name = "StartBtn"
 	start_btn.custom_minimum_size = Vector2(300, 56)
@@ -903,6 +920,13 @@ func _start_night_from_lobby() -> void:
 		_start_force_hold.cancel()
 	_fill_empty_seats_with_bots()
 	PlayerInput.save_setup()
+	# P3 flow: seats are settled — walk the grounds, ready up at the LYCHGATE,
+	# and the match begins. (Classic's start path below stays dormant.)
+	if _procession_next:
+		banner.visible = false
+		Sfx.play("ui_confirm")
+		_enter_grounds()
+		return
 	GameState.reset_match()
 	EstateState.start_night(4)
 	$Trail.reset_pawns()
@@ -1367,6 +1391,9 @@ const STROLL_SPOTS := [
 	{"name": "THE THEATER", "pos": Vector3(6.4, 0, -5.6), "r": 2.6, "act": "selector"},
 	{"name": "THE WARDROBE", "pos": Vector3(-3.0, 0, -2.2), "r": 2.2, "act": "wardrobe"},
 	{"name": "THE FAMILY ALBUM", "pos": Vector3(-6.6, 0, 2.2), "r": 2.4, "act": "album"},
+	# P3: the walk-up ready-up — stand at the gate, press A, the match begins
+	# (live only once the seats are settled; in the lobby it opens the panel).
+	{"name": "THE LYCHGATE", "pos": Vector3(0.0, 0, -8.4), "r": 2.6, "act": "procession"},
 ]
 var _strolling := false
 
@@ -1388,6 +1415,13 @@ func _exit_stroll(open_act := "") -> void:
 			_build_wardrobe_panel()
 		"album":
 			_build_album_panel()
+		"procession":
+			# P3: the lychgate walk-up. On the pre-match grounds it IS the
+			# ready-up; from the lobby stroll it just returns to the seats.
+			if phase == Phase.GROUNDS and _procession_next:
+				_continue_to_night()
+			else:
+				_build_lobby_panel()
 		_:
 			if phase == Phase.GROUNDS:
 				_build_freeroam_panel()
@@ -1732,13 +1766,16 @@ func _build_freeroam_panel() -> void:
 	row2.add_child(roam)
 	var cont := Button.new()
 	cont.custom_minimum_size = Vector2(300, 56)
-	cont.text = "CONTINUE — NIGHT %d" % (EstateState.run_night + 1)
+	# P3: the ready-up reads as the flow it is — the mourners gather at the gate.
+	cont.text = "READY AT THE LYCHGATE" if _procession_next \
+		else "CONTINUE — NIGHT %d" % (EstateState.run_night + 1)
 	cont.pressed.connect(_continue_to_night)
 	row2.add_child(cont)
 	phase_box.add_child(row2)
 
-## Leaves free roam for the night's first auction (placing bought tiles
-## first if any).
+## Leaves free roam. P3: the walkabout's ready-up leads to THE PROCESSION —
+## the mourners gather at the lychgate and the match begins. (Classic's
+## tiles→auction continuation below stays dormant behind the flag.)
 func _continue_to_night() -> void:
 	if phase != Phase.GROUNDS:
 		return
@@ -1746,6 +1783,9 @@ func _continue_to_night() -> void:
 	banner.remove_theme_font_size_override("font_size")
 	banner.visible = false
 	Sfx.play("confirm")
+	if _procession_next:
+		_enter_procession()
+		return
 	if EstateState.nights_played > 0 and EstateState.games_played == 0:
 		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.2)
 	_enter_tiles()
