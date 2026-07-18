@@ -33,6 +33,7 @@ param(
     [string]$Root = '',
     [string]$GenDir = '',
     [string]$ReportPath = '',
+    [string]$ManifestPath = '',
     [int]$PollIntervalSec = 5,
     [int]$TaskTimeoutMin = 15
 )
@@ -70,6 +71,17 @@ $Manifest = @(
         )
     }
 )
+
+# Optional external manifest override (additive; the built-in default above is
+# the original night-5 troupe). A -ManifestPath JSON is an array of objects
+# shaped exactly like the built-in entries: {name, height_meters, anims:[{label,
+# action, action_name}]}. Used by later waves (e.g. the PROCESSION heroes) so we
+# never mutate the record of what a prior wave rigged.
+if ($ManifestPath -and (Test-Path $ManifestPath)) {
+    $loaded = Get-Content -Raw -Path $ManifestPath | ConvertFrom-Json
+    $Manifest = @($loaded)
+    Write-Host ("Manifest overridden from {0}: {1} model(s)." -f $ManifestPath, $Manifest.Count)
+}
 
 function Get-MeshyApiKey {
     param([string]$Path)
