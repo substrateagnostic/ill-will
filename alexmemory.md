@@ -6,6 +6,48 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🔔🔔🔔🔔🔔🔔🔔 MORNING MENU #7 — THE SEVENTH WATCH (2026-07-18→19). The
+  night the game became one game.**
+
+  **TL;DR: THE GREAT REWORK IS BUILT AND PLAYABLE.** Doc 28 went from
+  approved constitution to running code in one night: board graph (3 roads,
+  76 stones, crossroads route-picks), d8 LAST BREATH slider with the
+  always-on aim heatmap, PENNIES/WREATHS economy, priced Peddler's Cart,
+  FINAL BELL with escalating arrival wreaths, 3-of-5 announced night
+  awards, LETTERS OF ADMINISTRATION, figurine pawns, over-shoulder roll
+  camera, interlude grounds minigames (random → DOORMAT picks), THE
+  READING finale with joint-heirs tie chain, and 12 Meshy heroes placed —
+  including a DORMANT REAPER waiting at the graveyard edge for the Estate
+  Stirs lane. **Playtest build: `build/illwill-0.3.0.zip`** (or run from
+  source: PLAY → THE PROCESSION → NIGHTS 3 · TURN CAP 12 → GO — GATHER
+  THE MOURNERS).
+
+  **PLAYTEST WITH:** your gamepad from the title onward (L1's fix means A/B
+  finally work on every menu — Godot shipped `ui_accept` with no pad
+  button, that was the whole plague). A full 3-night match at defaults
+  should run ~60-90 min; NIGHTS 1 is the quick taste.
+
+  **KNOWN NITS (flagged, not hidden):** heatmap % labels can collide with
+  stone names at some camera angles · figurine cosmetics-carry is wired
+  but unverified with a hat equipped · pause-menu TABS still need a mouse
+  click (shoulder-button binding queued) · human rolls can't skip the
+  over-shoulder shot (you aim with it; bots' shots are B-skippable) · the
+  Executor still tween-walks at the gate (rigged swap queued) · all new
+  ceremony prose is FIRST DRAFT for your dialog.json pen.
+
+  **RECEIPTS:** match seed 7 → HEIR GOLD [36,41,56,43] ×3 · seeds 1/11
+  recorded · topology checksum b269c570 never moved all night · your
+  slot_1 AND slot_2 saves verified untouched · Meshy balance 975 after
+  425cr (12/12 shipped, widow re-forged once — v1 was "a blank white
+  shroud, no figure").
+
+  **QUEUED NEXT (your call on order):** Estate Stirs events (the Reaper
+  MOVES — scythe carves the crypt open), THE CRYPT route, Book of the
+  Dead sealed bets, presence layer (heckling at the board), classic-code
+  full excision, online re-cert (Tailscale works today per RB), music
+  (your domain, whenever). Full research: docs/design/research-night7/ +
+  doc 28. Older detail below.
+
 - **🪙 P2 SHIPPED — THE PROCESSION IS A COMPLETE, PLAYTESTABLE GAME (2026-07-18).**
   The economy + cycle-loop lane landed on top of P1a's graph board. What you
   can play TODAY (`PLAY → THE PROCESSION`, or
