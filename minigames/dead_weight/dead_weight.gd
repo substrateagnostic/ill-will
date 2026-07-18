@@ -59,6 +59,10 @@ var _house_awake := false             # final-stretch ghost buff live this round
 # fx_on() so --dwbalance receipts never construct it.
 var _stretch: FinalStretch = null
 var _awaken_override := -1.0          # --dwawaken=S (verify): film the moment early
+var _oob_probe := false               # --dwoobtest (evidence pin): teleports seat 0
+                                      # to the "bottom-right off-map" corner (6.3, 6.3)
+                                      # 1s into round 1 and freezes its input, so the
+                                      # closed-safe-spot fix can be filmed. Never real play.
 var _evict_pin := -1                  # --dwevict=N (evidence pin, --seancechar
                                       # precedent): fell seat N through the REAL
                                       # _fall() path 1 s into round 1 so a probe
@@ -273,6 +277,8 @@ func _parse_args() -> void:
 			_hitkit_cap = true
 		elif arg.begins_with("--dwevict="):
 			_evict_pin = int(arg.trim_prefix("--dwevict="))
+		elif arg == "--dwoobtest":
+			_oob_probe = true
 		elif arg.begins_with("--outdir="):
 			_cap_dir = arg.trim_prefix("--outdir=")
 	if _aim_probe_on:
@@ -548,6 +554,22 @@ func _start_round() -> void:
 					and _fighters[pin] != null and _fighters[pin].alive:
 				print("DW_FORCEEVICT seat=%d (evidence pin — never real play)" % pin)
 				_fighters[pin]._fall())
+	# --dwoobtest evidence pin: stand seat 0 on the "bottom-right off-map" spot
+	# (just past the real ±6 floor edge) and freeze its input so the closed
+	# safe-spot can be filmed before/after. Loud, never real play.
+	if _oob_probe and round_index == 0 and _balance_rounds == 0 and not _mirror:
+		get_tree().create_timer(1.0).timeout.connect(func() -> void:
+			if phase != Phase.ROUND or _fighters.is_empty() or _fighters[0] == null or not _fighters[0].alive:
+				return
+			var f: DWFighter = _fighters[0]
+			f.global_position = Vector3(6.3, 0.05, 6.3)
+			f.linear_velocity = Vector3.ZERO
+			f.move_input = Vector2.ZERO
+			print("DW_OOBTEST seat=0 placed at (6.3, 6.3) — past the ±6 floor lip")
+			VerifyCapture.snap("dw_oob_before")
+			get_tree().create_timer(2.5).timeout.connect(func() -> void:
+				print("DW_OOBTEST_AFTER seat0_alive=%s" % str(_fighters[0] != null and _fighters[0].alive))
+				VerifyCapture.snap("dw_oob_after")))
 
 func _living_count() -> int:
 	var n := 0
@@ -926,6 +948,8 @@ func _physics_process(delta: float) -> void:
 	for i in players.size():
 		if _dw_probe_manual and i == 0:
 			continue   # the fling probe steers p0's ghost directly
+		if _oob_probe and i == 0:
+			continue   # --dwoobtest holds seat 0 pinned on the off-map spot
 		if _ghosts.has(i):
 			_drive_ghost(i)
 		elif _fighters[i] != null and _fighters[i].alive:

@@ -16,6 +16,8 @@ const HOP_IMPULSE := 5.0
 const HOP_CD := 1.5
 const STUN_TIME := 0.32
 const VOID_Y := -5.0        # below the floor slab (bottom at y=-3); only edge falls reach here
+const FLOOR_HALF := 6.0     # matches dead_weight.gd's FLOOR_HALF: the floor's
+                             # real ±6 footprint. Nothing legitimate stands past it.
 
 signal fell(index: int)
 
@@ -37,6 +39,8 @@ var _face := Vector3.FORWARD
 var _grounded := false
 var safe_spawn := Vector3.ZERO
 var grace_until := 0.0
+var _oob_time := 0.0   # off-map safe-spot fix: seconds spent "grounded" while
+                        # beyond the real floor edge (see FLOOR_HALF below)
 
 # ONLINE mirror facts (docs/design/10 §4.3): pure counters/tags read by the
 # host's _net_state() so the client fires the same juice from deltas. Additive
@@ -224,14 +228,34 @@ func _physics_process(delta: float) -> void:
 		global_position.y = 0.05
 		linear_velocity.y = maxf(linear_velocity.y, 0.0)
 
-	if global_position.y < VOID_Y:
+	# off-map safe-spot fix: the floor collider is a flat ±6 box, so a capsule
+	# resting right at (or wedged past) that edge can still read "grounded" from
+	# partial shape overlap — a fluke ledge with nothing legitimate on it (the
+	# design is "walk off, you fall": see _build_stage). A genuine edge-fall
+	# leaves _grounded false almost immediately as gravity takes over, so this
+	# only fires on a body that's actually come to rest out of bounds.
+	var out_of_bounds := absf(global_position.x) > FLOOR_HALF or absf(global_position.z) > FLOOR_HALF
+	if _grounded and out_of_bounds:
+		_oob_time += delta
+	else:
+		_oob_time = 0.0
+
+	var oob_fall := _oob_time > 0.25
+	if global_position.y < VOID_Y or oob_fall:
 		# grace at round start: spawn jank rescues instead of killing
 		if owner_game != null and owner_game.game_time < grace_until:
 			global_position = safe_spawn
 			linear_velocity = Vector3.ZERO
 			angular_velocity = Vector3.ZERO
 			_stun = 0.0
+			_oob_time = 0.0
 		else:
+			if oob_fall:
+				# evidence line: this is the ledge-clip / wedged-prop path, not a
+				# clean edge-fall. Turned up ~1 round in 4 in a 20-round bot sim
+				# (seed 7) before this fix, always at the ±6 lip, never mid-floor.
+				print("DW_OOB_SAFEFALL seat=%d pos=(%.2f,%.2f,%.2f)" % [
+					index, global_position.x, global_position.y, global_position.z])
 			_fall()
 
 func speed() -> float:
@@ -390,6 +414,7 @@ func revive(pos: Vector3) -> void:
 	_stun = 0.0
 	_shove_cd = 0.0
 	_hop_cd = 0.0
+	_oob_time = 0.0
 	last_attacker = {}
 	collision_layer = 2
 	collision_mask = 1 | 2 | 4
