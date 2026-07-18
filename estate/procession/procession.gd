@@ -1585,10 +1585,23 @@ func _pose_breath_shot(seat: int) -> void:
 		entries.append({"node": _preview_dest(seat, f + 1), "face": f + 1,
 			"p": float(weights[f]), "w": float(weights[f]) / wmax})
 	board.show_heatmap(entries, roster[seat].color)
+	# Pose the camera too: steep over-behind the roller, the glowing road and
+	# its percent tags running up-frame over the meter (the couch read,
+	# verified against the committed still).
+	executor.clear_banner()   # the round aside must not sit over the road
+	board_camera.hold()
+	var here := board.space_pos(positions[seat])
+	var ahead := board.space_pos(_preview_dest(seat, 4))
+	var dir := ahead - here
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.1 else Vector3.FORWARD
+	cam.global_position = here - dir * 3.0 + Vector3(0.0, 7.5, 0.0)
+	cam.look_at(ahead + dir * 1.5, Vector3.UP)
 	await _beat(0.5)
 	await _cap_snap("breath_heatmap")
 	board.clear_heatmap()
 	breath.meter.visible = false
+	_frame_roller(seat)   # hand the frame back to the director's roll shot
 
 # --------------------------------------------------------------------------
 # THE ITEM BEAT + WARES (P2 — doc 28 §6/§15). Guardrails: inventory cap 3,

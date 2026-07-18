@@ -25,23 +25,28 @@ func open(header: String, sub: String, header_color: Color, entries: Array,
 	_window = window
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
+	# CenterContainer keeps the panel truly centred whatever the shelf holds;
+	# the list itself lives in a height-capped ScrollContainer (follow_focus)
+	# so ten wares + rules can never run off the bottom of the frame.
+	var center := CenterContainer.new()
+	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(center)
 	var panel := PanelContainer.new()
 	panel.name = "Panel"
-	panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
 	panel.add_theme_stylebox_override("panel", _panel_box())
-	add_child(panel)
+	center.add_child(panel)
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
-		margin.add_theme_constant_override("margin_" + side, 20)
+		margin.add_theme_constant_override("margin_" + side, 16)
 	panel.add_child(margin)
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 8)
+	col.add_theme_constant_override("separation", 6)
 	margin.add_child(col)
 
 	var head := Label.new()
 	head.text = header
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	head.add_theme_font_size_override("font_size", 32)
+	head.add_theme_font_size_override("font_size", 30)
 	head.add_theme_color_override("font_color", header_color)
 	head.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
 	head.add_theme_constant_override("outline_size", 8)
@@ -50,36 +55,47 @@ func open(header: String, sub: String, header_color: Color, entries: Array,
 		var subl := Label.new()
 		subl.text = sub
 		subl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		subl.add_theme_font_size_override("font_size", 18)
+		subl.add_theme_font_size_override("font_size", 17)
 		subl.modulate = Color(0.92, 0.88, 0.72)
 		col.add_child(subl)
+
+	var scroll := ScrollContainer.new()
+	scroll.follow_focus = true
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var row_h := 40.0 + 20.0   # button + rule line
+	scroll.custom_minimum_size = Vector2(660, minf(entries.size() * row_h + 8.0, 560.0))
+	col.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.add_theme_constant_override("separation", 4)
+	list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(list)
 
 	for k in entries.size():
 		var e: Dictionary = entries[k]
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(620, 46)
+		btn.custom_minimum_size = Vector2(640, 40)
 		btn.text = String(e.get("label", "?"))
 		btn.disabled = bool(e.get("disabled", false))
-		btn.add_theme_font_size_override("font_size", 22)
+		btn.add_theme_font_size_override("font_size", 21)
 		var ec: Color = e.get("color", Color(0.95, 0.92, 0.8))
 		btn.add_theme_color_override("font_color",
 			ec if not btn.disabled else Color(ec, 0.4))
 		btn.pressed.connect(_pick.bind(k))
-		col.add_child(btn)
+		list.add_child(btn)
 		_buttons.append(btn)
 		var subrule := String(e.get("sub", ""))
 		if subrule != "":
 			var rl := Label.new()
 			rl.text = subrule
 			rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			rl.add_theme_font_size_override("font_size", 14)
+			rl.add_theme_font_size_override("font_size", 13)
 			rl.modulate = Color(ec, 0.55 if btn.disabled else 0.85)
-			col.add_child(rl)
+			list.add_child(rl)
 
 	_leave_btn = Button.new()
-	_leave_btn.custom_minimum_size = Vector2(620, 46)
+	_leave_btn.custom_minimum_size = Vector2(640, 40)
 	_leave_btn.text = leave_label
-	_leave_btn.add_theme_font_size_override("font_size", 22)
+	_leave_btn.add_theme_font_size_override("font_size", 21)
 	_leave_btn.add_theme_color_override("font_color", Color(0.75, 0.72, 0.62))
 	_leave_btn.pressed.connect(_pick.bind(-1))
 	col.add_child(_leave_btn)

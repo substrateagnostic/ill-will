@@ -6,6 +6,31 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🪙 P2 SHIPPED — THE PROCESSION IS A COMPLETE, PLAYTESTABLE GAME (2026-07-18).**
+  The economy + cycle-loop lane landed on top of P1a's graph board. What you
+  can play TODAY (`PLAY → THE PROCESSION`, or
+  `godot --path . -- --procession --seed=7 --turncap=12`):
+  **sequential LAST BREATH rolls (d8, leader first)** with the **always-on AIM
+  HEATMAP** (live landing % down your road, crit sharpening included) ·
+  **PENNIES ¢ / WREATHS ⚘** (display rename only — internals keep "grudge",
+  all 14 minigame receipts untouched) · **a minigame EVERY cycle** from the
+  full 15-game catalog, drawn without replacement (pennies 10/6/3/1 +
+  wreaths 2/1/1/0, Pallbearers pays by TEAM) · **THE PEDDLER'S CART priced**
+  (10 wares, LUCKY PENNY→WILL-O'-THE-WISP; cap 3, one move item/turn,
+  no-stack sabotage; wreath-last shops 30% off, announced) · **escalating
+  arrival wreaths 8/5/3/1 → 10/6/3/2 → 12/7/4/2** · **3 announced night
+  awards** (races visible at the interim reading, ties broken by the
+  estate's coin in full view) · **LETTERS OF ADMINISTRATION** (seed 11:
+  BLUE takes them nights 2–3 and climbs 4→47 wreaths — the dignity floor
+  works) · **the 3-night match** ending in **THE READING** (liquidation,
+  totals stream by stream, most wreaths inherits; joint heirs before any
+  coin flip). Receipts re-frozen deterministic ×3 in
+  `docs/verify/VERIFY-BOARD.md`; the old putt receipt is superseded with
+  honors; topology checksum b269c570 never moved. Screenshots in
+  `estate/procession/shots/p2_*.png`. **Your pen:** cart prices, award
+  pool, and all new dialog lines (`procession.items/cart/awards/letters/
+  finale` in dialog.json) are first-draft — rewrite freely.
+
 - **🔔 NIGHT 7 — THE REWORK PLAN AWAITS YOUR PEN (2026-07-18).**
   **The full unified-mode design is at `docs/design/28-the-procession-unified-mode.md`**
   — THE PROCESSION becomes the whole game (classic retires, auction/votes

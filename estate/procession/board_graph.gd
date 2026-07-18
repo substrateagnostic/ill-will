@@ -1046,13 +1046,13 @@ func _make_heat_marker() -> Dictionary:
 	root.add_child(ring)
 	var pct := Label3D.new()
 	pct.name = "Pct"
-	pct.font_size = 52
-	pct.pixel_size = 0.006
+	pct.font_size = 64
+	pct.pixel_size = 0.0078
 	pct.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	pct.no_depth_test = true
-	pct.outline_size = 14
+	pct.outline_size = 16
 	pct.outline_modulate = Color(0, 0, 0, 0.92)
-	pct.position = Vector3(0, 0.65, 0)
+	pct.position = Vector3(0, 0.72, 0)
 	root.add_child(pct)
 	add_child(root)
 	root.visible = false
