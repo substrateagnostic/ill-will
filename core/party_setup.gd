@@ -44,6 +44,8 @@ var _listen_action := ""
 var _listen_btn: Button = null
 var _quit_hold: HoldConfirm = null
 var _quit_button_held: bool = false
+var _quit_app_hold: HoldConfirm = null
+var _quit_app_button_held: bool = false
 
 var _disconnect_panel: PanelContainer = null
 var _disconnect_title: Label = null
@@ -155,6 +157,22 @@ func _ready() -> void:
 	_quit_hold.configure(5.0)
 	_quit_hold.completed.connect(quit_to_title)
 	quit_row.add_child(_quit_hold)
+	# The OTHER escape hatch (Alex: "no exit game button"): LEAVE THE ESTATE only
+	# returns to the title scene — the app itself had no quit-to-desktop path from
+	# either the pause menu or the title screen. Same hold-to-confirm ritual, same
+	# Executor QUIT_CONFIRM line, but this one actually closes the window.
+	var quit_app_btn: Button = Button.new()
+	quit_app_btn.text = "SHUT THE ESTATE  (quits to desktop)"
+	quit_app_btn.custom_minimum_size = Vector2(0, 44)
+	quit_app_btn.button_down.connect(func():
+		_quit_app_button_held = true
+		_show_quit_line())
+	quit_app_btn.button_up.connect(func(): _quit_app_button_held = false)
+	quit_row.add_child(quit_app_btn)
+	_quit_app_hold = HoldConfirm.new()
+	_quit_app_hold.configure(5.0)   # closing the app is the biggest consequence of all
+	_quit_app_hold.completed.connect(quit_app)
+	quit_row.add_child(_quit_app_hold)
 	box.add_child(quit_row)
 	_build_disconnect_overlay()
 	_build_hostpause_overlay()
@@ -202,6 +220,22 @@ func _ready() -> void:
 				get_tree().create_timer(0.6).timeout.connect(func():
 					VerifyCapture.snap("w6_quit")
 					get_tree().create_timer(0.6).timeout.connect(get_tree().quit)))
+		elif arg == "--w6quitapp":
+			# Exit-game-button fix capture: open the pause overlay showing BOTH quit
+			# paths side by side (LEAVE THE ESTATE / SHUT THE ESTATE), snap, then fake
+			# a mid-hold on the new quit-to-desktop ring (set_progress — a real hold
+			# can't be scripted headlessly) so the confirm-in-progress state is on
+			# film too. Quits the app for real at the end, same as the sibling caps.
+			get_tree().create_timer(1.0).timeout.connect(func():
+				if not open:
+					toggle()
+				get_tree().create_timer(0.4).timeout.connect(func():
+					VerifyCapture.snap("w6_quitapp_menu")
+					if _quit_app_hold != null:
+						_quit_app_hold.set_progress(0.55)
+					get_tree().create_timer(0.4).timeout.connect(func():
+						VerifyCapture.snap("w6_quitapp_hold")
+						get_tree().create_timer(0.6).timeout.connect(get_tree().quit))))
 		elif arg == "--w6wheelstop":
 			# W6 dev capture: build the séance-wheel STOP button on a blank overlay and
 			# drive three presses, snapping each escalating toast. Self-contained.
@@ -285,6 +319,17 @@ func quit_to_title() -> void:
 	Sfx.play("ui_back")
 	free_stray_root_nodes()
 	get_tree().change_scene_to_file("res://estate/estate.tscn")
+
+## The full exit: closes the application, not just the current night. Reachable
+## from the pause menu (this overlay) AND the title screen (estate.gd wires its
+## own QUIT button through this same method — see _enter_title_swap).
+func quit_app() -> void:
+	_quit_app_button_held = false
+	if _quit_app_hold != null:
+		_quit_app_hold.cancel()
+	PlayerInput.save_setup()
+	_save_prefs()
+	get_tree().quit()
 
 ## Free every child of /root that is neither an autoload nor the current scene
 ## (modules and podiums live there during play; on any path back to the title
@@ -378,6 +423,9 @@ func _process(delta: float) -> void:
 	if _quit_hold != null:
 		var quit_held: bool = open and not _disconnect_active and _quit_button_held
 		_quit_hold.tick(quit_held, delta)
+	if _quit_app_hold != null:
+		var quit_app_held: bool = open and not _disconnect_active and _quit_app_button_held
+		_quit_app_hold.tick(quit_app_held, delta)
 	_update_idle()
 
 ## GAMEPAD PAUSE — the single cert-grade gap doc 25 names: KEY_ESCAPE was the ONLY

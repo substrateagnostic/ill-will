@@ -643,6 +643,18 @@ func _enter_title_swap() -> void:
 		_hide_title()
 		_build_wardrobe_panel())
 	row.add_child(ward)
+	# No exit path existed from the title screen at all (Alex: "no exit game
+	# button") — HOLD to confirm (same ritual as the slot-wipe buttons above),
+	# then close the app via PartySetup.quit_app() so both quit paths (this one
+	# and the pause menu's SHUT THE ESTATE) share one exit.
+	var quit_title := Button.new()
+	quit_title.text = "HOLD: QUIT"
+	quit_title.custom_minimum_size = Vector2(160, 56)
+	row.add_child(quit_title)
+	var quit_title_hold := HoldConfirm.new()
+	quit_title_hold.bind_button(quit_title, 5.0)
+	quit_title_hold.completed.connect(PartySetup.quit_app)
+	row.add_child(quit_title_hold)
 	box.add_child(row)
 	var net_row := HBoxContainer.new()
 	net_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -662,7 +674,7 @@ func _enter_title_swap() -> void:
 	# gold hairline, parchment text; gamepad/hover focus lifts the whole border to
 	# full gold (see _style_title_button). Structure, handlers, tab order and the
 	# PLAY-first focus grab are all unchanged — this is presentation only.
-	var title_btns: Array[Button] = [play, newg, settings, mini, ward, host_btn, join_btn]
+	var title_btns: Array[Button] = [play, newg, settings, mini, ward, quit_title, host_btn, join_btn]
 	for b in title_btns:
 		_style_title_button(b)
 	var hint := Label.new()

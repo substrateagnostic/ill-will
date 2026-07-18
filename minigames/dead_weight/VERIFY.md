@@ -37,8 +37,15 @@ godot --headless --path . minigames/dead_weight/dead_weight.tscn -- --dwbalance=
 ```
 
 CLI args (after `--`): `--dwbots`, `--dwghosts=N`, `--dwbalance=N`,
-`--dwrounds=N`, `--players=N`, `--seed=N`, plus global `--shots` / `--outdir`
-/ `--quitafter`.
+`--dwrounds=N`, `--players=N`, `--seed=N`, `--dwoobtest` (off-map safe-spot
+evidence pin, below), plus global `--shots` / `--outdir` / `--quitafter`.
+
+Off-map safe-spot repro (evidence pin; seat 0 pinned on the exploit spot 1s
+into round 1, so the before/after can be filmed — needs a windowed run and
+some flag that flips VerifyCapture active, e.g. `--tracepos`):
+```
+godot --path . minigames/dead_weight/dead_weight.tscn -- --dwbots --dwoobtest --tracepos --seed=5 --outdir=verify_out/dw_oob
+```
 
 Import pass after adding files (run, exits clean):
 ```
@@ -57,22 +64,31 @@ FINAL RESULT (DRIVE_FORCE=38, KNOCK_SCALE=1.0, KNOCK_MAX=24, KILL_SPEED=3.0):
 
 ```
 --- seed 1 ---                          --- seed 7 ---
-living-shove=8 ghost-kill=7 void=5      living-shove=2 ghost-kill=9 void=9
-LIVING WIN % = 65.0%   PASS             LIVING WIN % = 55.0%   PASS
-possessions=33 ghost_hits=94            possessions=38 ghost_hits=69
-avg_round=12.1s                         avg_round=14.0s
+living-shove=6 ghost-kill=7 void=7      living-shove=3 ghost-kill=6 void=11
+LIVING WIN % = 65.0%   PASS             LIVING WIN % = 70.0%   PASS
+possessions=31 ghost_hits=71            possessions=30 ghost_hits=53
+avg_round=12.0s                         avg_round=10.2s
 ```
 
 Both seeds inside the 55-75% band; seed 1 sits exactly on the spec's ~65%.
 The ghost is a genuine menace (~3.5 prop possessions and ~4 prop hits per
 round) without out-scaling the living.
 
+These numbers moved from the previous receipt (seed 1 was 65.0%, seed 7 was
+55.0%) after bug #3 below closed the off-map safe-spot — see its evidence
+line, `DW_OOB_SAFEFALL`, which fired 8x/20 rounds on seed 1 and 9x/20 on seed
+7: bots were routinely getting wedged just past the ±6 lip (ledge-clip or a
+shoved prop resting past the edge) and surviving there indefinitely, which
+silently voided some of what should have been "living" or "void" outcomes.
+Closing it moved seed 7 from 55% to 70%, still inside the PASS band; seed 1
+happened to land back on exactly 65.0%.
+
 Tuning history (20-round runs, seed 1): DRIVE 78/K1.7 -> 25% living (ghost
 oppressive); 47/K1.15 -> 45%; 40/K1.0 -> 55%; 36/K1.0 -> 70% (seed 7: 85%);
-38/K1.0 -> 65% / 55% across seeds. Lamp ~0.6kg darts, wardrobe 8kg freight
-train (same drive force, mass does the talking).
+38/K1.0 -> 65% / 55% across seeds (pre off-map-fix). Lamp ~0.6kg darts,
+wardrobe 8kg freight train (same drive force, mass does the talking).
 
-Two physics bugs were CAUGHT by this harness (both fixed):
+Three physics bugs were CAUGHT by this harness (all fixed):
 1. Props seated on spawn corners catapulted fighters into the void at round
    start -> props now nudge off spawn corners at layout + 1.5s spawn grace
    teleports a falling fighter back instead of killing them.
@@ -80,6 +96,16 @@ Two physics bugs were CAUGHT by this harness (both fixed):
    at mid-floor coordinates, free-fall velocity) -> floor is a 3m slab and a
    hard clamp guarantees a fighter over the floor footprint is never below
    its surface. Since the fix, every death in the logs is a clean edge fall.
+3. "Bottom-right off-map" safe spot (Alex, playtest): the floor collider is
+   a flat ±6 box, so a capsule resting right at (or a prop wedged past) that
+   edge can still read "grounded" from partial shape overlap — a fluke ledge
+   with nothing legitimate on it, and the only death check was `y < VOID_Y`,
+   which a body sitting still at y≈0 never satisfies. Fix in `fighter.gd`:
+   track how long a fighter is simultaneously `_grounded` AND past the real
+   ±6 footprint (`FLOOR_HALF`); past 0.25s (long enough that a normal
+   fast-moving edge-fall never trips it — see `--dwoobtest` repro) it falls
+   exactly like a clean void death. `--dwoobtest` pins seat 0 on the exploit
+   spot 1s into round 1 for a before/after screenshot pair.
 
 Plus one flow bug caught by screenshots: an awaited 3s SceneTreeTimer for
 the between-rounds delay never resumed after a slow-mo beat (survivor then
@@ -126,6 +152,10 @@ wandered off the lip on stale bot input). The delay is now tick-driven in
 - [x] `prop_locked_by_spawn()`: props within 2m of any revival spawn are
       unpossessable for the first 3s of every round (checked inside
       `DWProp.can_be_possessed()`, which ghost bots also respect).
+- [x] Off-map safe-spot (bug #3 above): a fighter can no longer come to rest
+      anywhere past the real ±6 floor footprint and stay alive — see
+      `fighter.gd`'s `_oob_time` tracking. `DW_OOB_SAFEFALL` in the logs is
+      the evidence line.
 
 ## Screenshots (committed in shots/, Godot-ignored; regenerate via commands above)
 
@@ -142,6 +172,11 @@ wandered off the lip on stale bot input). The delay is now tick-driven in
   fresh ghost orb rising at the south lip.
 - `shots/screen_round2_revive.png` — ROUND 2 FIGHT!: fighters revived at
   corners, props reset with darkened tint, scores carried over.
+- `shots/screen_oob_before.png` / `screen_oob_after.png` — the off-map
+  safe-spot (bug #3 above), `--dwoobtest`: RED parked just past the ±6 lip,
+  clear of the glowing void gutter, alive and well in `_before`; by `_after`
+  RED has fallen — "THE VOID CLAIMS RED" banner, scoreboard skull, nothing
+  left at the spot but the death-fx splat.
 
 ## Evidence log lines (headless, seed 5, --dwghosts=2)
 
