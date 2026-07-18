@@ -1,0 +1,522 @@
+{
+  "_README": [
+    "ILL WILL — the single home for every player-facing line of PROSE (Executor",
+    "speeches, estate instructions, game-intro guides, ceremony readings).",
+    "Edit any line here and it changes in-game — no .gd file to touch. Values are",
+    "a String or an array of strings. Arrays are either paragraphs (shown one per",
+    "screen by the Nintendo pager) or pools (one drawn at random). KEEP the",
+    "placeholders ({name}, %s, %d) and their ORDER exactly — the game fills them in",
+    "at the call site; dropping one will make that line render wrong. Symbols like",
+    "♠ (grudge) and ◆ (deed) are literal text. Loaded by core/dialog.gd (autoload",
+    "Dialog); call Dialog.reload() after editing to see changes live."
+  ],
+
+  "executor": {
+    "greeting": [
+      "Good evening. You are all here for the reading, whether you know it or not.",
+      "Welcome to the procession. Please keep your grudges inside the carriage at all times.",
+      "The estate is open. The estate is always open. The estate is never glad to see you.",
+      "Four mourners, one manor, no witnesses worth the name. Let us begin."
+    ],
+    "shrine": [
+      "%s kneels at the shrine and is rewarded. The shrine will want that back.",
+      "The shrine blesses %s (+3♠). It has low standards and a long memory.",
+      "%s gains at the shrine. Piety pays, this once, under protest.",
+      "The saints smile on %s. The saints have never met them.",
+      "%s is favoured. The estate has logged the anomaly for review."
+    ],
+    "grave": [
+      "%s weeps at the grave (−2♠). The grave has wept harder for less.",
+      "The weeping grave takes its due from %s. It does not itemise.",
+      "%s pays the ground what the ground is owed. Everyone does, eventually.",
+      "A grave for %s. Not theirs. Not yet. Two grudge, all the same.",
+      "%s mourns, briefly and expensively."
+    ],
+    "grave_toll": [
+      "%s weeps on %s's monument — and %s collects the tears (%d♠).",
+      "The grave belongs to %s. %s learns this the way everyone does: by paying.",
+      "%s's headstone bills %s %d♠ for the trespass. The dead keep excellent books.",
+      "%s bleeds onto %s's stone; %s keeps the difference (%d♠), and the grudge."
+    ],
+    "stall": [
+      "%s takes something sharp from the stall. No refunds, no receipts, no remorse.",
+      "The stall arms %s. The stall would like it noted it warned nobody.",
+      "%s pockets a grievance-in-a-box. Do use it responsibly, which is to say don't.",
+      "%s shops the stall. The estate approves of premeditation."
+    ],
+    "codicil": [
+      "%s buys a Deed. The ink is wet and already contested.",
+      "%s claims the Codicil. Somewhere a lawyer feels a disturbance and smiles.",
+      "A Deed to %s. Ownership is nine-tenths of the haunting.",
+      "%s pays the Codicil's price. The price, naturally, goes up.",
+      "%s takes a Deed and the Codicil takes a walk. Chase it.",
+      "%s signs for a Deed. The estate files it under acquisitions, and under grievances.",
+      "A Codicil passes to %s. The manor notes a new claimant, and sharpens its interest."
+    ],
+    "codicil_short": [
+      "%s eyes the Codicil and finds the price beyond them. The estate is not a charity.",
+      "The Codicil declines %s for want of funds. Grieve, then earn.",
+      "%s reaches for the Deed and comes up short. The estate accepts grief, but not as tender.",
+      "The Codicil weighs %s's purse and finds it wanting. Come back richer, or come back bitter."
+    ],
+    "seance": [
+      "The planchette moves. Nobody admits to pushing it. The estate has its suspicions.",
+      "A séance opens. The dead are, as ever, unhelpfully opinionated.",
+      "The circle turns for the whole table. Misery, at last, distributed fairly.",
+      "The medium speaks. The estate transcribes. Everyone pays attention or pays later."
+    ],
+    "tollgate_take": [
+      "%s owns the tollgate now. Congratulations on the paperwork.",
+      "The tollgate answers to %s. Passage will cost the rest of you dearly and often.",
+      "%s collects the pot and the deed to the gate. A landlord is born, unmourned.",
+      "%s inherits the tollgate. The estate wishes them the joy of collections."
+    ],
+    "tollgate_pass": [
+      "%s passes %s's gate and pays for the privilege (2♠).",
+      "The tollgate bills %s on the way through. %s does not rise to thank them."
+    ],
+    "vendetta": [
+      "%s and %s settle it the estate's way — quietly, and for money.",
+      "A vendetta ripens between %s and %s. The higher stake walks away heavier.",
+      "%s stares at %s across five spaces. Sealed bids. Old wounds. New debts.",
+      "%s and %s are found within five stones of an old debt. The estate calls the wager."
+    ],
+    "vendetta_result": [
+      "%s out-stakes %s and takes the difference. Grudges compound.",
+      "%s wins the wager over %s. The estate admires a decisive cruelty.",
+      "The vendetta breaks %s's way. %s adds it to the list they keep.",
+      "%s collects from %s, with interest the estate did not trouble to name."
+    ],
+    "blank": [
+      "%s lands on nothing. A merciful administrative error.",
+      "%s finds bare stone. The estate resents the missed opportunity.",
+      "Nothing befalls %s. This is not the same as safety.",
+      "%s stands on plain flagstone. The estate has nothing to bill, and resents it.",
+      "Bare stone for %s. Even the grudges take the night off.",
+      "%s lands nowhere in particular. The ledger notes the absence, in ink."
+    ],
+    "house_awakens": [
+      "THE HOUSE AWAKENS. The manor's shadow walks the drive. Reach a safe stone or fall behind.",
+      "Something in the house remembers you. Run for the marked stones.",
+      "The shadow sweeps the procession. It is not particular about whom it catches."
+    ],
+    "house_loser": [
+      "The shadow takes %s two steps back. The house keeps what it touches.",
+      "%s is caught in the dark and slips back. The estate does not offer a hand."
+    ],
+    "will_open": [
+      "The estate has reviewed the evening's conduct and finds it, on the whole, actionable.",
+      "The will is read. It was written some time ago, and about all of you.",
+      "The estate has audited the evening and finds no one blameless. The will will now say so.",
+      "The reading begins. The estate has weighed the night and found it wanting, as forecast."
+    ],
+    "round_opener": [
+      "Round %d. The mourners take their marks; the estate takes notes.",
+      "The wake resumes at round %d. No one has yet asked to leave early.",
+      "Round %d begins. The estate turns a page it wrote in advance.",
+      "Round %d. The manor settles in to watch you spend.",
+      "Round %d. The drive is patient; the grudges, less so.",
+      "Round %d. The dead keep excellent time, and worse company."
+    ],
+    "pause": [
+      "The estate pauses. The estate has nowhere in particular to be.",
+      "The proceedings are suspended at your request. The estate files the interruption and waits.",
+      "The estate holds. It has held longer, for less, and remembers each occasion.",
+      "A recess is noted. The dead do not observe recesses, but the estate will indulge you.",
+      "The night is paused. Nothing is resolved; nothing ever is, but especially not now.",
+      "The estate sets down its pen. It does not lose its place. It never loses its place.",
+      "You have stopped the clock. The estate keeps a second clock, for occasions such as this.",
+      "The record is held open. The estate will not read ahead. The estate has already read ahead."
+    ],
+    "idle": [
+      "The estate notes %s has not moved in some time. It is used to being kept waiting. It has never once been kept waiting so thoroughly.",
+      "%s has yet to act. The estate marks the delay in the margin, where it keeps the other delays.",
+      "The estate awaits %s. Its patience is a matter of record, and the record is long.",
+      "Nothing has been decided by %s. The estate finds this consistent with the evening so far.",
+      "%s deliberates. The estate admires deliberation, up to a point, and has quietly noted the point.",
+      "The estate holds a place for %s. The place is not going anywhere, and increasingly, neither is the night.",
+      "%s takes their time. The estate has time to spare, and no one left to spend it on.",
+      "Still no word from %s. The estate has re-read the will while waiting and found no mention of hurry."
+    ],
+    "quit_confirm": [
+      "Departures are processed in the order received. The estate does not take them personally. It writes them down.",
+      "You are leaving. The estate has a form for this. The estate has a form for everything, which is the whole tragedy of it.",
+      "A guest withdraws. The estate marks the seat vacant and the grudges outstanding.",
+      "The exit is noted. The estate keeps the door for those who return, and a longer file for those who do not.",
+      "You wish to go. The estate will not stop you. The estate has never successfully stopped anyone.",
+      "Withdrawal acknowledged. The estate settles your account to zero and rounds the sentiment down.",
+      "One less at the table. The estate redistributes nothing, which is its custom, and reopens the will.",
+      "The night releases you. The estate does not. The estate merely lets you believe it has."
+    ]
+  },
+
+  "eulogy": {
+    "opener": [
+      "We are gathered, as the estate is always gathered, to read aloud what the night had already decided.",
+      "The wake is spent. The estate will now account for it, name by name, as it accounts for everything.",
+      "Sit. The reading is brief, the verdicts briefer, and the estate has never once been kept waiting.",
+      "The night is closed. What follows is not eulogy so much as itemisation, in the estate's steady hand.",
+      "Attend. The estate has balanced the evening, and finds, as always, that grief was the only currency spent freely."
+    ],
+    "closer": [
+      "The will is written. It was always written. Take your grief to the door; the estate keeps the rest.",
+      "So concludes the reckoning. The estate thanks you for your custom, and remembers all of it, however politely it is asked.",
+      "That is the night, entire and without appeal. The manor will see you again; it always does.",
+      "The reading rests. Your debts are noted, your kindnesses doubted, and the door is, as ever, that way.",
+      "The estate closes the ledger. Nothing is forgiven, but everything is filed, which the estate finds nearly the same."
+    ],
+    "heir": [
+      "We commend %s, who bought %s with other people's grief and now owns a house that owns them back.",
+      "%s took %s tonight and called it grief management. The estate calls it acquisition, and files it so.",
+      "To %s, who leaves with %s and the room's resentment — an heir the estate can, at last, do business with."
+    ],
+    "betrayed": [
+      "We remember %s, who bled %d Grudge into other hands and called it Tuesday.",
+      "%s paid %d Grudge to graves and gates tonight, sincerely and without recourse. The estate rounds the sincerity down.",
+      "%s gave %d Grudge to the ground and the tolls. Generosity, the estate notes, is only ever involuntary here."
+    ],
+    "bloody": [
+      "%s settled matters %s tonight, quietly and for money. The estate approved the paperwork retroactively.",
+      "To %s, who won %s and lost the room. The estate keeps the receipts, and the room."
+    ],
+    "hoarder": [
+      "%s ends the night %d Grudge richer and not one Deed the wiser. The estate admires a full purse and an empty claim.",
+      "%s hoarded %d Grudge and spent it on nothing. The manor respects the discipline; the will does not reward it."
+    ],
+    "mourner": [
+      "%s wept at %s tonight, expensively. Grief, the estate observes, is the one thing here that pays no dividend.",
+      "%s knelt at %s and asked the dead for nothing they could give. The estate found the manners unusual."
+    ],
+    "pious": [
+      "%s knelt at %s and was rewarded, this once, under protest. Piety, the estate notes, is a poor annuity.",
+      "%s took the shrines' small mercies %s over. The saints have never met them, and intend to keep it that way."
+    ],
+    "idle": [
+      "%s walked the drive and troubled no one, which the estate finds either saintly or suspicious, and files as both.",
+      "%s spent the night largely unbilled. The estate resents the missed opportunity, and notes the name."
+    ],
+    "warm": [
+      "And %s — who took from no one all night, and wept at %s besides — was, in the estate's cold estimation, almost kind. The anomaly has been logged for review.",
+      "One kindness is recorded: %s harmed no one tonight, and paid at %s for the privilege. The estate has filed it under mercy, provisionally, in pencil."
+    ],
+    "chronicle_prefix": "The estate adds, for the record: "
+  },
+
+  "howto": {
+    "house_rules": {
+      "lead": "You are new to the estate, so it will explain itself. Once. It keeps no patience for a slow study and less for a repeat question.",
+      "rules": [
+        "POINTS are the ladder. Place well in each game and the estate counts you among the worthy; place last and it counts you anyway.",
+        "♠ GRUDGE is spite made spendable — it buys your bids at THE AUCTION and the trap tiles you seed into the lawn.",
+        "ROYALTIES are the house's kindest cruelty: the traps and curses you author pay YOU, every time they take somebody else.",
+        "THE TRAIL climbs to the manor. First to the summit inherits it; the rest inherit the memory of the climb.",
+        "Every night closes at THE READING, where the ledger is totted up aloud and no one, on principle, is flattered."
+      ],
+      "sig": "— The Executor"
+    },
+    "get_ready_heads": [
+      "TAKE YOUR PLACES — %s",
+      "THE ESTATE IS SEATING YOU — %s",
+      "THE ESTATE WILL SEE YOU NOW — %s"
+    ],
+    "goals": {
+      "par": "Sabotage golf. Draft a trap, place it on the SHARED hole, then putt it yourself. Your trap's kills pay YOU royalties. Last round is CHAOS: everyone putts at once.",
+      "echo": "Duel beside your own GHOST — it replays your previous round. Shatter the others before the past catches up.",
+      "tilt": "The floor is one platter and everyone's weight tilts it. Fall off and you return as a vengeful seagull.",
+      "orbital": "Dodgeball on a tiny planet. Throws ORBIT forever — a 45-second-old ball still kills, and its thrower still gets paid.",
+      "mower": "Mow more lawn than anyone. Coverage is score; ramming is diplomacy.",
+      "greed": "One pot of gold, four sets of hands. Bank it down your chute; tackle whoever is richer.",
+      "swap": "Kart race where your weapon TRADES PLACES with whoever it hits. The lead is a rumor.",
+      "deadweight": "Sumo where the dead never leave — they possess the furniture and fling it at the living.",
+      "throne": "One throne, four claimants. Reigning scores. Decrees blast, guards defend, gravity votes last.",
+      "lastwill": "A funeral procession race: first to the crypt inherits. Every death freezes the world while the deceased writes a curse into the road.",
+      "widowsgaze": "Rob the wake. Creep the parlor for relics while the Widow weeps — FREEZE when she turns, or her gaze flings you back to the rope. A shove as the sting plays is a murder.",
+      "seance": "A co-op séance: guide the planchette to the spirit's word — but one of you was paid in grudge to make it fail without getting caught. The Executor is the medium.",
+      "understudy": "Everyone knows tonight's play but the understudy, who must bluff along. Rehearse, interrogate, vote — the scoring never stalemates.",
+      "maskedball": "A crowd of identical masked dancers — four of them are you, and nobody is told which. Find yourself, dance like furniture, curtsy to the throne, and spend your one mark to unmask a human. Wrong guess: you flash.",
+      "pallbearers": "The anthology's first TEAM race: 2v2, one coffin per pair. The coffin moves on the BLEND of both your sticks — sync to sprint, pull apart and the dead spill out. First pall to the crypt wins."
+    }
+  },
+
+  "intro": {
+    "maskedball": {
+      "name": "MASKED BALL",
+      "goal": "Find yourself among twenty identical dancers, then curtsy for points or unmask a human.",
+      "tips": [
+        "Your own dancer answers your stick the instant you move — the crowd merely wanders.",
+        "Feather the stick below a full drift and only your mask glints, privately.",
+        "Marking empty air still costs your one mark. Aim before you spend it."
+      ]
+    },
+    "seance": {
+      "name": "THE SÉANCE",
+      "goal": "Guide the planchette to the word together. One of you was paid to make it fail.",
+      "tips": [
+        "Whoever's paid up front sees the word too — sabotage has to look like an honest mistake.",
+        "Every hand pulls the same shared planchette. Nobody can see whose is pulling it wrong."
+      ]
+    },
+    "orbital": {
+      "name": "ORBITAL DODGEBALL",
+      "goal": "Dodgeball on three tiny planets. Every throw orbits forever and can still kill you.",
+      "tips": [
+        "A throw never truly leaves — it just keeps orbiting the cluster until physics or a body stops it.",
+        "Hop near the gap between two planets to jump to the next one."
+      ]
+    },
+    "echo": {
+      "name": "ECHO CHAMBER",
+      "goal": "Fight beside your own ghost — your past round replays and still earns you points when it lands a hit.",
+      "tips": [
+        "Every translucent fighter is somebody's own past round, replaying blow for blow — yours included.",
+        "Hold STRIKE to charge a heavy swing; hold DASH to parry and riposte."
+      ]
+    },
+    "deadweight": {
+      "name": "DEAD WEIGHT",
+      "goal": "Sumo brawl in the attic. Shove rivals off — the fallen return as furniture-hurling ghosts.",
+      "tips": [
+        "Shove rivals over the edge; a HOP dodges a shove and repositions.",
+        "Fall off and you possess the furniture — hurl it at the living.",
+        "Last body standing takes the round."
+      ]
+    },
+    "greed": {
+      "name": "GREED INC.",
+      "goal": "The pot fills forever. Bank it at your chute — but carrying makes you a slow, glowing target.",
+      "tips": [
+        "Carry the pot to YOUR chute and hold to bank the coins as points.",
+        "The longer you hold it, the more it leaks — and the bigger a target you are.",
+        "Tackle a carrier to knock the pot loose, then scoop the spill."
+      ]
+    },
+    "throne": {
+      "name": "THE THRONE",
+      "goal": "Whoever SITS scores every second but can't move. Gang up, drain their GRIP, fling them off.",
+      "tips": [
+        "On the throne: DECREE blasts the room and SUMMON a guard — but you're rooted.",
+        "Off the throne: dash in, shove the king off, and take the seat.",
+        "Longest total reign wins, not whoever sits last."
+      ]
+    },
+    "lastwill": {
+      "name": "LAST WILL",
+      "goal": "A funeral race where DYING IS A POWER. Three lives each — first body to the crypt inherits.",
+      "tips": [
+        "Spend a life as a curse or a boulder to wreck the leaders, then respawn ahead.",
+        "HOP the traps: pendulums, spinners, and the gust gates.",
+        "First through the crypt door takes the estate."
+      ]
+    },
+    "understudy": {
+      "name": "THE UNDERSTUDY",
+      "goal": "Three know tonight's PLAY. One is faking. Spot the Understudy — or bluff through as one.",
+      "tips": [
+        "On your cue, act out a beat of the play — vague enough to hide if you're faking.",
+        "Watch who over- or under-commits; the Understudy is only guessing.",
+        "Aim with the stick, lock your vote in with A."
+      ]
+    },
+    "widowsgaze": {
+      "name": "THE WIDOW'S GAZE",
+      "goal": "Rob the wake while she weeps. FREEZE when she turns — or be taken.",
+      "tips": [
+        "Hold A by a relic to lift it, carry it home, press A at your chest to bank.",
+        "SHOVE a rival as the sting rises and the Widow does your murder for you.",
+        "Once she grows suspicious, a FALLING third note is a fake-out — hold."
+      ]
+    },
+    "pallbearers": {
+      "name": "PALLBEARERS",
+      "goal": "Carry the pall to the crypt first. You share one coffin — steer together or drop the dead.",
+      "tips": [
+        "The coffin moves on the BLEND of both sticks. Pull the same way to sprint.",
+        "Both hop on the same beat to HEAVE over mud. Hop alone and you jostle the dead.",
+        "Drop on the downhill and the coffin bolts for the crypt without you. Chase it."
+      ]
+    }
+  },
+
+  "results": {
+    "default_title": "FINAL DISPOSITION",
+    "win_title": "{name} INHERITS"
+  },
+
+  "settings": {
+    "hint": "Changes apply to the next game launched (estate phases apply live).\nGamepads must press a button once to be detected by the OS."
+  },
+
+  "saga": {
+    "grudge": {
+      "sub": "Before the night opens, the estate reviews the accounts still standing.",
+      "reign_streak_1": "The estate has answered to %s %s running.",
+      "reign_streak_2": "%s goes for the %s tonight. The estate keeps a chisel warm, on principle.",
+      "reign_single": "The estate answers, for now, to %s, with %s to their name.",
+      "leader": "%s holds more nights than anyone, and holds them without apology.",
+      "winless": "%s remains, in the estate's assessment, persistent.",
+      "reprisal": "A reprisal stands on the books: %s came for %s. The estate has left the matter open.",
+      "sig": "— The Executor"
+    },
+    "audit": {
+      "tenure": "Tenure: %s kept, and counted.",
+      "monuments_some": "Monuments raised: %d. The lawn is spoken for.",
+      "monuments_none": "Monuments raised: none. The estate found the restraint suspicious.",
+      "grudges_some": "Grudges settled: %s. The estate keeps the remainder open.",
+      "grudges_none": "Grudges settled: none. The estate keeps every one of them open.",
+      "kindness": "Kindnesses recorded: none. The estate had budgeted for this.",
+      "heir": "The manor, and its debts, pass to %s.",
+      "rank": "The account ranks in the %s percentile of grievers. The estate rates it, in candour, actionable."
+    },
+    "receipt": {
+      "header": "FUNERAL PROCESSED.",
+      "goodwill": "Goodwill recognised: +1, provisional.",
+      "kindness": "Kindness logged to the liability column, pending audit.",
+      "remains": "Remains: reallocated."
+    }
+  },
+
+  "estate": {
+    "walkabout": {
+      "stroll_banner": "walk to a landmark  ·  A enter  ·  B desk",
+      "near": "%s — A: enter %s  ·  B: desk",
+      "idle": "WALK THE GROUNDS — approach a landmark, A to enter, B back to the desk",
+      "freeroam_header": "THE ESTATE RESTS — night %d awaits",
+      "freeroam_hint": "Walk the grounds (B closes this desk) · visit the wardrobe or theater · seed a trap tile · continue when ready",
+      "tile_prompt": "%s — CLICK THE LAWN TO SEED YOUR TRAP TILE"
+    },
+    "title": {
+      "tagline": "a party nobody asked for",
+      "footer": "PLAY = tonight's rite — THE PROCESSION board, or classic auctioned minigame nights"
+    },
+    "play": {
+      "header": "PLAY — how does the estate settle its debts tonight?",
+      "procession_desc": "The funeral board: pawns putt the loop, the Codicil pays out Deeds, and the first to the goal inherits the manor.",
+      "classic_desc": "Auctioned minigames, night after night, until someone climbs the trail and takes the manor."
+    },
+    "slot": {
+      "header": "THE THREE ESTATES — pick where tonight happens",
+      "empty": "an empty deed",
+      "wipe_warning": "Wiping a slot erases that estate's monuments, ledger, and wardrobe. The Executor will pretend not to notice."
+    },
+    "lobby": {
+      "header": "who's on the couch?",
+      "controls": "PAD A or KEYBOARD Space/Enter takes an open seat  ·  A again = READY  ·  KB+MOUSE joins by button (its A is the mouse)  ·  ESC = players & controls"
+    },
+    "auction": {
+      "header": "THE AUCTION — bid grudge; the estate takes nothing else",
+      "on_block": "on the block:  ",
+      "no_bids": "no bids — cheapest seat chooses",
+      "vendetta": "“An unsettled matter: %s hunted %s last night. The estate has opened a book on the reprisal (+3♠).”  — The Executor",
+      "quips": [
+        "The Executor opens the bidding. Spite is legal tender.",
+        "The Executor reminds the room that generosity is not on the block.",
+        "The Executor accepts grudge, resentment, and exact change.",
+        "The Executor calls the lot. The reserve price is a grudge, and it always clears.",
+        "The Executor notes, for the record, that the estate sells the evening and never gives it.",
+        "The Executor opens the book. Bids are entered in spite and paid in kind."
+      ]
+    },
+    "greeting": {
+      "empty": "The Executor is pleased to receive you. The estate had been expecting someone; it was not, in candour, you.",
+      "no_awards": "Welcome back. The estate kept the lights on and the grudges filed.",
+      "seagull": "The first guest left a note about the seagull. The estate declines to repeat it, but agrees it was beautiful.",
+      "pool": [
+        "Welcome back. We remembered %s as %s, and see no reason to revise.",
+        "The ledger has %s down as %s. The ledger is seldom wrong twice.",
+        "%s returns. Last night they were %s. The estate expects consistency.",
+        "Do come in. %s will find their reputation as %s exactly where they left it."
+      ]
+    },
+    "album": {
+      "empty": "The estate has taken no portraits yet. Give it a night; it is patient, and it is watching.",
+      "some": "%s hang in the salon. The estate remembers every face it has framed, and forgives none of them."
+    },
+    "will": {
+      "header": "The estate has reviewed the evening's conduct and finds it, on the whole, actionable.\n%s wins the night.",
+      "vendetta_open": "The matter of %s and %s remains open. The estate is patient.",
+      "night_win_banner": "%s WINS THE NIGHT\nthe estate will remember"
+    },
+    "heir": {
+      "reaches_banner": "%s REACHES THE MANOR",
+      "manor_banner": "%s TAKES THE MANOR\nthe estate has an heir",
+      "reading": "%s took the manor after %d nights.\n“The keys, the grounds, the grudges — all of it passes to %s.\nThe estate offers its condolences to everyone else.”  — The Executor"
+    },
+    "audit": {
+      "subtitle": "The manor has changed hands. The estate closes its books in full."
+    },
+    "client": {
+      "will_foot": "the host turns the page — the parade follows",
+      "heir_foot": "the run is over — the host decides what the estate does with the rest of the evening"
+    }
+  },
+
+  "procession": {
+    "epitaphs": [
+      "BRIEFLY MOURNED",
+      "SURVIVED BY NO ONE",
+      "PENDING PROBATE",
+      "FILED UNDER LOSS",
+      "DIED IN ARREARS",
+      "NOT NAMED IN THE WILL",
+      "LATE, AND UNLAMENTED",
+      "SETTLED IN FULL",
+      "OF NO FIXED ESTATE",
+      "NO KNOWN HEIRS",
+      "REMAINDERED",
+      "HERE, UNDER PROTEST"
+    ],
+    "interim_lines": [
+      "A provisional accounting, read aloud so no one may later claim surprise.",
+      "The estate pauses over the running clauses. Nothing here is final, and nothing here is forgiven.",
+      "An interim reckoning. The leaders are noted, in pencil, and watched.",
+      "The estate reads the standing so far. It has read worse, to worse people."
+    ],
+    "clauses": {
+      "longest_title": "THE LONGEST PROCESSION",
+      "longest_desc": "walked the most stones tonight",
+      "betrayed_title": "THE MOST BETRAYED",
+      "betrayed_desc": "bled the most Grudge to graves and tolls",
+      "bloody_title": "THE BLOODIEST HAND",
+      "bloody_desc": "won the most on the board — vendettas and claims",
+      "card_header": "TONIGHT'S WILL CLAUSES",
+      "line": "◆ %s — +1 Deed to whoever %s"
+    },
+    "narration": {
+      "pin": "%s spends a MOURNING PIN (+1 space)",
+      "ribbon": "%s is dragged by a BLACK RIBBON (−1 space)",
+      "grave_salt": "%s salts the grave — the loss is cancelled.",
+      "seance_stir": "The planchette stirs for %s. The circle turns…",
+      "vendetta_alone": "%s reaches the vendetta stone alone. No blood today.",
+      "vendetta_wash": "%s and %s stake %d each — a wash. The estate is disappointed."
+    },
+    "interim": {
+      "header": "THE INTERIM READING",
+      "trailer": "Provisional. The estate reserves the right to change its mind.",
+      "line": "◆ %s — %s leads, %s",
+      "contested": "◆ %s — still contested. No one leads.",
+      "metric_stones": "%d stones walked",
+      "metric_bled": "%d♠ bled",
+      "metric_board": "%d taken on the board"
+    },
+    "reckoning": {
+      "header": "THE RECKONING",
+      "line": "%s  #%d  +%d♠"
+    },
+    "will_reading": {
+      "header": "THE READING OF THE WILL",
+      "line": "%s — %s (%s)  +1 Deed → ◆%d",
+      "unclaimed": "%s — unclaimed. The estate keeps the Deed."
+    },
+    "house_awakens": {
+      "header": "THE HOUSE AWAKENS",
+      "safe": "Everyone reaches a safe stone. The house sulks.",
+      "slip_suffix": " slip back two stones."
+    },
+    "heir": {
+      "crown": "%s IS CROWNED HEIR\n◆%d DEEDS",
+      "monument": "%s — HEIR OF THE PROCESSION (◆%d)",
+      "graffiti": "%s inherited the manor at the procession"
+    },
+    "epitaph_graffiti": "%s had the last word over %s: “%s”. The estate filed it."
+  }
+}
