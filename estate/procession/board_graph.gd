@@ -504,8 +504,9 @@ func route_mid_pos(tag: String) -> Vector3:
 	return space_pos(start + int(ri.get("half_a", 1)) / 2)
 
 ## Options at a fork, for the crossroads prompt + bot strategy:
-## [{node, route, label, color, blurb, left}] — left = stones to the gate
-## stepping onto that branch.
+## [{node, route, label, color, blurb, left}] — left = stones to the gate if
+## you STAY on that road (switching again at the next fork is your business;
+## the signpost quotes each road's own length, so personalities read true).
 func branch_options(fork_id: int) -> Array:
 	var out: Array = []
 	for nx in next_of(fork_id):
@@ -513,8 +514,27 @@ func branch_options(fork_id: int) -> Array:
 		var ri := route_info(tag)
 		out.append({"node": int(nx), "route": tag, "label": String(ri.label),
 			"color": ri.color, "blurb": String(ri.get("blurb", "")),
-			"left": dist_to_gate(int(nx)) + 1})
+			"left": _stay_route_dist(int(nx), tag)})
 	return out
+
+## Stones to the gate from `node` (inclusive of stepping onto it), keeping to
+## route `tag` at any later fork. Pure graph walk — no rng.
+func _stay_route_dist(node: int, tag: String) -> int:
+	var steps := 1          # stepping onto `node` is the first stone
+	var cur := node
+	var guard := nodes.size() + 4
+	while guard > 0 and not next_of(cur).is_empty():
+		guard -= 1
+		var nxt := next_of(cur)
+		var step := int(nxt[0])
+		if nxt.size() > 1:
+			for nx in nxt:
+				if route_of(int(nx)) == tag:
+					step = int(nx)
+					break
+		cur = step
+		steps += 1
+	return steps
 
 ## The first node of a given type (capture hero shots).
 func first_of_type(type: String) -> int:

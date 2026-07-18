@@ -103,7 +103,9 @@ func _draw() -> void:
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(0.72, 0.76, 0.9))
 	var gate: Vector2 = _px[_board.gate_id()]
 	draw_circle(gate, 5.4, Color(0.96, 0.82, 0.32))
-	draw_string(_font, Vector2(gate.x - 18.0, gate.y - 9.0), "GATE",
+	# Label sits RIGHT of the gate dot — the dot rides the panel's top edge,
+	# where a label above it collided with the THE DRIVE title strip.
+	draw_string(_font, Vector2(gate.x + 9.0, gate.y + 5.0), "GATE",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 13, Color(0.96, 0.86, 0.5))
 	# The mourners — player-colour disc + badge glyph, fanned by seat so pawns
 	# sharing a stone stay distinct.
