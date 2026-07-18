@@ -1,27 +1,36 @@
 extends Node3D
-## THE PROCESSION — ILL WILL's flagship board night (doc 18 build spec, doc 13
-## Approach A). One complete wake per session: putt your pawn round the manor
-## drive, buy Deeds at the roving Codicil, inherit when the night's Deed goal
-## hits. The wedge (doc 13 §A5): PARALLELISE the roll+move (no downtime),
-## SERIALISE the reveal (the shared schadenfreude beat).
+## THE PROCESSION — ILL WILL's board night, rebuilt on the doc-28 graph board.
+## One wake per session: putt your pawn from the LYCHGATE to the MANOR GATE
+## through three route personalities (GARDEN ROW / HOLLOW WOODS / WEEPING
+## VALLEY) joined by two CROSSROADS. The first pawn through the gate rings
+## THE FINAL BELL — everyone else gets exactly one more turn, then the night
+## is scored by arrival order, then remaining distance. The wedge survives:
+## PARALLELISE the roll+move, SERIALISE the reveal.
 ##
-## Self-boots from the CLI via procession_boot.gd (--procession), OR is handed a
-## roster by estate.gd at merge via begin(config) — see doc 19 for the snippet.
-## Deterministic: every stochastic choice draws from `rng`, seeded by --seed, so
-## the same seed twice yields an identical tally (the verification receipt).
+## Self-boots from the CLI via procession_boot.gd (--procession), OR is handed
+## a roster by estate.gd at merge via begin(config). Deterministic under four
+## NAMED rng streams (Codex correction #2, night 7):
+##   LAYOUT — board topology; seeded from board DATA, never the night seed
+##            (board_graph.gd), so --boardgraphtest is night-independent.
+##   ROLL   — _roll_rng: putt band deals, bot aim, bot crossroads choices.
+##   EVENT  — _event_rng: séance slots, item draws, minigame pick/minisim,
+##            house-awakens draws, bot vendetta stakes.
+##   VOICE/DRAMA — _voice_rng/_drama_prng: Executor line picks + board-drama
+##            flourishes. Presentation only; can never shift the tally.
 ##
-## Online: _net_state()/_net_apply() ship the whole board as facts from day one;
-## the host simulates, mirrors render truth. Putt intents are seat-attributed
-## (pawn_putt.submit_remote_intent) — the thing Par-online still needs, solved
-## here in new code.
+## The Codicil is RETIRED as a purchase stop (doc 28 §1); codicil.gd stays on
+## disk, unwired. The ring (board_path.gd) is retired the same way. This
+## deliberately kills the frozen seed-7 ring receipt — sanctioned, doc 28 §13.
+##
+## Online: _net_state()/_net_apply() ship the whole board as facts; the host
+## simulates, mirrors render truth.
 
-const BoardPath := preload("res://estate/procession/board_path.gd")
+const BoardGraph := preload("res://estate/procession/board_graph.gd")
 const PawnPutt := preload("res://estate/procession/pawn_putt.gd")
-const Codicil := preload("res://estate/procession/codicil.gd")
 const Executor := preload("res://estate/procession/executor_host.gd")
 const Spaces := preload("res://estate/procession/board_spaces.gd")
-const Presets := preload("res://estate/procession/presets.gd")
 const BoardCamera := preload("res://estate/procession/board_camera.gd")
+const RoadPrompt := preload("res://estate/procession/crossroads_prompt.gd")
 const BoardFx := preload("res://estate/procession/board_fx.gd")
 const SeanceWheelScene := preload("res://estate/procession/seance_wheel.gd")
 const MinigameRouletteScene := preload("res://estate/procession/minigame_roulette.gd")
@@ -70,44 +79,48 @@ const MODULE_SCENES := {
 signal night_over(tally: Dictionary)
 
 # ---- night state (the tally reads out of these) ----
-var rng := RandomNumberGenerator.new()
 var seed_value := 0
 var roster: Array = []
 var grudge: Array[int] = []
-var deeds: Array[int] = []
-var positions: Array[int] = []
+var deeds: Array[int] = []          # will-clause trophies only (Codicil retired)
+var positions: Array[int] = []      # per seat: current GRAPH NODE id
 var moved_total: Array[int] = []
+var trail: Array = []               # per seat: Array[int] walked node history (slip-backs)
+var arrived: Array = []             # per seat: bool — through the Manor Gate (home, untouchable)
+var arrival_order: Array = []       # seats in gate-crossing order
+var bell_round := -1                # round THE FINAL BELL rang (-1 = still open)
+var turn_cap := 12                  # doc 28 §8 rule 4 — distance ranking backstop
 var items: Array = []               # per seat: {pin,ribbon,salt} counts
 var stats: Array = []               # per seat: will-clause stat dict
 var round_num := 0
-var deed_goal := 4
-var movement_goal := 0
-var decision_layer := true
-var preset_id := "short"
 var winner := -1
 var _started := false
 var _autoplay := false
 var _fast := false
 var _minisim := true
 var _mirror := false
-var _preset_explicit := false
 var _capture := false            # windowed: pose beats + snap for screenshots
 var _vendettatest := false       # dev flag: force the board-drama presentation with bot data (screenshots)
 var _longnames := false          # dev flag (W9): worst-case long names to stress the text surfaces
-var _drama_prng := RandomNumberGenerator.new()   # PRESENTATION stream: interim lines + epitaph pick, never the sim rng
+var _graphtest := false          # --boardgraphtest: print the topology receipt and quit
+# ---- the NAMED rng streams (header doctrine; LAYOUT lives in board_graph) ----
+var _roll_rng := RandomNumberGenerator.new()     # ROLL: band deals, bot aim, bot road picks
+var _event_rng := RandomNumberGenerator.new()    # EVENT: séance, items, minigame pick, house
+var _voice_rng := RandomNumberGenerator.new()    # VOICE: Executor line picks (presentation)
+var _drama_prng := RandomNumberGenerator.new()   # DRAMA: interim lines + epitaph pick (presentation)
 var _epitaphs: Array = []        # per seat: epitaph String a duel winner hung ("" = none)
 var _epitaph_tags := {}          # seat -> Label3D (the persistent gravestone tag riding the pawn)
 var _stakes_ui: VendettaStakes = null   # sealed-stakes overlay (lazy; windowed only)
 var _phase := "boot"
-var _round_codicil_seat := -1   # who claims the Codicil this round (pass-or-land)
 var _preview_active := false    # F29: live putt target reticles during the roll
 var _react_last: Array[int] = []   # F24: per-seat last-reaction wall-clock (cooldown)
 var _reacted_demo := false         # F24: capture fires the reaction demo once
+var _prompt_demoed := false        # capture poses the crossroads prompt once (screenshot b)
+var _arrived_this_round: Array = []   # seats whose walk crossed the gate THIS round
 
 # ---- nodes ---- (concrete types so method returns infer without annotation)
-var board: ProcessionBoardPath
+var board: ProcessionBoardGraph
 var putt: ProcessionPawnPutt
-var codicil: ProcessionCodicil
 var executor: ProcessionExecutor
 var cam: Camera3D
 var board_camera: ProcessionCamera    # F1: the named-shot camera director
@@ -128,9 +141,9 @@ var _minimap: Minimap                   # F-mini: corner board inset (place read
 var _announce: Label
 var _announce_scrim: Control            # dark band behind the centre ceremony cards
 var _round_lbl: Label
-var _codicil_lbl: Label
+var _objective_lbl: Label               # top-right: the gate / FINAL BELL state
 var _chips: Array = []               # per seat: {badge, grudge_lbl, deeds_lbl}
-var _cam_home := Vector3(-3.4, 23.5, 23.0)   # 3/4 overview; matches board_camera._home_pos
+var _cam_home: Vector3 = BoardGraph.OVERVIEW_POS   # 3/4 overview; lock-step with board_camera
 
 # Lower-third geometry (anchored bottom-centre; slides up on show). The band's
 # BOTTOM edge is pinned; its TOP grows upward to fit long copy (the eulogy and the
@@ -162,15 +175,16 @@ func _ready() -> void:
 
 ## F29: while the roll is live, paint each charging seat's projected landing stone
 ## with a seat-coloured reticle + rule tooltip, so steering at a space is a real
-## decision. Presentation only; inert under the fast soak and outside the roll.
+## decision. Forks in the preview walk follow the seat's PREFERRED road (the
+## same no-rng strategy read the bots use), so the reticle is honest about the
+## likeliest destination without consuming any stream. Presentation only.
 func _process(_delta: float) -> void:
 	if _fast or not _preview_active or putt == null or board == null:
 		return
 	for i in roster.size():
 		var sp := putt.preview_spaces(i)
-		if sp > 0:
-			var dest := posmod(positions[i] + sp, BoardPath.SPACES)
-			board.set_putt_preview(i, dest, roster[i].color)
+		if sp > 0 and not bool(arrived[i]):
+			board.set_putt_preview(i, _preview_dest(i, sp), roster[i].color)
 		else:
 			board.clear_putt_preview(i)
 
@@ -193,6 +207,12 @@ func _autostart() -> void:
 # --------------------------------------------------------------------------
 func _boot(config: Dictionary) -> void:
 	_parse_cli()
+	# --boardgraphtest: print the topology receipt (pure data, no world) and quit.
+	if _graphtest:
+		for line in BoardGraph.topology_receipt():
+			print(line)
+		get_tree().quit()
+		return
 	# The board-drama probe forces the presentation path (interim reading + sealed
 	# stake meters) with bot data, at full ceremony length, so a windowed capture
 	# can screenshot beats an all-bot soak skips by design. Never on the receipt.
@@ -202,21 +222,15 @@ func _boot(config: Dictionary) -> void:
 	_capture = _autoplay and DisplayServer.get_name() != "headless"
 	if config.has("seed"):
 		seed_value = int(config.seed)
-	if config.has("deed_goal"):
-		deed_goal = int(config.deed_goal)
-	if config.has("preset"):
-		preset_id = String(config.preset)
-		_preset_explicit = true
-	rng.seed = seed_value
-	# A presentation stream of our own for the board-drama flourishes — distinct
-	# from the sim rng AND the executor's, so no flourish shifts the receipt.
+	if config.has("turn_cap"):
+		turn_cap = clampi(int(config.turn_cap), 4, 40)
+	# Seed the NAMED streams (header doctrine). Distinct affine salts per stream
+	# so no draw in one can ever shift another; presentation streams can never
+	# shift the tally at all.
+	_roll_rng.seed = seed_value * 1103515245 + 12345
+	_event_rng.seed = seed_value * 22695477 + 1
+	_voice_rng.seed = seed_value * 134775813 + 5
 	_drama_prng.seed = seed_value * 2246822519 + 3266489917
-	var preset := Presets.get_preset(preset_id) if _preset_explicit \
-		else Presets.from_goal(deed_goal)
-	decision_layer = bool(preset.get("decision_layer", true))
-	movement_goal = int(preset.get("movement_goal", 0))
-	if _preset_explicit and decision_layer:
-		deed_goal = maxi(1, int(preset.get("deed_goal", deed_goal)))
 	roster = config.get("roster", []) if config.has("roster") else _default_roster()
 	if _longnames:
 		_apply_longnames()   # W9: stress the text surfaces with worst-case names
@@ -229,19 +243,23 @@ func _boot(config: Dictionary) -> void:
 	# byte-identical. Interactive/windowed play runs at 1.0.
 	if _autoplay and _fast:
 		Engine.time_scale = 8.0
-	print("PROCESSION boot seed=%d preset=%s deed_goal=%d players=%d autoplay=%s minisim=%s" % [
-		seed_value, preset_id, deed_goal, roster.size(), str(_autoplay), str(_minisim)])
+	print("PROCESSION boot seed=%d board=%s turn_cap=%d players=%d autoplay=%s minisim=%s" % [
+		seed_value, String(BoardGraph.BOARD.id), turn_cap, roster.size(),
+		str(_autoplay), str(_minisim)])
 	_run_night()
 
 func _parse_cli() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--seed="):
 			seed_value = int(arg.trim_prefix("--seed="))
-		elif arg.begins_with("--deedgoal="):
-			deed_goal = clampi(int(arg.trim_prefix("--deedgoal=")), 1, 12)
-		elif arg.begins_with("--preset="):
-			preset_id = arg.trim_prefix("--preset=")
-			_preset_explicit = true
+		elif arg.begins_with("--turncap="):
+			turn_cap = clampi(int(arg.trim_prefix("--turncap=")), 4, 40)
+		elif arg.begins_with("--deedgoal=") or arg.begins_with("--preset="):
+			# Ring-era dials, retired with the Codicil (doc 28). Accepted so old
+			# command lines don't crash; they change nothing.
+			print("PROCESSION note: %s is retired on the graph board (use --turncap=N)" % arg.split("=")[0])
+		elif arg == "--boardgraphtest":
+			_graphtest = true     # topology receipt: nodes/edges/routes/ratios/reach
 		elif arg.begins_with("--autoplay="):
 			_autoplay = true
 			_fast = true
@@ -287,14 +305,19 @@ func _init_arrays() -> void:
 	for i in n:
 		_react_last[i] = -100000
 	items.clear(); stats.clear()
+	trail.clear(); arrived.clear(); arrival_order.clear()
+	_arrived_this_round.clear()
+	bell_round = -1
 	_epitaphs.clear()
 	_epitaphs.resize(n)
 	for i in n:
 		_epitaphs[i] = ""
 		grudge[i] = EstateState.STARTING_GRUDGE + 3   # a small float so turn 1 has stakes
 		deeds[i] = 0
-		positions[i] = 0
+		positions[i] = 0                # node 0 = THE LYCHGATE
 		moved_total[i] = 0
+		trail.append([0])               # walked history (slip-backs retrace it)
+		arrived.append(false)
 		items.append({"pin": 0, "ribbon": 0, "salt": 0})
 		stats.append({"moved": 0, "graves": 0, "lost": 0, "duels": 0,
 			"shrines": 0, "deeds_bought": 0, "spent": 0})
@@ -316,15 +339,11 @@ func _build_world() -> void:
 		"glow_intensity": 0.85,
 	})
 
-	board = BoardPath.new()
+	board = BoardGraph.new()
 	add_child(board)
 	# The soak ignores the persistent monument set so the receipt is independent
 	# of whatever the user's save happens to hold; real play reads the estate.
 	board.build(roster, [] if _autoplay else EstateState.monuments)
-
-	codicil = Codicil.new()
-	add_child(codicil)
-	codicil.set_space(board.beacon_index)
 
 	cam = Camera3D.new()
 	cam.fov = 52.0
@@ -371,8 +390,8 @@ func _build_hud() -> void:
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(spacer)
-	_codicil_lbl = _chip_label("CODICIL @ —", 30, Color(1, 0.88, 0.4))
-	top.add_child(_codicil_lbl)
+	_objective_lbl = _chip_label("LYCHGATE → MANOR GATE", 30, Color(1, 0.88, 0.4))
+	top.add_child(_objective_lbl)
 
 	var chiprow := HBoxContainer.new()
 	chiprow.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
@@ -591,13 +610,19 @@ func _chip_label(text: String, size: int, color: Color) -> Label:
 
 func _refresh_hud() -> void:
 	if _round_lbl:
-		_round_lbl.text = "ROUND %d" % round_num
-	if _codicil_lbl:
-		_codicil_lbl.text = "CODICIL ◆ @ SPACE %d  (%d♠+%d/deed)" % [
-			board.beacon_index, codicil.BASE_COST, codicil.COST_PER_DEED]
+		_round_lbl.text = "ROUND %d / %d" % [round_num, turn_cap]
+	if _objective_lbl:
+		if bell_round >= 0:
+			_objective_lbl.text = "☠ THE BELL HAS RUNG — LAST TURN"
+		else:
+			_objective_lbl.text = "LYCHGATE → MANOR GATE"
 	for i in _chips.size():
-		var extra := "  ×%d" % moved_total[i] if not decision_layer else ""
-		_chips[i].grudge.text = "%d♠  ◆%d%s" % [grudge[i], deeds[i], extra]
+		if bool(arrived[i]):
+			_chips[i].grudge.text = "%d♠  ◆%d  HOME #%d" % [
+				grudge[i], deeds[i], arrival_order.find(i) + 1]
+		else:
+			_chips[i].grudge.text = "%d♠  ◆%d  %d⚑" % [
+				grudge[i], deeds[i], board.dist_to_gate(positions[i]) if board else 0]
 	_sync_minimap()
 
 ## Show THE DRIVE inset only during MOVE/REVEAL (place legibility while the camera
@@ -610,7 +635,7 @@ func _sync_minimap() -> void:
 	var show := (_phase == "move" or _phase == "reveal") and (board == null or board.visible)
 	_minimap.visible = show
 	if show:
-		_minimap.set_state(positions, board.beacon_index if board else 0)
+		_minimap.set_state(positions)
 
 func _announce_text(text: String, color := Color(0.95, 0.95, 1.0), hold := 2.0) -> void:
 	if _announce == null:
@@ -763,16 +788,18 @@ func _run_night() -> void:
 		await _round()
 		if _check_win():
 			break
-		if round_num % 2 == 0:
+		# Once THE FINAL BELL has rung the night is closing — the stragglers get
+		# their one roll and nothing else. Blocks only fire on an open road.
+		if bell_round < 0 and round_num % 2 == 0:
 			await _minigame_block()
-			if _check_win():
-				break
-		if round_num % 3 == 0:
+		if bell_round < 0 and round_num % 3 == 0:
 			await _house_awakens()
-			if _check_win():
-				break
-		if round_num >= 60:
-			break   # safety cap — a night must always end
+		if round_num >= turn_cap:
+			if not _fast:
+				_announce_text(Dialog.text("procession.bell.closing"), Color(1, 0.6, 0.4))
+				await _beat(2.0)
+				_hide_announce()
+			break   # doc 28 §8 rule 4: the cap ends it; distance ranks the rest
 	await _will_reading()
 	await ProcessionEulogy.deliver(self, executor)   # B2-HOOK: procedural closing eulogy (F33)
 	await _heir_crowned()
@@ -783,11 +810,11 @@ func _intro() -> void:
 	# --- Establishing flyover: a wide raked view of the whole drive, greeting
 	# in the executor banner, no clause text yet (they don't overlap). ---
 	_reveal_seat = -1
-	executor.say(Executor.pick(Executor.GREETING, rng), Color(0.9, 0.88, 0.98))
-	# --- Establishing shot at the gate, then a cinematic flyover: a tour of the
-	# drive, the manor gate + hearse, and the roving Codicil — the opening of a
-	# Mario-Party board, re-staged around the new gothic dressing. The director
-	# owns the shot spine now (F1); any player tap skips the tour (F1 skip). ---
+	executor.say(Executor.pick(Executor.GREETING, _voice_rng), Color(0.9, 0.88, 0.98))
+	# --- Establishing shot at the lychgate, then a cinematic flyover: a tour of
+	# the three roads and the Manor Gate — the opening of a Mario-Party board,
+	# re-staged around the branching grounds. The director owns the shot spine
+	# (F1); any player tap skips the tour (F1 skip). ---
 	board_camera.establish()
 	if not _fast:
 		await board_camera.flyover(_flyover_skip)
@@ -835,15 +862,14 @@ func _flyover_skip() -> bool:
 ## runs headless (gated by _capture) so it can't perturb the receipt.
 func _capture_showcase() -> void:
 	executor.clear_banner()   # hero shots stand clean, no greeting banner
-	# A clean, head-on elevated hero of the whole dressed drive (nothing blocks
-	# centre; the Codicil glow anchors the far arc).
-	cam.global_position = Vector3(0.0, 17.5, 28.0)
-	cam.look_at(board.CENTER + Vector3(0, 1.4, 0), Vector3.UP)
+	# A clean elevated hero of the WHOLE branching board — lychgate at the
+	# bottom of frame, the three route ribbons, the Manor Gate glowing at top.
+	cam.global_position = Vector3(0.0, 42.0, 44.0)
+	cam.look_at(board.CENTER + Vector3(0, 0.5, -2.0), Vector3.UP)
 	print("SHOWCASE board_wide cam=", cam.global_position)
 	await _cap_snap("board_wide")
-	# A weeping grave in close: a headstone with its lit pink rim, board dark
-	# behind. Index 16 -> grave_headstone_plain (a clean upright stone).
-	var gi := 16
+	# An open grave in close: a headstone with its lit rim, board dark behind.
+	var gi := board.first_of_type(Spaces.OPEN_GRAVE)
 	var gp := board.space_pos(gi)
 	var outward := gp - board.CENTER
 	outward.y = 0.0
@@ -873,20 +899,22 @@ func _round() -> void:
 		await _cap_snap("putt_meters")
 		putt.end_roll_visuals()
 	var targets := _bot_targets()
-	putt.begin_roll(targets, rng)
+	putt.begin_roll(targets, _roll_rng)
 	_preview_active = true   # F29: live target reticles follow each charging meter
 	if not _capture:
 		VerifyCapture.snap("putt_meters")
 	elif round_num == 2:
 		# Fire-and-forget so the delayed snap never sits between begin_roll and the
 		# all_released await (which would risk missing the signal). Round 2 spreads
-		# the pawns around the ring so the reticles land at distinct stones.
+		# the pawns down the roads so the reticles land at distinct stones.
 		_snap_putt_preview_later()
 	var results: Array = await putt.all_released
 	_preview_active = false
 	board.clear_all_putt_previews()
 	putt.end_roll_visuals()
-	# spaces per seat, adjusted by held items (announced when spent).
+	# spaces per seat, adjusted by held items (announced when spent). Pawns
+	# already HOME roll with the table (pawn_putt meters all seats) but their
+	# result is discarded — home pawns are beyond the reach of the road.
 	var moved: Array[int] = []
 	moved.resize(roster.size())
 	for i in roster.size():
@@ -895,28 +923,39 @@ func _round() -> void:
 		var seat := int(r.seat)
 		moved[seat] = int(r.spaces)
 	_apply_item_movement(moved)
-
-	# --- MOVE: every pawn travels at once; a low raking dolly TRAVELS along the
-	# drive (F2) so the procession reads as a procession, not a static overhead. ---
-	_phase = "move"
-	board_camera.move_travel(0.9)
-	# The Codicil is a moving target you REACH: the first pawn (by seat) whose
-	# hop passes OR lands on the beacon this round, and can afford it, claims it.
-	# Resolved as that seat's REVEAL beat; relocation happens on the claim.
-	_round_codicil_seat = -1
 	for i in roster.size():
-		if _path_crosses(positions[i], moved[i], board.beacon_index) \
-				and grudge[i] >= codicil.price_for(deeds[i]):
-			_round_codicil_seat = i
-			break
+		if bool(arrived[i]):
+			moved[i] = 0
+
+	# --- WALK RESOLUTION: node-to-node along each seat's road. A walk that
+	# reaches a CROSSROADS picks a branch — humans via the A/B/C prompt, bots
+	# by strategy (leader → safe, trailers → gamble; ROLL stream). Seat order,
+	# so the stream stays deterministic. Excess movement past the gate is
+	# forfeited (the manor does not do refunds). ---
+	_phase = "move"
+	_arrived_this_round.clear()
+	var paths: Array = []
+	for i in roster.size():
+		var path: Array = await _resolve_walk(i, moved[i])
+		paths.append(path)
+		moved[i] = path.size()   # the true stones walked (gate clamps)
+	# --- MOVE: every pawn travels at once; the low raking dolly TRAVELS (F2). ---
+	board_camera.move_travel(0.9)
 	var tweens: Array = []
 	for i in roster.size():
-		_pay_passthrough_tolls(i, positions[i], moved[i])
-		var tw: Tween = board.advance_pawn(i, positions[i], moved[i])
+		if (paths[i] as Array).is_empty():
+			continue
+		_pay_passthrough_tolls(i, paths[i] as Array)
+		var tw: Tween = board.advance_pawn_path(i, paths[i] as Array)
 		tweens.append(tw)
-		positions[i] = posmod(positions[i] + moved[i], BoardPath.SPACES)
+		positions[i] = int((paths[i] as Array).back())
+		(trail[i] as Array).append_array(paths[i] as Array)
 		moved_total[i] += moved[i]
 		stats[i].moved += moved[i]
+		if board.type_at(positions[i]) == Spaces.GATE and not bool(arrived[i]):
+			arrived[i] = true
+			arrival_order.append(i)
+			_arrived_this_round.append(i)
 	_sync_minimap()   # THE DRIVE inset lights up for the travel + reveal
 	if not _fast:
 		for tw in tweens:
@@ -925,20 +964,148 @@ func _round() -> void:
 	else:
 		for i in roster.size():
 			board.seat_pawn(i, positions[i])
+	if _capture and round_num == 1:
+		await _cap_snap("drive_minimap")   # THE DRIVE ribbons, first travel beat
 	_push_net()
 
-	# --- REVEAL: staggered Executor cascade, one landing at a time. ---
+	# --- THE FINAL BELL: the first crossing this night rings it. ---
+	if bell_round < 0 and not _arrived_this_round.is_empty():
+		bell_round = round_num
+		var ringer := int(_arrived_this_round[0])
+		if final_kit:
+			final_kit.escalate()
+		Sfx.play("match_win", -4.0)
+		MomentScribe.capture("final_bell", "%s RINGS THE FINAL BELL" % roster[ringer].name,
+			3, [ringer], "procession")
+		if not _fast:
+			board_camera.landing_push(board.reveal_shot(board.gate_id(), Spaces.GATE))
+			_announce_text(Dialog.text("procession.bell.header") + "\n\n"
+				+ Dialog.text("procession.bell.rung") % roster[ringer].name,
+				Color(1, 0.85, 0.4))
+			if _capture:
+				await _cap_snap("final_bell")
+			await _beat(2.6)
+			_hide_announce()
+
+	# --- REVEAL: staggered Executor cascade, one landing at a time. Seats that
+	# did not walk (home already) have no landing to reveal. ---
 	_phase = "reveal"
 	var order := _reveal_order(moved)
 	for seat in order:
-		await _reveal_landing(seat)
+		if moved[seat] > 0:
+			await _reveal_landing(seat)
 	executor.clear_banner()
 	executor.settle_body()   # B2-HOOK: host eases home after the cascade (F7)
 	board_camera.whole_board(0.5)   # camera belongs to the director (F1-F3)
 	_refresh_hud()
 
-## Bots aim for the highest-value reachable stone (1..6), Codicil first if
-## affordable; a small seeded jitter keeps four bots from being identical.
+## Walk `steps` stones from the seat's node, resolving forks. Returns the node
+## path (may be shorter than steps: the gate ends every walk). Bot/soak fork
+## choices draw from the ROLL stream in seat order; humans draw nothing.
+func _resolve_walk(seat: int, steps: int) -> Array:
+	var path: Array = []
+	var cur := positions[seat]
+	for _k in steps:
+		var nxt := board.next_of(cur)
+		if nxt.is_empty():
+			break   # standing at the gate
+		var branch := 0
+		if nxt.size() > 1:
+			branch = await _choose_branch(seat, cur)
+		cur = int(nxt[branch])
+		path.append(cur)
+	return path
+
+## A fork decision. Bots (and the soak): leader keeps to GARDEN ROW, the last
+## seat gambles on WEEPING VALLEY, the middle takes HOLLOW WOODS — with a
+## seeded 25% wildcard so four bots never railroad. Humans get the A/B/C
+## prompt (no rng). Capture poses the prompt once with the bot's data.
+func _choose_branch(seat: int, fork_id: int) -> int:
+	var options: Array = board.branch_options(fork_id)
+	var is_human := not bool(roster[seat].bot) and not _is_remote_seat(seat)
+	if is_human and _drama_visible():
+		return await _prompt_branch(seat, options)
+	# bot strategy — ROLL stream, fixed draw shape (1 float + optional 1 int)
+	var pref := _route_pref(seat)
+	var pick := -1
+	if _roll_rng.randf() < 0.25:
+		pick = _roll_rng.randi_range(0, options.size() - 1)
+	else:
+		for k in options.size():
+			if String((options[k] as Dictionary).route) == pref:
+				pick = k
+				break
+		if pick < 0:
+			pick = 0
+	if _capture and not _prompt_demoed:
+		_prompt_demoed = true
+		await _demo_prompt(seat, options)
+	return pick
+
+## The seat's PREFERRED road by standing (no rng — shared by bot strategy,
+## the F29 preview walk, and the human prompt's default focus order).
+## Leader (fewest stones left) → garden (safe); last → valley (the gamble);
+## middle seats → hollow.
+func _route_pref(seat: int) -> String:
+	var better := 0
+	var worse := 0
+	for j in roster.size():
+		if j == seat or bool(arrived[j]):
+			continue
+		var dj := board.dist_to_gate(positions[j])
+		var di := board.dist_to_gate(positions[seat])
+		if dj < di or (dj == di and j < seat):
+			better += 1
+		else:
+			worse += 1
+	if better == 0:
+		return "garden"
+	if worse == 0:
+		return "valley"
+	return "hollow"
+
+## The human crossroads prompt: camera on the fork, the minimal A/B/C picker,
+## the table waits. Returns the branch index; draws nothing from any stream.
+func _prompt_branch(seat: int, options: Array) -> int:
+	board_camera.landing_push(board.reveal_shot(positions[seat], Spaces.CROSSROADS))
+	var prompt := RoadPrompt.new()
+	_ui.add_child(prompt)
+	prompt.open({"name": roster[seat].name, "color": roster[seat].color}, options)
+	var pick: int = await prompt.run()
+	prompt.queue_free()
+	return clampi(pick, 0, options.size() - 1)
+
+## Windowed capture only: pose the crossroads prompt with bot data long enough
+## for the verification screenshot, then tear it down. Never headless.
+func _demo_prompt(seat: int, options: Array) -> void:
+	var prompt := RoadPrompt.new()
+	_ui.add_child(prompt)
+	prompt.open({"name": roster[seat].name, "color": roster[seat].color}, options)
+	await _beat(0.7)
+	await _cap_snap("crossroads_prompt")
+	prompt.queue_free()
+
+## F29 preview destination: walk n stones taking the seat's preferred road at
+## any fork. Pure read — no rng, no await, no mutation.
+func _preview_dest(seat: int, n: int) -> int:
+	var cur := positions[seat]
+	var pref := _route_pref(seat)
+	for _k in n:
+		var nxt := board.next_of(cur)
+		if nxt.is_empty():
+			break
+		var step := int(nxt[0])
+		if nxt.size() > 1:
+			for opt in board.branch_options(cur):
+				if String((opt as Dictionary).route) == pref:
+					step = int((opt as Dictionary).node)
+					break
+		cur = step
+	return cur
+
+## Bots aim for the highest-value stone reachable in 1..6 (previewed down
+## their preferred road); a small ROLL-stream jitter keeps four bots distinct.
+## Fixed draw shape: exactly 6 floats per bot seat, every round.
 func _bot_targets() -> Array[int]:
 	var out: Array[int] = []
 	out.resize(roster.size())
@@ -949,11 +1116,8 @@ func _bot_targets() -> Array[int]:
 		var best_n := 1
 		var best_v := -999.0
 		for n in range(1, 7):
-			var idx := posmod(positions[i] + n, BoardPath.SPACES)
-			var v: float = Spaces.bot_value(board.type_at(idx))
-			if _path_crosses(positions[i], n, board.beacon_index) and grudge[i] >= codicil.price_for(deeds[i]):
-				v = Spaces.bot_value(Spaces.CODICIL)
-			v += rng.randf_range(-0.6, 0.6)
+			var v: float = Spaces.bot_value(board.type_at(_preview_dest(i, n)))
+			v += _roll_rng.randf_range(-0.6, 0.6)
 			if v > best_v:
 				best_v = v
 				best_n = n
@@ -971,18 +1135,23 @@ func _apply_item_movement(moved: Array[int]) -> void:
 			moved[i] = maxi(1, moved[i] - 1)
 			_flash_line(Dialog.text("procession.narration.ribbon") % roster[i].name, roster[i].color, i)
 
-func _pay_passthrough_tolls(seat: int, from_idx: int, moved: int) -> void:
-	for step in range(1, moved):   # intermediate spaces only; landing handled in reveal
-		var idx := posmod(from_idx + step, BoardPath.SPACES)
-		if board.type_at(idx) == Spaces.TOLLGATE:
-			var owner := board.tollgate_owner(idx)
-			if owner >= 0 and owner != seat:
-				var pay := mini(2, grudge[seat])
-				grudge[seat] -= pay
-				grudge[owner] += pay
-				stats[seat].lost += pay
-				_pop_at(board.space_pos(idx) + Vector3(0, 1.0, 0), owner, pay,
-					roster[owner].color)   # F11: pass-toll coins arc to the owner
+## THE FERRYMAN'S TOLL, in passing: crossing a toll stone mid-walk pays 2♠ to
+## the Ferryman (the estate; no player owns the river — doc 28 §6). Landing on
+## one is handled in the reveal. The player-owned tollgate died with the ring.
+func _pay_passthrough_tolls(seat: int, path: Array) -> void:
+	for k in path.size() - 1:   # intermediate stones only; the landing reveals
+		var idx := int(path[k])
+		if board.type_at(idx) == Spaces.FERRY_TOLL:
+			var pay := mini(2, grudge[seat])
+			if pay <= 0:
+				continue
+			grudge[seat] -= pay
+			stats[seat].lost += pay
+			_pop_at(board.space_pos(idx) + Vector3(0, 1.0, 0), seat, -pay,
+				roster[seat].color)   # F11: the fee falls off at the arch
+			if not _fast:
+				_flash_line(Dialog.text("procession.narration.ferry_pass") % roster[seat].name,
+					roster[seat].color, seat)
 
 func _reveal_order(moved: Array[int]) -> Array:
 	var order: Array = []
@@ -999,36 +1168,30 @@ func _reveal_landing(seat: int) -> void:
 	# The affected player's badge rides the lower-third for this landing's line.
 	_reveal_seat = seat
 	_apply_reveal_badge(seat)
-	# Type-aware landing close-up with an overshoot punch-in (F3). The Codicil
-	# claim gets its own hero push (F17), staged inside _resolve_codicil.
-	# The camera belongs to the director; the body's comic wind-up (B2, F8)
-	# plays underneath it — lean-in while the shot settles, line on the snap.
-	if not _fast and seat != _round_codicil_seat:
-		board_camera.landing_push(board.reveal_shot(idx, board.type_at(idx)))
+	# Type-aware landing close-up with an overshoot punch-in (F3). The camera
+	# belongs to the director; the body's comic wind-up (B2, F8) plays
+	# underneath it — lean-in while the shot settles, line on the snap.
 	if not _fast:
-		await executor.anticipate(idx, seat == _round_codicil_seat)   # B2-HOOK: comic-timing wind-up (F8)
+		board_camera.landing_push(board.reveal_shot(idx, board.type_at(idx)))
+		await executor.anticipate(idx, false)   # B2-HOOK: comic-timing wind-up (F8)
 	var col: Color = roster[seat].color
 	var name := String(roster[seat].name)
-	if seat == _round_codicil_seat:
-		await _resolve_codicil(seat)
+	if _arrived_this_round.has(seat):
+		_resolve_arrival(seat, name, col)
 	else:
 		match board.type_at(idx):
-			Spaces.SHRINE: _resolve_shrine(seat, name, col)
-			Spaces.WEEPING_GRAVE: _resolve_grave(seat, name, col)
-			Spaces.STALL: _resolve_stall(seat, name, col)
+			Spaces.OFFERING: _resolve_offering(seat, name, col)
+			Spaces.OPEN_GRAVE: _resolve_grave(seat, name, col)
+			Spaces.GRAVE_GOODS: _resolve_box(seat, name, col)
+			Spaces.CART: _resolve_cart(seat, name, col)
 			Spaces.SEANCE: await _resolve_seance(seat, name, col)
-			Spaces.TOLLGATE: _resolve_tollgate(seat, name, col)
+			Spaces.FERRY_TOLL: _resolve_ferry(seat, name, col)
+			Spaces.CROSSROADS: executor.say(Executor.pick(Executor.CROSSROADS_LAND, _voice_rng, [name]), col)
 			Spaces.VENDETTA: await _resolve_vendetta(seat, name, col)
-			_: executor.say(Executor.pick(Executor.BLANK, rng, [name]), col)
+			_: executor.say(Executor.pick(Executor.BLANK, _voice_rng, [name]), col)
 	_refresh_hud()
 	_push_net()
-	if seat == _round_codicil_seat:
-		if _capture:
-			await _cap_snap("codicil")
-		else:
-			VerifyCapture.snap("codicil")
-		await _reveal_beat(seat, REVEAL_BEAT)
-	elif _capture:
+	if _capture:
 		# Let the landing push-in settle before the verification snap, so the
 		# type-aware close-up (F3) is judged at rest, not mid-travel. Windowed
 		# capture only — the headless receipt never takes this branch.
@@ -1118,12 +1281,12 @@ func _capture_demo_reactions(victim: int) -> void:
 		_spawn_reaction(victim, i, String(REACT_MAP.values()[i % REACT_MAP.size()]))
 
 # ---- per-space resolutions ----
-func _resolve_shrine(seat: int, name: String, col: Color) -> void:
+func _resolve_offering(seat: int, name: String, col: Color) -> void:
 	grudge[seat] += 3
 	stats[seat].shrines += 1
 	Sfx.play("grudge", -4.0)
-	_pop_grudge(seat, 3)   # F10: +3♠ arcs from the shrine to the chip
-	executor.say(Executor.pick(Executor.SHRINE, rng, [name]), col)
+	_pop_grudge(seat, 3)   # F10: +3♠ arcs from the offering to the chip
+	executor.say(Executor.pick(Executor.OFFERING, _voice_rng, [name]), col)
 
 func _resolve_grave(seat: int, name: String, col: Color) -> void:
 	if items[seat].salt > 0:
@@ -1139,34 +1302,65 @@ func _resolve_grave(seat: int, name: String, col: Color) -> void:
 		stats[seat].lost += toll
 		stats[owner].duels += 1
 		_pop_transfer(seat, owner, toll)   # F11: the toll flies to the monument owner
-		executor.say(Executor.pick(Executor.GRAVE_TOLL, rng,
+		executor.say(Executor.pick(Executor.GRAVE_TOLL, _voice_rng,
 			[name, roster[owner].name, roster[owner].name, toll]), col)
 	else:
 		var loss := mini(2, grudge[seat])
 		grudge[seat] -= loss
 		stats[seat].lost += loss
 		_pop_grudge(seat, -loss)   # F11: −N♠ falls from the pawn
-		executor.say(Executor.pick(Executor.GRAVE, rng, [name]), col)
+		executor.say(Executor.pick(Executor.GRAVE, _voice_rng, [name]), col)
 
-func _resolve_stall(seat: int, name: String, col: Color) -> void:
+## GRAVE GOODS — the free item box (EVENT stream picks the item).
+func _resolve_box(seat: int, name: String, col: Color) -> void:
+	var item := _grant_item(seat)
+	Sfx.play("card", -6.0)
+	executor.say(Executor.pick(Executor.GRAVE_GOODS, _voice_rng, [name]) + "  (%s)" % item.name, col)
+
+## THE PEDDLER'S CART — tonight it hands over one item with better patter; the
+## priced shop (doc 28 §6 wares table) is the economy lane's to build (P2).
+func _resolve_cart(seat: int, name: String, col: Color) -> void:
+	var item := _grant_item(seat)
+	Sfx.play("card", -6.0)
+	executor.say(Executor.pick(Executor.CART, _voice_rng, [name]) + "  (%s)" % item.name, col)
+
+## THE FERRYMAN'S TOLL, landed on: pay 2♠ to the river. No owner, no refunds.
+func _resolve_ferry(seat: int, name: String, col: Color) -> void:
+	var pay := mini(2, grudge[seat])
+	grudge[seat] -= pay
+	stats[seat].lost += pay
+	Sfx.play("sink", -4.0)
+	_pop_grudge(seat, -pay)
+	executor.say(Executor.pick(Executor.FERRY, _voice_rng, [name]), col)
+
+## ARRIVAL — through the Manor Gate: home, untouchable, filed by the minute.
+func _resolve_arrival(seat: int, name: String, col: Color) -> void:
+	var rank := arrival_order.find(seat) + 1
+	Sfx.play("match_win", -6.0)
+	executor.say(Executor.pick(Executor.ARRIVAL, _voice_rng, [name])
+		+ "  (HOME #%d)" % rank, col)
+	MomentScribe.capture("gate_arrival", "%s REACHES THE MANOR GATE (#%d)" % [name, rank],
+		2, [seat], "procession")
+
+## Deal one announced item from the shared pool (EVENT stream). The black
+## ribbon aims itself at the race leader, as ever.
+func _grant_item(seat: int) -> Dictionary:
 	var pool := Spaces.ITEMS
-	var item: Dictionary = pool[rng.randi_range(0, pool.size() - 1)]
+	var item: Dictionary = pool[_event_rng.randi_range(0, pool.size() - 1)]
 	match String(item.id):
 		"mourning_pin": items[seat].pin += 1
 		"grave_salt": items[seat].salt += 1
 		"black_ribbon":
-			items[seat].ribbon += 0   # ribbon is aimed at the leader, not self
-			var leader := _deed_leader(seat)
+			var leader := _race_leader(seat)
 			if leader >= 0:
 				items[leader].ribbon += 1
-	Sfx.play("card", -6.0)
-	executor.say(Executor.pick(Executor.STALL, rng, [name]) + "  (%s)" % item.name, col)
+	return item
 
 func _resolve_seance(seat: int, name: String, col: Color) -> void:
 	# The SIM decides the slot (unchanged rng draw); the visible wheel is theater
 	# that spins TO it (F13). Effects apply as the needle lands, so the dial reads
 	# like it caused the outcome — but it never decides anything.
-	var slot := rng.randi_range(0, Spaces.SEANCE_WHEEL.size() - 1)
+	var slot := _event_rng.randi_range(0, Spaces.SEANCE_WHEEL.size() - 1)
 	var w: Dictionary = Spaces.SEANCE_WHEEL[slot]
 	Sfx.play("bumper", -6.0)
 	if not _fast:
@@ -1188,8 +1382,8 @@ func _resolve_seance(seat: int, name: String, col: Color) -> void:
 		0:  # MERCIFUL DRAFT — every mourner +2
 			for i in roster.size():
 				grudge[i] += 2
-		1:  # EQUAL SHARES — deed leader pays each rival 1
-			var lead := _deed_leader(-1)
+		1:  # EQUAL SHARES — the race leader pays each rival 1
+			var lead := _race_leader(-1)
 			if lead >= 0:
 				for i in roster.size():
 					if i != lead:
@@ -1206,17 +1400,12 @@ func _resolve_seance(seat: int, name: String, col: Color) -> void:
 	# chip so the whole table sees who the circle favoured.
 	for i in roster.size():
 		_pop_grudge(i, grudge[i] - _before[i])
-	executor.say(Executor.pick(Executor.SEANCE, rng) + "  [%s — %s]" % [w.title, w.rule],
+	executor.say(Executor.pick(Executor.SEANCE, _voice_rng) + "  [%s — %s]" % [w.title, w.rule],
 		Color(0.78, 0.6, 0.95))
 
-func _resolve_tollgate(seat: int, name: String, col: Color) -> void:
-	board.set_tollgate_owner(positions[seat], seat)
-	grudge[seat] += 2   # the collected pot (abstracted)
-	stats[seat].duels += 1
-	Sfx.play("sink", -4.0)
-	_pop_grudge(seat, 2)   # F10: the pot arcs to the new gate-owner's chip
-	executor.say(Executor.pick(Executor.TOLLGATE_TAKE, rng, [name]), col)
-
+## Kept for data-driven boards that declare VENDETTA stones — the base
+## estate_procession board has none (doc 28 §3 has no duel space; GRUDGE MATCH
+## is its own interlude). Dormant, not dead.
 func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	var nemesis := _nearest_within(seat, 5)
 	if nemesis < 0:
@@ -1230,14 +1419,14 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	var s_a: int
 	var s_b: int
 	if _drama_visible() and (_is_local_human(seat) or _is_local_human(nemesis) or _vendettatest):
-		executor.say(Executor.pick(Executor.VENDETTA, rng, [name, roster[nemesis].name]), col)
+		executor.say(Executor.pick(Executor.VENDETTA, _voice_rng, [name, roster[nemesis].name]), col)
 		var sealed: Array = await _sealed_stakes(seat, nemesis)
 		s_a = int(sealed[0])
 		s_b = int(sealed[1])
 	else:
 		s_a = _stake_for(seat)
 		s_b = _stake_for(nemesis)
-		executor.say(Executor.pick(Executor.VENDETTA, rng, [name, roster[nemesis].name]), col)
+		executor.say(Executor.pick(Executor.VENDETTA, _voice_rng, [name, roster[nemesis].name]), col)
 	# sealed stakes resolve visibly: higher stake takes the difference.
 	var win := seat if s_a >= s_b else nemesis
 	var lose := nemesis if win == seat else seat
@@ -1252,7 +1441,7 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	stats[win].duels += 1
 	stats[lose].lost += moved_g
 	_pop_transfer(lose, win, moved_g)   # F11: the spoils fly from loser to winner
-	executor.say(Executor.pick(Executor.VENDETTA_RESULT, rng, [roster[win].name, roster[lose].name]) \
+	executor.say(Executor.pick(Executor.VENDETTA_RESULT, _voice_rng, [roster[win].name, roster[lose].name]) \
 		+ "  (%d♠, stakes %d vs %d)" % [moved_g, s_a, s_b], roster[win].color)
 	# A decisive vendetta is a deciding beat for the newsreel (F5).
 	MomentScribe.capture("vendetta", "%s BREAKS %s (%d♠)" % [
@@ -1263,92 +1452,37 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	if _capture and String(_epitaphs[lose]) != "":
 		await _snap_epitaph(lose)
 
-## THE DEED MONEY-SHOT (F17). The economy's climax: hero push into the Codicil, a
-## gold flare, a wax-sealed Deed flying to the buyer's chip, the price draining
-## from their grudge, and the beacon RELOCATING visibly (a gold wisp streak) so
-## the moving target is never lost. The sim (charge/grant/relocation rng) is
-## byte-identical to before; only the theater is new, all gated behind not _fast.
-func _resolve_codicil(seat: int) -> void:
-	var name := String(roster[seat].name)
-	var col: Color = roster[seat].color
-	var price := codicil.price_for(deeds[seat])
-	if grudge[seat] < price:
-		executor.say(Executor.pick(Executor.CODICIL_SHORT, rng, [name]) + "  (needs %d♠)" % price, col)
-		return
-	var beacon_pos := board.beacon_world_pos()
-	if not _fast:
-		board_camera.beacon_hero(beacon_pos)
-	# --- sim: charge the price, grant the Deed (unchanged order + effects) ---
-	grudge[seat] -= price
-	deeds[seat] += 1
-	stats[seat].deeds_bought += 1
-	stats[seat].spent += price
-	Sfx.play("match_win", -6.0)
-	executor.say(Executor.pick(Executor.CODICIL, rng, [name]) + "  (−%d♠ → ◆%d)" % [price, deeds[seat]], col)
-	_refresh_hud()
-	# --- theater: flare, the Deed flies to the buyer, the price drains away ---
-	if not _fast:
-		board.flare_beacon()
-		var chip := _chip_screen_pos(seat)
-		fx.fly_deed(beacon_pos, chip, col)
-		fx.fly_number(-price, "♠", beacon_pos, chip, col)
-		if _capture:
-			await _beat(0.3)                 # catch the Deed in flight + the flare
-			await _cap_snap("deed_moneyshot")
-	# The estate's memory ceremony (F5): the deciding-moment still.
-	MomentScribe.capture("codicil_claim", "%s CLAIMS A DEED (◆%d)" % [name, deeds[seat]],
-		3, [seat], "procession")
-	# --- relocation: logical index updates now; the beacon TRAVELS on screen ---
-	var new_idx := codicil.choose_relocation(rng, BoardPath.SPACES)
-	if _fast:
-		board.set_beacon(new_idx)
-	else:
-		var tw: Tween = board.travel_beacon(new_idx)
-		if tw != null and tw.is_valid():
-			await tw.finished
-	if final_kit and deeds[seat] >= deed_goal - 1 and decision_layer:
-		final_kit.escalate()
-
 # ---- helpers ----
+## Nemesis search for the (dormant) vendetta stone: the closest rival by
+## RACE distance — |stones-left(a) − stones-left(b)| — since node ids mean
+## nothing across routes. Home pawns are beyond the reach of grudges.
 func _nearest_within(seat: int, reach: int) -> int:
 	var best := -1
 	var best_d := reach + 1
 	for j in roster.size():
-		if j == seat:
+		if j == seat or bool(arrived[j]):
 			continue
-		var d := _ring_dist(positions[seat], positions[j])
+		var d: int = absi(board.dist_to_gate(positions[seat]) - board.dist_to_gate(positions[j]))
 		if d <= reach and d < best_d:
 			best_d = d
 			best = j
 	return best
 
-func _ring_dist(a: int, b: int) -> int:
-	var raw: int = abs(a - b)
-	return mini(raw, BoardPath.SPACES - raw)
-
-## Does a hop of `moved` from `from_idx` pass over OR land on `target` (the
-## Codicil beacon)? A move of 0 never reaches anything.
-func _path_crosses(from_idx: int, moved: int, target: int) -> bool:
-	for step in range(1, moved + 1):
-		if posmod(from_idx + step, BoardPath.SPACES) == target:
-			return true
-	return false
-
-## Bot / remote-guest stake: a hidden 0–3 roll from the sim rng, capped by the
-## seat's purse. LOCAL HUMAN seats never reach this — they raise their own stake
-## sealed (see _sealed_stakes). The all-bot verification soak has no humans, so it
-## always draws here, in the same order it always did — the receipt stays frozen.
+## Bot / remote-guest stake: a hidden 0–3 roll from the EVENT stream, capped by
+## the seat's purse. LOCAL HUMAN seats never reach this — they raise their own
+## stake sealed (see _sealed_stakes). Dormant with the base board (no vendetta
+## stones), alive for any board data that declares them.
 func _stake_for(seat: int) -> int:
-	return clampi(rng.randi_range(0, 3), 0, grudge[seat])
+	return clampi(_event_rng.randi_range(0, 3), 0, grudge[seat])
 
-func _deed_leader(exclude: int) -> int:
-	var lead := -1
-	for i in roster.size():
-		if i == exclude:
-			continue
-		if lead < 0 or deeds[i] > deeds[lead] or (deeds[i] == deeds[lead] and grudge[i] > grudge[lead]):
-			lead = i
-	return lead
+## The race leader (fewest stones to the gate; home pawns rank by arrival).
+## The black ribbon's target and the séance's EQUAL SHARES payer.
+func _race_leader(exclude: int) -> int:
+	var order := _final_order()
+	for p in order:
+		if int(p) != exclude:
+			return int(p)
+	return -1
 
 func _flash_line(text: String, col: Color, seat := -1) -> void:
 	if _reveal:
@@ -1586,18 +1720,13 @@ func _snap_epitaph(loser: int) -> void:
 func _minigame_block() -> void:
 	_phase = "minigame"
 	executor.clear_banner()
-	# item offer — a quick shop beat: each seat is handed a random stall item.
+	# item offer — a quick shop beat: each seat is handed a random item (EVENT
+	# stream; the ribbon aims itself at the race leader inside _grant_item).
 	for i in roster.size():
-		var it: Dictionary = Spaces.ITEMS[rng.randi_range(0, Spaces.ITEMS.size() - 1)]
-		match String(it.id):
-			"mourning_pin": items[i].pin += 1
-			"grave_salt": items[i].salt += 1
-			"black_ribbon":
-				var lead := _deed_leader(i)
-				if lead >= 0: items[lead].ribbon += 1
-	# The SIM picks the game (unchanged rng draw); the roulette (F22) is theater
-	# that lands on it, then calls "TAKE YOUR PLACES" (the estate's voice, doc 26).
-	var mid: String = CONTRACT_POOL[rng.randi_range(0, CONTRACT_POOL.size() - 1)]
+		_grant_item(i)
+	# The EVENT stream picks the game; the roulette (F22) is theater that lands
+	# on it, then calls "TAKE YOUR PLACES" (the estate's voice, doc 26).
+	var mid: String = CONTRACT_POOL[_event_rng.randi_range(0, CONTRACT_POOL.size() - 1)]
 	if _fast:
 		pass   # the soak skips the roulette entirely
 	elif _capture:
@@ -1610,18 +1739,13 @@ func _minigame_block() -> void:
 		await roulette.present(CONTRACT_POOL, mid)
 	_hide_announce()
 	var placements: Array = await _run_minigame(mid)
-	# RECKONING — placements pay 5/3/2/1 Grudge (and movement in QUICK WAKE).
+	# RECKONING — placements pay 5/3/2/1 Grudge.
 	_phase = "reckoning"
 	var lines: Array[String] = []
 	for rank in placements.size():
 		var p := int(placements[rank])
 		var pay: int = POINTS[rank] if rank < POINTS.size() else 0
 		grudge[p] += pay
-		if not decision_layer:
-			var adv: int = POINTS[rank] if rank < POINTS.size() else 0
-			moved_total[p] += adv
-			positions[p] = posmod(positions[p] + adv, BoardPath.SPACES)
-			board.seat_pawn(p, positions[p])
 		lines.append(Dialog.text("procession.reckoning.line") % [roster[p].name, rank + 1, pay])
 	_announce_text(Dialog.text("procession.reckoning.header") + "\n\n" + "\n".join(lines), Color(0.95, 0.85, 0.6))
 	_refresh_hud()
@@ -1649,7 +1773,7 @@ func _run_minigame(id: String) -> Array:
 	for pl in roster:
 		mroster.append({"index": pl.index, "name": pl.name, "color": pl.color,
 			"char_scene": pl.char_scene, "device": pl.device, "bot": pl.bot})
-	module.begin({"roster": mroster, "rounds": 2, "rng_seed": rng.randi(), "practice": false})
+	module.begin({"roster": mroster, "rounds": 2, "rng_seed": _event_rng.randi(), "practice": false})
 	while not _mini_done:
 		await get_tree().process_frame
 	if is_instance_valid(module):
@@ -1672,9 +1796,9 @@ func _sim_placements() -> Array:
 	var order: Array = []
 	for i in roster.size():
 		order.append(i)
-	# Fisher-Yates with the seeded stream — deterministic, unbiased.
+	# Fisher-Yates with the EVENT stream — deterministic, unbiased.
 	for i in range(order.size() - 1, 0, -1):
-		var j := rng.randi_range(0, i)
+		var j := _event_rng.randi_range(0, i)
 		var t = order[i]; order[i] = order[j]; order[j] = t
 	return order
 
@@ -1685,22 +1809,25 @@ func _house_awakens() -> void:
 	_phase = "house"
 	executor.clear_banner()
 	executor.gesture_house_rise()   # B2-HOOK: the host rises (F7)
-	_announce_text(Dialog.text("procession.house_awakens.header") + "\n\n" + Executor.pick(Executor.HOUSE_AWAKENS, rng),
+	_announce_text(Dialog.text("procession.house_awakens.header") + "\n\n" + Executor.pick(Executor.HOUSE_AWAKENS, _voice_rng),
 		Color(1, 0.4, 0.35))
 	if final_kit:
 		final_kit.escalate()
 	await _beat(2.4)
-	# Safe stones: a seeded third of the ring. Each pawn "putts" for safety;
-	# those who miss slip back 2 (announced, all-in).
+	# Safe stones: a seeded handful of the graph (EVENT stream). Each pawn on
+	# the road "putts" for safety; those who miss slip back 2 stones ALONG
+	# THEIR OWN WALKED TRAIL (a graph has no minus-two; the estate remembers
+	# where you stepped). Home pawns are untouchable.
 	var safe := {}
 	for k in 8:
-		safe[rng.randi_range(0, BoardPath.SPACES - 1)] = true
+		safe[_event_rng.randi_range(0, board.node_count() - 1)] = true
 	var caught: Array[String] = []
 	for i in roster.size():
-		var reached := rng.randf() < (0.45 + 0.1 * float(deeds[i] == 0))
+		var reached := _event_rng.randf() < (0.45 + 0.1 * float(deeds[i] == 0))
+		if bool(arrived[i]):
+			continue
 		if not reached and not safe.has(positions[i]):
-			positions[i] = posmod(positions[i] - 2, BoardPath.SPACES)
-			board.seat_pawn(i, positions[i])
+			_slip_back(i, 2)
 			caught.append(String(roster[i].name))
 			stats[i].lost += 1
 	if caught.is_empty():
@@ -1722,22 +1849,32 @@ func _house_awakens() -> void:
 # --------------------------------------------------------------------------
 # WIN CHECK + CEREMONIES
 # --------------------------------------------------------------------------
+## Retrace the seat's own walked trail `steps` stones (THE HOUSE AWAKENS).
+func _slip_back(seat: int, steps: int) -> void:
+	var t: Array = trail[seat]
+	for _k in steps:
+		if t.size() > 1:
+			t.pop_back()
+	positions[seat] = int(t.back())
+	board.seat_pawn(seat, positions[seat])
+
+## The night closes when everyone is home, or one full round after THE FINAL
+## BELL rang (doc 28: every other player gets exactly one more turn).
 func _check_win() -> bool:
-	if decision_layer:
-		for i in roster.size():
-			if deeds[i] >= deed_goal:
-				return true
-		return false
+	var all_home := true
 	for i in roster.size():
-		if moved_total[i] >= movement_goal:
-			return true
-	return false
+		if not bool(arrived[i]):
+			all_home = false
+			break
+	if all_home:
+		return true
+	return bell_round >= 0 and round_num >= bell_round + 1
 
 func _will_reading() -> void:
 	_phase = "will"
 	executor.clear_banner()
 	Music.play_slot("ceremony")
-	executor.say(Executor.pick(Executor.WILL_OPEN, rng), Color(0.85, 0.75, 1.0))
+	executor.say(Executor.pick(Executor.WILL_OPEN, _voice_rng), Color(0.85, 0.75, 1.0))
 	var lines: Array[String] = []
 	for c in clauses:
 		var winner_seat := _stat_leader(String(c.stat))
@@ -1801,7 +1938,7 @@ func _heir_crowned() -> void:
 	_reveal.visible = false
 	podium.stage_entries(entries)
 	# The seed is verification plumbing — real heirs get a clean crown.
-	var crown := Dialog.text("procession.heir.crown") % [pl.name, deeds[winner]]
+	var crown := Dialog.text("procession.heir.crown_gate") % pl.name
 	if _autoplay:
 		crown += " · SEED %d" % seed_value
 	_announce_text(crown, Color(pl.color))
@@ -1822,31 +1959,50 @@ func _heir_crowned() -> void:
 func _final_winner() -> int:
 	return int(_final_order()[0])
 
+## The night's standings: arrival order first (crossing beats everything),
+## then the DISTANCE RANKING (fewest stones to the gate — the doc 28 §8
+## turn-cap fallback), then grudge, then seat. Every tie explicit and stable.
 func _final_order() -> Array:
 	var order: Array = []
 	for i in roster.size():
 		order.append(i)
 	order.sort_custom(func(a, b):
-		if decision_layer and deeds[a] != deeds[b]:
-			return deeds[a] > deeds[b]
-		if not decision_layer and moved_total[a] != moved_total[b]:
-			return moved_total[a] > moved_total[b]
+		var aa := arrival_order.find(a)
+		var bb := arrival_order.find(b)
+		if (aa >= 0) != (bb >= 0):
+			return aa >= 0
+		if aa >= 0 and bb >= 0 and aa != bb:
+			return aa < bb
+		var da := board.dist_to_gate(positions[a])
+		var db := board.dist_to_gate(positions[b])
+		if da != db:
+			return da < db
 		if grudge[a] != grudge[b]:
 			return grudge[a] > grudge[b]
 		return a < b)
 	return order
 
 func _emit_tally() -> void:
+	var routes: Array = []
+	var left: Array = []
+	for i in roster.size():
+		routes.append(board.route_of(positions[i]))
+		left.append(board.dist_to_gate(positions[i]))
 	var tally := {
-		"seed": seed_value, "preset": preset_id, "rounds": round_num,
-		"deed_goal": deed_goal, "heir": winner, "heir_name": String(roster[winner].name),
+		"seed": seed_value, "board": String(BoardGraph.BOARD.id), "rounds": round_num,
+		"turn_cap": turn_cap, "bell_round": bell_round,
+		"heir": winner, "heir_name": String(roster[winner].name),
+		"arrivals": arrival_order.duplicate(),
 		"grudge": grudge.duplicate(), "deeds": deeds.duplicate(),
 		"moved": moved_total.duplicate(), "positions": positions.duplicate(),
+		"routes": routes, "left": left,
 	}
 	print("PROCESSION_TALLY ", JSON.stringify(tally))
 	for i in roster.size():
-		print("  seat %d %s: ◆%d  %d♠  moved=%d  pos=%d" % [
-			i, roster[i].name, deeds[i], grudge[i], moved_total[i], positions[i]])
+		var home := arrival_order.find(i)
+		print("  seat %d %s: ◆%d  %d♠  moved=%d  pos=%d  route=%s  left=%d%s" % [
+			i, roster[i].name, deeds[i], grudge[i], moved_total[i], positions[i],
+			routes[i], int(left[i]), ("  HOME#%d" % (home + 1)) if home >= 0 else ""])
 	print("PROCESSION_HEIR %s (seed %d, %d rounds)" % [roster[winner].name, seed_value, round_num])
 	night_over.emit(tally)
 	if _autoplay:
@@ -1898,10 +2054,15 @@ func _push_net() -> void:
 	pass
 
 func _net_state() -> Dictionary:
+	var routes: Array = []
+	for i in roster.size():
+		routes.append(board.route_of(positions[i]) if board else "common")
 	return {
-		"phase": _phase, "round": round_num, "beacon": board.beacon_index if board else 0,
+		"phase": _phase, "round": round_num,
 		"grudge": grudge.duplicate(), "deeds": deeds.duplicate(),
 		"positions": positions.duplicate(), "moved": moved_total.duplicate(),
+		"routes": routes, "arrived": arrived.duplicate(),
+		"arrival_order": arrival_order.duplicate(), "bell_round": bell_round,
 		"banner": _reveal.get_parsed_text() if _reveal and _reveal.visible else "",
 	}
 
@@ -1912,8 +2073,10 @@ func _net_apply(state: Dictionary) -> void:
 	deeds.assign(state.get("deeds", deeds))
 	positions.assign(state.get("positions", positions))
 	moved_total.assign(state.get("moved", moved_total))
+	arrived = state.get("arrived", arrived)
+	arrival_order = state.get("arrival_order", arrival_order)
+	bell_round = int(state.get("bell_round", bell_round))
 	if board:
-		board.set_beacon(int(state.get("beacon", board.beacon_index)))
 		for i in mini(positions.size(), roster.size()):
 			board.seat_pawn(i, positions[i])
 	_refresh_hud()

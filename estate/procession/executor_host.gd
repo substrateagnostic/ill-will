@@ -42,6 +42,22 @@ static var VENDETTA_RESULT: Array:
 	get: return Dialog.paras("executor.vendetta_result")
 static var BLANK: Array:
 	get: return Dialog.paras("executor.blank")
+# --- graph-board pools (doc 28 space set; the ring pools above stay for any
+# caller that still speaks them — pools are data, not topology) ---
+static var OFFERING: Array:
+	get: return Dialog.paras("executor.offering")
+static var GRAVE_GOODS: Array:
+	get: return Dialog.paras("executor.grave_goods")
+static var CART: Array:
+	get: return Dialog.paras("executor.cart")
+static var FERRY: Array:
+	get: return Dialog.paras("executor.ferry")
+static var CROSSROADS_LAND: Array:
+	get: return Dialog.paras("executor.crossroads_land")
+static var ARRIVAL: Array:
+	get: return Dialog.paras("executor.arrival")
+static var BELL: Array:
+	get: return Dialog.paras("executor.bell")
 static var HOUSE_AWAKENS: Array:
 	get: return Dialog.paras("executor.house_awakens")
 static var HOUSE_LOSER: Array:
@@ -88,7 +104,7 @@ var banner: RichTextLabel = null   # procession supplies the reveal banner
 var after_say := Callable()        # procession hook: fit + grow the band per line
 var cam: Camera3D = null           # procession supplies the live camera
 var body: ProcessionExecutorBody = null   # the embodied host (null when headless)
-var board: ProcessionBoardPath = null     # supplies stone positions for gestures
+var board: ProcessionBoardGraph = null    # supplies stone positions for gestures
 # PRESENTATION-side rng — used only for gesture variety and the eulogy templates,
 # NEVER the sim stream, so no flourish can shift the byte-identical receipt.
 var _prng := RandomNumberGenerator.new()
@@ -103,26 +119,21 @@ func setup(reveal_banner: RichTextLabel, camera: Camera3D) -> void:
 ## Give the host a body and a place to stand. No-op under headless — the soak has
 ## no viewport, so the receipt path never builds or animates the figure and the
 ## tally stays byte-identical.
-func embody(world: Node3D, board_ref: ProcessionBoardPath, prng_seed: int) -> void:
+func embody(world: Node3D, board_ref: ProcessionBoardGraph, prng_seed: int) -> void:
 	board = board_ref
 	_prng.seed = prng_seed * 2654435761 + 1013904223   # a presentation stream of our own
 	if DisplayServer.get_name() == "headless":
 		return
 	body = Body.new(int(_prng.randi()))
 	world.add_child(body)
-	# Stand him at the manor gate (space 0), just off the drive to one side,
-	# facing the loop's CENTER so he presides over every landing.
-	var gate := board.space_pos(0)
+	# Stand him at THE MANOR GATE (doc 28 §10 — the Executor rings the Bell),
+	# just inside the arch on the finish apron, facing the grounds' CENTER so
+	# every landing anywhere on the three roads plays out before him.
+	var gate := board.gate_pos()
 	var out := gate - board.CENTER
 	out.y = 0.0
 	out = out.normalized() if out.length() > 0.01 else Vector3.FORWARD
 	var right := out.cross(Vector3.UP).normalized()
-	# Seat him just inside the gate on the drive apron, near-centred in the gate's
-	# CLEAR lane — the old gate-SIDE spot (right * 4.4) put him in the narrow
-	# corridor between the crooked signpost and the space-1 shrine lantern, and his
-	# arm clipped one or the other (director note W9). Pulled ~2.2m toward the loop
-	# (‑out) and barely off-centre, he presides with the manor arch as his backdrop
-	# and daylight on both sides. He still faces CENTER, so every landing reads.
 	var stand := gate - out * 2.2 + right * 0.5
 	stand.y = gate.y
 	body.stand_at(stand, board.CENTER)
@@ -178,7 +189,8 @@ func showcase_gestures(proc: Node) -> void:
 	frame_body(0.6)
 	await proc.get_tree().create_timer(0.75).timeout   # let the framing tween settle
 	await proc._cap_snap("exec_idle")
-	var stone := board.space_pos(1) if board != null else Vector3.ZERO
+	# Gesture at the homestretch stone beside his gate post.
+	var stone := board.space_pos(board.node_count() - 2) if board != null else Vector3.ZERO
 	var yaw := body.yaw_toward(stone)
 	body.anticipate(yaw, 0.85)
 	await proc.get_tree().create_timer(0.45).timeout
@@ -208,18 +220,21 @@ func anticipate(space_idx: int, is_codicil: bool) -> void:
 	body.present(yaw, stakes, _mood_for(space_idx, is_codicil))
 
 ## How much drama a landing carries, 0..1 — sets both the lean depth and the
-## length of the anticipation pause. The Codicil (a Deed changes hands) is the
-## crown; a blank path stone is the anticlimax and barely earns a beat.
+## length of the anticipation pause. The MANOR GATE (an arrival) is the crown;
+## a blank path stone is the anticlimax and barely earns a beat.
 func _stakes_for(space_idx: int, is_codicil: bool) -> float:
 	if is_codicil:
-		return 1.0
+		return 1.0   # legacy hook — no caller passes true on the graph board
 	match board.type_at(space_idx):
+		ProcessionBoardSpaces.GATE: return 1.0
 		ProcessionBoardSpaces.VENDETTA: return 0.8
-		ProcessionBoardSpaces.WEEPING_GRAVE: return 0.7
+		ProcessionBoardSpaces.OPEN_GRAVE: return 0.7
 		ProcessionBoardSpaces.SEANCE: return 0.62
-		ProcessionBoardSpaces.TOLLGATE: return 0.55
-		ProcessionBoardSpaces.SHRINE: return 0.5
-		ProcessionBoardSpaces.STALL: return 0.4
+		ProcessionBoardSpaces.FERRY_TOLL: return 0.55
+		ProcessionBoardSpaces.OFFERING: return 0.5
+		ProcessionBoardSpaces.CART: return 0.45
+		ProcessionBoardSpaces.GRAVE_GOODS: return 0.4
+		ProcessionBoardSpaces.CROSSROADS: return 0.3
 	return 0.16   # BLANK / path stone — the dry anticlimax
 
 ## The reaction gesture keyed to the space (see MOOD_* / body._react).
@@ -227,11 +242,14 @@ func _mood_for(space_idx: int, is_codicil: bool) -> int:
 	if is_codicil:
 		return MOOD_CODICIL
 	match board.type_at(space_idx):
-		ProcessionBoardSpaces.SHRINE: return MOOD_GOOD
-		ProcessionBoardSpaces.TOLLGATE: return MOOD_GOOD
-		ProcessionBoardSpaces.WEEPING_GRAVE: return MOOD_BAD
+		ProcessionBoardSpaces.GATE: return MOOD_CODICIL
+		ProcessionBoardSpaces.OFFERING: return MOOD_GOOD
+		ProcessionBoardSpaces.CART: return MOOD_GOOD
+		ProcessionBoardSpaces.OPEN_GRAVE: return MOOD_BAD
+		ProcessionBoardSpaces.FERRY_TOLL: return MOOD_BAD
 		ProcessionBoardSpaces.VENDETTA: return MOOD_WATCH
 		ProcessionBoardSpaces.SEANCE: return MOOD_WATCH
+		ProcessionBoardSpaces.CROSSROADS: return MOOD_WATCH
 	return MOOD_NEUTRAL
 
 ## Fill one line from a pool by seeded index (deterministic).

@@ -13,6 +13,19 @@ const SEANCE := "seance"
 const TOLLGATE := "tollgate"
 const VENDETTA := "vendetta"
 
+# ---- THE PROCESSION graph board (doc 28 §3) ------------------------------
+# The A-to-B board's space set. The ring-era types above stay declared so the
+# retired ring files (board_path.gd, codicil.gd) still parse; the graph board
+# (board_graph.gd) speaks only the types below plus BLANK (its path stones)
+# and SEANCE (the circle survives unchanged).
+const OFFERING := "offering"          # +3 · the mercy stone (was SHRINE)
+const OPEN_GRAVE := "open_grave"      # −2 · the hazard (was WEEPING GRAVE)
+const GRAVE_GOODS := "grave_goods"    # free item box (was THE STALL)
+const FERRY_TOLL := "ferry_toll"      # pay the Ferryman 2, pass or land
+const CART := "cart"                  # the Peddler's Cart stop (shop lands in P2)
+const CROSSROADS := "crossroads"      # a fork — the mover chooses the road
+const GATE := "gate"                  # the Manor Gate — arrival ends the walk
+
 const TABLE := {
 	BLANK: {
 		"name": "PATH STONE", "icon": "·", "color": Color("72747d"),
@@ -46,11 +59,40 @@ const TABLE := {
 		"name": "VENDETTA", "icon": "V", "color": Color("ef7058"),
 		"rule": "NEMESIS WITHIN 5: SEALED 0–3 GRUDGE WAGER", "bot_value": 1.0,
 	},
+	# ---- graph-board space set (doc 28 §3) ----
+	OFFERING: {
+		"name": "OFFERING", "icon": "+", "color": Color("65d58b"),
+		"rule": "+3 GRUDGE", "bot_value": 5.0,
+	},
+	OPEN_GRAVE: {
+		"name": "OPEN GRAVE", "icon": "−", "color": Color("b04d68"),
+		"rule": "−2 GRUDGE · MONUMENT OWNER RECEIVES THE TOLL", "bot_value": -5.0,
+	},
+	GRAVE_GOODS: {
+		"name": "GRAVE GOODS", "icon": "!", "color": Color("e4a54c"),
+		"rule": "TAKE ONE ANNOUNCED ITEM FROM THE BOX", "bot_value": 3.0,
+	},
+	FERRY_TOLL: {
+		"name": "FERRYMAN'S TOLL", "icon": "$", "color": Color("64b9d5"),
+		"rule": "PAY THE FERRYMAN 2 · PASS OR LAND", "bot_value": -2.0,
+	},
+	CART: {
+		"name": "PEDDLER'S CART", "icon": "C", "color": Color("f4db62"),
+		"rule": "THE CART OFFERS ITS WARES", "bot_value": 4.0,
+	},
+	CROSSROADS: {
+		"name": "CROSSROADS", "icon": "Y", "color": Color("c9c2a8"),
+		"rule": "CHOOSE YOUR ROAD", "bot_value": 0.5,
+	},
+	GATE: {
+		"name": "THE MANOR GATE", "icon": "⌂", "color": Color("f4c95d"),
+		"rule": "ARRIVE · RING THE FINAL BELL", "bot_value": 30.0,
+	},
 }
 
 const SEANCE_WHEEL := [
 	{"title": "MERCIFUL DRAFT", "rule": "EVERY MOURNER RECEIVES 2 GRUDGE"},
-	{"title": "EQUAL SHARES", "rule": "DEED LEADER PAYS EACH RIVAL 1 GRUDGE"},
+	{"title": "EQUAL SHARES", "rule": "THE LEADER PAYS EACH RIVAL 1 GRUDGE"},
 	{"title": "ROAD LEVY", "rule": "EACH TOLLGATE POT RECEIVES 3 GRUDGE"},
 	{"title": "FAVORED MEDIUM", "rule": "MEDIUM RECEIVES 4; ALL OTHERS RECEIVE 1"},
 ]

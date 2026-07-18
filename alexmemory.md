@@ -2473,3 +2473,38 @@ nothing committed, no game runs). Condensed verdicts:
 - TOP 3 RISKS: (1) ring→graph topology cascade (minimap/camera/bots/tolls/
   net_state), (2) estate.gd surgery with the net ceremony mirror woven through
   every phase, (3) currency collapse vs saves + receipt strings.
+
+## P1a — BOARD GRAPH SURGERY LANDED (worktree lane, night 7+1)
+
+The riskiest cut of the rework is in: the 24-ring is gone, THE PROCESSION now
+runs LYCHGATE → MANOR GATE over a branching graph. For your review:
+
+- **The board**: 76 stones / 79 edges. GARDEN ROW (safe/long, offerings +
+  Peddler's Cart) · HOLLOW WOODS (short/wild, boxes + séances) · WEEPING
+  VALLEY (gamble, open graves + Ferryman's Toll). Two crossroads (split +
+  mid-track switch), merge before the gate. Walked path 28-32 stones
+  (producer's d8 numbers); doc-28 §3 ratios hit within ~1.5 points. ALL of it
+  is data — one BOARD dict in board_graph.gd (routes/stones/ratios/anchors).
+- **The night**: putt (unchanged pawn_putt) → graph walk → crossroads picks
+  (humans: A/B/C prompt, gamepad-first; bots: leader→garden, last→valley,
+  25% seeded wildcard) → THE FINAL BELL (first crossing = one last turn for
+  everyone else) → arrival order, then distance ranking at turn cap 12.
+- **Retired**: Codicil purchase stop (file kept, unwired), --deedgoal/--preset
+  flags, player-owned tollgates (Ferryman takes a flat 2 now), vendetta
+  stones on the base board (resolution kept dormant for future board data).
+- **Receipts** (docs/verify/VERIFY-BOARD.md is the new home):
+  - OLD ring record retired in writing: PROCESSION_HEIR MINT (seed 7, 21 rounds).
+  - NEW frozen: `godot --headless --path . -- --procession --seed=7
+    --turncap=12 --autoplay=bots` → **PROCESSION_HEIR RED (seed 7, 9 rounds)**,
+    bell round 8, arrivals RED/GOLD/BLUE, MINT caught 2 out. Deterministic ×3.
+  - Topology: `--boardgraphtest` → 76 nodes/79 edges, per-route lengths,
+    ratio table, per-node distance-to-finish, fork reachability OK, checksum
+    b269c570. Night-independent (LAYOUT rng seeded from board data).
+  - Five NAMED rng streams now (LAYOUT/ROLL/EVENT/VOICE/DRAMA) so voice-pool
+    edits and future events can't shift each other's receipts.
+- **Screenshots**: estate/procession/shots/ — full board, crossroads prompt,
+  THE DRIVE route-ribbon minimap.
+- **Left for the other lanes**: LAST BREATH meter + d8 (P1b), pennies/wreaths
+  + priced cart + arrival wreaths + 3-night loop (P2), estate.gd surgery (P3),
+  online pair re-cert (P5). Estate shell still boots clean (smoke-tested);
+  slot saves untouched.

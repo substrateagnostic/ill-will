@@ -10,7 +10,6 @@
     "♠ (grudge) and ◆ (deed) are literal text. Loaded by core/dialog.gd (autoload",
     "Dialog); call Dialog.reload() after editing to see changes live."
   ],
-
   "executor": {
     "greeting": [
       "Good evening. You are all here for the reading, whether you know it or not.",
@@ -24,6 +23,13 @@
       "%s gains at the shrine. Piety pays, this once, under protest.",
       "The saints smile on %s. The saints have never met them.",
       "%s is favoured. The estate has logged the anomaly for review."
+    ],
+    "offering": [
+      "%s leaves an offering and is repaid threefold. The estate calls this interest.",
+      "The road provides for %s (+3♠). The road will remember providing.",
+      "%s stoops for the offering. Gratitude is expected in writing.",
+      "An offering for %s. The estate has logged the generosity, and the witness.",
+      "%s is favoured by the wayside. Favour, as ever, is a loan."
     ],
     "grave": [
       "%s weeps at the grave (−2♠). The grave has wept harder for less.",
@@ -43,6 +49,18 @@
       "The stall arms %s. The stall would like it noted it warned nobody.",
       "%s pockets a grievance-in-a-box. Do use it responsibly, which is to say don't.",
       "%s shops the stall. The estate approves of premeditation."
+    ],
+    "grave_goods": [
+      "%s pries open the grave goods. The previous owner files no complaint.",
+      "A box for %s. Whatever is inside was buried for a reason.",
+      "%s inherits a box of goods, unexamined. Bold. The estate approves.",
+      "The box opens for %s. Its contents are described as 'previously loved'."
+    ],
+    "cart": [
+      "%s reaches the Peddler's Cart. The Peddler stocks grievances in every size.",
+      "The cart creaks open for %s. All sales are final; so are most of the goods.",
+      "%s browses the hearse-drawn cart. Nothing here was acquired honestly.",
+      "The Peddler receives %s warmly, the way a spider receives anyone."
     ],
     "codicil": [
       "%s buys a Deed. The ink is wet and already contested.",
@@ -74,6 +92,28 @@
     "tollgate_pass": [
       "%s passes %s's gate and pays for the privilege (2♠).",
       "The tollgate bills %s on the way through. %s does not rise to thank them."
+    ],
+    "ferry": [
+      "%s meets the Ferryman (−2♠). The crossing is short. The invoice is not.",
+      "The Ferryman takes his due from %s. He takes it from everyone. He is thorough.",
+      "%s pays the toll. The Ferryman does not make change, on principle.",
+      "Two grudge to cross, and %s pays. The river keeps the receipts."
+    ],
+    "crossroads_land": [
+      "%s halts at the crossroads. The signpost offers three regrets to choose from.",
+      "The roads wait for %s. All of them lead to the gate. None of them are kind.",
+      "%s stands where the ways part. The estate recommends none of them."
+    ],
+    "arrival": [
+      "%s passes the MANOR GATE. The house takes them in, which should worry them.",
+      "The gate opens for %s. Home, of a kind, and beyond the reach of grudges.",
+      "%s arrives. The Executor marks the hour in the ledger, to the minute.",
+      "The manor receives %s. The procession continues without them, poorer for it."
+    ],
+    "bell": [
+      "THE FINAL BELL. One turn remains for those still on the road. Spend it well.",
+      "The bell has rung. The estate grants the stragglers one more turn, as charity.",
+      "The bell speaks once. Everything still walking has one turn left to matter."
     ],
     "vendetta": [
       "%s and %s settle it the estate's way — quietly, and for money.",
@@ -149,7 +189,6 @@
       "The night releases you. The estate does not. The estate merely lets you believe it has."
     ]
   },
-
   "eulogy": {
     "opener": [
       "We are gathered, as the estate is always gathered, to read aloud what the night had already decided.",
@@ -201,7 +240,6 @@
     ],
     "chronicle_prefix": "The estate adds, for the record: "
   },
-
   "howto": {
     "house_rules": {
       "lead": "You are new to the estate, so it will explain itself. Once. It keeps no patience for a slow study and less for a repeat question.",
@@ -237,7 +275,6 @@
       "pallbearers": "The anthology's first TEAM race: 2v2, one coffin per pair. The coffin moves on the BLEND of both your sticks — sync to sprint, pull apart and the dead spill out. First pall to the crypt wins."
     }
   },
-
   "intro": {
     "maskedball": {
       "name": "MASKED BALL",
@@ -336,16 +373,13 @@
       ]
     }
   },
-
   "results": {
     "default_title": "FINAL DISPOSITION",
     "win_title": "{name} INHERITS"
   },
-
   "settings": {
     "hint": "Changes apply to the next game launched (estate phases apply live).\nGamepads must press a button once to be detected by the OS."
   },
-
   "saga": {
     "grudge": {
       "sub": "Before the night opens, the estate reviews the accounts still standing.",
@@ -374,7 +408,6 @@
       "remains": "Remains: reallocated."
     }
   },
-
   "estate": {
     "walkabout": {
       "stroll_banner": "walk to a landmark  ·  A enter  ·  B desk",
@@ -449,7 +482,6 @@
       "heir_foot": "the run is over — the host decides what the estate does with the rest of the evening"
     }
   },
-
   "procession": {
     "epitaphs": [
       "BRIEFLY MOURNED",
@@ -485,6 +517,7 @@
       "pin": "%s spends a MOURNING PIN (+1 space)",
       "ribbon": "%s is dragged by a BLACK RIBBON (−1 space)",
       "grave_salt": "%s salts the grave — the loss is cancelled.",
+      "ferry_pass": "%s pays the Ferryman in passing (−2♠)",
       "seance_stir": "The planchette stirs for %s. The circle turns…",
       "vendetta_alone": "%s reaches the vendetta stone alone. No blood today.",
       "vendetta_wash": "%s and %s stake %d each — a wash. The estate is disappointed."
@@ -514,9 +547,20 @@
     },
     "heir": {
       "crown": "%s IS CROWNED HEIR\n◆%d DEEDS",
+      "crown_gate": "%s IS CROWNED HEIR\nFIRST THROUGH THE MANOR GATE",
       "monument": "%s — HEIR OF THE PROCESSION (◆%d)",
       "graffiti": "%s inherited the manor at the procession"
     },
-    "epitaph_graffiti": "%s had the last word over %s: “%s”. The estate filed it."
+    "epitaph_graffiti": "%s had the last word over %s: “%s”. The estate filed it.",
+    "crossroads": {
+      "header": "%s — CHOOSE THE ROAD",
+      "option": "%s · %d STONES TO THE GATE",
+      "hint": "UP/DOWN TO CHOOSE · A TO COMMIT"
+    },
+    "bell": {
+      "header": "THE FINAL BELL",
+      "rung": "%s rings the bell at the Manor Gate.\nONE LAST TURN for everyone still on the road.",
+      "closing": "The road closes at dawn. The turn cap has been reached."
+    }
   }
 }
