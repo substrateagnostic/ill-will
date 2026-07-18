@@ -3,7 +3,10 @@
 *Night 7 (2026-07-18). The design that merges classic + procession into one
 game. Synthesized from the night-7 research fleet (RA/RB/RC/RD +
 tools/board_balance_sim.py, 90k simulated games) and Alex's producer spec.
-STATUS: awaiting producer review — nothing here is built yet except the sim.*
+STATUS: **PRODUCER-APPROVED 2026-07-18** (pending Codex addendum; tweaks
+expected from playtests). Locked calls: FINAL BELL · PENNIES/WREATHS ·
+LETTERS OF ADMINISTRATION in v1 · phases 1-2 greenlit · figurine pawns ·
+Estate Stirs major/minor split · Book of the Dead cosmetic-first.*
 
 ---
 
@@ -63,8 +66,9 @@ NIGHT (repeat 3x):
     3. MINIGAME — random (THE INVITATION item can pick), all-play
        → pennies 10/6/3/1 + wreaths 2/1/1/0
   FINAL BELL → arrival wreaths 10/7/4/2 → 3 announced awards → standings
-  INTERLUDE — will reading (night recap ceremony), ONE grounds minigame,
-    wardrobe, LAST RITES cart (end-of-night store), estate scars persist
+  INTERLUDE — will reading (night recap ceremony), one grounds minigame
+    (interlude 1: random; interlude 2: the current DOORMAT picks, no
+    repeat of interlude 1's game), wardrobe, LAST RITES cart, scars persist
 FINALE — THE READING OF THE WILL: liquidation (10 pennies = 1 wreath),
   running totals revealed stream by stream, most wreaths INHERITS.
 ```
@@ -95,19 +99,38 @@ DRIVE gets route-colored ribbons.
 
 ## 4. THE ESTATE STIRS (topology events)
 
-One or two drawn per GAME from a pool, **announced by the Executor** at
-night start ("tonight, the estate is restless"), fired at a fixed mid-night
-beat with a full camera moment (board_camera money-shot vocabulary):
+Drawn per GAME from two pools (producer call, 2026-07-18), **announced by
+the Executor** at game start as omens ("tonight, the bog is hungry"), fired
+at fixed night beats with full camera moments (board_camera money-shot
+vocabulary). **Guaranteed minimum per game: 1 MAJOR + 1 MINOR.**
 
+**MAJOR (permanent reroutes — the board is different from here on):**
 1. **THE REAPER'S SHORTCUT** — a colossal scythe arcs down and carves a
-   new path between two routes. (Rigged + animated Meshy hero asset.)
+   passage between routes... and INTO THE CRYPT (see below). (Rigged +
+   animated Meshy hero.)
 2. **THE BONE BRIDGE** — rises from the bog; Weeping Valley gains a bypass.
-3. **THE FLOOD** — Garden Row closes for 2 turns; carts board their windows.
-4. **THE HUNGRY GRAVE** — one stone collapses into an Open Grave, permanently.
-5. **THE HEARSE MOVES ON** — the Peddler's Cart relocates to another route.
+3. **THE LANDSLIP** — a hillside gives way; one Hollow Woods segment now
+   empties into Weeping Valley (routes cross-contaminate).
+4. **THE PROCESSION ROAD** — ghostly pallbearers tread a brand-new stone
+   path between two distant points; anyone may walk it, it whispers.
+
+**MINOR (temporary or single-stone drama):**
+1. **THE FLOOD** — Garden Row closes for 2 turns; carts board their windows.
+2. **THE HUNGRY GRAVE** — one stone collapses into an Open Grave, permanently.
+3. **THE HEARSE MOVES ON** — the Peddler's Cart relocates to another route.
+4. **THE WAKE** — mourners crowd 3 stones for 2 turns; landing there costs a
+   toast (−2 pennies) but pays a wreath rumor (+1 séance-style spin).
+5. **CROW COURT** — the murder convenes on a stone; first to pass it is
+   robbed (−3 pennies), scattering them.
+
+**THE CRYPT (the fourth route — event-gated scarcity):** the shortest path
+in the game, pitch dark, claustrophobic camera, one guaranteed Open Grave.
+It has no crossroads entrance — it opens ONLY via the Reaper's Shortcut or
+a Gravedigger purchase. A route you *earn or buy*, never a menu option.
 
 No two games play the same board. All announced, never hidden (Pro Rules
-discipline — nothing hidden decides).
+discipline — nothing hidden decides). Moving set pieces are cheap drama —
+pool grows over time.
 
 ## 5. The roll — THE LAST BREATH meter (RD candidate B)
 
@@ -197,20 +220,46 @@ regardless of variant:
 3. **All ties break explicitly and visibly** (stable-sort bias gave seat 0
    an 11-point edge in early sims — the real game gets ceremony tie-breaks).
 4. **Turn cap 12 with distance ranking** as the no-crossing fallback.
-5. A mercy mechanic for the winless seat (the night-6 LETTERS OF
-   ADMINISTRATION pity draw) — the 0.75× seat wins only ~4-6% of games and
-   needs a dignity floor. Opt-in, announced, Dokapon-Darkling flavored.
+5. **LETTERS OF ADMINISTRATION (locked, v1):** at night start, a player
+   with zero minigame wins AND bottom wreaths may publicly accept the
+   Letters — the Executor reads it as a dry legal formality (comedy doing
+   balance work). That night only: cart at 30% off, one free CROW'S CUT,
+   arrival award bumped one tier. Opt-in, announced, time-boxed — the
+   Dokapon-Darkling shape. (The 0.75× seat wins only ~4-6% of games
+   without a dignity floor; comeback target ~20%.)
 
 Comeback rate (~17%) is below the ~20% target: close the gap with the
 LETTERS mercy draw + séance wreath swings, not with invisible handicaps.
 
 ## 9. Downtime (the restored sequential-roll tax)
 
-Budget: roll act ≤5s, travel ≤2s (hold-A fast-forward), one Executor line,
-full 4-seat roll phase ≤40s. The three waiting seats always have a job:
+**THE DOCTRINE (Alex, 2026-07-18): "Downtime is any time spent not
+THINKING or not ACTING."** The old procession's failure was not idle hands
+— it was illegibility at speed: "a simulator with an occasional putt," too
+fast to calculate strategy, too opaque to strategize about at all. So the
+budget below has TWO sides, and legibility is the harder one:
 
-- **BOOK OF THE DEAD** — sealed bet on the coming minigame's winner
-  (cosmetic stakes; bystanders watch the same needle the roller does).
+**Action budget:** roll act ≤5s, travel ≤2s (hold-A fast-forward), one
+Executor line, full 4-seat roll phase ≤40s.
+
+**Thinking budget (a waiting seat must always be able to answer these at a
+glance):** where is everyone, what route are they on, what do they hold,
+what are the three announced award races, what do I want from my next roll.
+Concretely: persistent standings strip with route icons + penny/wreath
+counts; THE DRIVE always visible during the roll phase; camera cuts that
+frame the DECISION (the crossroads ahead, the stone they'll land on), not
+the walk; the crossroads choice telegraphed one roll early so rivals can
+scheme against it. Between-move stillness with a readable board is not
+downtime — it's the strategy layer.
+
+The three waiting seats also always have a job:
+
+- **BOOK OF THE DEAD** — sealed bet on the coming minigame's winner.
+  **v1: cosmetic stakes only** (boast lines, no economy touch). v2, only
+  with clean UX (old side-bets failed on usability, producer verdict):
+  1-penny ante, and a **self-bet tax** — betting on YOURSELF and losing
+  pays a larger penalty than a wrong bet on a rival, so the table shark
+  can't compound wins by default-betting themselves.
 - **REACT glyphs** over the roller (shipped F24 system, new surface).
 - Walkabout presence: run alongside the board, emotes, scrap-collecting,
   chapel bell (cooldown + audio ducking under the crit tell). The meter
@@ -225,8 +274,13 @@ reads the will).
 
 ## 11. Art + Meshy manifest (post-approval, pull-immediately doctrine)
 
-- **Minifigs:** board pawns become the four KayKit-rig characters at pawn
-  scale (existing rigs, 0.7-0.78 scale precedent — likely zero Meshy cost).
+- **Figurine pawns (producer call — option b):** NOT walking mini-people.
+  Toy-style figurines of the four characters on round bases that HOP
+  stone-to-stone with a clack. Build from the existing character meshes in
+  a static sculpt pose + cylinder base, slight glaze/ceramic material —
+  in-engine, zero Meshy cost, perfect likeness. The fiction stays clean:
+  you play a board game ABOUT them while the characters themselves run
+  alongside heckling.
 - **Heroes:** THE REAPER (rigged + scythe animation), BONE BRIDGE (rise
   anim), the LYCHGATE, MANOR GATE arch, PEDDLER'S CART (hearse-drawn).
 - **NPCs:** gravedigger, widow, ferryman + skiff, mourner, magpie.
