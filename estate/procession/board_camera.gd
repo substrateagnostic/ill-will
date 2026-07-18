@@ -22,23 +22,24 @@ const SWAY_POS := Vector3(0.055, 0.038, 0.05)   # metres, per-axis amplitude
 const SWAY_LOOK := 0.03                          # metres of aim drift
 
 var cam: Camera3D = null
-var board: ProcessionBoardPath = null
+var board: ProcessionBoardGraph = null
 var fast := false
 
 var _driving := false                 # when false, procession poses the cam directly
-# A gentle 3/4 overview (a touch off the drive's axis) instead of a dead-centre,
-# perfectly-symmetric head-on — reads more cinematic while still showing the whole
-# loop. Kept in lock-step with procession._cam_home so director + posed shots agree.
-var _base_pos := Vector3(-3.4, 23.5, 23.0)
-var _base_look := Vector3(0, 0, -3)
+# A gentle 3/4 overview (a touch off the grounds' axis) instead of a dead-centre,
+# perfectly-symmetric head-on — reads more cinematic while still showing all
+# three roads. Home comes from the board (OVERVIEW_POS) so the director and
+# procession's posed shots agree by construction.
+var _base_pos := ProcessionBoardGraph.OVERVIEW_POS
+var _base_look := Vector3.ZERO
 var _tw: Tween = null
 var _t := 0.0                          # handheld clock (seconds, wall time)
-var _home_pos := Vector3(-3.4, 23.5, 23.0)
-var _home_look := Vector3(0, 0, -3)
+var _home_pos := ProcessionBoardGraph.OVERVIEW_POS
+var _home_look := Vector3.ZERO
 
-func setup(camera: Camera3D, board_path: ProcessionBoardPath, is_fast: bool) -> void:
+func setup(camera: Camera3D, board_graph: ProcessionBoardGraph, is_fast: bool) -> void:
 	cam = camera
-	board = board_path
+	board = board_graph
 	fast = is_fast
 	if board != null:
 		_home_look = board.CENTER
@@ -85,26 +86,31 @@ func _handheld_look() -> Vector3:
 # NAMED SHOTS — each sets the base pose (tweened) that _process composits.
 # --------------------------------------------------------------------------
 
-## ESTABLISH — a low, close pose at the manor gate (pre-flyover start frame).
+## ESTABLISH — a low, close pose at the LYCHGATE looking up the road north
+## (pre-flyover start frame).
 func establish() -> void:
-	_snap(Vector3(0.0, 6.5, 6.0), board.CENTER + Vector3(0, 1.6, -11.0))
+	var lych := board.lychgate_pos()
+	_snap(lych + Vector3(0.0, 5.5, 9.0), lych + Vector3(0, 1.6, -14.0))
 
 ## The opening flyover: a smooth multi-key tour (position AND look-at
-## interpolated together) — the gate, a rise along the drive, the far sweep, a
-## glide past the Codicil, then a settle to the whole-board overview. Awaits the
-## tour but breaks EARLY the instant any player taps (skip: a Callable -> bool).
-## Instant under fast.
+## interpolated together) — the lychgate, a rise over GARDEN ROW, the sweep
+## across HOLLOW WOODS and WEEPING VALLEY, a hero glide onto the MANOR GATE,
+## then a settle to the whole-board overview. Awaits the tour but breaks EARLY
+## the instant any player taps (skip: a Callable -> bool). Instant under fast.
 func flyover(skip: Callable) -> void:
 	activate()
 	if fast or not is_instance_valid(cam) or board == null:
 		_snap(_home_pos, _home_look)
 		return
-	var bpos := board.space_pos(board.beacon_index)
+	var lych := board.lychgate_pos()
+	var garden := board.route_mid_pos("garden")
+	var valley := board.route_mid_pos("valley")
+	var gate := board.gate_pos()
 	var keys: Array = [
-		{"p": Vector3(0.0, 6.5, 6.0), "l": board.CENTER + Vector3(0, 1.6, -11.0)},
-		{"p": Vector3(-24.0, 13.0, 9.0), "l": board.CENTER + Vector3(-4, 0.6, 2)},
-		{"p": Vector3(-9.0, 20.0, -28.0), "l": board.CENTER + Vector3(0, 1.0, -2)},
-		{"p": bpos + Vector3(6.0, 8.0, 7.0), "l": bpos + Vector3(0, 1.6, 0)},
+		{"p": lych + Vector3(0.0, 5.5, 9.0), "l": lych + Vector3(0, 1.6, -14.0)},
+		{"p": garden + Vector3(9.0, 11.0, 5.0), "l": garden + Vector3(-2, 0.6, -3)},
+		{"p": valley + Vector3(-10.0, 13.0, 0.0), "l": valley + Vector3(2, 0.6, -3)},
+		{"p": gate + Vector3(5.0, 7.5, 9.0), "l": gate + Vector3(0, 2.2, 0)},
 		{"p": _home_pos, "l": _home_look},
 	]
 	_kill_tween()
@@ -145,8 +151,8 @@ func move_travel(dur := 0.9) -> void:
 		_snap(_home_pos, _home_look)
 		return
 	var c: Vector3 = board.CENTER
-	var start := c + Vector3(-3.2, 9.0, 24.0)
-	var end := c + Vector3(3.2, 8.4, 23.2)
+	var start := c + Vector3(-4.0, 12.0, 32.0)
+	var end := c + Vector3(4.0, 11.2, 31.0)
 	var look := c + Vector3(0, 1.1, 0)
 	_kill_tween()
 	# Ease DOWN from wherever we were (usually the whole-board overview) into the
@@ -228,7 +234,7 @@ func standings(points: Array) -> void:
 		whole_board(0.6)
 		return
 	var lead: Vector3 = points[0]
-	var pos := Vector3(lead.x * 0.4, 15.0, 20.0)
+	var pos := Vector3(lead.x * 0.4, 22.0, 30.0)
 	var look := board.CENTER + Vector3(0, 0.6, 0)
 	if fast:
 		_snap(pos, look)
