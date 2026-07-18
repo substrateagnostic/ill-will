@@ -140,7 +140,17 @@ auditable** d6 distribution (geometric kernel k=1.6): full-left =
 [40/25/15/10/6/4]%, center peaks 3/4, full-right mirrors. A **45ms crit
 band**, re-dealt every roll (W8 doctrine on a new surface), sharpens to
 k=3.2 — a crit roughly **doubles your top-face certainty without changing
-your aim**. Die stays d6 in v1 (the entire economy is tuned to 1-6 moves).
+your aim**.
+
+**Die: d8 base** (producer + sim, 2026-07-18). The die study (10k games per
+config) showed balance is die-size-agnostic (skilled win 52.3/51.5/51.6%
+across d6-24/d8-30/d10-36), so the call is feel: d8 on ~30-stone paths buys
+a longer, grander track AND a wider aim window (8 heatmap candidates per
+roll) at the same 75-90 min session. WRITS widen d8→d10→d12 temporarily.
+Item magnitudes scale one notch for the bigger die (+3 lucky boost, bell
+−4). In the pocket if 1-rolls feel bad live: the MOURNER'S DIE (faces 2-9,
+same single honest kernel, no snake eyes). 2dN rejected — a bell curve
+breaks the "aim at your number" read.
 
 Hard rules carried from RD: never randomize after release commits; the
 weights must be real (MP's fake dice-timing scandal is the cautionary tale —

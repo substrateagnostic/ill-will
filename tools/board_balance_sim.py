@@ -31,7 +31,7 @@ import argparse
 import random
 from collections import defaultdict
 
-N_FACES = 6
+N_FACES = 6          # overridable via --faces (die-size study, night 7)
 BIAS_K = 1.6
 CRIT_K = 3.2
 
@@ -44,7 +44,7 @@ CROSSING_BONUS_C = 8                # variant C one-time crossing prize
 AWARD_WREATHS = 4                   # per announced night award (3 per night)
 LIQUIDATION_RATE = 10               # pennies per wreath at game end
 
-TRACK_A = 40                        # stones, nightly board (variant A)
+TRACK_A = 40                        # stones, nightly board (variant A); --track
 TRACK_BC = 120                      # stones, continuous board (B and C)
 TURN_CAP_A = 12
 TURNS_BC = 8
@@ -352,6 +352,7 @@ def run_variant(variant, games, seed, skills, label):
 
 
 def main():
+    global N_FACES, TRACK_A
     ap = argparse.ArgumentParser()
     ap.add_argument("--games", type=int, default=10000)
     ap.add_argument("--seed", type=int, default=7)
@@ -359,7 +360,15 @@ def main():
                     help="all seats identical skill (seat-order fairness check)")
     ap.add_argument("--skill", type=float, default=1.35,
                     help="P0 minigame skill multiplier (default 1.35)")
+    ap.add_argument("--faces", type=int, default=6,
+                    help="die size (default 6)")
+    ap.add_argument("--track", type=int, default=40,
+                    help="variant-A nightly track length (default 40)")
+    ap.add_argument("--variant", choices=["A", "B", "C", "all"], default="all")
     args = ap.parse_args()
+
+    N_FACES = args.faces
+    TRACK_A = args.track
 
     if args.equal:
         skills = [(1.0, 0.06, 0.18)] * 4
@@ -369,17 +378,21 @@ def main():
                   (1.0, 0.06, 0.18), (0.75, 0.09, 0.10)]
 
     print("ILL WILL board rework - Monte Carlo balance sim")
-    print(f"seed={args.seed}  games/variant={args.games}")
+    print(f"seed={args.seed}  games/variant={args.games}  "
+          f"d{args.faces}  track={args.track}")
     if args.equal:
         print("skills: ALL SEATS EQUAL (fairness check)")
     else:
-        print("skills: P0 skilled (1.35), P1-P2 avg, P3 weak (0.75)")
-    run_variant("A", args.games, args.seed, skills,
-                "FINAL BELL (nightly reset, arrival 10/7/4/2)")
-    run_variant("B", args.games, args.seed, skills,
-                "LONG PROCESSION (continuous, no arrival scoring)")
-    run_variant("C", args.games, args.seed, skills,
-                "HYBRID WARP (continuous, +8 crossing, loop)")
+        print(f"skills: P0 skilled ({args.skill}), P1-P2 avg, P3 weak (0.75)")
+    if args.variant in ("A", "all"):
+        run_variant("A", args.games, args.seed, skills,
+                    f"FINAL BELL (d{args.faces}, track {args.track})")
+    if args.variant in ("B", "all"):
+        run_variant("B", args.games, args.seed, skills,
+                    "LONG PROCESSION (continuous, no arrival scoring)")
+    if args.variant in ("C", "all"):
+        run_variant("C", args.games, args.seed, skills,
+                    "HYBRID WARP (continuous, +8 crossing, loop)")
 
 
 if __name__ == "__main__":
