@@ -150,6 +150,7 @@ var _capture := false            # windowed: pose beats + snap for screenshots
 var _vendettatest := false       # dev flag: force the board-drama presentation with bot data (screenshots)
 var _longnames := false          # dev flag (W9): worst-case long names to stress the text surfaces
 var _graphtest := false          # --boardgraphtest: print the topology receipt and quit
+var _parprobe := false           # --parprobe: run the legacy Par adapter once, print, quit
 # ---- the NAMED rng streams (header doctrine; LAYOUT lives in board_graph) ----
 var _roll_rng := RandomNumberGenerator.new()     # ROLL: band deals, bot aim, bot road picks
 var _event_rng := RandomNumberGenerator.new()    # EVENT: séance, items, minigame pick, house
@@ -315,6 +316,11 @@ func _boot(config: Dictionary) -> void:
 	roster = config.get("roster", []) if config.has("roster") else _default_roster()
 	if _longnames:
 		_apply_longnames()   # W9: stress the text surfaces with worst-case names
+	# P3: a real couch plays the REAL minigames (they are the board's engine
+	# room, doc 28 §0). Probes and all-bot soaks keep the deterministic
+	# minisim; --realmini still forces live modules for bot tables.
+	if not _autoplay and _has_human():
+		_minisim = false
 	_init_arrays()
 	_build_world()
 	_build_hud()
@@ -327,7 +333,20 @@ func _boot(config: Dictionary) -> void:
 	print("PROCESSION boot seed=%d board=%s turn_cap=%d nights=%d players=%d autoplay=%s minisim=%s" % [
 		seed_value, String(BoardGraph.BOARD.id), turn_cap, match_nights, roster.size(),
 		str(_autoplay), str(_minisim)])
+	if _parprobe:
+		_parprobe_run()   # dev probe: the legacy Par adapter, alone, then quit
+		return
 	_run_match()
+
+## Dev probe (`--parprobe`, never on a receipt): exercise the P3 legacy Par
+## adapter end-to-end — real launch, real finish signal, validated placements
+## — then quit. Pair with --autoplay=bots for an unattended run.
+func _parprobe_run() -> void:
+	_minisim = false
+	print("PARPROBE launching legacy par via the catalog adapter")
+	var placements: Array = await _run_minigame("par")
+	print("PARPROBE placements=", placements)
+	get_tree().quit()
 
 func _parse_cli() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -351,6 +370,8 @@ func _parse_cli() -> void:
 			_minisim = true
 		elif arg == "--realmini":
 			_minisim = false     # launch real modules even under autoplay
+		elif arg == "--parprobe":
+			_parprobe = true     # dev: run the legacy Par adapter once and quit
 		elif arg == "--slowsim":
 			_fast = false         # keep ceremonies at full length (for capture)
 		elif arg == "--vendettatest":
@@ -3121,11 +3142,7 @@ func _run_minigame(id: String) -> Array:
 	if _minisim:
 		return _sim_placements()
 	if String(meta.get("launch", "contract")) == "legacy":
-		# Landmine 3: Par is a legacy launcher (no begin(); root-parented;
-		# GameState reset). The draw stands; the module simulates until the
-		# P3 catalog-level adapter.
-		print("PROCESSION note: %s is a legacy launcher — simulated placements until the P3 adapter" % id)
-		return _sim_placements()
+		return await _run_legacy_minigame(id, meta)
 	var scene: PackedScene = load(String(meta.get("scene", "")))
 	if scene == null:
 		return await _module_error(id, "scene missing")
@@ -3153,6 +3170,71 @@ func _run_minigame(id: String) -> Array:
 	if not _valid_placements(_mini_out):
 		return await _module_error(id, str(_mini_out))
 	return _mini_out
+
+## THE PAR ADAPTER (P3 — landmine 3, estate.gd's "gamestate" launch pattern):
+## Par is a legacy launcher — no begin(), root-parented, GameState-reset, but
+## it duck-types finished(results) like every module. This mirrors estate.gd's
+## _launch_game_swap "gamestate" branch: reset GameState for the roster, place
+## the module at the TREE ROOT (it owns the frame; PartySetup's boot-time
+## free_stray_root_nodes is the safety net — never called here, since the
+## procession itself rides the root at merge), and transition on the emitted
+## signal, never a computed win (landmine 7). Procession's own EnvKit rig
+## stands down while Par runs (a legacy scene brings its own world).
+func _run_legacy_minigame(id: String, meta: Dictionary) -> Array:
+	var scene: PackedScene = load(String(meta.get("scene", "")))
+	if scene == null:
+		return await _module_error(id, "scene missing")
+	var module: Node = scene.instantiate()
+	if not module.has_signal("finished"):
+		module.free()
+		return await _module_error(id, "no finished signal")
+	# Par reads seats from PlayerInput/GameState, not a roster dict — make the
+	# board's bot flags visible to it (autoplay probes included).
+	for pl in roster:
+		PlayerInput.set_bot(int(pl.index), bool(pl.bot))
+	GameState.player_count = roster.size()
+	GameState.rounds_total = 2   # one board cycle's worth (contract games run rounds=2)
+	GameState.reset_match()
+	board.visible = false
+	cam.current = false
+	_ui.visible = false
+	if breath.meter != null:
+		breath.meter.visible = false
+	_envkit_standdown(true)
+	_mini_done = false
+	_mini_out = []
+	_mini_results = {}
+	module.finished.connect(_on_mini_finished, CONNECT_ONE_SHOT)
+	get_tree().root.add_child(module)   # root placement — the legacy contract
+	while not _mini_done:
+		await get_tree().process_frame
+	if is_instance_valid(module):
+		module.queue_free()
+	_envkit_standdown(false)
+	board.visible = true
+	cam.current = true
+	_ui.visible = true
+	if not _valid_placements(_mini_out):
+		return await _module_error(id, str(_mini_out))
+	return _mini_out
+
+## Mute/restore the procession's own EnvKit world + light rig while a legacy
+## full-scene module runs (two live WorldEnvironments fight; a null
+## environment stands aside). Presentation only.
+var _envkit_saved: Environment = null
+
+func _envkit_standdown(down: bool) -> void:
+	for n in find_children("*", "", false, false):
+		if not n.is_in_group("envkit_rig"):
+			continue
+		if n is WorldEnvironment:
+			if down:
+				_envkit_saved = (n as WorldEnvironment).environment
+				(n as WorldEnvironment).environment = null
+			elif _envkit_saved != null:
+				(n as WorldEnvironment).environment = _envkit_saved
+		elif n is Node3D:
+			(n as Node3D).visible = not down
 
 ## Placements must be a permutation of the real roster — every seat exactly
 ## once. Anything else is a module bug the table deserves to SEE.
