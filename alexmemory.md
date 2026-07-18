@@ -6,6 +6,30 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🔔 NIGHT 7 — THE REWORK PLAN AWAITS YOUR PEN (2026-07-18).**
+  **The full unified-mode design is at `docs/design/28-the-procession-unified-mode.md`**
+  — THE PROCESSION becomes the whole game (classic retires, auction/votes
+  scrapped), PENNIES + WREATHS economy with every number specified, THE LAST
+  BREATH roll meter (700ms slider, honest auditable weights, 45ms crit),
+  branching 3-route board (~90 stones) with THE ESTATE STIRS topology events
+  (Reaper's scythe shortcut, bone bridge, flood, hungry grave, wandering
+  hearse), FINAL BELL night-end, 3-of-5 announced night awards, Book of the
+  Dead side bets. **Monte Carlo receipts (90k games,
+  tools/board_balance_sim.py):** seat-fair to ±0.5%, good-friend skill edge
+  wins ~50%, comeback ~17% (LETTERS mercy draw closes the gap), FINAL BELL
+  beats your continuous-board alt on drama at equal balance — but B is one
+  flag in the sim if you want to feel it. Sim discovered four structural
+  laws now in the doc: standings roll order (leader rolls first, blind),
+  home pawns untouchable, explicit tie-breaks, award de-correlation
+  (earnings-based awards measurably boost sharks — pool stays luck/behavior
+  weighted). **NOTHING IS BUILT until you mark this up.** Codex second
+  opinion lands as an addendum. Playtest bugs from your notes: ALL FIXED
+  and pushed tonight (gamepad everywhere incl. every estate screen + pad
+  A/B on menus — Godot ships ui_accept with no gamepad button, that was
+  the whole plague; dialog → one editable `dialog/dialog.json` (317
+  strings, hand-rewrite freely), Nintendo pager with ring countdown, guides
+  2×, DEAD WEIGHT off-map hole now fatal, SHUT THE ESTATE quit button).
+
 - **🌙🌙🌙🌙🌙🌙 MORNING MENU #6 — THE SIXTH WATCH (2026-07-17). The night
   the fleet went out, and everything came back.**
 
@@ -2412,3 +2436,40 @@ JUDGMENT CALLS (flag if you disagree):
 3. Elderly + groundskeeper on plain Idle (0) — cleanest grief/labor read given
    no dedicated mourning-stand or rake clip. style_02 is now proven, so a
    characterful re-pick (e.g. Dozing Elderly 38) is a report-only change later.
+
+---
+
+## R-C (night 7): load-bearing repo audit for the one-game rework — REPORT ONLY
+
+Full audit: docs/design/research-night7/RC-rework-audit.md (no code touched,
+nothing committed, no game runs). Condensed verdicts:
+
+- CLASSIC = auction-minigame night loop + 26-stone trail parade in estate.gd;
+  PROCESSION = self-contained 24-loop board scene. The fork is
+  estate.gd::_build_play_panel (455/_enter_procession vs 350/_play_pressed).
+- ADAPTS: procession.gd (becomes THE game — sequential turns, track w/ splits),
+  board_spaces grammar, board_camera (anchors re-derived; over-shoulder = new
+  shot), executor host, estate.gd (major surgery), estate_state (save v2).
+- SCRAPPED: pawn_putt (→ Madden oscillating slider; keep bot release logic),
+  board_path ring topology (→ node graph), auction + side bets + trail/parade
+  + trap-tile phase. "Map voting" doesn't exist in code — auction pick-of-3
+  and PAR course pick are the analogues; both go.
+- SURVIVES AS-IS: all 14 minigames + contract, results_board, podium,
+  MomentScribe/newsreel/album, saga_cards (Standing Grudge / eulogy receipt /
+  FINAL AUDIT), final_stretch, shake/env kits, cosmetics+wardrobe, walkabout,
+  bots rule (roster[i].bot), seance_wheel/roulette theater, mock_game.
+- CURRENCIES: 9 resources today; only `legacy` + `run{trail_pos,tollgates}`
+  persist. Collapse: SHOP ← grudge ♠ (two unrelated arrays today!), VICTORY ←
+  deeds ◆ / points. Keep currency_events type string "grudge" internally
+  (else 14 minigame receipts re-freeze); rename display-side via one const.
+- SAVE: slot_1's 5 nights live OUTSIDE run{} (monuments/ledger/chronicle.events/
+  legacy/wardrobe/statues/graffiti) — loader is get()-tolerant, additive keys
+  safe. Migrate legacy 1:1, add "schema":2, never wipe. Bot tests --slot=3.
+- RECEIPTS: seed-7 board receipt (meshy-troupe-VERIFY:168, HEIR BLUE/17) dies;
+  online-ceremonies, parity-night4, all online-<game> estate bookends, and
+  --auctiontest die. All per-minigame receipts survive. Re-found in layers:
+  topology → movement → full night → 3-night game → net pair; add a
+  tools/run_receipts.ps1 while the list is short.
+- TOP 3 RISKS: (1) ring→graph topology cascade (minimap/camera/bots/tolls/
+  net_state), (2) estate.gd surgery with the net ceremony mirror woven through
+  every phase, (3) currency collapse vs saves + receipt strings.
