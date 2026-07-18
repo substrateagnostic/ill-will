@@ -860,7 +860,7 @@ func _rebuild_seats() -> void:
 		row.add_child(dev_btn)
 		_seats_box.add_child(row)
 	var hint := Label.new()
-	hint.text = "Changes apply to the next game launched (estate phases apply live).\nGamepads must press a button once to be detected by the OS."
+	hint.text = Dialog.text("settings.hint")
 	hint.add_theme_font_size_override("font_size", 15)
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.modulate.a = 0.75

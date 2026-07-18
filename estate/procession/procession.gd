@@ -40,29 +40,14 @@ const RAISE_TIME := 2.5              # sealed-stakes hold-to-raise window (secon
 # One-word-ish epitaphs the duel winner hangs on the loser's pawn for the rest of
 # the night, in the estate's gravestone register (doc 26): death is a filing, not
 # a scream; affection is logged as liability. Chosen from the PRESENTATION rng.
-const EPITAPHS := [
-	"BRIEFLY MOURNED",
-	"SURVIVED BY NO ONE",
-	"PENDING PROBATE",
-	"FILED UNDER LOSS",
-	"DIED IN ARREARS",
-	"NOT NAMED IN THE WILL",
-	"LATE, AND UNLAMENTED",
-	"SETTLED IN FULL",
-	"OF NO FIXED ESTATE",
-	"NO KNOWN HEIRS",
-	"REMAINDERED",
-	"HERE, UNDER PROTEST",
-]
-# Dry framing lines for THE INTERIM READING (Voice A: full sentences, two beats,
-# no exclamation, death administrative). Drawn from the PRESENTATION rng only, so
-# the interim beat never touches the sim stream even when it does render.
-const INTERIM_LINES := [
-	"A provisional accounting, read aloud so no one may later claim surprise.",
-	"The estate pauses over the running clauses. Nothing here is final, and nothing here is forgiven.",
-	"An interim reckoning. The leaders are noted, in pencil, and watched.",
-	"The estate reads the standing so far. It has read worse, to worse people.",
-]
+# Epitaphs + interim framing lines now live in dialog.json ("procession.epitaphs",
+# "procession.interim_lines"); these getters fetch them. Both are drawn from the
+# PRESENTATION rng by SIZE, so an edit that keeps the line count stays deterministic
+# and never touches the sim stream / the frozen receipt.
+static var EPITAPHS: Array:
+	get: return Dialog.paras("procession.epitaphs")
+static var INTERIM_LINES: Array:
+	get: return Dialog.paras("procession.interim_lines")
 # F24 reveal-cascade reactions: waiting-player button -> attributed glyph.
 const REACT_COOLDOWN_MS := 550
 const REACT_MAP := {"b": "HA!", "up": "OOH", "down": "OOF"}
@@ -756,12 +741,12 @@ func _slide_in_lowerthird() -> void:
 # --------------------------------------------------------------------------
 func _choose_clauses() -> void:
 	clauses = [
-		{"stat": "moved", "title": "THE LONGEST PROCESSION",
-			"desc": "walked the most stones tonight"},
-		{"stat": "lost", "title": "THE MOST BETRAYED",
-			"desc": "bled the most Grudge to graves and tolls"},
-		{"stat": "duels", "title": "THE BLOODIEST HAND",
-			"desc": "won the most on the board — vendettas and claims"},
+		{"stat": "moved", "title": Dialog.text("procession.clauses.longest_title"),
+			"desc": Dialog.text("procession.clauses.longest_desc")},
+		{"stat": "lost", "title": Dialog.text("procession.clauses.betrayed_title"),
+			"desc": Dialog.text("procession.clauses.betrayed_desc")},
+		{"stat": "duels", "title": Dialog.text("procession.clauses.bloody_title"),
+			"desc": Dialog.text("procession.clauses.bloody_desc")},
 	]
 
 # --------------------------------------------------------------------------
@@ -818,8 +803,8 @@ func _intro() -> void:
 	board_camera.whole_board(0.6)
 	var lines: Array[String] = []
 	for c in clauses:
-		lines.append("◆ %s — +1 Deed to whoever %s" % [c.title, c.desc])
-	_announce_text("TONIGHT'S WILL CLAUSES\n\n" + "\n".join(lines), Color(0.85, 0.78, 1.0))
+		lines.append(Dialog.text("procession.clauses.line") % [c.title, c.desc])
+	_announce_text(Dialog.text("procession.clauses.card_header") + "\n\n" + "\n".join(lines), Color(0.85, 0.78, 1.0))
 	if _capture:
 		await _cap_snap("will_clause")
 	else:
@@ -980,11 +965,11 @@ func _apply_item_movement(moved: Array[int]) -> void:
 		if items[i].pin > 0:
 			items[i].pin -= 1
 			moved[i] += 1
-			_flash_line("%s spends a MOURNING PIN (+1 space)" % roster[i].name, roster[i].color, i)
+			_flash_line(Dialog.text("procession.narration.pin") % roster[i].name, roster[i].color, i)
 		if items[i].ribbon > 0:
 			items[i].ribbon -= 1
 			moved[i] = maxi(1, moved[i] - 1)
-			_flash_line("%s is dragged by a BLACK RIBBON (−1 space)" % roster[i].name, roster[i].color, i)
+			_flash_line(Dialog.text("procession.narration.ribbon") % roster[i].name, roster[i].color, i)
 
 func _pay_passthrough_tolls(seat: int, from_idx: int, moved: int) -> void:
 	for step in range(1, moved):   # intermediate spaces only; landing handled in reveal
@@ -1143,7 +1128,7 @@ func _resolve_shrine(seat: int, name: String, col: Color) -> void:
 func _resolve_grave(seat: int, name: String, col: Color) -> void:
 	if items[seat].salt > 0:
 		items[seat].salt -= 1
-		executor.say("%s salts the grave — the loss is cancelled." % name, col)
+		executor.say(Dialog.text("procession.narration.grave_salt") % name, col)
 		return
 	var owner := board.grave_owner(positions[seat])
 	stats[seat].graves += 1
@@ -1187,7 +1172,7 @@ func _resolve_seance(seat: int, name: String, col: Color) -> void:
 	if not _fast:
 		# Match the lower-third to the séance during the spin (the outcome line
 		# lands after the needle settles).
-		executor.say("The planchette stirs for %s. The circle turns…" % name,
+		executor.say(Dialog.text("procession.narration.seance_stir") % name,
 			Color(0.78, 0.6, 0.95))
 		if _capture:
 			# Fire the spin, snap it mid-turn for the verification screenshot, then
@@ -1235,7 +1220,7 @@ func _resolve_tollgate(seat: int, name: String, col: Color) -> void:
 func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	var nemesis := _nearest_within(seat, 5)
 	if nemesis < 0:
-		executor.say("%s reaches the vendetta stone alone. No blood today." % name, col)
+		executor.say(Dialog.text("procession.narration.vendetta_alone") % name, col)
 		return
 	# THE STAKE (doc 18 signature 1v1). Bots + remote guests roll the old hidden
 	# 0–3 (via _stake_for → sim rng). LOCAL HUMANS raise their own stake, sealed
@@ -1258,7 +1243,7 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	var lose := nemesis if win == seat else seat
 	var low := mini(s_a, s_b)
 	if s_a == s_b:
-		executor.say("%s and %s stake %d each — a wash. The estate is disappointed." % [
+		executor.say(Dialog.text("procession.narration.vendetta_wash") % [
 			name, roster[nemesis].name, s_a], col)
 		return
 	var moved_g := mini(low + 1, grudge[lose])
@@ -1514,12 +1499,12 @@ func _interim_reading() -> void:
 	for c in clauses:
 		var lead := _stat_leader(String(c.stat))
 		if lead >= 0:
-			lines.append("◆ %s — %s leads, %s" % [
+			lines.append(Dialog.text("procession.interim.line") % [
 				c.title, roster[lead].name, _interim_metric(String(c.stat), lead)])
 		else:
-			lines.append("◆ %s — still contested. No one leads." % c.title)
-	_announce_text("THE INTERIM READING\n\n" + "\n".join(lines)
-		+ "\n\nProvisional. The estate reserves the right to change its mind.",
+			lines.append(Dialog.text("procession.interim.contested") % c.title)
+	_announce_text(Dialog.text("procession.interim.header") + "\n\n" + "\n".join(lines)
+		+ "\n\n" + Dialog.text("procession.interim.trailer"),
 		Color(0.85, 0.78, 1.0))
 	if _capture:
 		await _cap_snap("interim_reading")
@@ -1530,9 +1515,9 @@ func _interim_reading() -> void:
 func _interim_metric(stat: String, seat: int) -> String:
 	var v := int(stats[seat].get(stat, 0))
 	match stat:
-		"moved": return "%d stones walked" % v
-		"lost": return "%d♠ bled" % v
-		"duels": return "%d taken on the board" % v
+		"moved": return Dialog.text("procession.interim.metric_stones") % v
+		"lost": return Dialog.text("procession.interim.metric_bled") % v
+		"duels": return Dialog.text("procession.interim.metric_board") % v
 	return "%d" % v
 
 ## THE EPITAPH. The duel winner hangs a seeded gravestone tag on the loser's pawn
@@ -1548,7 +1533,7 @@ func _hang_epitaph(loser: int, winner: int) -> void:
 	# The estate keeps the last word — persisted at heir-crowning, like the heir
 	# monument, and only when this is real play (autoplay probes never write).
 	if not _autoplay:
-		EstateState.add_graffiti("%s had the last word over %s: “%s”. The estate filed it." % [
+		EstateState.add_graffiti(Dialog.text("procession.epitaph_graffiti") % [
 			String(roster[winner].name), String(roster[loser].name), epitaph])
 
 ## Ride a small IM Fell gravestone tag on the loser's pawn (matches the pawn
@@ -1637,8 +1622,8 @@ func _minigame_block() -> void:
 			moved_total[p] += adv
 			positions[p] = posmod(positions[p] + adv, BoardPath.SPACES)
 			board.seat_pawn(p, positions[p])
-		lines.append("%s  #%d  +%d♠" % [roster[p].name, rank + 1, pay])
-	_announce_text("THE RECKONING\n\n" + "\n".join(lines), Color(0.95, 0.85, 0.6))
+		lines.append(Dialog.text("procession.reckoning.line") % [roster[p].name, rank + 1, pay])
+	_announce_text(Dialog.text("procession.reckoning.header") + "\n\n" + "\n".join(lines), Color(0.95, 0.85, 0.6))
 	_refresh_hud()
 	await _beat(2.4)
 	_hide_announce()
@@ -1700,7 +1685,7 @@ func _house_awakens() -> void:
 	_phase = "house"
 	executor.clear_banner()
 	executor.gesture_house_rise()   # B2-HOOK: the host rises (F7)
-	_announce_text("THE HOUSE AWAKENS\n\n" + Executor.pick(Executor.HOUSE_AWAKENS, rng),
+	_announce_text(Dialog.text("procession.house_awakens.header") + "\n\n" + Executor.pick(Executor.HOUSE_AWAKENS, rng),
 		Color(1, 0.4, 0.35))
 	if final_kit:
 		final_kit.escalate()
@@ -1719,10 +1704,10 @@ func _house_awakens() -> void:
 			caught.append(String(roster[i].name))
 			stats[i].lost += 1
 	if caught.is_empty():
-		_announce_text("THE HOUSE AWAKENS\n\nEveryone reaches a safe stone. The house sulks.",
+		_announce_text(Dialog.text("procession.house_awakens.header") + "\n\n" + Dialog.text("procession.house_awakens.safe"),
 			Color(0.7, 0.85, 1.0))
 	else:
-		_announce_text("THE HOUSE AWAKENS\n\n" + ", ".join(caught) + " slip back two stones.",
+		_announce_text(Dialog.text("procession.house_awakens.header") + "\n\n" + ", ".join(caught) + Dialog.text("procession.house_awakens.slip_suffix"),
 			Color(1, 0.55, 0.4))
 	_refresh_hud()
 	_push_net()
@@ -1760,13 +1745,13 @@ func _will_reading() -> void:
 			deeds[winner_seat] += 1
 			stats[winner_seat].will_bonus = int(stats[winner_seat].get("will_bonus", 0)) + 1
 			_pop_grudge(winner_seat, 1, "◆")   # F10: the bonus Deed flies to the chip
-			lines.append("%s — %s (%s)  +1 Deed → ◆%d" % [
+			lines.append(Dialog.text("procession.will_reading.line") % [
 				c.title, roster[winner_seat].name, c.desc, deeds[winner_seat]])
 		else:
-			lines.append("%s — unclaimed. The estate keeps the Deed." % c.title)
+			lines.append(Dialog.text("procession.will_reading.unclaimed") % c.title)
 	# Clear the executor's opening line so it does not sit behind the card.
 	executor.clear_banner()
-	_announce_text("THE READING OF THE WILL\n\n" + "\n".join(lines), Color(0.85, 0.78, 1.0))
+	_announce_text(Dialog.text("procession.will_reading.header") + "\n\n" + "\n".join(lines), Color(0.85, 0.78, 1.0))
 	_refresh_hud()
 	if _capture:
 		await _cap_snap("will_reading")
@@ -1794,11 +1779,11 @@ func _heir_crowned() -> void:
 		EstateState.monuments.append({
 			"owner": String(pl.name),
 			"color": Color(pl.color).to_html(),
-			"label": "%s — HEIR OF THE PROCESSION (◆%d)" % [pl.name, deeds[winner]],
+			"label": Dialog.text("procession.heir.monument") % [pl.name, deeds[winner]],
 			"night": EstateState.nights_played,
 			"kind": "heir",
 		})
-		EstateState.add_graffiti("%s inherited the manor at the procession" % pl.name)
+		EstateState.add_graffiti(Dialog.text("procession.heir.graffiti") % pl.name)
 		EstateState.save_estate()
 	Music.play_slot("ceremony")
 	var podium := Podium.new()
@@ -1816,7 +1801,7 @@ func _heir_crowned() -> void:
 	_reveal.visible = false
 	podium.stage_entries(entries)
 	# The seed is verification plumbing — real heirs get a clean crown.
-	var crown := "%s IS CROWNED HEIR\n◆%d DEEDS" % [pl.name, deeds[winner]]
+	var crown := Dialog.text("procession.heir.crown") % [pl.name, deeds[winner]]
 	if _autoplay:
 		crown += " · SEED %d" % seed_value
 	_announce_text(crown, Color(pl.color))

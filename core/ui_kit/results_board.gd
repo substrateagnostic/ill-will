@@ -111,7 +111,7 @@ func present(rows: Array, opts: Dictionary = {}) -> void:
 	_skip_seats = opts.get("skip_seats", _players_of(rows))
 	# W6 (FINAL DISPOSITION rename): the shared results header, in probate voice, as
 	# the default any game inherits when it names no title of its own.
-	_title.text = str(opts.get("title", "FINAL DISPOSITION"))
+	_title.text = str(opts.get("title", Dialog.text("results.default_title")))
 	_title.visible = _title.text != ""
 	_subtitle.text = str(opts.get("subtitle", ""))
 	_subtitle.visible = _subtitle.text != ""
@@ -307,7 +307,7 @@ func _winner_beat() -> void:
 	# frame the ceremony holds on and the frame verify captures.
 	for rw in _row_widgets:
 		(rw.row as Control).modulate = Color(1, 1, 1, 1)
-	var tmpl := str(_opts.get("win_title", "{name} INHERITS"))
+	var tmpl := str(_opts.get("win_title", Dialog.text("results.win_title")))
 	_winner_banner.text = tmpl.replace("{name}", nm)
 	_winner_banner.add_theme_color_override("font_color", col)
 	# NIT 2 — SEQUENTIAL BEAT EXCLUSIVITY: the "calculating" title + subtitle

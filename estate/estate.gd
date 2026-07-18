@@ -374,7 +374,7 @@ func _build_play_panel() -> void:
 	phase = Phase.LOBBY
 	_hide_title()
 	Sfx.play("ui_move")
-	_clear_panel("PLAY — how does the estate settle its debts tonight?", Color(1, 0.9, 0.5))
+	_clear_panel(Dialog.text("estate.play.header"), Color(1, 0.9, 0.5))
 	# --- THE PROCESSION: the featured night mode ---
 	var proc_btn := Button.new()
 	proc_btn.custom_minimum_size = Vector2(460, 78)
@@ -385,7 +385,7 @@ func _build_play_panel() -> void:
 	pc.add_child(proc_btn)
 	phase_box.add_child(pc)
 	var proc_desc := Label.new()
-	proc_desc.text = "The funeral board: pawns putt the loop, the Codicil pays out Deeds, and the first to the goal inherits the manor."
+	proc_desc.text = Dialog.text("estate.play.procession_desc")
 	proc_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	proc_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	proc_desc.custom_minimum_size = Vector2(660, 0)
@@ -422,7 +422,7 @@ func _build_play_panel() -> void:
 	cc.add_child(classic_btn)
 	phase_box.add_child(cc)
 	var classic_desc := Label.new()
-	classic_desc.text = "Auctioned minigames, night after night, until someone climbs the trail and takes the manor."
+	classic_desc.text = Dialog.text("estate.play.classic_desc")
 	classic_desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	classic_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	classic_desc.custom_minimum_size = Vector2(660, 0)
@@ -494,14 +494,14 @@ func _build_slot_panel() -> void:
 	phase = Phase.LOBBY
 	_hide_title()
 	Sfx.play("ui_move")
-	_clear_panel("THE THREE ESTATES — pick where tonight happens", Color(0.9, 0.95, 0.9))
+	_clear_panel(Dialog.text("estate.slot.header"), Color(0.9, 0.95, 0.9))
 	for n in [1, 2, 3]:
 		var row := HBoxContainer.new()
 		row.alignment = BoxContainer.ALIGNMENT_CENTER
 		row.add_theme_constant_override("separation", 12)
 		var summary := EstateState.slot_summary(n)
 		var lab := Label.new()
-		lab.text = "SLOT %d — %s" % [n, summary if summary != "" else "an empty deed"]
+		lab.text = "SLOT %d — %s" % [n, summary if summary != "" else Dialog.text("estate.slot.empty")]
 		lab.custom_minimum_size = Vector2(360, 0)
 		lab.add_theme_font_size_override("font_size", 18)
 		if n == EstateState.current_slot:
@@ -527,7 +527,7 @@ func _build_slot_panel() -> void:
 		row.add_child(wipe_hold)
 		phase_box.add_child(row)
 	var hint := Label.new()
-	hint.text = "Wiping a slot erases that estate's monuments, ledger, and wardrobe. The Executor will pretend not to notice."
+	hint.text = Dialog.text("estate.slot.wipe_warning")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size", 14)
 	hint.modulate.a = 0.65
@@ -594,7 +594,7 @@ func _enter_title_swap() -> void:
 	# lighter serif is kept legible by a bump in size and a warm parchment tone.
 	var serif: Font = load("res://assets/fonts/IMFellEnglish-Regular.ttf")
 	var sub := Label.new()
-	sub.text = "a party nobody asked for"
+	sub.text = Dialog.text("estate.title.tagline")
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if serif != null:
 		sub.add_theme_font_override("font", serif)
@@ -666,7 +666,7 @@ func _enter_title_swap() -> void:
 	for b in title_btns:
 		_style_title_button(b)
 	var hint := Label.new()
-	hint.text = "PLAY = tonight's rite — THE PROCESSION board, or classic auctioned minigame nights"
+	hint.text = Dialog.text("estate.title.footer")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	if serif != null:
 		hint.add_theme_font_override("font", serif)
@@ -735,7 +735,7 @@ func _enter_lobby() -> void:
 	_build_lobby_panel()
 
 func _build_lobby_panel() -> void:
-	_clear_panel("who's on the couch?", Color(0.9, 0.95, 0.9))
+	_clear_panel(Dialog.text("estate.lobby.header"), Color(0.9, 0.95, 0.9))
 	for i in 4:
 		var status := _seat_status(i)
 		var row := HBoxContainer.new()
@@ -865,7 +865,7 @@ func _build_lobby_panel() -> void:
 	quote.modulate.a = 0.85
 	phase_box.add_child(quote)
 	var hint := Label.new()
-	hint.text = "PAD A or KEYBOARD Space/Enter takes an open seat  ·  A again = READY  ·  KB+MOUSE joins by button (its A is the mouse)  ·  ESC = players & controls"
+	hint.text = Dialog.text("estate.lobby.controls")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size = Vector2(760, 0)
@@ -1263,24 +1263,19 @@ func _refresh_album_wall() -> void:
 ## One Saki-voiced line for the lobby, drawn from the ledger's memory.
 func _executor_greeting() -> String:
 	if EstateState.ledger.is_empty():
-		return "The Executor is pleased to receive you. The estate had been expecting someone; it was not, in candour, you."
+		return Dialog.text("estate.greeting.empty")
 	var last: Dictionary = EstateState.ledger.back()
 	var aw: Array = last.get("awards", [])
 	if aw.is_empty():
-		return "Welcome back. The estate kept the lights on and the grudges filed."
+		return Dialog.text("estate.greeting.no_awards")
 	var a: Dictionary = aw[EstateState.rng.randi_range(0, aw.size() - 1)]
 	var who := str(a.get("who", "someone"))
 	var title := str(a.get("title", "themselves"))
 	# One rare line honors the estate's first outside guest (2026-07-05),
 	# whose field report on the seagull is archived in docs/playtests/.
 	if EstateState.rng.randf() < 0.07:
-		return "The first guest left a note about the seagull. The estate declines to repeat it, but agrees it was beautiful."
-	var lines := [
-		"Welcome back. We remembered %s as %s, and see no reason to revise.",
-		"The ledger has %s down as %s. The ledger is seldom wrong twice.",
-		"%s returns. Last night they were %s. The estate expects consistency.",
-		"Do come in. %s will find their reputation as %s exactly where they left it.",
-	]
+		return Dialog.text("estate.greeting.seagull")
+	var lines: Array = Dialog.paras("estate.greeting.pool")
 	return String(lines[EstateState.rng.randi_range(0, lines.size() - 1)]) % [who, title]
 
 var _wardrobe_player := 0
@@ -1356,7 +1351,7 @@ func _enter_stroll() -> void:
 	Sfx.play("card")
 	phase_panel.visible = false
 	banner.add_theme_font_size_override("font_size", 26)
-	_flash("walk to a landmark  ·  A enter  ·  B desk", Color(0.9, 0.95, 0.9), 9999.0)
+	_flash(Dialog.text("estate.walkabout.stroll_banner"), Color(0.9, 0.95, 0.9), 9999.0)
 
 func _exit_stroll(open_act := "") -> void:
 	_strolling = false
@@ -1392,13 +1387,13 @@ func _poll_stroll() -> void:
 		if near_player >= 0:
 			break
 	if near_player >= 0:
-		banner.text = "%s — A: enter %s  ·  B: desk" % [GameState.PLAYER_NAMES[near_player], near_spot.name]
+		banner.text = Dialog.text("estate.walkabout.near") % [GameState.PLAYER_NAMES[near_player], near_spot.name]
 		if PlayerInput.just_pressed(near_player, "a"):
 			Sfx.play("confirm")
 			_exit_stroll(String(near_spot.act))
 			return
 	else:
-		banner.text = "WALK THE GROUNDS — approach a landmark, A to enter, B back to the desk"
+		banner.text = Dialog.text("estate.walkabout.idle")
 	for i in EstateState.players.size():
 		if not PlayerInput.is_bot(i) and not NetSession.is_seat_remote(i) and PlayerInput.just_pressed(i, "b"):
 			Sfx.play("card")
@@ -1412,9 +1407,9 @@ func _build_album_panel() -> void:
 	var n := FamilyAlbumWall.entries(EstateState.current_slot).size()
 	var l := Label.new()
 	if n == 0:
-		l.text = "The estate has taken no portraits yet. Give it a night; it is patient, and it is watching."
+		l.text = Dialog.text("estate.album.empty")
 	else:
-		l.text = "%s hang in the salon. The estate remembers every face it has framed, and forgives none of them." % _plural_nights(n)
+		l.text = Dialog.text("estate.album.some") % _plural_nights(n)
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	l.custom_minimum_size = Vector2(640, 0)
@@ -1569,9 +1564,9 @@ func _build_freeroam_panel() -> void:
 	_strolling = false
 	banner.remove_theme_font_size_override("font_size")
 	banner.visible = false
-	_clear_panel("THE ESTATE RESTS — night %d awaits" % (EstateState.run_night + 1))
+	_clear_panel(Dialog.text("estate.walkabout.freeroam_header") % (EstateState.run_night + 1))
 	var hint := Label.new()
-	hint.text = "Walk the grounds (B closes this desk) · visit the wardrobe or theater · seed a trap tile · continue when ready"
+	hint.text = Dialog.text("estate.walkabout.freeroam_hint")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size = Vector2(700, 0)
@@ -1653,7 +1648,7 @@ func _prompt_next_tile() -> void:
 		return
 	var p: int = _tile_buyers[0]
 	var pl = EstateState.players[p]
-	_clear_panel("%s — CLICK THE LAWN TO SEED YOUR TRAP TILE" % pl.name, pl.color)
+	_clear_panel(Dialog.text("estate.walkabout.tile_prompt") % pl.name, pl.color)
 	if _is_bot(p):
 		var spot := Vector3(EstateState.rng.randf_range(-5.0, 5.0), 0, EstateState.rng.randf_range(-6.0, 1.0))
 		_place_tile(p, spot)
@@ -1739,11 +1734,11 @@ func _enter_auction() -> void:
 		bag.remove_at(pick)
 	_bots_place_bets()
 	_rebuild_top_bar()
-	_clear_panel("THE AUCTION — bid grudge; the estate takes nothing else")
+	_clear_panel(Dialog.text("estate.auction.header"))
 	if EstateState.games_played == 0 and not EstateState.vendetta.is_empty():
 		var v: Dictionary = EstateState.vendetta
 		var vl := Label.new()
-		vl.text = "“An unsettled matter: %s hunted %s last night. The estate has opened a book on the reprisal (+3♠).”  — The Executor" % [EstateState.players[int(v.hunter)].name, EstateState.players[int(v.prey)].name]
+		vl.text = Dialog.text("estate.auction.vendetta") % [EstateState.players[int(v.hunter)].name, EstateState.players[int(v.prey)].name]
 		vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		vl.custom_minimum_size = Vector2(700, 0)
@@ -1751,14 +1746,7 @@ func _enter_auction() -> void:
 		vl.add_theme_color_override("font_color", Color(0.9, 0.75, 0.75))
 		phase_box.add_child(vl)
 		_net_auction_flavor["vendetta"] = vl.text
-	var exec_lines := [
-		"The Executor opens the bidding. Spite is legal tender.",
-		"The Executor reminds the room that generosity is not on the block.",
-		"The Executor accepts grudge, resentment, and exact change.",
-		"The Executor calls the lot. The reserve price is a grudge, and it always clears.",
-		"The Executor notes, for the record, that the estate sells the evening and never gives it.",
-		"The Executor opens the book. Bids are entered in spite and paid in kind.",
-	]
+	var exec_lines: Array = Dialog.paras("estate.auction.quips")
 	var eq := Label.new()
 	eq.text = "“%s”" % String(exec_lines[EstateState.rng.randi_range(0, exec_lines.size() - 1)])
 	eq.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1771,7 +1759,7 @@ func _enter_auction() -> void:
 	var names: Array = []
 	for id in auction_options:
 		names.append(MODULES[id].name)
-	opts.text = "on the block:  " + " / ".join(names)
+	opts.text = Dialog.text("estate.auction.on_block") + " / ".join(names)
 	opts.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	phase_box.add_child(opts)
 	var row := HBoxContainer.new()
@@ -1842,7 +1830,7 @@ func _on_bid(p: int) -> void:
 func _update_auction_clock() -> void:
 	var clock := phase_box.get_node_or_null("Clock")
 	if clock:
-		var lead := "no bids — cheapest seat chooses" if high_bidder < 0 else "%s leads at %d♠" % [EstateState.players[high_bidder].name, high_bid]
+		var lead := Dialog.text("estate.auction.no_bids") if high_bidder < 0 else "%s leads at %d♠" % [EstateState.players[high_bidder].name, high_bid]
 		clock.text = "%s   (%ds)" % [lead, ceili(_bid_timer)]
 
 func _bots_bid() -> void:
@@ -2172,7 +2160,7 @@ func _night_ceremonies() -> void:
 			"player": order[rank],
 		})
 	podium.present(entries)
-	_flash("%s WINS THE NIGHT\nthe estate will remember" % champ.name, champ.color, 9999.0)
+	_flash(Dialog.text("estate.will.night_win_banner") % champ.name, champ.color, 9999.0)
 	print("NIGHT_OVER winner=", champ.name, " monuments=", EstateState.monuments.size())
 	await podium.done
 	podium.queue_free()
@@ -2196,7 +2184,7 @@ func _enter_will_reading(champ) -> void:
 	var awards: Array = EstateState.night_superlatives(champ.index)
 	_clear_panel("THE READING OF THE WILL", Color(0.85, 0.75, 1.0))
 	var head := Label.new()
-	head.text = "The estate has reviewed the evening's conduct and finds it, on the whole, actionable.\n%s wins the night." % champ.name
+	head.text = Dialog.text("estate.will.header") % champ.name
 	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	head.add_theme_color_override("font_color", champ.color)
 	phase_box.add_child(head)
@@ -2214,7 +2202,7 @@ func _enter_will_reading(champ) -> void:
 	if not EstateState.vendetta.is_empty() and EstateState.vendetta_settled_by < 0:
 		var v: Dictionary = EstateState.vendetta
 		var open_l := Label.new()
-		open_l.text = "The matter of %s and %s remains open. The estate is patient." % [
+		open_l.text = Dialog.text("estate.will.vendetta_open") % [
 			EstateState.players[int(v.hunter)].name, EstateState.players[int(v.prey)].name]
 		vend_text = open_l.text
 		open_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -2334,7 +2322,7 @@ func _night_parade() -> void:
 	EstateState.save_estate()
 	_parade_running = false
 	if summit >= 0:
-		_flash("%s REACHES THE MANOR" % EstateState.players[summit].name, EstateState.players[summit].color, 3.0)
+		_flash(Dialog.text("estate.heir.reaches_banner") % EstateState.players[summit].name, EstateState.players[summit].color, 3.0)
 		await get_tree().create_timer(2.2).timeout
 		_run_over(summit)
 		return
@@ -2367,14 +2355,14 @@ func _run_over(p: int) -> void:
 		entries.append({"name": q.name, "color": q.color, "rank": rank,
 			"char_scene": CHAR_SCENES[order[rank]], "player": order[rank]})
 	podium.present(entries)
-	_flash("%s TAKES THE MANOR\nthe estate has an heir" % pl.name, pl.color, 9999.0)
+	_flash(Dialog.text("estate.heir.manor_banner") % pl.name, pl.color, 9999.0)
 	await podium.done
 	podium.queue_free()
 	cam.current = true
 	banner.visible = false
 	_clear_panel("THE ESTATE HAS AN HEIR", Color(1, 0.85, 0.2))
 	var l := Label.new()
-	l.text = "%s took the manor after %d nights.\n“The keys, the grounds, the grudges — all of it passes to %s.\nThe estate offers its condolences to everyone else.”  — The Executor" % [pl.name, maxi(1, EstateState.run_night), pl.name]
+	l.text = Dialog.text("estate.heir.reading") % [pl.name, maxi(1, EstateState.run_night), pl.name]
 	_net_set_ceremony({"stage": "heir", "heir": p, "text": l.text})
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2408,7 +2396,7 @@ func _enter_funeral_statistics(heir_idx: int) -> void:
 	Music.play_slot("ceremony")
 	_clear_panel("THE FINAL AUDIT", Color(0.9, 0.8, 0.4))
 	var sub := Label.new()
-	sub.text = "The manor has changed hands. The estate closes its books in full."
+	sub.text = Dialog.text("estate.audit.subtitle")
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	sub.custom_minimum_size = Vector2(720, 0)
@@ -2772,7 +2760,7 @@ func _client_show_will(cer: Dictionary) -> void:
 			tw.tween_property(c, "modulate:a", 1.0, 0.3)
 			i += 1
 	var foot := Label.new()
-	foot.text = "the host turns the page — the parade follows"
+	foot.text = Dialog.text("estate.client.will_foot")
 	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	foot.add_theme_font_size_override("font_size", 13)
 	foot.modulate.a = 0.55
@@ -2794,7 +2782,7 @@ func _client_show_heir(cer: Dictionary) -> void:
 	l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[heir])
 	phase_box.add_child(l)
 	var foot := Label.new()
-	foot.text = "the run is over — the host decides what the estate does with the rest of the evening"
+	foot.text = Dialog.text("estate.client.heir_foot")
 	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	foot.add_theme_font_size_override("font_size", 13)
 	foot.modulate.a = 0.55
