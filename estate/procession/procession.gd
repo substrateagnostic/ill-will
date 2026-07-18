@@ -168,6 +168,11 @@ const N_FACES_BASE := 8            # doc 28 §5: d8 locked (WRITs widen per roll
 var _breath_faces: Array = []      # all_released payload for the turn in flight
 var _heat_seat := -1               # seat whose aim the heatmap paints (-1 = off)
 var _heat_frame := 0               # coarse update cadence (every 3rd frame)
+# ---- P3 presentation state ----
+var _os_shown := 0                 # over-shoulder roll shots shown (1st eases in; later ones cut; skippable after the 1st)
+var _award_tracker: PanelContainer = null   # doc 28 §9c: the 3 announced races, compact + live
+var _award_rows: Array = []        # per-race {title: Label, lead: Label}
+var _tracker_live := false         # armed at the first interim reading each night
 
 # ---- nodes ---- (concrete types so method returns infer without annotation)
 var board: ProcessionBoardGraph
@@ -526,12 +531,24 @@ func _build_hud() -> void:
 		row.add_child(badge)
 		var col := VBoxContainer.new()
 		row.add_child(col)
+		# P3 standings strip (doc 28 §9): rank + name, ROUTE icon on the same
+		# line, purse below, held-item glyphs (cap 3) underneath — a waiting
+		# seat answers "where is everyone / what do they hold" at a glance.
+		var name_row := HBoxContainer.new()
+		name_row.add_theme_constant_override("separation", 10)
+		col.add_child(name_row)
 		var name_l := _chip_label(String(roster[i].name), 28, roster[i].color)
-		col.add_child(name_l)
+		name_row.add_child(name_l)
+		var route_l := _chip_label("", 20, Color(0.8, 0.78, 0.7))
+		name_row.add_child(route_l)
 		var stat_l := _chip_label("—", 30, Color(0.95, 0.95, 1.0))
 		col.add_child(stat_l)
+		var items_l := _chip_label("", 18, Color(0.93, 0.82, 0.52))
+		items_l.visible = false
+		col.add_child(items_l)
 		chiprow.add_child(panel)
-		_chips.append({"grudge": stat_l, "panel": panel})
+		_chips.append({"grudge": stat_l, "panel": panel, "name": name_l,
+			"route": route_l, "items": items_l})
 
 	# ---- REVEAL lower-third: a broadcast-style band pinned bottom-centre, with a
 	# dark translucent scrim + gold rule, the affected player's PlayerBadge, and
@@ -630,6 +647,39 @@ func _build_hud() -> void:
 	_ui.add_child(_minimap)
 	_minimap.configure(board, roster)
 
+	# P3 — THE THREE RACES (doc 28 §9c): a compact live tracker of the night's
+	# 3 announced award races, pinned top-right under the objective. Armed at
+	# the interim reading, refreshed with the HUD, disarmed at settlement.
+	# House scrim chrome; never near the meter's bottom-center layer.
+	_award_tracker = PanelContainer.new()
+	_award_tracker.name = "AwardTracker"
+	_award_tracker.anchor_left = 1.0; _award_tracker.anchor_right = 1.0
+	_award_tracker.anchor_top = 0.0; _award_tracker.anchor_bottom = 0.0
+	_award_tracker.offset_left = -324.0; _award_tracker.offset_right = -14.0
+	_award_tracker.offset_top = 66.0
+	_award_tracker.add_theme_stylebox_override("panel", _scrim_box(Color(0.05, 0.045, 0.08, 0.85)))
+	_award_tracker.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_award_tracker.visible = false
+	_ui.add_child(_award_tracker)
+	var tr_col := VBoxContainer.new()
+	tr_col.add_theme_constant_override("separation", 2)
+	_award_tracker.add_child(tr_col)
+	var tr_head := _chip_label(Dialog.text("procession.tracker.header"), 20, Color(0.85, 0.78, 1.0))
+	tr_col.add_child(tr_head)
+	_award_rows.clear()
+	for _k in 3:
+		var tr_row := HBoxContainer.new()
+		tr_row.add_theme_constant_override("separation", 10)
+		tr_col.add_child(tr_row)
+		var t_l := _chip_label("", 19, Color(0.78, 0.72, 0.88))
+		tr_row.add_child(t_l)
+		var sp := Control.new()
+		sp.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		tr_row.add_child(sp)
+		var l_l := _chip_label("", 19, Color(0.95, 0.95, 1.0))
+		tr_row.add_child(l_l)
+		_award_rows.append({"row": tr_row, "title": t_l, "lead": l_l})
+
 	# The FX layer rides ABOVE the chips so flying numbers + the Deed token land
 	# on the HUD (F10/F11/F17). A full-rect, input-transparent Control.
 	_fx_host = Control.new()
@@ -719,6 +769,9 @@ func _refresh_hud() -> void:
 			_objective_lbl.text = "LYCHGATE → MANOR GATE"
 	# PENNIES + WREATHS on every chip (P2 display seam — internal names keep
 	# "grudge"; the couch reads the two currencies at a glance, doc 28 §0).
+	# P3 adds the standings strip reads: wreath rank on the name, ROUTE icon,
+	# and the held-item glyph row (cap 3) — doc 28 §9's thinking budget.
+	var standing := _roll_order()
 	for i in _chips.size():
 		var purse := "%d%s  %s%d" % [grudge[i], Spaces.PENNY_GLYPH,
 			Spaces.WREATH_GLYPH, wreaths[i]]
@@ -728,7 +781,61 @@ func _refresh_hud() -> void:
 		else:
 			_chips[i].grudge.text = "%s  ◆%d  %d⚑" % [
 				purse, deeds[i], board.dist_to_gate(positions[i]) if board else 0]
+		if _chips[i].has("name"):
+			_chips[i].name.text = "#%d %s" % [standing.find(i) + 1, roster[i].name]
+			var route_l: Label = _chips[i].route
+			if bool(arrived[i]):
+				route_l.text = "⌂ HOME"
+				route_l.add_theme_color_override("font_color", Color(1, 0.88, 0.4))
+			elif board != null:
+				var rt := board.route_of(positions[i])
+				if rt == "common":
+					route_l.text = "▸ THE DRIVE"
+					route_l.add_theme_color_override("font_color", Color(0.8, 0.78, 0.7))
+				else:
+					var ri := board.route_info(rt)
+					route_l.text = "▸ %s" % String(ri.label)
+					route_l.add_theme_color_override("font_color",
+						Color(ri.color).lerp(Color.WHITE, 0.25))
+			var glyphs: Array[String] = []
+			var ids: Array = items[i].keys() if i < items.size() else []
+			ids.sort()
+			for raw in ids:
+				for _c in _count_item(i, String(raw)):
+					if glyphs.size() < Spaces.INV_CAP:
+						glyphs.append(Spaces.ware_glyph(String(raw)))
+			var items_l: Label = _chips[i].items
+			items_l.text = " · ".join(glyphs)
+			items_l.visible = not glyphs.is_empty()
+	_refresh_award_tracker()
 	_sync_minimap()
+
+## P3 — refresh THE THREE RACES tracker rows (leader name + running stat).
+## Visible only while armed (_tracker_live, set at the interim reading) and
+## never under the fast soak. Presentation only: pure reads of stats/awards.
+func _refresh_award_tracker() -> void:
+	if _award_tracker == null:
+		return
+	_award_tracker.visible = _tracker_live and not _fast and not night_awards.is_empty()
+	if not _award_tracker.visible:
+		return
+	for k in _award_rows.size():
+		var row: Dictionary = _award_rows[k]
+		if k >= night_awards.size():
+			(row.row as Control).visible = false
+			continue
+		(row.row as Control).visible = true
+		var a: Dictionary = night_awards[k]
+		(row.title as Label).text = _award_title(a)
+		var lead := _stat_leader(String(a.stat))
+		var lead_l := row.lead as Label
+		if lead >= 0:
+			lead_l.text = "%s %d" % [roster[lead].name, int(stats[lead].get(String(a.stat), 0))]
+			lead_l.add_theme_color_override("font_color",
+				Color(roster[lead].color).lerp(Color.WHITE, 0.25))
+		else:
+			lead_l.text = "—"
+			lead_l.add_theme_color_override("font_color", Color(0.7, 0.68, 0.62))
 
 ## Show THE DRIVE inset only during MOVE/REVEAL (place legibility while the camera
 ## is pushed in), and feed it the current logical positions + Codicil berth. The
@@ -737,7 +844,11 @@ func _refresh_hud() -> void:
 func _sync_minimap() -> void:
 	if _minimap == null:
 		return
-	var show := (_phase == "move" or _phase == "reveal") and (board == null or board.visible)
+	# P3 (doc 28 §9b): THE DRIVE stays visible through the ROLL phase too — a
+	# waiting seat reads "where is everyone" while the meter sweeps. The inset
+	# is top-left; the meter's own CanvasLayer owns bottom-center.
+	var show := (_phase == "roll" or _phase == "move" or _phase == "reveal") \
+		and (board == null or board.visible)
 	_minimap.visible = show
 	if show:
 		_minimap.set_state(positions)
@@ -947,6 +1058,7 @@ func _award_desc(a: Dictionary) -> String:
 func _night_open() -> void:
 	_phase = "night_open"
 	Music.play_slot("grounds")
+	_tracker_live = false   # new night, new races — re-armed at the interim reading
 	_mini_pool = MINIGAME_ORDER.duplicate()
 	_night_start_wreaths = wreaths.duplicate()
 	if not _fast and match_nights > 1:
@@ -1041,6 +1153,10 @@ func _letters_offer() -> void:
 var _carry_spent: Array[int] = []   # LAST RITES spending counts toward the NEXT night's race
 
 func _night_settlement() -> void:
+	# The races are over — the tracker stands down for the ceremonies (P3).
+	_tracker_live = false
+	if _award_tracker != null:
+		_award_tracker.visible = false
 	await _arrival_wreaths()
 	await _award_payouts()
 	await _will_reading()
@@ -1366,6 +1482,27 @@ func _capture_showcase() -> void:
 	cam.look_at(gp + outward * 0.9 + Vector3(0, 0.85, 0), Vector3.UP)
 	print("SHOWCASE grave_detail cam=", cam.global_position)
 	await _cap_snap("grave_detail")
+	# ---- P3 verification stills ----
+	# (a) the four figurines mustered on the lychgate stone.
+	var muster := board.space_pos(0)
+	cam.global_position = muster + Vector3(2.4, 1.7, 3.1)
+	cam.look_at(muster + Vector3(0, 0.6, 0), Vector3.UP)
+	await _cap_snap("figurine_pawns")
+	# (c) the dressed LYCHGATE...
+	var lych := board.lychgate_pos()
+	cam.global_position = lych + Vector3(4.6, 3.2, 7.2)
+	cam.look_at(lych + Vector3(0, 2.0, -1.0), Vector3.UP)
+	await _cap_snap("lychgate_dressed")
+	# ...AND the MANOR GATE.
+	var gate := board.gate_pos()
+	cam.global_position = gate + Vector3(-4.8, 3.4, 8.4)
+	cam.look_at(gate + Vector3(0, 2.4, -1.0), Vector3.UP)
+	await _cap_snap("manor_gate_dressed")
+	# (e) THE REAPER, dormant and distant, barely lit at the graveyard edge.
+	var rp: Vector3 = BoardGraph.REAPER_POST
+	cam.global_position = rp + Vector3(6.4, 2.4, 8.8)
+	cam.look_at(rp + Vector3(0, 2.6, 0), Vector3.UP)
+	await _cap_snap("reaper_dormant")
 	if executor.has_body():
 		await executor.showcase_gestures(self)   # B2-HOOK: host idle + gesture stills (F7)
 	cam.global_position = _cam_home
@@ -1458,9 +1595,12 @@ func _take_turn(seat: int) -> void:
 	if not path.is_empty():
 		if walked > 0:
 			_pay_passthrough_tolls(seat, path)
-		board_camera.move_travel(0.9)
+		# P3: on release, CUT to the landing area — the figurine hops through frame
+		# toward its stone (doc 28 §9: the camera frames the DECISION, not the walk).
+		var land := int(path.back())
+		board_camera.travel_cut(board.reveal_shot(land, board.type_at(land)))
 		var tw: Tween = board.advance_pawn_path(seat, path)
-		positions[seat] = int(path.back())
+		positions[seat] = land
 		(trail[seat] as Array).append_array(path)
 		moved_total[seat] += walked
 		stats[seat].moved += walked
@@ -1470,7 +1610,13 @@ func _take_turn(seat: int) -> void:
 			_arrived_this_round.append(seat)
 		_sync_minimap()   # THE DRIVE inset lights up for the travel + reveal
 		if not _fast and tw and tw.is_valid():
-			await tw.finished
+			# Travel ≤2s with hold-A fast-forward (doc 28 §9 action budget): any
+			# human holding A triples the hop tween. Presentation only — the walk
+			# was already resolved; the tween is theater.
+			while tw.is_valid() and tw.is_running():
+				if _any_human_holds_a():
+					tw.set_speed_scale(3.2)
+				await get_tree().process_frame
 		elif _fast:
 			board.seat_pawn(seat, positions[seat])
 	if _capture and round_num == 1 and seat == _roll_order().back():
@@ -1524,10 +1670,29 @@ func _roll_breath(seat: int, n_faces: int) -> int:
 	_heat_seat = seat
 	breath.begin_night_roll([seat], _turn_targets(seat, n_faces), turn_rng, n_faces)
 	while _breath_faces.is_empty():
+		# P3: after the first showing, a waiting human can skip a BOT's over-
+		# shoulder cinematic with B — camera falls back to the whole board while
+		# the meter resolves untouched (sim never sees the skip).
+		if not _fast and _os_shown > 1 and bool(roster[seat].bot) and _any_human_pressed_b():
+			board_camera.whole_board(0.3)
 		await get_tree().process_frame
 	_heat_seat = -1
 	board.clear_heatmap()
 	return clampi(int(_breath_faces[seat]), 1, n_faces)
+
+## Any LOCAL human currently holding A (the travel fast-forward).
+func _any_human_holds_a() -> bool:
+	for i in roster.size():
+		if _is_local_human(i) and PlayerInput.is_down(i, "a"):
+			return true
+	return false
+
+## Any LOCAL human tapping B this frame (the over-shoulder skip).
+func _any_human_pressed_b() -> bool:
+	for i in roster.size():
+		if _is_local_human(i) and PlayerInput.just_pressed(i, "b"):
+			return true
+	return false
 
 func _on_breath_released(faces: Array) -> void:
 	_breath_faces = faces
@@ -1553,17 +1718,19 @@ func _turn_targets(seat: int, n_faces: int) -> Array:
 	out[seat] = best_n
 	return out
 
-## Frame the active roller: a raised shot from behind their stone looking down
-## the road, so the meter (bottom-center) and the glowing heatmap stones share
-## the frame. P3's over-shoulder minifig camera replaces this.
+## Frame the active roller (P3): over the FIGURINE's shoulder, looking down its
+## road — the heatmap stones glow ahead while the meter owns bottom-center. The
+## first showing eases in (0.45s); every later roll hard-cuts, and a waiting
+## human can skip a bot's cinematic with B (_roll_breath polls it). Budget-safe:
+## the shot adds zero seconds to the roll act.
 func _frame_roller(seat: int) -> void:
 	var here := board.space_pos(positions[seat])
 	var ahead := board.space_pos(_preview_dest(seat, 4))
-	var dir := ahead - here
-	dir.y = 0.0
-	dir = dir.normalized() if dir.length() > 0.1 else Vector3.FORWARD
-	board_camera.landing_push({"pos": here - dir * 5.4 + Vector3(0, 4.6, 0),
-		"look": here + dir * 3.4 + Vector3(0, 0.4, 0)})
+	var pawn_pos := here
+	if board.pawns.has(seat):
+		pawn_pos = (board.pawns[seat] as Node3D).global_position
+	board_camera.over_shoulder(pawn_pos, ahead - here, _os_shown == 0)
+	_os_shown += 1
 
 ## Windowed capture only: pose the meter mid-sweep with the crit band telegraphed
 ## and the heatmap lit at the same needle position, snap, tear down. Never
@@ -1585,9 +1752,8 @@ func _pose_breath_shot(seat: int) -> void:
 		entries.append({"node": _preview_dest(seat, f + 1), "face": f + 1,
 			"p": float(weights[f]), "w": float(weights[f]) / wmax})
 	board.show_heatmap(entries, roster[seat].color)
-	# Pose the camera too: steep over-behind the roller, the glowing road and
-	# its percent tags running up-frame over the meter (the couch read,
-	# verified against the committed still).
+	# Pose the camera in the P3 OVER-SHOULDER frame: behind the figurine's
+	# shoulder, the glowing road + percent tags running up-frame over the meter.
 	executor.clear_banner()   # the round aside must not sit over the road
 	board_camera.hold()
 	var here := board.space_pos(positions[seat])
@@ -1595,10 +1761,21 @@ func _pose_breath_shot(seat: int) -> void:
 	var dir := ahead - here
 	dir.y = 0.0
 	dir = dir.normalized() if dir.length() > 0.1 else Vector3.FORWARD
-	cam.global_position = here - dir * 3.0 + Vector3(0.0, 7.5, 0.0)
-	cam.look_at(ahead + dir * 1.5, Vector3.UP)
+	var right := dir.cross(Vector3.UP).normalized()
+	var pawn_pos := here
+	if board.pawns.has(seat):
+		pawn_pos = (board.pawns[seat] as Node3D).global_position
+	cam.global_position = pawn_pos - dir * 2.9 + right * 0.9 + Vector3(0, 2.5, 0)
+	cam.look_at(pawn_pos + dir * 7.0 + Vector3(0, 0.3, 0), Vector3.UP)
+	_sync_minimap()   # THE DRIVE rides the roll phase now (P3 §9b)
 	await _beat(0.5)
-	await _cap_snap("breath_heatmap")
+	await _cap_snap("overshoulder_heatmap")
+	# The thinking-budget wide (P3 screenshot d): standings strip + THE DRIVE +
+	# meter, read together from the couch overview.
+	cam.global_position = _cam_home
+	cam.look_at(board.CENTER, Vector3.UP)
+	await _beat(0.4)
+	await _cap_snap("standings_drive")
 	board.clear_heatmap()
 	breath.meter.visible = false
 	_frame_roller(seat)   # hand the frame back to the director's roll shot
@@ -2687,6 +2864,10 @@ func _interim_reading() -> void:
 				c.title, roster[lead].name, _interim_metric(String(c.stat), lead)])
 		else:
 			lines.append(Dialog.text("procession.interim.contested") % c.title)
+	# P3 (doc 28 §9c): the interim reading ARMS the compact live tracker — from
+	# here the 3 announced races ride top-right through every roll phase.
+	_tracker_live = true
+	_refresh_award_tracker()
 	_announce_text(Dialog.text("procession.interim.header") + "\n\n" + "\n".join(lines)
 		+ "\n\n" + Dialog.text("procession.interim.trailer"),
 		Color(0.85, 0.78, 1.0))

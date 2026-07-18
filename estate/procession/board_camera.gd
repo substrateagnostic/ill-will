@@ -191,6 +191,39 @@ func landing_push(shot: Dictionary) -> void:
 	_tw.parallel().tween_method(_set_base_look, from_look, look, 0.38) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
+## OVER_SHOULDER (P3, doc 28 §9) — during a seat's LAST BREATH roll, frame over
+## the FIGURINE's shoulder looking down its road, so the glowing heatmap stones
+## run up-frame while the meter sweeps at bottom-center (its CanvasLayer stays
+## on top by construction). `ease_in` plays the 0.45s settle on the FIRST
+## showing only; after that the shot is a hard cut — the roll's whole camera
+## cost stays inside the ≤5s roll-act budget.
+func over_shoulder(pawn_pos: Vector3, dir: Vector3, ease_in := false) -> void:
+	activate()
+	var d := dir
+	d.y = 0.0
+	d = d.normalized() if d.length() > 0.1 else Vector3.FORWARD
+	var right := d.cross(UP).normalized()
+	var pos := pawn_pos - d * 2.9 + right * 0.9 + Vector3(0, 2.5, 0)
+	var look := pawn_pos + d * 7.0 + Vector3(0, 0.3, 0)
+	if fast:
+		_snap(pos, look)
+		return
+	if ease_in:
+		_ease_to(pos, look, 0.45)
+	else:
+		_snap(pos, look)
+
+## TRAVEL_CUT (P3) — on release, CUT to a medium of the landing area (the
+## reveal_shot anchor pulled back and up) so the figurine hops through frame
+## toward its stone; the landing push-in then does the close-up. A hard cut,
+## never an ease — the release lands the frame.
+func travel_cut(shot: Dictionary) -> void:
+	activate()
+	var pos: Vector3 = shot.get("pos", _home_pos)
+	var look: Vector3 = shot.get("look", _home_look)
+	var wide := look + (pos - look) * 2.1 + Vector3(0, 2.6, 0)
+	_snap(wide, look)
+
 ## TWO_SHOT (F3/F14) — frame two pawns facing off (vendetta), holding both in
 ## frame from a low outside angle on the midpoint.
 func two_shot(a: Vector3, b: Vector3) -> void:

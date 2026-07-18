@@ -651,6 +651,18 @@
       "stream_liquid": "THE READING — LIQUIDATION · 10 PENNIES TO THE WREATH",
       "stream_line": "%s — +%d%s",
       "totals_header": "THE FINAL ACCOUNTING"
+    },
+    "tracker": {
+      "header": "THE THREE RACES"
+    },
+    "interlude": {
+      "header": "THE INTERLUDE — THE GROUNDS OFFER ONE MORE GAME",
+      "random_line": "The estate deals the night's unplayed invitation: %s.",
+      "doormat_header": "%s HOLDS THE DOORMAT'S PRIVILEGE",
+      "doormat_sub": "Bottom of the wreaths. The grounds' next game is yours to choose.",
+      "doormat_line": "%s, lowest in wreaths, calls for %s.",
+      "deal_label": "LET THE ESTATE DEAL",
+      "card_line": "%s — placements pay the usual pennies and wreaths."
     }
   }
 }
