@@ -23,58 +23,31 @@ extends RefCounted
 
 const LAST_FILE := "user://saves/eulogy_last.json"
 
-# ---- framing pools (no-repeat-two-nights on opener/closer) -------------------
-const OPENER := [
-	"We are gathered, as the estate is always gathered, to read aloud what the night had already decided.",
-	"The wake is spent. The estate will now account for it, name by name, as it accounts for everything.",
-	"Sit. The reading is brief, the verdicts briefer, and the estate has never once been kept waiting.",
-	"The night is closed. What follows is not eulogy so much as itemisation, in the estate's steady hand.",
-	"Attend. The estate has balanced the evening, and finds, as always, that grief was the only currency spent freely.",
-]
-const CLOSER := [
-	"The will is written. It was always written. Take your grief to the door; the estate keeps the rest.",
-	"So concludes the reckoning. The estate thanks you for your custom, and remembers all of it, however politely it is asked.",
-	"That is the night, entire and without appeal. The manor will see you again; it always does.",
-	"The reading rests. Your debts are noted, your kindnesses doubted, and the door is, as ever, that way.",
-	"The estate closes the ledger. Nothing is forgiven, but everything is filed, which the estate finds nearly the same.",
-]
-
-# ---- per-descriptor commendations (2-3 variants; %s slots documented) --------
-const L_HEIR := [           # [name, deeds_phrase]
-	"We commend %s, who bought %s with other people's grief and now owns a house that owns them back.",
-	"%s took %s tonight and called it grief management. The estate calls it acquisition, and files it so.",
-	"To %s, who leaves with %s and the room's resentment — an heir the estate can, at last, do business with.",
-]
-const L_BETRAYED := [       # [name, lost]
-	"We remember %s, who bled %d Grudge into other hands and called it Tuesday.",
-	"%s paid %d Grudge to graves and gates tonight, sincerely and without recourse. The estate rounds the sincerity down.",
-	"%s gave %d Grudge to the ground and the tolls. Generosity, the estate notes, is only ever involuntary here.",
-]
-const L_BLOODY := [         # [name, duels]
-	"%s settled matters %s tonight, quietly and for money. The estate approved the paperwork retroactively.",
-	"To %s, who won %s and lost the room. The estate keeps the receipts, and the room.",
-]
-const L_HOARDER := [        # [name, grudge]
-	"%s ends the night %d Grudge richer and not one Deed the wiser. The estate admires a full purse and an empty claim.",
-	"%s hoarded %d Grudge and spent it on nothing. The manor respects the discipline; the will does not reward it.",
-]
-const L_MOURNER := [        # [name, graves_phrase]
-	"%s wept at %s tonight, expensively. Grief, the estate observes, is the one thing here that pays no dividend.",
-	"%s knelt at %s and asked the dead for nothing they could give. The estate found the manners unusual.",
-]
-const L_PIOUS := [          # [name, shrines_phrase]
-	"%s knelt at %s and was rewarded, this once, under protest. Piety, the estate notes, is a poor annuity.",
-	"%s took the shrines' small mercies %s over. The saints have never met them, and intend to keep it that way.",
-]
-const L_IDLE := [           # [name]
-	"%s walked the drive and troubled no one, which the estate finds either saintly or suspicious, and files as both.",
-	"%s spent the night largely unbilled. The estate resents the missed opportunity, and notes the name.",
-]
-# The one warm line — a genuine kindness, then undercut. [name, graves_phrase]
-const L_WARM := [
-	"And %s — who took from no one all night, and wept at %s besides — was, in the estate's cold estimation, almost kind. The anomaly has been logged for review.",
-	"One kindness is recorded: %s harmed no one tonight, and paid at %s for the privilege. The estate has filed it under mercy, provisionally, in pencil.",
-]
+# ---- framing + commendation pools ---------------------------------------------
+# All the eulogy's prose now lives in dialog.json ("eulogy.*"); these getters
+# fetch the current pools. %s/%d slots are documented per pool below and filled at
+# the call site. Selection indexes by pool SIZE (no-repeat guard on opener/closer,
+# random elsewhere), so an edit that keeps each pool's line count stays stable.
+static var OPENER: Array:
+	get: return Dialog.paras("eulogy.opener")
+static var CLOSER: Array:
+	get: return Dialog.paras("eulogy.closer")
+static var L_HEIR: Array:              # [name, deeds_phrase]
+	get: return Dialog.paras("eulogy.heir")
+static var L_BETRAYED: Array:          # [name, lost]
+	get: return Dialog.paras("eulogy.betrayed")
+static var L_BLOODY: Array:            # [name, duels]
+	get: return Dialog.paras("eulogy.bloody")
+static var L_HOARDER: Array:           # [name, grudge]
+	get: return Dialog.paras("eulogy.hoarder")
+static var L_MOURNER: Array:           # [name, graves_phrase]
+	get: return Dialog.paras("eulogy.mourner")
+static var L_PIOUS: Array:             # [name, shrines_phrase]
+	get: return Dialog.paras("eulogy.pious")
+static var L_IDLE: Array:              # [name]
+	get: return Dialog.paras("eulogy.idle")
+static var L_WARM: Array:              # [name, graves_phrase]
+	get: return Dialog.paras("eulogy.warm")
 
 ## Build the eulogy — 6-9 lines, fully formatted. Returns
 ## {lines: Array[String], opener: int, closer: int} so the caller can persist
@@ -138,7 +111,7 @@ static func build(roster: Array, stats: Array, deeds: Array, grudge: Array,
 
 	# --- a chronicle echo, if the estate remembers anything across nights ---
 	if chron != "":
-		lines.append("The estate adds, for the record: " + chron)
+		lines.append(Dialog.text("eulogy.chronicle_prefix") + chron)
 
 	# --- closer (exclude last night's) ---
 	var cl := _pick_avoiding(CLOSER.size(), int(last.get("closer", -1)), prng)
