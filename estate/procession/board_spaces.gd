@@ -22,9 +22,19 @@ const OFFERING := "offering"          # +3 · the mercy stone (was SHRINE)
 const OPEN_GRAVE := "open_grave"      # −2 · the hazard (was WEEPING GRAVE)
 const GRAVE_GOODS := "grave_goods"    # free item box (was THE STALL)
 const FERRY_TOLL := "ferry_toll"      # pay the Ferryman 2, pass or land
-const CART := "cart"                  # the Peddler's Cart stop (shop lands in P2)
+const CART := "cart"                  # the Peddler's Cart — the priced shop (P2)
 const CROSSROADS := "crossroads"      # a fork — the mover chooses the road
 const GATE := "gate"                  # the Manor Gate — arrival ends the walk
+
+# ---- P2 DISPLAY SEAM — the currency rename lives HERE and only here. ------
+# Internally the shop currency is still "grudge" (RC §3 / doc 28 §13: 14
+# minigame receipts reference the internal string and currency_events keep
+# their names). Everything the PLAYER reads calls it PENNIES, and the victory
+# currency is WREATHS. One seam, so a future rename is one edit.
+const PENNY_GLYPH := "¢"
+const WREATH_GLYPH := "⚘"
+const PENNIES_LABEL := "PENNIES"
+const WREATHS_LABEL := "WREATHS"
 
 const TABLE := {
 	BLANK: {
@@ -62,11 +72,11 @@ const TABLE := {
 	# ---- graph-board space set (doc 28 §3) ----
 	OFFERING: {
 		"name": "OFFERING", "icon": "+", "color": Color("65d58b"),
-		"rule": "+3 GRUDGE", "bot_value": 5.0,
+		"rule": "+3 PENNIES", "bot_value": 5.0,
 	},
 	OPEN_GRAVE: {
 		"name": "OPEN GRAVE", "icon": "−", "color": Color("b04d68"),
-		"rule": "−2 GRUDGE · MONUMENT OWNER RECEIVES THE TOLL", "bot_value": -5.0,
+		"rule": "−2 PENNIES · MONUMENT OWNER RECEIVES THE TOLL", "bot_value": -5.0,
 	},
 	GRAVE_GOODS: {
 		"name": "GRAVE GOODS", "icon": "!", "color": Color("e4a54c"),
@@ -74,11 +84,11 @@ const TABLE := {
 	},
 	FERRY_TOLL: {
 		"name": "FERRYMAN'S TOLL", "icon": "$", "color": Color("64b9d5"),
-		"rule": "PAY THE FERRYMAN 2 · PASS OR LAND", "bot_value": -2.0,
+		"rule": "PAY THE FERRYMAN 2 PENNIES · PASS OR LAND", "bot_value": -2.0,
 	},
 	CART: {
 		"name": "PEDDLER'S CART", "icon": "C", "color": Color("f4db62"),
-		"rule": "THE CART OFFERS ITS WARES", "bot_value": 4.0,
+		"rule": "THE CART SELLS ITS WARES · LAST PLACE 30% OFF", "bot_value": 4.0,
 	},
 	CROSSROADS: {
 		"name": "CROSSROADS", "icon": "Y", "color": Color("c9c2a8"),
@@ -91,9 +101,9 @@ const TABLE := {
 }
 
 const SEANCE_WHEEL := [
-	{"title": "MERCIFUL DRAFT", "rule": "EVERY MOURNER RECEIVES 2 GRUDGE"},
-	{"title": "EQUAL SHARES", "rule": "THE LEADER PAYS EACH RIVAL 1 GRUDGE"},
-	{"title": "ROAD LEVY", "rule": "EACH TOLLGATE POT RECEIVES 3 GRUDGE"},
+	{"title": "MERCIFUL DRAFT", "rule": "EVERY MOURNER RECEIVES 2 PENNIES"},
+	{"title": "EQUAL SHARES", "rule": "THE LEADER PAYS EACH RIVAL 1 PENNY"},
+	{"title": "ROAD LEVY", "rule": "EVERY MOURNER RECEIVES 1 PENNY"},
 	{"title": "FAVORED MEDIUM", "rule": "MEDIUM RECEIVES 4; ALL OTHERS RECEIVE 1"},
 ]
 

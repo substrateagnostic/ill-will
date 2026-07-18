@@ -533,7 +533,7 @@
     },
     "reckoning": {
       "header": "THE RECKONING",
-      "line": "%s  #%d  +%d♠"
+      "line": "%s  #%d  +%d%s +%d%s"
     },
     "will_reading": {
       "header": "THE READING OF THE WILL",
@@ -561,6 +561,15 @@
       "header": "THE FINAL BELL",
       "rung": "%s rings the bell at the Manor Gate.\nONE LAST TURN for everyone still on the road.",
       "closing": "The road closes at dawn. The turn cap has been reached."
+    },
+    "arrival": {
+      "header": "ARRIVAL AT THE MANOR GATE",
+      "line": "#%d  %s  +%d%s",
+      "on_road": "  · still on the road",
+      "bumped": "  · the LETTERS raise it a tier"
+    },
+    "mini": {
+      "error": "%s has misfiled its results.\nThe estate refuses to guess — no pay this cycle."
     }
   }
 }

@@ -68,21 +68,34 @@ static var INTERIM_LINES: Array:
 # F24 reveal-cascade reactions: waiting-player button -> attributed glyph.
 const REACT_COOLDOWN_MS := 550
 const REACT_MAP := {"b": "HA!", "up": "OOH", "down": "OOF"}
-const POINTS := [5, 3, 2, 1]        # RECKONING / will placement -> Grudge
-const CONTRACT_POOL := ["echo", "tilt", "orbital", "mower", "greed", "swap",
-	"deadweight", "throne", "lastwill", "pallbearers"]  # B7-HOOK
-const MODULE_SCENES := {
-	"pallbearers": "res://minigames/pallbearers/pallbearers.tscn",  # B7-HOOK
-	"echo": "res://minigames/echo_chamber/echo_chamber.tscn",
-	"tilt": "res://minigames/tilt/tilt.tscn",
-	"orbital": "res://minigames/orbital/orbital.tscn",
-	"mower": "res://minigames/mower/mower.tscn",
-	"greed": "res://minigames/greed/greed.tscn",
-	"swap": "res://minigames/swap_meet/swap_meet.tscn",
-	"deadweight": "res://minigames/dead_weight/dead_weight.tscn",
-	"throne": "res://minigames/throne/throne.tscn",
-	"lastwill": "res://minigames/last_will/last_will.tscn",
+# ---- THE MINIGAME CATALOG, UNIFIED (doc 28 §15): one registry, all 15 games
+# (estate.gd MODULES minus the mock exhibition), drawn WITHOUT replacement per
+# night; THE INVITATION item overrides one draw. Catalog metadata: launch kind
+# (Par is a legacy launcher — landmine 3 — simulated until the P3 adapter) and
+# team shape (Pallbearers settles 2v2: teammates get equal-tier pay).
+const MINIGAME_ORDER: Array[String] = ["par", "echo", "tilt", "orbital",
+	"mower", "greed", "swap", "deadweight", "throne", "lastwill",
+	"widowsgaze", "seance", "understudy", "maskedball", "pallbearers"]
+const MINIGAMES := {
+	"par": {"name": "PAR FOR THE CURSE", "scene": "res://scenes/main.tscn", "launch": "legacy", "team": "ffa"},
+	"echo": {"name": "ECHO CHAMBER", "scene": "res://minigames/echo_chamber/echo_chamber.tscn", "launch": "contract", "team": "ffa"},
+	"tilt": {"name": "TILT", "scene": "res://minigames/tilt/tilt.tscn", "launch": "contract", "team": "ffa"},
+	"orbital": {"name": "ORBITAL DODGEBALL", "scene": "res://minigames/orbital/orbital.tscn", "launch": "contract", "team": "ffa"},
+	"mower": {"name": "MOWER MAYHEM", "scene": "res://minigames/mower/mower.tscn", "launch": "contract", "team": "ffa"},
+	"greed": {"name": "GREED INC.", "scene": "res://minigames/greed/greed.tscn", "launch": "contract", "team": "ffa"},
+	"swap": {"name": "SWAP MEET", "scene": "res://minigames/swap_meet/swap_meet.tscn", "launch": "contract", "team": "ffa"},
+	"deadweight": {"name": "DEAD WEIGHT", "scene": "res://minigames/dead_weight/dead_weight.tscn", "launch": "contract", "team": "ffa"},
+	"throne": {"name": "THE THRONE", "scene": "res://minigames/throne/throne.tscn", "launch": "contract", "team": "ffa"},
+	"lastwill": {"name": "LAST WILL", "scene": "res://minigames/last_will/last_will.tscn", "launch": "contract", "team": "ffa"},
+	"widowsgaze": {"name": "THE WIDOW'S GAZE", "scene": "res://minigames/widows_gaze/widows_gaze.tscn", "launch": "contract", "team": "ffa"},
+	"seance": {"name": "THE SÉANCE", "scene": "res://minigames/seance/seance.tscn", "launch": "contract", "team": "ffa"},
+	"understudy": {"name": "THE UNDERSTUDY", "scene": "res://minigames/understudy/understudy.tscn", "launch": "contract", "team": "ffa"},
+	"maskedball": {"name": "MASKED BALL", "scene": "res://minigames/masked_ball/masked_ball.tscn", "launch": "contract", "team": "ffa"},
+	"pallbearers": {"name": "PALLBEARERS", "scene": "res://minigames/pallbearers/pallbearers.tscn", "launch": "contract", "team": "2v2"},  # B7-HOOK
 }
+# The economy heartbeat (doc 28 §6): minigame settlement per cycle.
+const MINI_PENNIES := [10, 6, 3, 1]
+const MINI_WREATHS := [2, 1, 1, 0]
 
 signal night_over(tally: Dictionary)
 
@@ -101,9 +114,23 @@ var arrival_order: Array = []       # seats in gate-crossing order
 var bell_round := -1                # round THE FINAL BELL rang (-1 = still open)
 var turn_cap := 12                  # doc 28 §8 rule 4 — distance ranking backstop
 var items: Array = []               # per seat: {pin,ribbon,salt} counts
-var stats: Array = []               # per seat: will-clause stat dict
+var stats: Array = []               # per seat: will-clause + award stat dict (per NIGHT)
 var round_num := 0
 var winner := -1
+# ---- THE 3-NIGHT MATCH (doc 28 §2; landmine 1: night_length means games-per-
+# night in the estate shell — this is a NEW field, never that one) ----
+var match_nights := 3               # --nights=N; estate merge passes config.match_nights
+var night_index := 1                # 1-based, current night
+# Escalating FINAL BELL arrival wreaths by night (doc 28 §15 — night 3 can
+# never be ceremonial). Crossing order first, then dist_to_gate ranking.
+const ARRIVAL_WREATHS := [[8, 5, 3, 1], [10, 6, 3, 2], [12, 7, 4, 2]]
+var wreath_src: Array = []          # per seat {arrival, mini, award, liquid} — THE READING streams
+var mini_wins_match: Array[int] = []   # match-level minigame wins (LETTERS + finale tie-break)
+var board_firsts: Array[int] = []      # nights finished #1 on the board (finale tie-break 1)
+var night_final_rank: Array[int] = []  # board rank on the LAST night (finale tie-break 2)
+var letters: Array = []             # per seat: LETTERS OF ADMINISTRATION active tonight
+var _mini_pool: Array = []          # per-night draw-without-replacement pool
+var _invitation_pick := ""          # THE INVITATION override for the next draw
 var _started := false
 var _autoplay := false
 var _fast := false
@@ -340,8 +367,20 @@ func _init_arrays() -> void:
 	var n := roster.size()
 	grudge.resize(n); deeds.resize(n); positions.resize(n); moved_total.resize(n)
 	wreaths.resize(n)
+	mini_wins_match.resize(n)
+	board_firsts.resize(n)
+	night_final_rank.resize(n)
+	wreath_src.clear()
+	letters.clear()
 	for i in n:
 		wreaths[i] = 0
+		mini_wins_match[i] = 0
+		board_firsts[i] = 0
+		night_final_rank[i] = 0
+		wreath_src.append({"arrival": 0, "mini": 0, "award": 0, "liquid": 0})
+		letters.append(false)
+	_mini_pool = MINIGAME_ORDER.duplicate()
+	_invitation_pick = ""
 	_react_last.resize(n)
 	for i in n:
 		_react_last[i] = -100000
@@ -361,7 +400,8 @@ func _init_arrays() -> void:
 		arrived.append(false)
 		items.append({"pin": 0, "ribbon": 0, "salt": 0})
 		stats.append({"moved": 0, "graves": 0, "lost": 0, "duels": 0,
-			"shrines": 0, "deeds_bought": 0, "spent": 0})
+			"shrines": 0, "deeds_bought": 0, "spent": 0,
+			"hazards": 0, "seances": 0, "mini_wins": 0})
 
 # --------------------------------------------------------------------------
 # WORLD + HUD
@@ -467,7 +507,7 @@ func _build_hud() -> void:
 		row.add_child(col)
 		var name_l := _chip_label(String(roster[i].name), 28, roster[i].color)
 		col.add_child(name_l)
-		var stat_l := _chip_label("2♠  ◆0", 30, Color(0.95, 0.95, 1.0))
+		var stat_l := _chip_label("—", 30, Color(0.95, 0.95, 1.0))
 		col.add_child(stat_l)
 		chiprow.add_child(panel)
 		_chips.append({"grudge": stat_l, "panel": panel})
@@ -606,26 +646,28 @@ func _pawn_src(seat: int) -> Vector3:
 		return (board.pawns[seat] as Node3D).global_position + Vector3(0, 1.15, 0)
 	return board.space_pos(positions[seat]) + Vector3(0, 1.0, 0) if board else Vector3.ZERO
 
-## A grudge (or deed) delta popup at the seat's pawn, arcing to its chip. glyph
-## carries the currency; the sign + glyph mean it never reads as colour alone.
-func _pop_grudge(seat: int, amount: int, glyph := "♠") -> void:
+## A pennies (or deed/wreath) delta popup at the seat's pawn, arcing to its
+## chip. glyph carries the currency ("" = the penny glyph from the display
+## seam); the sign + glyph mean it never reads as colour alone.
+func _pop_grudge(seat: int, amount: int, glyph := "") -> void:
 	if _fast or fx == null or amount == 0:
 		return
-	fx.fly_number(amount, glyph, _pawn_src(seat), _chip_screen_pos(seat), roster[seat].color)
+	var g := glyph if glyph != "" else Spaces.PENNY_GLYPH
+	fx.fly_number(amount, g, _pawn_src(seat), _chip_screen_pos(seat), roster[seat].color)
 
 ## A grudge TRANSFER: the value lifts off the payer's pawn and flies to the
 ## collector's chip in the COLLECTOR's colour — the MP "Orb" toll, made visible.
 func _pop_transfer(from_seat: int, to_seat: int, amount: int) -> void:
 	if _fast or fx == null or amount <= 0:
 		return
-	fx.fly_number(amount, "♠", _pawn_src(from_seat), _chip_screen_pos(to_seat), roster[to_seat].color)
+	fx.fly_number(amount, Spaces.PENNY_GLYPH, _pawn_src(from_seat), _chip_screen_pos(to_seat), roster[to_seat].color)
 
 ## A flying number lifting off a fixed world point (a stone, a gate) rather than a
 ## pawn — used for pass-through tolls where the payer is mid-hop.
 func _pop_at(world_from: Vector3, seat_target: int, amount: int, color: Color) -> void:
 	if _fast or fx == null or amount == 0:
 		return
-	fx.fly_number(amount, "♠", world_from, _chip_screen_pos(seat_target), color)
+	fx.fly_number(amount, Spaces.PENNY_GLYPH, world_from, _chip_screen_pos(seat_target), color)
 
 ## Screen-space centre of a seat's HUD chip — the homing target for flying numbers
 ## and the Deed token (F10/F11/F17).
@@ -654,13 +696,17 @@ func _refresh_hud() -> void:
 			_objective_lbl.text = "☠ THE BELL HAS RUNG — LAST TURN"
 		else:
 			_objective_lbl.text = "LYCHGATE → MANOR GATE"
+	# PENNIES + WREATHS on every chip (P2 display seam — internal names keep
+	# "grudge"; the couch reads the two currencies at a glance, doc 28 §0).
 	for i in _chips.size():
+		var purse := "%d%s  %s%d" % [grudge[i], Spaces.PENNY_GLYPH,
+			Spaces.WREATH_GLYPH, wreaths[i]]
 		if bool(arrived[i]):
-			_chips[i].grudge.text = "%d♠  ◆%d  HOME #%d" % [
-				grudge[i], deeds[i], arrival_order.find(i) + 1]
+			_chips[i].grudge.text = "%s  ◆%d  HOME #%d" % [
+				purse, deeds[i], arrival_order.find(i) + 1]
 		else:
-			_chips[i].grudge.text = "%d♠  ◆%d  %d⚑" % [
-				grudge[i], deeds[i], board.dist_to_gate(positions[i]) if board else 0]
+			_chips[i].grudge.text = "%s  ◆%d  %d⚑" % [
+				purse, deeds[i], board.dist_to_gate(positions[i]) if board else 0]
 	_sync_minimap()
 
 ## Show THE DRIVE inset only during MOVE/REVEAL (place legibility while the camera
@@ -828,7 +874,8 @@ func _run_night() -> void:
 			break
 		# Once THE FINAL BELL has rung the night is closing — the stragglers get
 		# their one roll and nothing else. Blocks only fire on an open road.
-		if bell_round < 0 and round_num % 2 == 0:
+		# A MINIGAME EVERY CYCLE (doc 28 §2 — the engine room's heartbeat).
+		if bell_round < 0:
 			await _minigame_block()
 		if bell_round < 0 and round_num % 3 == 0:
 			await _house_awakens()
@@ -838,10 +885,51 @@ func _run_night() -> void:
 				await _beat(2.0)
 				_hide_announce()
 			break   # doc 28 §8 rule 4: the cap ends it; distance ranks the rest
+	await _arrival_wreaths()
 	await _will_reading()
 	await ProcessionEulogy.deliver(self, executor)   # B2-HOOK: procedural closing eulogy (F33)
 	await _heir_crowned()
 	_emit_tally()
+
+## ARRIVAL WREATHS (doc 28 §6/§15): the FINAL BELL pays arrival order on the
+## escalating night table — crossing order first, then dist_to_gate ranking
+## for everyone still on the road (_final_order does exactly that). A LETTERS
+## holder's award is bumped ONE TIER (doc 28 §8 rule 5), announced.
+func _arrival_wreaths() -> void:
+	_phase = "arrival_pay"
+	var table: Array = ARRIVAL_WREATHS[clampi(night_index - 1, 0, ARRIVAL_WREATHS.size() - 1)]
+	var order := _final_order()
+	var lines: Array[String] = []
+	for rank in order.size():
+		var p := int(order[rank])
+		var tier := rank
+		var bumped := false
+		if bool(letters[p]) and tier > 0:
+			tier -= 1
+			bumped = true
+		var wd := int(table[mini(tier, table.size() - 1)])
+		wreaths[p] += wd
+		wreath_src[p].arrival += wd
+		var home := arrival_order.find(p)
+		var line := Dialog.text("procession.arrival.line") % [rank + 1, roster[p].name,
+			wd, Spaces.WREATH_GLYPH]
+		if home < 0:
+			line += Dialog.text("procession.arrival.on_road")
+		if bumped:
+			line += Dialog.text("procession.arrival.bumped")
+		lines.append(line)
+	board_firsts[int(order[0])] += 1
+	if night_index >= match_nights:
+		for rank in order.size():
+			night_final_rank[int(order[rank])] = rank
+	if not _fast:
+		_announce_text(Dialog.text("procession.arrival.header") + "\n\n" + "\n".join(lines),
+			Color(1, 0.88, 0.5))
+		_refresh_hud()
+		await _beat(3.0)
+		_hide_announce()
+	else:
+		_refresh_hud()
 
 func _intro() -> void:
 	Music.play_slot("grounds")
@@ -1232,6 +1320,7 @@ func _pay_passthrough_tolls(seat: int, path: Array) -> void:
 				continue
 			grudge[seat] -= pay
 			stats[seat].lost += pay
+			stats[seat].hazards += 1
 			_pop_at(board.space_pos(idx) + Vector3(0, 1.0, 0), seat, -pay,
 				roster[seat].color)   # F11: the fee falls off at the arch
 			if not _fast:
@@ -1370,6 +1459,7 @@ func _resolve_grave(seat: int, name: String, col: Color) -> void:
 		return
 	var owner := board.grave_owner(positions[seat])
 	stats[seat].graves += 1
+	stats[seat].hazards += 1
 	if owner >= 0 and owner != seat:
 		var toll := mini(2, grudge[seat])
 		grudge[seat] -= toll
@@ -1404,6 +1494,7 @@ func _resolve_ferry(seat: int, name: String, col: Color) -> void:
 	var pay := mini(2, grudge[seat])
 	grudge[seat] -= pay
 	stats[seat].lost += pay
+	stats[seat].hazards += 1
 	Sfx.play("sink", -4.0)
 	_pop_grudge(seat, -pay)
 	executor.say(Executor.pick(Executor.FERRY, _voice_rng, [name]), col)
@@ -1437,6 +1528,7 @@ func _resolve_seance(seat: int, name: String, col: Color) -> void:
 	# like it caused the outcome — but it never decides anything.
 	var slot := _event_rng.randi_range(0, Spaces.SEANCE_WHEEL.size() - 1)
 	var w: Dictionary = Spaces.SEANCE_WHEEL[slot]
+	stats[seat].seances += 1
 	Sfx.play("bumper", -6.0)
 	if not _fast:
 		# Match the lower-third to the séance during the spin (the outcome line
@@ -1790,52 +1882,119 @@ func _snap_epitaph(loser: int) -> void:
 	await _cap_snap("epitaph")
 
 # --------------------------------------------------------------------------
-# MINIGAME BLOCK  (every 2nd round)
+# MINIGAME BLOCK — one per CYCLE (doc 28 §2), drawn WITHOUT replacement per
+# night from the full 15-game catalog; THE INVITATION overrides one draw.
 # --------------------------------------------------------------------------
 func _minigame_block() -> void:
 	_phase = "minigame"
 	executor.clear_banner()
-	# item offer — a quick shop beat: each seat is handed a random item (EVENT
-	# stream; the ribbon aims itself at the race leader inside _grant_item).
-	for i in roster.size():
-		_grant_item(i)
-	# The EVENT stream picks the game; the roulette (F22) is theater that lands
-	# on it, then calls "TAKE YOUR PLACES" (the estate's voice, doc 26).
-	var mid: String = CONTRACT_POOL[_event_rng.randi_range(0, CONTRACT_POOL.size() - 1)]
+	var mid := _draw_minigame()
+	# The roulette (F22) is theater that lands on the pre-decided card.
 	if _fast:
 		pass   # the soak skips the roulette entirely
 	elif _capture:
-		roulette.present(CONTRACT_POOL, mid)   # fire, snap mid-spin, then wait out
+		roulette.present(MINIGAME_ORDER, mid)   # fire, snap mid-spin, then wait out
 		await _beat(1.2)
 		await _cap_snap("roulette")
 		while not roulette.finished:
 			await get_tree().process_frame
 	else:
-		await roulette.present(CONTRACT_POOL, mid)
+		await roulette.present(MINIGAME_ORDER, mid)
 	_hide_announce()
 	var placements: Array = await _run_minigame(mid)
-	# RECKONING — placements pay 5/3/2/1 Grudge.
+	if placements.is_empty():
+		return   # module error already surfaced — the cycle is voided, never randomized
+	await _settle_minigame(mid, placements)
+
+## Draw the cycle's game: without replacement per night (pool refills at night
+## start); THE INVITATION's pick takes the slot and leaves the pool intact
+## minus itself. EVENT stream, one randi per natural draw.
+func _draw_minigame() -> String:
+	if _mini_pool.is_empty():
+		_mini_pool = MINIGAME_ORDER.duplicate()
+	if _invitation_pick != "":
+		var pick := _invitation_pick
+		_invitation_pick = ""
+		_mini_pool.erase(pick)
+		return pick
+	return String(_mini_pool.pop_at(_event_rng.randi_range(0, _mini_pool.size() - 1)))
+
+## THE RECKONING — settlement per cycle (doc 28 §6): pennies 10/6/3/1 +
+## wreaths 2/1/1/0. TEAM-AWARE (doc 28 §15): a 2v2 game pays the winning
+## teammates equal FIRST-tier and the losers equal THIRD-tier — never
+## seat-ordinal inequity. Genuine ties (equal module scores) take the LOWER
+## award. Results were validated against the real roster before this runs.
+func _settle_minigame(mid: String, placements: Array) -> void:
 	_phase = "reckoning"
+	var meta: Dictionary = MINIGAMES.get(mid, {})
+	var tiers: Array[int] = []
+	tiers.resize(placements.size())
+	if String(meta.get("team", "ffa")) == "2v2" and placements.size() == 4:
+		tiers[0] = 0; tiers[1] = 0; tiers[2] = 2; tiers[3] = 2
+	else:
+		for k in placements.size():
+			tiers[k] = k
+		_apply_tie_tiers(placements, tiers)
 	var lines: Array[String] = []
-	for rank in placements.size():
-		var p := int(placements[rank])
-		var pay: int = POINTS[rank] if rank < POINTS.size() else 0
-		grudge[p] += pay
-		lines.append(Dialog.text("procession.reckoning.line") % [roster[p].name, rank + 1, pay])
+	for k in placements.size():
+		var p := int(placements[k])
+		var tier := int(tiers[k])
+		var pd: int = MINI_PENNIES[tier] if tier < MINI_PENNIES.size() else 0
+		var wd: int = MINI_WREATHS[tier] if tier < MINI_WREATHS.size() else 0
+		grudge[p] += pd
+		wreaths[p] += wd
+		wreath_src[p].mini += wd
+		if tier == 0:
+			stats[p].mini_wins += 1
+			mini_wins_match[p] += 1
+		lines.append(Dialog.text("procession.reckoning.line") % [
+			roster[p].name, k + 1, pd, Spaces.PENNY_GLYPH, wd, Spaces.WREATH_GLYPH])
+		_pop_grudge(p, pd)
 	_announce_text(Dialog.text("procession.reckoning.header") + "\n\n" + "\n".join(lines), Color(0.95, 0.85, 0.6))
 	_refresh_hud()
+	_push_net()
 	await _beat(2.4)
 	_hide_announce()
 
+## Genuine ties, FFA only: when the module reports scores ("points": seat ->
+## score) and adjacent placements hold EQUAL scores, the whole tied group takes
+## the LOWEST rank's award (doc 28 §15 — no seat-index favoritism). The sim
+## path reports no scores, so it never ties.
+func _apply_tie_tiers(placements: Array, tiers: Array[int]) -> void:
+	var scores: Dictionary = _mini_results.get("points", {})
+	if scores.is_empty():
+		return
+	for v in placements:
+		if not scores.has(int(v)):
+			return   # partial score sheet — placements stand as ranked
+	var k := 0
+	while k < placements.size():
+		var j := k
+		while j + 1 < placements.size() \
+				and int(scores[int(placements[j + 1])]) == int(scores[int(placements[k])]):
+			j += 1
+		for m in range(k, j + 1):
+			tiers[m] = j
+		k = j + 1
+
 ## The real module contract, reused from inside the board (spec §3). Under
 ## --autoplay the deterministic MINISIM stands in so the full night resolves
-## fast and byte-identically; --realmini forces the live module.
+## fast and byte-identically; --realmini forces the live module. Results are
+## VALIDATED against the real roster — a misfiling module voids the cycle
+## with a surfaced error, it never gets silently re-randomized (doc 28 §15).
 func _run_minigame(id: String) -> Array:
-	if _minisim or not MODULE_SCENES.has(id):
+	var meta: Dictionary = MINIGAMES.get(id, {})
+	if _minisim:
 		return _sim_placements()
-	var scene: PackedScene = load(MODULE_SCENES[id])
+	if String(meta.get("launch", "contract")) == "legacy":
+		# Landmine 3: Par is a legacy launcher (no begin(); root-parented;
+		# GameState reset). The draw stands; the module simulates until the
+		# P3 catalog-level adapter.
+		print("PROCESSION note: %s is a legacy launcher — simulated placements until the P3 adapter" % id)
+		return _sim_placements()
+	var scene: PackedScene = load(String(meta.get("scene", "")))
 	if scene == null:
-		return _sim_placements()
+		return await _module_error(id, "scene missing")
 	var module: Node = scene.instantiate()
 	board.visible = false
 	cam.current = false
@@ -1843,6 +2002,7 @@ func _run_minigame(id: String) -> Array:
 	add_child(module)
 	_mini_done = false
 	_mini_out = []
+	_mini_results = {}
 	module.finished.connect(_on_mini_finished, CONNECT_ONE_SHOT)
 	var mroster: Array = []
 	for pl in roster:
@@ -1856,14 +2016,39 @@ func _run_minigame(id: String) -> Array:
 	board.visible = true
 	cam.current = true
 	_ui.visible = true
-	if _mini_out.size() != roster.size():
-		return _sim_placements()
+	if not _valid_placements(_mini_out):
+		return await _module_error(id, str(_mini_out))
 	return _mini_out
+
+## Placements must be a permutation of the real roster — every seat exactly
+## once. Anything else is a module bug the table deserves to SEE.
+func _valid_placements(p: Array) -> bool:
+	if p.size() != roster.size():
+		return false
+	var seen := {}
+	for v in p:
+		var s := int(v)
+		if s < 0 or s >= roster.size() or seen.has(s):
+			return false
+		seen[s] = true
+	return true
+
+func _module_error(id: String, got: String) -> Array:
+	print("PROCESSION MODULE ERROR game=%s results=%s want=permutation of %d seats — cycle voided, no settlement" % [
+		id, got, roster.size()])
+	if not _fast:
+		_announce_text(Dialog.text("procession.mini.error") % String(
+			(MINIGAMES.get(id, {}) as Dictionary).get("name", id)), Color(1, 0.5, 0.4))
+		await _beat(2.2)
+		_hide_announce()
+	return []
 
 var _mini_done := false
 var _mini_out: Array = []
+var _mini_results := {}    # the module's full results dict (scores feed tie policy)
 
 func _on_mini_finished(results: Dictionary) -> void:
+	_mini_results = results
 	_mini_out = results.get("placements", [])
 	_mini_done = true
 
@@ -1905,6 +2090,7 @@ func _house_awakens() -> void:
 			_slip_back(i, 2)
 			caught.append(String(roster[i].name))
 			stats[i].lost += 1
+			stats[i].hazards += 1
 	if caught.is_empty():
 		_announce_text(Dialog.text("procession.house_awakens.header") + "\n\n" + Dialog.text("procession.house_awakens.safe"),
 			Color(0.7, 0.85, 1.0))
@@ -2068,15 +2254,17 @@ func _emit_tally() -> void:
 		"turn_cap": turn_cap, "bell_round": bell_round,
 		"heir": winner, "heir_name": String(roster[winner].name),
 		"arrivals": arrival_order.duplicate(),
-		"grudge": grudge.duplicate(), "deeds": deeds.duplicate(),
+		"grudge": grudge.duplicate(), "wreaths": wreaths.duplicate(),
+		"deeds": deeds.duplicate(),
 		"moved": moved_total.duplicate(), "positions": positions.duplicate(),
 		"routes": routes, "left": left,
 	}
 	print("PROCESSION_TALLY ", JSON.stringify(tally))
 	for i in roster.size():
 		var home := arrival_order.find(i)
-		print("  seat %d %s: ◆%d  %d♠  moved=%d  pos=%d  route=%s  left=%d%s" % [
-			i, roster[i].name, deeds[i], grudge[i], moved_total[i], positions[i],
+		print("  seat %d %s: %s%d  %d%s  ◆%d  moved=%d  pos=%d  route=%s  left=%d%s" % [
+			i, roster[i].name, Spaces.WREATH_GLYPH, wreaths[i], grudge[i],
+			Spaces.PENNY_GLYPH, deeds[i], moved_total[i], positions[i],
 			routes[i], int(left[i]), ("  HOME#%d" % (home + 1)) if home >= 0 else ""])
 	print("PROCESSION_HEIR %s (seed %d, %d rounds)" % [roster[winner].name, seed_value, round_num])
 	night_over.emit(tally)
