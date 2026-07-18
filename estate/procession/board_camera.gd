@@ -197,14 +197,21 @@ func landing_push(shot: Dictionary) -> void:
 ## on top by construction). `ease_in` plays the 0.45s settle on the FIRST
 ## showing only; after that the shot is a hard cut — the roll's whole camera
 ## cost stays inside the ≤5s roll-act budget.
-func over_shoulder(pawn_pos: Vector3, dir: Vector3, ease_in := false) -> void:
+func over_shoulder(pawn_pos: Vector3, dir: Vector3, ease_in := false,
+		gate_clearance := false) -> void:
 	activate()
 	var d := dir
 	d.y = 0.0
 	d = d.normalized() if d.length() > 0.1 else Vector3.FORWARD
 	var right := d.cross(UP).normalized()
-	var pos := pawn_pos - d * 2.9 + right * 0.9 + Vector3(0, 2.5, 0)
-	var look := pawn_pos + d * 7.0 + Vector3(0, 0.3, 0)
+	# gate_clearance: the roller stands under a hero arch (the LYCHGATE) — a
+	# tight shoulder frame would sit inside the model. Swing wide of the posts,
+	# angled down the same road, so the figurine AND the heatmap still read.
+	var pos := pawn_pos - d * 3.6 + right * 3.4 + Vector3(0, 3.0, 0) if gate_clearance \
+		else pawn_pos - d * 2.9 + right * 0.9 + Vector3(0, 2.5, 0)
+	# Aim a touch right of the road so the figurine + its stones sit left of
+	# centre — clear of the meter's bottom-centre lane.
+	var look := pawn_pos + d * 7.0 + right * 1.3 + Vector3(0, 0.3, 0)
 	if fast:
 		_snap(pos, look)
 		return

@@ -123,11 +123,12 @@ const ZF_SKIFF := GEN_DIR + "ferryman_skiff.glb"
 const ZF_FERRYMAN := GEN_DIR + "npc_ferryman_idle.glb"      # native 1.85m
 const ZF_GRAVEDIGGER := GEN_DIR + "npc_gravedigger_idle.glb" # native 1.7m
 const ZF_WIDOW := GEN_DIR + "npc_widow_idle.glb"             # native 1.6m
-const ZF_REAPER_WALK := GEN_DIR + "npc_reaper_walk.glb"      # native 3.5m — frozen DORMANT here
+const ZF_REAPER_BASE := GEN_DIR + "npc_reaper.glb"           # the standing sculpt — dormant
+const ZF_SCYTHE := GEN_DIR + "reaper_scythe.glb"             # forged separately (hand-parent later)
 ## THE REAPER's dormant post — the far graveyard edge beyond Weeping Valley,
 ## outside every route bulge, barely lit. He activates in a future Estate
 ## Stirs lane; tonight he is just... present.
-const REAPER_POST := Vector3(-27.5, 0.0, -15.0)
+const REAPER_POST := Vector3(-25.0, 0.0, -13.0)
 
 # --------------------------------------------------------------------------
 # GRAPH STATE (filled by build() from generate())
@@ -826,10 +827,12 @@ func _build_npc_troupe() -> void:
 	var wid_id := _route_mid_id("garden")
 	_place_facing(_rigged_npc(ZF_WIDOW, 1.6, 1.6),
 		space_pos(wid_id) + _outward(wid_id) * 3.0 + Vector3(0, 0.04, 0), space_pos(wid_id))
-	# THE REAPER — frozen mid-stride at the graveyard's edge, facing the gate.
-	var reaper := _rigged_npc(ZF_REAPER_WALK, 3.5, 4.1, true)
-	if reaper.get_child_count() > 0:
-		_place_facing(reaper, REAPER_POST, gate_pos() + Vector3(0, 0.0, 4.0))
+	# THE REAPER — the standing sculpt, motionless at the graveyard's edge,
+	# facing across the valley toward the gate; his scythe planted beside him.
+	if ResourceLoader.exists(ZF_REAPER_BASE):
+		_place_facing(_prop(ZF_REAPER_BASE, FB_COLUMN, 4.1),
+			REAPER_POST, gate_pos() + Vector3(0, 0.0, 4.0))
+		_place(_prop(ZF_SCYTHE, FB_LANTERN, 3.6), REAPER_POST + Vector3(1.4, 0.0, 0.6))
 		# Barely lit: one faint, sickly pool so the silhouette reads at distance —
 		# never a hero light. (Existing kit only; shadows off, tight range.)
 		var pall := OmniLight3D.new()
@@ -839,7 +842,7 @@ func _build_npc_troupe() -> void:
 		pall.omni_range = 7.0
 		pall.shadow_enabled = false
 		add_child(pall)
-		pall.global_position = REAPER_POST + Vector3(0.6, 3.0, 0.6)
+		pall.global_position = REAPER_POST + Vector3(0.6, 3.2, 0.6)
 
 ## The node id at the middle of a route's first half (placement anchor).
 func _route_mid_id(tag: String) -> int:

@@ -528,11 +528,19 @@ func _build_hud() -> void:
 	_objective_lbl = _chip_label("LYCHGATE → MANOR GATE", 30, Color(1, 0.88, 0.4))
 	top.add_child(_objective_lbl)
 
+	# P3 FIX: the strip was anchored BOTTOM_WIDE with zero height before its
+	# children existed, then grew DOWNWARD — every chip rendered off-screen
+	# (visible in P2's own committed stills). Pin the height, grow UP, and
+	# split the row around a centre gap so the LAST BREATH meter (bottom-
+	# centre, its own layer) is never occluded — doc 28 §9's standings strip,
+	# actually on screen.
 	var chiprow := HBoxContainer.new()
 	chiprow.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	chiprow.alignment = BoxContainer.ALIGNMENT_CENTER
 	chiprow.add_theme_constant_override("separation", 22)
+	chiprow.offset_top = -152
 	chiprow.offset_bottom = -14
+	chiprow.grow_vertical = Control.GROW_DIRECTION_BEGIN
 	_ui.add_child(chiprow)
 	_chiprow = chiprow
 	_chips.clear()
@@ -549,29 +557,34 @@ func _build_hud() -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 10)
 		panel.add_child(row)
-		var badge := PlayerBadge.make(i, 30)
+		var badge := PlayerBadge.make(i, 24)
 		badge.color = roster[i].color
 		row.add_child(badge)
 		var col := VBoxContainer.new()
 		row.add_child(col)
-		# P3 standings strip (doc 28 §9): rank + name, ROUTE icon on the same
-		# line, purse below, held-item glyphs (cap 3) underneath — a waiting
-		# seat answers "where is everyone / what do they hold" at a glance.
-		var name_row := HBoxContainer.new()
-		name_row.add_theme_constant_override("separation", 10)
-		col.add_child(name_row)
-		var name_l := _chip_label(String(roster[i].name), 28, roster[i].color)
-		name_row.add_child(name_l)
-		var route_l := _chip_label("", 20, Color(0.8, 0.78, 0.7))
-		name_row.add_child(route_l)
-		var stat_l := _chip_label("—", 30, Color(0.95, 0.95, 1.0))
+		# P3 standings strip (doc 28 §9): rank + name, ROUTE icon line, purse,
+		# held-item glyphs (cap 3) — a waiting seat answers "where is everyone
+		# / what do they hold" at a glance. Compact faces: two chips must fit
+		# each side of the meter's centre lane at 1080p.
+		var name_l := _chip_label(String(roster[i].name), 24, roster[i].color)
+		col.add_child(name_l)
+		var route_l := _chip_label("", 15, Color(0.8, 0.78, 0.7))
+		col.add_child(route_l)
+		var stat_l := _chip_label("—", 24, Color(0.95, 0.95, 1.0))
 		col.add_child(stat_l)
-		var items_l := _chip_label("", 18, Color(0.93, 0.82, 0.52))
+		var items_l := _chip_label("", 15, Color(0.93, 0.82, 0.52))
 		items_l.visible = false
 		col.add_child(items_l)
+		panel.size_flags_vertical = Control.SIZE_SHRINK_END
 		chiprow.add_child(panel)
 		_chips.append({"grudge": stat_l, "panel": panel, "name": name_l,
 			"route": route_l, "items": items_l})
+		if i == 1:
+			# The meter gap: seats 0-1 ride left of the LAST BREATH meter,
+			# seats 2-3 right of it. The instrument's lane stays clear.
+			var gap := Control.new()
+			gap.custom_minimum_size = Vector2(700, 0)
+			chiprow.add_child(gap)
 
 	# ---- REVEAL lower-third: a broadcast-style band pinned bottom-centre, with a
 	# dark translucent scrim + gold rule, the affected player's PlayerBadge, and
@@ -678,7 +691,7 @@ func _build_hud() -> void:
 	_award_tracker.name = "AwardTracker"
 	_award_tracker.anchor_left = 1.0; _award_tracker.anchor_right = 1.0
 	_award_tracker.anchor_top = 0.0; _award_tracker.anchor_bottom = 0.0
-	_award_tracker.offset_left = -324.0; _award_tracker.offset_right = -14.0
+	_award_tracker.offset_left = -470.0; _award_tracker.offset_right = -14.0
 	_award_tracker.offset_top = 66.0
 	_award_tracker.add_theme_stylebox_override("panel", _scrim_box(Color(0.05, 0.045, 0.08, 0.85)))
 	_award_tracker.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1131,6 +1144,10 @@ func _announce_awards() -> void:
 		Color(0.85, 0.78, 1.0))
 	if _capture and night_index == 1:
 		await _cap_snap("night_awards")
+		# Capture-only: arm THE THREE RACES tracker from the announcement so the
+		# roll-phase stills show it (real play arms it at the interim reading,
+		# which the all-bot capture's drama gate skips by design).
+		_tracker_live = true
 	await _beat(3.0)
 	_hide_announce()
 
@@ -1509,11 +1526,22 @@ func _capture_showcase() -> void:
 	print("SHOWCASE grave_detail cam=", cam.global_position)
 	await _cap_snap("grave_detail")
 	# ---- P3 verification stills ----
-	# (a) the four figurines mustered on the lychgate stone.
-	var muster := board.space_pos(0)
-	cam.global_position = muster + Vector3(2.4, 1.7, 3.1)
-	cam.look_at(muster + Vector3(0, 0.6, 0), Vector3.UP)
+	# (a) the four figurines on stones — posed down the first garden stones for
+	# a clean low hero (visual seat only: logical positions untouched, everyone
+	# re-seated at the lychgate right after; capture-only theater).
+	for i in roster.size():
+		board.seat_pawn(i, 2 + i)
+	var f_a := board.space_pos(3)
+	var f_b := board.space_pos(5)
+	var f_dir := (f_b - f_a)
+	f_dir.y = 0.0
+	f_dir = f_dir.normalized() if f_dir.length() > 0.1 else Vector3.FORWARD
+	var f_perp := f_dir.cross(Vector3.UP).normalized()
+	cam.global_position = f_a - f_dir * 1.6 + f_perp * 3.1 + Vector3(0, 1.5, 0)
+	cam.look_at(f_a + f_dir * 2.4 + Vector3(0, 0.45, 0), Vector3.UP)
 	await _cap_snap("figurine_pawns")
+	for i in roster.size():
+		board.seat_pawn(i, 0)
 	# (c) the dressed LYCHGATE...
 	var lych := board.lychgate_pos()
 	cam.global_position = lych + Vector3(4.6, 3.2, 7.2)
@@ -1598,8 +1626,9 @@ func _take_turn(seat: int) -> void:
 		if not _fast:
 			_frame_roller(seat)
 		# Windowed capture: pose the meter + heatmap once for the verification
-		# still (the fast soak resolves a live roll in a single frame).
-		if _capture and not _breath_posed:
+		# still (the fast soak resolves a live roll in a single frame). Round 2+
+		# only — round 1's rollers still stand under the lychgate arch.
+		if _capture and not _breath_posed and round_num >= 2:
 			_breath_posed = true
 			await _pose_breath_shot(seat)
 		var faces := N_FACES_BASE
@@ -1647,6 +1676,23 @@ func _take_turn(seat: int) -> void:
 			board.seat_pawn(seat, positions[seat])
 	if _capture and round_num == 1 and seat == _roll_order().back():
 		await _cap_snap("drive_minimap")   # THE DRIVE ribbons, first travel beat
+	# P3 still (a): the figurines strung out on the stones MID-MATCH — low over
+	# the last roller's shoulder, the trailing toys on the road behind it.
+	if _capture and round_num == 2 and seat == _roll_order().back():
+		board_camera.hold()
+		executor.clear_banner()   # a clean frame — the toys are the subject
+		var pp := board.space_pos(positions[seat])
+		if board.pawns.has(seat):
+			pp = (board.pawns[seat] as Node3D).global_position
+		var to_lych := board.lychgate_pos() - pp
+		to_lych.y = 0.0
+		to_lych = to_lych.normalized() if to_lych.length() > 0.1 else Vector3.BACK
+		var side := to_lych.cross(Vector3.UP).normalized()
+		# Raked 3/4 down-angle from above the dressing line (lamps 2.4, shrines
+		# 2.5) so no prop can photobomb the toys again.
+		cam.global_position = pp - to_lych * 3.4 + side * 0.8 + Vector3(0, 2.9, 0)
+		cam.look_at(pp + to_lych * 3.6 + Vector3(0, 0.2, 0), Vector3.UP)
+		await _cap_snap("figurines_midmatch")
 	_push_net()
 	# --- WREATH OF DEBT: a rival's trap on the landing stone collects now. ---
 	if not path.is_empty():
@@ -1755,7 +1801,10 @@ func _frame_roller(seat: int) -> void:
 	var pawn_pos := here
 	if board.pawns.has(seat):
 		pawn_pos = (board.pawns[seat] as Node3D).global_position
-	board_camera.over_shoulder(pawn_pos, ahead - here, _os_shown == 0)
+	# Gate clearance: at the LYCHGATE the hero arch swallows a tight shoulder
+	# frame — swing outside its posts, angled down the road instead.
+	board_camera.over_shoulder(pawn_pos, ahead - here, _os_shown == 0,
+		positions[seat] == 0)
 	_os_shown += 1
 
 ## Windowed capture only: pose the meter mid-sweep with the crit band telegraphed
@@ -1792,7 +1841,7 @@ func _pose_breath_shot(seat: int) -> void:
 	if board.pawns.has(seat):
 		pawn_pos = (board.pawns[seat] as Node3D).global_position
 	cam.global_position = pawn_pos - dir * 2.9 + right * 0.9 + Vector3(0, 2.5, 0)
-	cam.look_at(pawn_pos + dir * 7.0 + Vector3(0, 0.3, 0), Vector3.UP)
+	cam.look_at(pawn_pos + dir * 7.0 + right * 1.3 + Vector3(0, 0.3, 0), Vector3.UP)
 	_sync_minimap()   # THE DRIVE rides the roll phase now (P3 §9b)
 	await _beat(0.5)
 	await _cap_snap("overshoulder_heatmap")

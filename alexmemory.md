@@ -2533,3 +2533,53 @@ runs LYCHGATE → MANOR GATE over a branching graph. For your review:
   + priced cart + arrival wreaths + 3-night loop (P2), estate.gd surgery (P3),
   online pair re-cert (P5). Estate shell still boots clean (smoke-tested);
   slot saves untouched.
+
+## P3 — THE PRESENTATION PASS (worktree lane, night 7+2)
+
+The working game now looks and feels like the game. Playtest-ready. For your
+review:
+
+- **Figurine pawns (your locked call, doc 28 §11b)**: the capsules are gone.
+  Each seat's real character mesh, frozen mid-idle (a sculpt, never an actor),
+  on a round seat-coloured base with a ceramic glaze overlay; wardrobe hats
+  carry onto the toy. They HOP stone-to-stone with a dry woody clack
+  (impact_wood, quiet — no new audio).
+- **Over-shoulder roll camera**: every LAST BREATH roll frames over the
+  figurine's shoulder, heatmap percentages glowing down its road. First
+  showing eases in; after that it hard-cuts (and B skips a bot's cinematic).
+  Release CUTS to the landing area; hold-A fast-forwards the hop tween 3×.
+  At the lychgate the shot swings outside the arch posts (the hero model
+  swallowed a tight shoulder frame — found on stills, fixed).
+- **The thinking budget (doc 28 §9)**: the standings strip is REAL now — and
+  note: **P2's chip row never rendered at all** (BOTTOM_WIDE preset grew
+  downward off-screen; visible in P2's own committed stills). Fixed, split
+  around the meter's lane, and extended: wreath rank, route icon, pennies ¢,
+  wreaths ⚘, held-item glyphs (cap 3). THE DRIVE now rides the roll phase
+  too, and THE THREE RACES get a compact live tracker (arms at the interim
+  reading; capture arms it at the announcement since bot tables skip interim).
+- **ZF wave placed**: lychgate + manor_gate heroes at the ends, peddlers_cart
+  at the cart, checkpoint shrines at both crossroads + the merge, grave-goods
+  coffers, ferryman + skiff at the first valley toll, gravedigger/widow
+  idling by their routes. THE REAPER stands DORMANT at the graveyard edge —
+  standing sculpt, scythe planted beside him, one faint sickly pool of light.
+  He does nothing. He's just... present. (Estate Stirs wakes him later.)
+- **Hub simplification**: PLAY is THE PROCESSION only — nights + turn-cap
+  dials + GO. Flow: PLAY → seats/lobby → walkabout → READY AT THE LYCHGATE
+  (button + a walk-up gate spot) → the match. Classic Nights retired at the
+  UI level only; its code sleeps on disk for the excision lane.
+- **THE INTERLUDE (doc 28 §2)**: between nights, after the will reading +
+  LAST RITES, one grounds minigame — interlude 1 dealt from the night's
+  unplayed games, interlude 2 picked by the DOORMAT (bottom wreaths, no
+  repeat of interlude 1; bots seeded, humans pure input). Normal settlement.
+  **Sanctioned receipt change**: match record re-frozen ×3 — seed 7 → HEIR
+  GOLD [36,41,56,43] (was RED [61,32,45,48], superseded and documented);
+  seed 1 → BLUE; seed 11 → GOLD, still the LETTERS witness. Single-night +
+  topology receipts byte-identical (checksum b269c570 unmoved).
+- **The Par adapter is REAL**: catalog launch:"legacy" now does the estate's
+  gamestate dance (GameState reset, root placement, finished(results)
+  duck-type, EnvKit stands down). Probe: `--parprobe --autoplay=bots` →
+  placements [0,3,1,2], exit 0. And real couches now play REAL minigames
+  every cycle (soaks keep the deterministic minisim).
+- **Screenshots**: estate/procession/shots/p3_*.png — figurines mid-match,
+  over-shoulder heatmap, standings+DRIVE, both dressed gates, the dormant
+  Reaper, the simplified PLAY panel.

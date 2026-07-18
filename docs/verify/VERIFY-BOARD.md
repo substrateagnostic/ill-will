@@ -173,30 +173,47 @@ so a mixed table diverges from the soak only through their choices, as designed.
 ## 7. SCREENSHOTS (windowed capture)
 
 ```
-godot --path . -- --procession --seed=7 --turncap=12 --nights=1 --autoplay=bots --slowsim --outdir=verify_out/procession_p2
+godot --path . -- --procession --seed=7 --turncap=12 --nights=1 --autoplay=bots --slowsim --outdir=verify_out/procession_p3
+godot --path . -- --playmenutest --quitafter=500 --outdir=verify_out/procession_p3
 ```
 
 (`--slowsim` keeps ceremonies at full length so the announce cards render.)
 Exit `-1073741819` after the snaps is the known harmless shutdown segfault.
-Committed under `estate/procession/shots/`:
+Committed under `estate/procession/shots/` (P3 set):
 
-- `p2_breath_heatmap.png` — THE LAST BREATH meter in situ over the board, the
-  aim heatmap glowing landing percentages down the roller's road.
-- `p2_peddler_cart.png` — the priced cart UI: ten wares, prices, rules, purse.
-- `p2_night_awards.png` — the night-award announcement card (3 drawn races).
-- `p2_reading_totals.png` — THE READING finale's final accounting card.
+- `p3_figurine_pawns.png` — the four toy figurines on their stones (frozen
+  sculpt pose, seat-colour bases, glaze).
+- `p3_overshoulder_heatmap.png` — the over-shoulder roll frame: figurine
+  shoulder, heatmap percentages glowing down the road, meter bottom-center.
+- `p3_standings_drive.png` — the thinking budget in one frame: standings
+  strip (rank/route/items), THE DRIVE inset, the meter — all during a roll.
+- `p3_lychgate_dressed.png` / `p3_manor_gate_dressed.png` — the ZF hero
+  gates dressing the start and finish.
+- `p3_reaper_dormant.png` — THE REAPER looming motionless at the graveyard
+  edge, barely lit.
+- `p3_play_menu.png` — the simplified PLAY panel: THE PROCESSION only,
+  nights + turn-cap dials, GO.
 
-P1a's board shots (`boardgraph_full_board.png`, `boardgraph_crossroads_prompt.png`,
-`boardgraph_drive_minimap.png`) remain valid — topology unchanged.
+P2's shots (`p2_peddler_cart.png`, `p2_night_awards.png`,
+`p2_reading_totals.png`) remain valid; `p2_breath_heatmap.png` is superseded
+by the over-shoulder frame. P1a's board shots remain valid — topology
+unchanged.
 
 ## 8. DELIBERATELY LEFT FOR LATER LANES
 
-- **P3 (presentation):** figurine pawns, true over-shoulder roll camera (P2
-  ships a raised behind-the-roller frame), estate.gd hub surgery
-  (PLAY-menu Deed dial still feeds an ignored config key; `par` real-launch
-  catalog adapter — drawn today, simulated with an announced note), held-item
-  glyphs on the HUD chips, Estate Stirs events.
+- **Estate Stirs (doc 28 §4):** the topology-event pools + THE CRYPT; THE
+  REAPER stands dormant on the grounds until that lane wakes him.
 - **P5 (online):** `_net_state` does not yet carry wreaths/inventory/match
   fields; LAST BREATH mirror re-cert per landmine 9 (roll_id/start-tick,
   reliable STOP intent).
 - pawn_putt.gd stays on disk untouched (Par receipts reference its constants).
+- CLASSIC NIGHTS is retired at the **UI level only** (P3): the PLAY panel no
+  longer offers it, but its transition chain stays dormant on disk for the
+  excision lane (landmine 6 — remove with replacement continuations).
+
+**P3 probes:** `--parprobe` (with `--autoplay=bots`) exercises the legacy Par
+catalog adapter end-to-end — real root-parented launch, real
+finished(results), validated placements — recorded run: seed 7 →
+`PARPROBE placements=[0, 3, 1, 2]`, exit 0. Real couches (any local human)
+now play REAL minigames per cycle; probes and all-bot soaks keep the
+deterministic minisim unless `--realmini`.
