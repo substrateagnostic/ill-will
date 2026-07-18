@@ -54,6 +54,7 @@ var _monuments_drawn := 0
 var walkers: Array = []
 var _saved_env: Environment = null
 var _selected_walker := -1
+var _skip_panel_focus := false    # one-shot: _build_lobby_panel opts out of the L1 pad-focus grab
 var _bot_wander_timer := 0.0
 var _tile_buyers: Array = []
 var exhibition := false
@@ -200,6 +201,16 @@ func _ready() -> void:
 						_exit_stroll("selector")
 						get_tree().create_timer(0.5).timeout.connect(func():
 							VerifyCapture.snap("stroll_selector")))))
+		elif arg == "--padreclaimtest":
+			# GAMEPAD EVERYWHERE (L1) bug 2 proof: a pad seated on the grounds is
+			# dropped then reconnected; the seat must come back HUMAN on its pad
+			# (pre-fix it stayed bot/-99 and the walker froze). Headless; quits.
+			get_tree().create_timer(1.0).timeout.connect(_pad_reclaim_test_run)
+		elif arg == "--focussweep":
+			# GAMEPAD EVERYWHERE (L1) verification: build every estate desk and log
+			# which control the pad-focus cursor landed on. Proves each screen is
+			# navigable by a controller alone. Headless; self-contained; quits.
+			get_tree().create_timer(1.0).timeout.connect(_focus_sweep_run)
 		elif arg == "--howtotest":
 			HowtoCards.schedule_howto_test(self)
 		elif arg == "--input2holdtest":
@@ -748,6 +759,7 @@ func _enter_lobby() -> void:
 
 func _build_lobby_panel() -> void:
 	_clear_panel("who's on the couch?", Color(0.9, 0.95, 0.9))
+	_skip_panel_focus = true   # L1: keep the lobby on its couch A=join/ready model (see _focus_panel_deferred)
 	for i in 4:
 		var status := _seat_status(i)
 		var row := HBoxContainer.new()
@@ -1440,6 +1452,9 @@ func _plural_nights(n: int) -> String:
 	return "%d portrait%s" % [n, "" if n == 1 else "s"]
 
 var _join_held := {}
+# L1 bug 2: device id -> the seat it was bumped from when it dropped on the
+# grounds/lobby, so a reconnect of the SAME id re-seats it (see _on_joy_connection_changed).
+var _stranded_pad_seats := {}
 
 ## Press-A-to-join (digest join flow): a gamepad nobody is seated on
 ## presses A in the LOBBY and claims the first BOT/EMPTY seat as HUMAN.
@@ -1458,10 +1473,31 @@ func _poll_pad_join() -> void:
 		_claim_seat_for_device(pad)
 
 ## A seated pad vanishing during LOBBY/GROUNDS hands its seat to a bot (Executor
-## register) and frees the pad, so reconnect + press-A can retake a seat. Mid-
-## minigame disconnects belong to the module's own loop — see readyroom-VERIFY.
+## register) and frees the pad. GAMEPAD EVERYWHERE (L1) bug 2: the CONNECT branch
+## used to only flash — so a wireless pad that dropped across a minigame's scene
+## swap (very common on Windows) came back a bot at device -99, and get_move()
+## then returned ZERO forever: the character was frozen on the walkabout. The
+## handler is now symmetric — a returning pad RECLAIMS the exact seat it was
+## bumped from (remembered in _stranded_pad_seats). If the OS re-enumerates it
+## under a new joypad id (also common), auto-reclaim can't match, so the press-A
+## reclaim path is now reachable on the walkabout too (see _process).
+## Mid-minigame disconnects still belong to PartySetup's overlay — see readyroom.
 func _on_joy_connection_changed(device: int, connected: bool) -> void:
 	if connected:
+		# Re-seat the returning pad on the seat it was stranded from, but only if
+		# that seat is still the vacant bot we left (nobody else pressed A into it).
+		if _stranded_pad_seats.has(device):
+			var seat: int = int(_stranded_pad_seats[device])
+			if PlayerInput.is_bot(seat) and PlayerInput.device_of(seat) == -99:
+				PlayerInput.assign(seat, device)
+				PlayerInput.set_bot(seat, false)
+				PlayerInput.save_setup()
+				Sfx.play("ui_confirm")
+				_flash("GAMEPAD %d RESTORED — %s IS YOURS AGAIN" % [device + 1, GameState.PLAYER_NAMES[seat]], GameState.PLAYER_COLORS[seat], 2.4)
+				if phase == Phase.LOBBY:
+					_build_lobby_panel()
+			_stranded_pad_seats.erase(device)
+			return
 		if phase == Phase.LOBBY:
 			_flash("GAMEPAD %d RESTORED — PRESS A TO TAKE A SEAT" % (device + 1), Color(0.85, 0.9, 1.0), 2.4)
 			# NIT 4: transient notice fades on its own; no "ILL WILL" title over the panel
@@ -1470,12 +1506,13 @@ func _on_joy_connection_changed(device: int, connected: bool) -> void:
 		return
 	for i in 4:
 		if PlayerInput.device_of(i) == device and not PlayerInput.is_bot(i):
+			_stranded_pad_seats[device] = i   # so a reconnect can hand the seat straight back
 			PlayerInput.set_bot(i, true)
 			PlayerInput.assign(i, -99)
 			_lobby_ready.erase(i)
 			_join_ready_lock.erase(i)
 			Sfx.play("grudge", -4.0)
-			_flash("GAMEPAD %d LOST — %s PLAYS ITSELF UNTIL FURTHER NOTICE" % [device + 1, GameState.PLAYER_NAMES[i]], GameState.PLAYER_COLORS[i], 2.6)
+			_flash("GAMEPAD %d LOST — %s PLAYS ITSELF (RECONNECT OR PRESS A TO RETAKE)" % [device + 1, GameState.PLAYER_NAMES[i]], GameState.PLAYER_COLORS[i], 2.6)
 			if phase == Phase.LOBBY:
 				# NIT 4: transient notice fades on its own; no "ILL WILL" title over the panel
 				_build_lobby_panel()
@@ -1495,6 +1532,10 @@ func _process(delta: float) -> void:
 	# the table's input belongs to the card, not a stray seat toggle.
 	if (phase == Phase.LOBBY or phase == Phase.GROUNDS) and not _house_rules_active and not _standing_grudge_active:
 		if _strolling:
+			# L1 bug 2: a dropped/late pad must be able to reclaim a seat while the
+			# table is on the walkabout too — _poll_pad_join only ever acts on an
+			# UNSEATED pad, so it never fights a seated stroller's landmark A.
+			_poll_pad_join()
 			_poll_stroll()
 		else:
 			_poll_pad_join()
@@ -1559,6 +1600,80 @@ func _clear_panel(title: String, color := Color(1, 0.9, 0.5)) -> void:
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	phase_box.add_child(t)
 	phase_panel.visible = true
+	# GAMEPAD EVERYWHERE (L1): every estate desk is built here first, then the
+	# caller adds its buttons. Defer the pad-focus grab one idle frame so it lands
+	# AFTER those buttons exist — it parks the focus cursor on the first enabled
+	# one so a controller can drive the panel, and no-ops when the panel has no
+	# buttons or a pad cursor already lives inside it (UiFocus.grab_first).
+	call_deferred("_focus_panel_deferred")
+
+## L1 verification (--focussweep): build each estate desk and report which
+## control the pad-focus cursor parked on. A desk is pad-navigable iff a Button
+## takes focus (the LOBBY is the one deliberate "none" — see _focus_panel_deferred).
+func _focus_sweep_run() -> void:
+	EstateState.house_rules_shown = true          # skip the first-night gate on the auction
+	PlayerInput.assign(0, 0)                        # a (phantom) seated human pad
+	PlayerInput.set_bot(0, false)
+	for i in range(1, 4):
+		PlayerInput.set_bot(i, true)
+	var screens: Array = [
+		["play_panel", func() -> void: _build_play_panel()],
+		["slot_panel", func() -> void: _build_slot_panel()],
+		["selector", func() -> void: _enter_selector()],
+		["howto_card", func() -> void: _show_howto("orbital")],
+		["auction", func() -> void: phase = Phase.GROUNDS; _enter_auction()],
+		["wardrobe", func() -> void: _build_wardrobe_panel()],
+		["family_album", func() -> void: _build_album_panel()],
+		["freeroam_grounds", func() -> void: phase = Phase.GROUNDS; _build_freeroam_panel()],
+		["lobby_seats", func() -> void: _build_lobby_panel()],
+	]
+	for s in screens:
+		(s[1] as Callable).call()
+		await get_tree().process_frame
+		await get_tree().process_frame
+		var f: Control = get_viewport().gui_get_focus_owner()
+		var desc := "NONE"
+		if f != null:
+			desc = "%s '%s'" % [f.get_class(), (f.get("text") if f.get("text") != null else "")]
+		print("FOCUSSWEEP %-17s -> %s" % [s[0], desc])
+	print("FOCUSSWEEP done")
+	get_tree().quit()
+
+## L1 bug 2 proof (--padreclaimtest): drive the real disconnect->reconnect on the
+## grounds and log the seat state at each step. Exercises _on_joy_connection_changed.
+## Self-contained: the reclaim path persists via PlayerInput.save_setup(), so this
+## backs up and restores party_setup.json (house convention for verify hooks).
+func _pad_reclaim_test_run() -> void:
+	var ps := ProjectSettings.globalize_path("user://party_setup.json")
+	if FileAccess.file_exists(ps):
+		DirAccess.copy_absolute(ps, ps + ".prbak")
+	phase = Phase.GROUNDS
+	PlayerInput.assign(0, 0)
+	PlayerInput.set_bot(0, false)
+	print("PADRECLAIM start   seat0 bot=%s dev=%d" % [str(PlayerInput.is_bot(0)), PlayerInput.device_of(0)])
+	_on_joy_connection_changed(0, false)   # pad drops across the minigame / idle
+	print("PADRECLAIM dropped seat0 bot=%s dev=%d (want bot=true dev=-99)" % [str(PlayerInput.is_bot(0)), PlayerInput.device_of(0)])
+	_on_joy_connection_changed(0, true)    # same pad returns
+	print("PADRECLAIM back    seat0 bot=%s dev=%d (want bot=false dev=0)" % [str(PlayerInput.is_bot(0)), PlayerInput.device_of(0)])
+	var ok := (not PlayerInput.is_bot(0)) and PlayerInput.device_of(0) == 0
+	print("PADRECLAIM result: %s" % ("PASS — walker driven by its pad again" if ok else "FAIL"))
+	if FileAccess.file_exists(ps + ".prbak"):
+		DirAccess.copy_absolute(ps + ".prbak", ps)
+		DirAccess.remove_absolute(ps + ".prbak")
+		print("PADRECLAIM party_setup.json restored")
+	get_tree().quit()
+
+## Deferred by _clear_panel: hand the freshly-built desk a pad-focus cursor.
+## The LOBBY ("who's on the couch") opts out: there a pad's A is the couch
+## join/ready button (_poll_lobby_ready) and its focused buttons cycle a seat
+## HUMAN/BOT — a focus cursor would make one A press do both. The lobby stays on
+## its documented couch model (A join/ready, B leave, hold Start to begin); the
+## settings SEATS tab is the focus-navigable way to drive seats from a pad.
+func _focus_panel_deferred() -> void:
+	if _skip_panel_focus:
+		_skip_panel_focus = false
+		return
+	UiFocus.grab_first(phase_box)
 
 ## FREE ROAM — the estate rests between nights. The grounds are walkable
 ## (stroll on by default), trap tiles are bought here, and the night
