@@ -201,6 +201,11 @@ func _ready() -> void:
 						_exit_stroll("selector")
 						get_tree().create_timer(0.5).timeout.connect(func():
 							VerifyCapture.snap("stroll_selector")))))
+		elif arg == "--padreclaimtest":
+			# GAMEPAD EVERYWHERE (L1) bug 2 proof: a pad seated on the grounds is
+			# dropped then reconnected; the seat must come back HUMAN on its pad
+			# (pre-fix it stayed bot/-99 and the walker froze). Headless; quits.
+			get_tree().create_timer(1.0).timeout.connect(_pad_reclaim_test_run)
 		elif arg == "--focussweep":
 			# GAMEPAD EVERYWHERE (L1) verification: build every estate desk and log
 			# which control the pad-focus cursor landed on. Proves each screen is
@@ -1620,6 +1625,30 @@ func _focus_sweep_run() -> void:
 			desc = "%s '%s'" % [f.get_class(), (f.get("text") if f.get("text") != null else "")]
 		print("FOCUSSWEEP %-17s -> %s" % [s[0], desc])
 	print("FOCUSSWEEP done")
+	get_tree().quit()
+
+## L1 bug 2 proof (--padreclaimtest): drive the real disconnect->reconnect on the
+## grounds and log the seat state at each step. Exercises _on_joy_connection_changed.
+## Self-contained: the reclaim path persists via PlayerInput.save_setup(), so this
+## backs up and restores party_setup.json (house convention for verify hooks).
+func _pad_reclaim_test_run() -> void:
+	var ps := ProjectSettings.globalize_path("user://party_setup.json")
+	if FileAccess.file_exists(ps):
+		DirAccess.copy_absolute(ps, ps + ".prbak")
+	phase = Phase.GROUNDS
+	PlayerInput.assign(0, 0)
+	PlayerInput.set_bot(0, false)
+	print("PADRECLAIM start   seat0 bot=%s dev=%d" % [str(PlayerInput.is_bot(0)), PlayerInput.device_of(0)])
+	_on_joy_connection_changed(0, false)   # pad drops across the minigame / idle
+	print("PADRECLAIM dropped seat0 bot=%s dev=%d (want bot=true dev=-99)" % [str(PlayerInput.is_bot(0)), PlayerInput.device_of(0)])
+	_on_joy_connection_changed(0, true)    # same pad returns
+	print("PADRECLAIM back    seat0 bot=%s dev=%d (want bot=false dev=0)" % [str(PlayerInput.is_bot(0)), PlayerInput.device_of(0)])
+	var ok := (not PlayerInput.is_bot(0)) and PlayerInput.device_of(0) == 0
+	print("PADRECLAIM result: %s" % ("PASS — walker driven by its pad again" if ok else "FAIL"))
+	if FileAccess.file_exists(ps + ".prbak"):
+		DirAccess.copy_absolute(ps + ".prbak", ps)
+		DirAccess.remove_absolute(ps + ".prbak")
+		print("PADRECLAIM party_setup.json restored")
 	get_tree().quit()
 
 ## Deferred by _clear_panel: hand the freshly-built desk a pad-focus cursor.
