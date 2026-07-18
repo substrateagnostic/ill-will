@@ -1,0 +1,74 @@
+[
+  {
+    "id": "reaper_scythe",
+    "category": "PROCESSION_STATIC",
+    "prompt": "A giant grim reaper scythe weapon standing upright, one very long straight dark wooden haft with a huge sweeping curved steel blade mounted at the top end, weathered pitted rusty metal blade and aged worn wood shaft, a single tall menacing death scythe, blade curving to one side",
+    "target_height_hint": 4.0
+  },
+  {
+    "id": "bone_bridge",
+    "category": "PROCESSION_STATIC",
+    "prompt": "A small arched footbridge built entirely of huge interlocked bones, thick femur bones and stacked round vertebrae forming the curved arch span and the walkway deck, pale weathered ivory bone streaked with green moss, a single spanning skeletal arch bridge",
+    "target_height_hint": 2.6
+  },
+  {
+    "id": "lychgate",
+    "category": "PROCESSION_STATIC",
+    "prompt": "A roofed wooden churchyard lychgate, a covered timber gateway arch with a steep peaked wood-shingled roof over two upright posts and a low gate, leaning and tilted slightly askew, weathered grey timber blotched with pale lichen",
+    "target_height_hint": 2.8
+  },
+  {
+    "id": "manor_gate",
+    "category": "PROCESSION_STATIC",
+    "prompt": "A grand estate entrance, two tall ornate black wrought-iron gates hung between two heavy square carved stone pillars, swirling iron scrollwork and spear-tip tops, one gate swung partway open ajar, imposing and weathered",
+    "target_height_hint": 3.2
+  },
+  {
+    "id": "peddlers_cart",
+    "category": "PROCESSION_STATIC",
+    "prompt": "A Victorian black funeral hearse wagon converted into a peddlers shop cart, a tall lacquered wooden wagon body on four spoked wheels, one whole side panel hinged open and folded down to reveal shelves stacked with little bottles and wares, no horse",
+    "target_height_hint": 2.3
+  },
+  {
+    "id": "ferryman_skiff",
+    "category": "PROCESSION_STATIC",
+    "prompt": "A long narrow flat-bottomed wooden punt skiff, a simple funeral ferry rowboat of dark weathered planks with a slightly raised curved bow, one long straight wooden punting pole lying along its length, empty interior",
+    "target_height_hint": 0.8
+  },
+  {
+    "id": "checkpoint_shrine",
+    "category": "PROCESSION_STATIC",
+    "prompt": "A small roadside mourning shrine, a little peaked-roof wooden shrine box mounted on a short post, a row of lit melting candles on its front ledge and small iron hooks along the top holding a dark mourning wreath, weathered and somber",
+    "target_height_hint": 1.6
+  },
+  {
+    "id": "grave_goods_chest",
+    "category": "PROCESSION_STATIC",
+    "prompt": "An ornate old grave treasure chest half sunken and tilted into a mound of dark dirt, its cracked domed lid propped partly open with a thin warm golden glow spilling out from the gap, dark weathered wood bound with tarnished worn gold banding",
+    "target_height_hint": 0.7
+  },
+  {
+    "id": "npc_reaper",
+    "category": "PROCESSION_NPC",
+    "prompt": "A towering colossal hooded skeletal grim reaper standing upright, draped head to floor in a tattered dark hooded robe that fully hides the feet and pools on the ground, deep empty black hood with no face, thin bony skeletal hands with empty open palms emerging from long ragged sleeves, arms slightly out from the body, both legs together straight not mid-stride, gaunt and imposing, slightly oversized skull for readability",
+    "target_height_hint": 3.5
+  },
+  {
+    "id": "npc_ferryman",
+    "category": "PROCESSION_NPC",
+    "prompt": "A gaunt tall hooded ferryman standing upright in a long tattered floor-length hooded cloak that fully hides the feet and sweeps the ground, deep shadowed hood with a bony gaunt face barely visible inside, a small round glowing lantern hanging from a cord at his belt, both arms resting down at his sides, both legs together not mid-stride, weathered cloth, slightly oversized head for readability",
+    "target_height_hint": 1.85
+  },
+  {
+    "id": "npc_gravedigger",
+    "category": "PROCESSION_NPC",
+    "prompt": "A stooped stout weary old gravedigger man standing upright, wearing a flat cloth cap, rolled-up sleeves, an apron and heavy work boots, holding a long-handled dirt shovel resting up over one shoulder with one hand while the other arm hangs at his side, hunched round-shouldered posture, both legs together not mid-stride, slightly oversized head for readability",
+    "target_height_hint": 1.7
+  },
+  {
+    "id": "npc_widow",
+    "category": "PROCESSION_NPC",
+    "prompt": "An elegant dignified elderly widow woman standing upright, a clearly visible kindly wrinkled old womans face framed by neat grey hair, a small short black lace veil pinned back behind her head and off her face, wearing a high-necked long-sleeved floor-length black Victorian mourning gown, both gloved hands clasped together at her waist in front, a clearly readable solid human figure with distinct head shoulders arms and torso, both legs together not mid-stride, slightly oversized head for readability",
+    "target_height_hint": 1.6
+  }
+]

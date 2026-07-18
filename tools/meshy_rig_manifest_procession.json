@@ -1,0 +1,31 @@
+[
+  {
+    "name": "npc_reaper",
+    "height_meters": 3.5,
+    "anims": [
+      { "label": "walk",  "action": 119, "action_name": "Slow Orc Walk" },
+      { "label": "sweep", "action": 99,  "action_name": "Reaping Swing" }
+    ]
+  },
+  {
+    "name": "npc_ferryman",
+    "height_meters": 1.85,
+    "anims": [
+      { "label": "idle", "action": 0, "action_name": "Idle" }
+    ]
+  },
+  {
+    "name": "npc_gravedigger",
+    "height_meters": 1.7,
+    "anims": [
+      { "label": "idle", "action": 0, "action_name": "Idle" }
+    ]
+  },
+  {
+    "name": "npc_widow",
+    "height_meters": 1.6,
+    "anims": [
+      { "label": "idle", "action": 0, "action_name": "Idle" }
+    ]
+  }
+]

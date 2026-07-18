@@ -1,0 +1,93 @@
+{
+    "generated_at":  "2026-07-18T02:12:04.4292901-05:00",
+    "experiment":  "RIGGING WAVE: rig graveyard troupe + apply preset animations",
+    "gen_dir":  "assets/models/meshy/generated/",
+    "models":  [
+                   {
+                       "name":  "npc_reaper",
+                       "native_height_meters":  3.5,
+                       "rig_task_id":  "019f740c-ea58-7458-b6dc-1f27ef121179",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "walk",
+                                              "action_id":  119,
+                                              "action_name":  "Slow Orc Walk",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_reaper_walk.glb",
+                                              "error":  ""
+                                          },
+                                          {
+                                              "label":  "sweep",
+                                              "action_id":  99,
+                                              "action_name":  "Reaping Swing",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_reaper_sweep.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   },
+                   {
+                       "name":  "npc_ferryman",
+                       "native_height_meters":  1.85,
+                       "rig_task_id":  "019f740e-8cd4-7b28-97ac-addd7d21b045",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle",
+                                              "action_id":  0,
+                                              "action_name":  "Idle",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_ferryman_idle.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   },
+                   {
+                       "name":  "npc_gravedigger",
+                       "native_height_meters":  1.7,
+                       "rig_task_id":  "019f740f-b11f-7034-954f-d22fc0a67685",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle",
+                                              "action_id":  0,
+                                              "action_name":  "Idle",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_gravedigger_idle.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   },
+                   {
+                       "name":  "npc_widow",
+                       "native_height_meters":  1.6,
+                       "rig_task_id":  "019f7410-812e-7b91-8619-2a2973a31617",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle",
+                                              "action_id":  0,
+                                              "action_name":  "Idle",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_widow_idle.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   }
+               ],
+    "totals":  {
+                   "rig_credits":  20,
+                   "anim_credits":  15,
+                   "total_credits":  35
+               }
+}

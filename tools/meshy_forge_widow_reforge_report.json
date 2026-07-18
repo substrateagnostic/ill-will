@@ -1,0 +1,30 @@
+{
+    "generated_at":  "2026-07-18T02:06:15.2584392-05:00",
+    "model":  "meshy-6",
+    "preview_only":  false,
+    "batch_size":  5,
+    "items":  [
+                  {
+                      "id":  "npc_widow",
+                      "category":  "PROCESSION_NPC",
+                      "status":  "ok",
+                      "preview_task_id":  "019f7407-7f0e-7a02-a595-43a44cad434e",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f740a-e417-7f4d-a75c-990ba7089561",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "C:\\Users\\agall\\projects\\un_party_game\\.claude\\worktrees\\agent-a26051519fd64df1f\\assets\\models\\meshy\\generated\\npc_widow.glb",
+                      "error":  null
+                  }
+              ],
+    "summary":  {
+                    "total":  1,
+                    "ok":  1,
+                    "preview_only":  0,
+                    "failed":  0,
+                    "resumed_skip":  0,
+                    "total_credits":  30
+                }
+}
