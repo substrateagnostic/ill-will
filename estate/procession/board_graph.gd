@@ -929,6 +929,136 @@ func advance_pawn_path(seat: int, path: Array) -> Tween:
 	return tw
 
 # --------------------------------------------------------------------------
+# AIM HEATMAP (P2, doc 28 §15 — the legibility flagship). While the active
+# seat's LAST BREATH needle sweeps, the reachable stones down their road glow
+# with the LIVE landing probability (brighter = likelier) + a percent tag, so
+# aiming at a number is a readable decision from the couch. Pure presentation:
+# a pooled marker set fed by procession each few frames; never draws rng,
+# never touches generate() (the topology receipt cannot move).
+# --------------------------------------------------------------------------
+var _heat_markers: Array = []      # pooled {root, ring, ring_mat, pct} dicts
+
+## entries: [{node, face, p, w}] — p = probability 0..1, w = p normalized to
+## the max face (brightness). Duplicate nodes merge (walks clamp at the gate).
+func show_heatmap(entries: Array, seat_color: Color) -> void:
+	var by_node := {}
+	for e in entries:
+		var d := e as Dictionary
+		var n := int(d.node)
+		if by_node.has(n):
+			by_node[n].p += float(d.p)
+			by_node[n].w = maxf(float(by_node[n].w), float(d.w))
+		else:
+			by_node[n] = {"p": float(d.p), "w": float(d.w)}
+	var keys: Array = by_node.keys()
+	keys.sort()
+	while _heat_markers.size() < keys.size():
+		_heat_markers.append(_make_heat_marker())
+	var col := Color(1.0, 0.85, 0.42).lerp(seat_color, 0.35)
+	var k := 0
+	for n in keys:
+		var m: Dictionary = _heat_markers[k]
+		var w := clampf(float(by_node[n].w), 0.0, 1.0)
+		var root := m.root as Node3D
+		root.visible = true
+		root.global_position = space_pos(int(n)) + Vector3(0, 0.14, 0)
+		var mat := m.ring_mat as StandardMaterial3D
+		mat.emission = col
+		mat.albedo_color = Color(col.r, col.g, col.b, 0.25 + 0.55 * w)
+		mat.emission_energy_multiplier = 0.5 + 4.5 * w
+		var pct := m.pct as Label3D
+		pct.text = "%d%%" % int(round(100.0 * float(by_node[n].p)))
+		pct.modulate = Color(col.lerp(Color.WHITE, 0.4), 0.40 + 0.60 * w)
+		k += 1
+	for i in range(k, _heat_markers.size()):
+		(_heat_markers[i].root as Node3D).visible = false
+
+func clear_heatmap() -> void:
+	for m in _heat_markers:
+		(m.root as Node3D).visible = false
+
+# --------------------------------------------------------------------------
+# WREATH OF DEBT markers (P2 cart item): an owner-coloured coin ring on the
+# trapped stone — announced sabotage is VISIBLE sabotage (Pro Rules).
+# --------------------------------------------------------------------------
+var _debt_markers := {}            # node_id -> Node3D
+
+func set_debt_marker(node_id: int, color: Color) -> void:
+	clear_debt_marker(node_id)
+	var root := Node3D.new()
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.52
+	tm.outer_radius = 0.70
+	tm.rings = 6
+	tm.ring_segments = 20
+	ring.mesh = tm
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.emission_enabled = true
+	mat.emission = color
+	mat.emission_energy_multiplier = 2.6
+	mat.albedo_color = color
+	ring.material_override = mat
+	ring.rotation_degrees.x = 90.0
+	root.add_child(ring)
+	var tag := Label3D.new()
+	tag.text = "DEBT"
+	tag.font_size = 34
+	tag.pixel_size = 0.005
+	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	tag.outline_size = 10
+	tag.outline_modulate = Color(0, 0, 0, 0.9)
+	tag.modulate = color.lerp(Color.WHITE, 0.25)
+	tag.position = Vector3(0, 0.55, 0)
+	root.add_child(tag)
+	add_child(root)
+	root.global_position = space_pos(node_id) + Vector3(0, 0.16, 0)
+	_debt_markers[node_id] = root
+
+func clear_debt_marker(node_id: int) -> void:
+	if _debt_markers.has(node_id):
+		(_debt_markers[node_id] as Node3D).queue_free()
+		_debt_markers.erase(node_id)
+
+func clear_all_debt_markers() -> void:
+	for n in _debt_markers.keys():
+		clear_debt_marker(int(n))
+
+func _make_heat_marker() -> Dictionary:
+	var root := Node3D.new()
+	var ring := MeshInstance3D.new()
+	var tm := TorusMesh.new()
+	tm.inner_radius = 0.98
+	tm.outer_radius = 1.18
+	tm.rings = 6
+	tm.ring_segments = 24
+	ring.mesh = tm
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.emission_enabled = true
+	mat.emission = Color(1.0, 0.85, 0.42)
+	mat.emission_energy_multiplier = 1.0
+	mat.albedo_color = Color(1.0, 0.85, 0.42, 0.4)
+	ring.material_override = mat
+	ring.rotation_degrees.x = 90.0
+	root.add_child(ring)
+	var pct := Label3D.new()
+	pct.name = "Pct"
+	pct.font_size = 64
+	pct.pixel_size = 0.0078
+	pct.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	pct.no_depth_test = true
+	pct.outline_size = 16
+	pct.outline_modulate = Color(0, 0, 0, 0.92)
+	pct.position = Vector3(0, 0.72, 0)
+	root.add_child(pct)
+	add_child(root)
+	root.visible = false
+	return {"root": root, "ring": ring, "ring_mat": mat, "pct": pct}
+
+# --------------------------------------------------------------------------
 # PUTT TARGET PREVIEW (F29) — unchanged language, graph destinations
 # --------------------------------------------------------------------------
 var _preview: Dictionary = {}      # seat -> Node3D reticle+tooltip marker

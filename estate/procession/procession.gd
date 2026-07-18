@@ -1,6 +1,6 @@
 extends Node3D
 ## THE PROCESSION — ILL WILL's board night, rebuilt on the doc-28 graph board.
-## One wake per session: putt your pawn from the LYCHGATE to the MANOR GATE
+## One wake per session: roll your pawn from the LYCHGATE to the MANOR GATE
 ## through three route personalities (GARDEN ROW / HOLLOW WOODS / WEEPING
 ## VALLEY) joined by two CROSSROADS. The first pawn through the gate rings
 ## THE FINAL BELL — everyone else gets exactly one more turn, then the night
@@ -12,11 +12,19 @@ extends Node3D
 ## NAMED rng streams (Codex correction #2, night 7):
 ##   LAYOUT — board topology; seeded from board DATA, never the night seed
 ##            (board_graph.gd), so --boardgraphtest is night-independent.
-##   ROLL   — _roll_rng: putt band deals, bot aim, bot crossroads choices.
-##   EVENT  — _event_rng: séance slots, item draws, minigame pick/minisim,
-##            house-awakens draws, bot vendetta stakes.
+##   ROLL   — _roll_rng: LAST BREATH turn streams (one child stream seeded per
+##            turn: crit band deal, period jitter, the face draw), bot aim
+##            scans, bot crossroads choices.
+##   EVENT  — _event_rng: séance slots, item draws + bot shop/item policy,
+##            minigame pick/minisim, award draws + tie-breaks, house-awakens.
 ##   VOICE/DRAMA — _voice_rng/_drama_prng: Executor line picks + board-drama
 ##            flourishes. Presentation only; can never shift the tally.
+##
+## P2 (this lane): the roll is THE LAST BREATH meter — SEQUENTIAL, one seat at
+## a time in wreath-standings order LEADER FIRST (doc 28 §8 law 1), d8 base,
+## with the always-on AIM HEATMAP painting live landing probabilities down the
+## roller's road. pawn_putt.gd stays on disk untouched (Par receipts reference
+## its constants) — it is simply no longer wired here.
 ##
 ## The Codicil is RETIRED as a purchase stop (doc 28 §1); codicil.gd stays on
 ## disk, unwired. The ring (board_path.gd) is retired the same way. This
@@ -26,11 +34,12 @@ extends Node3D
 ## simulates, mirrors render truth.
 
 const BoardGraph := preload("res://estate/procession/board_graph.gd")
-const PawnPutt := preload("res://estate/procession/pawn_putt.gd")
+const LastBreath := preload("res://estate/procession/last_breath.gd")
 const Executor := preload("res://estate/procession/executor_host.gd")
 const Spaces := preload("res://estate/procession/board_spaces.gd")
 const BoardCamera := preload("res://estate/procession/board_camera.gd")
 const RoadPrompt := preload("res://estate/procession/crossroads_prompt.gd")
+const CartPrompt := preload("res://estate/procession/cart_prompt.gd")
 const BoardFx := preload("res://estate/procession/board_fx.gd")
 const SeanceWheelScene := preload("res://estate/procession/seance_wheel.gd")
 const MinigameRouletteScene := preload("res://estate/procession/minigame_roulette.gd")
@@ -60,28 +69,43 @@ static var INTERIM_LINES: Array:
 # F24 reveal-cascade reactions: waiting-player button -> attributed glyph.
 const REACT_COOLDOWN_MS := 550
 const REACT_MAP := {"b": "HA!", "up": "OOH", "down": "OOF"}
-const POINTS := [5, 3, 2, 1]        # RECKONING / will placement -> Grudge
-const CONTRACT_POOL := ["echo", "tilt", "orbital", "mower", "greed", "swap",
-	"deadweight", "throne", "lastwill", "pallbearers"]  # B7-HOOK
-const MODULE_SCENES := {
-	"pallbearers": "res://minigames/pallbearers/pallbearers.tscn",  # B7-HOOK
-	"echo": "res://minigames/echo_chamber/echo_chamber.tscn",
-	"tilt": "res://minigames/tilt/tilt.tscn",
-	"orbital": "res://minigames/orbital/orbital.tscn",
-	"mower": "res://minigames/mower/mower.tscn",
-	"greed": "res://minigames/greed/greed.tscn",
-	"swap": "res://minigames/swap_meet/swap_meet.tscn",
-	"deadweight": "res://minigames/dead_weight/dead_weight.tscn",
-	"throne": "res://minigames/throne/throne.tscn",
-	"lastwill": "res://minigames/last_will/last_will.tscn",
+# ---- THE MINIGAME CATALOG, UNIFIED (doc 28 §15): one registry, all 15 games
+# (estate.gd MODULES minus the mock exhibition), drawn WITHOUT replacement per
+# night; THE INVITATION item overrides one draw. Catalog metadata: launch kind
+# (Par is a legacy launcher — landmine 3 — simulated until the P3 adapter) and
+# team shape (Pallbearers settles 2v2: teammates get equal-tier pay).
+const MINIGAME_ORDER: Array[String] = ["par", "echo", "tilt", "orbital",
+	"mower", "greed", "swap", "deadweight", "throne", "lastwill",
+	"widowsgaze", "seance", "understudy", "maskedball", "pallbearers"]
+const MINIGAMES := {
+	"par": {"name": "PAR FOR THE CURSE", "scene": "res://scenes/main.tscn", "launch": "legacy", "team": "ffa"},
+	"echo": {"name": "ECHO CHAMBER", "scene": "res://minigames/echo_chamber/echo_chamber.tscn", "launch": "contract", "team": "ffa"},
+	"tilt": {"name": "TILT", "scene": "res://minigames/tilt/tilt.tscn", "launch": "contract", "team": "ffa"},
+	"orbital": {"name": "ORBITAL DODGEBALL", "scene": "res://minigames/orbital/orbital.tscn", "launch": "contract", "team": "ffa"},
+	"mower": {"name": "MOWER MAYHEM", "scene": "res://minigames/mower/mower.tscn", "launch": "contract", "team": "ffa"},
+	"greed": {"name": "GREED INC.", "scene": "res://minigames/greed/greed.tscn", "launch": "contract", "team": "ffa"},
+	"swap": {"name": "SWAP MEET", "scene": "res://minigames/swap_meet/swap_meet.tscn", "launch": "contract", "team": "ffa"},
+	"deadweight": {"name": "DEAD WEIGHT", "scene": "res://minigames/dead_weight/dead_weight.tscn", "launch": "contract", "team": "ffa"},
+	"throne": {"name": "THE THRONE", "scene": "res://minigames/throne/throne.tscn", "launch": "contract", "team": "ffa"},
+	"lastwill": {"name": "LAST WILL", "scene": "res://minigames/last_will/last_will.tscn", "launch": "contract", "team": "ffa"},
+	"widowsgaze": {"name": "THE WIDOW'S GAZE", "scene": "res://minigames/widows_gaze/widows_gaze.tscn", "launch": "contract", "team": "ffa"},
+	"seance": {"name": "THE SÉANCE", "scene": "res://minigames/seance/seance.tscn", "launch": "contract", "team": "ffa"},
+	"understudy": {"name": "THE UNDERSTUDY", "scene": "res://minigames/understudy/understudy.tscn", "launch": "contract", "team": "ffa"},
+	"maskedball": {"name": "MASKED BALL", "scene": "res://minigames/masked_ball/masked_ball.tscn", "launch": "contract", "team": "ffa"},
+	"pallbearers": {"name": "PALLBEARERS", "scene": "res://minigames/pallbearers/pallbearers.tscn", "launch": "contract", "team": "2v2"},  # B7-HOOK
 }
+# The economy heartbeat (doc 28 §6): minigame settlement per cycle.
+const MINI_PENNIES := [10, 6, 3, 1]
+const MINI_WREATHS := [2, 1, 1, 0]
 
 signal night_over(tally: Dictionary)
 
 # ---- night state (the tally reads out of these) ----
 var seed_value := 0
 var roster: Array = []
-var grudge: Array[int] = []
+var grudge: Array[int] = []         # PENNIES on screen (internal name kept — RC §3:
+                                    # 14 minigame receipts reference "grudge")
+var wreaths: Array[int] = []        # THE victory currency (doc 28 §6) — persists all match
 var deeds: Array[int] = []          # will-clause trophies only (Codicil retired)
 var positions: Array[int] = []      # per seat: current GRAPH NODE id
 var moved_total: Array[int] = []
@@ -90,10 +114,32 @@ var arrived: Array = []             # per seat: bool — through the Manor Gate 
 var arrival_order: Array = []       # seats in gate-crossing order
 var bell_round := -1                # round THE FINAL BELL rang (-1 = still open)
 var turn_cap := 12                  # doc 28 §8 rule 4 — distance ranking backstop
-var items: Array = []               # per seat: {pin,ribbon,salt} counts
-var stats: Array = []               # per seat: will-clause stat dict
+var items: Array = []               # per seat: Dictionary ware_id -> count (cap 3 total)
+var stats: Array = []               # per seat: will-clause + award stat dict (per NIGHT)
+# ---- THE PEDDLER'S CART item state (P2; guardrails per doc 28 §15) ----
+var pending_die: Array[int] = []    # per seat: armed WRIT die (0 = the d8)
+var pending_lucky: Array[int] = []  # per seat: armed LUCKY PENNY bonus steps
+var debt_traps := {}                # node_id -> owner seat (WREATH OF DEBT)
+var _move_item_used := false        # max ONE die/movement item per turn
+var _offense_hit := {}              # per turn: target seat -> true (no-stack per target)
+var _wisp_dest := -1                # WILL-O'-THE-WISP teleport (replaces the roll)
+var _cart_demoed := false           # capture poses the cart UI once (P2 screenshot b)
 var round_num := 0
 var winner := -1
+# ---- THE 3-NIGHT MATCH (doc 28 §2; landmine 1: night_length means games-per-
+# night in the estate shell — this is a NEW field, never that one) ----
+var match_nights := 3               # --nights=N; estate merge passes config.match_nights
+var night_index := 1                # 1-based, current night
+# Escalating FINAL BELL arrival wreaths by night (doc 28 §15 — night 3 can
+# never be ceremonial). Crossing order first, then dist_to_gate ranking.
+const ARRIVAL_WREATHS := [[8, 5, 3, 1], [10, 6, 3, 2], [12, 7, 4, 2]]
+var wreath_src: Array = []          # per seat {arrival, mini, award, liquid} — THE READING streams
+var mini_wins_match: Array[int] = []   # match-level minigame wins (LETTERS + finale tie-break)
+var board_firsts: Array[int] = []      # nights finished #1 on the board (finale tie-break 1)
+var night_final_rank: Array[int] = []  # board rank on the LAST night (finale tie-break 2)
+var letters: Array = []             # per seat: LETTERS OF ADMINISTRATION active tonight
+var _mini_pool: Array = []          # per-night draw-without-replacement pool
+var _invitation_pick := ""          # THE INVITATION override for the next draw
 var _started := false
 var _autoplay := false
 var _fast := false
@@ -112,15 +158,20 @@ var _epitaphs: Array = []        # per seat: epitaph String a duel winner hung (
 var _epitaph_tags := {}          # seat -> Label3D (the persistent gravestone tag riding the pawn)
 var _stakes_ui: VendettaStakes = null   # sealed-stakes overlay (lazy; windowed only)
 var _phase := "boot"
-var _preview_active := false    # F29: live putt target reticles during the roll
 var _react_last: Array[int] = []   # F24: per-seat last-reaction wall-clock (cooldown)
 var _reacted_demo := false         # F24: capture fires the reaction demo once
 var _prompt_demoed := false        # capture poses the crossroads prompt once (screenshot b)
+var _breath_posed := false         # capture poses the meter + heatmap once (P2 screenshot a)
 var _arrived_this_round: Array = []   # seats whose walk crossed the gate THIS round
+# ---- THE LAST BREATH turn state (P2) ----
+const N_FACES_BASE := 8            # doc 28 §5: d8 locked (WRITs widen per roll)
+var _breath_faces: Array = []      # all_released payload for the turn in flight
+var _heat_seat := -1               # seat whose aim the heatmap paints (-1 = off)
+var _heat_frame := 0               # coarse update cadence (every 3rd frame)
 
 # ---- nodes ---- (concrete types so method returns infer without annotation)
 var board: ProcessionBoardGraph
-var putt: ProcessionPawnPutt
+var breath: ProcessionLastBreath
 var executor: ProcessionExecutor
 var cam: Camera3D
 var board_camera: ProcessionCamera    # F1: the named-shot camera director
@@ -173,20 +224,42 @@ var clauses: Array = []
 func _ready() -> void:
 	call_deferred("_autostart")
 
-## F29: while the roll is live, paint each charging seat's projected landing stone
-## with a seat-coloured reticle + rule tooltip, so steering at a space is a real
-## decision. Forks in the preview walk follow the seat's PREFERRED road (the
-## same no-rng strategy read the bots use), so the reticle is honest about the
-## likeliest destination without consuming any stream. Presentation only.
+## THE AIM HEATMAP (P2, always-on — producer-locked). While the active seat's
+## LAST BREATH needle sweeps, the reachable stones down their road glow with the
+## LIVE landing distribution from the meter's side-effect-free weights read
+## (current_weights() picks the crit kernel iff the needle sits in the band, so
+## crit sharpening is reflected as it happens). Coarse cadence (every 3rd
+## frame) is plenty — the read is for a couch, not a scope. Presentation only:
+## never consumes any stream, never mutates sim state.
 func _process(_delta: float) -> void:
-	if _fast or not _preview_active or putt == null or board == null:
+	if _fast or board == null or breath == null:
 		return
-	for i in roster.size():
-		var sp := putt.preview_spaces(i)
-		if sp > 0 and not bool(arrived[i]):
-			board.set_putt_preview(i, _preview_dest(i, sp), roster[i].color)
-		else:
-			board.clear_putt_preview(i)
+	if _heat_seat < 0:
+		return
+	_heat_frame += 1
+	if _heat_frame % 3 != 0:
+		return
+	_paint_heatmap(_heat_seat)
+
+## One heatmap frame: face f lands at _preview_dest(seat, f + pending bonus)
+## down the seat's preferred road (the same no-rng walk the bots use), glowing
+## by probability (w normalized to the likeliest face) with a percent tag.
+func _paint_heatmap(seat: int) -> void:
+	var weights: Array[float] = breath.current_weights()
+	var bonus := _pending_steps_bonus(seat)
+	var entries: Array = []
+	var wmax := 0.0001
+	for w in weights:
+		wmax = maxf(wmax, float(w))
+	for f in weights.size():
+		entries.append({"node": _preview_dest(seat, f + 1 + bonus), "face": f + 1,
+			"p": float(weights[f]), "w": float(weights[f]) / wmax})
+	board.show_heatmap(entries, roster[seat].color)
+
+## Announced movement bonuses that shift every face's landing (an armed LUCKY
+## PENNY). Kept honest: the heatmap must glow the stones you will actually reach.
+func _pending_steps_bonus(seat: int) -> int:
+	return pending_lucky[seat] if seat < pending_lucky.size() else 0
 
 ## estate.gd (merge path) calls this with a real roster BEFORE the deferred
 ## _autostart fires; the flag makes the two entry points mutually exclusive.
@@ -224,6 +297,8 @@ func _boot(config: Dictionary) -> void:
 		seed_value = int(config.seed)
 	if config.has("turn_cap"):
 		turn_cap = clampi(int(config.turn_cap), 4, 40)
+	if config.has("match_nights"):
+		match_nights = clampi(int(config.match_nights), 1, 5)
 	# Seed the NAMED streams (header doctrine). Distinct affine salts per stream
 	# so no draw in one can ever shift another; presentation streams can never
 	# shift the tally at all.
@@ -238,15 +313,15 @@ func _boot(config: Dictionary) -> void:
 	_build_world()
 	_build_hud()
 	_choose_clauses()
-	# The soak compresses real time: pawn_putt is frame/tick-based, so a higher
-	# time_scale changes only how fast the same ticks elapse — the tally stays
-	# byte-identical. Interactive/windowed play runs at 1.0.
+	# The soak compresses real time: under _fast the LAST BREATH queue resolves
+	# in a single frame per turn (no live sweep), so time_scale only speeds the
+	# ceremonies — the tally stays byte-identical. Windowed play runs at 1.0.
 	if _autoplay and _fast:
 		Engine.time_scale = 8.0
-	print("PROCESSION boot seed=%d board=%s turn_cap=%d players=%d autoplay=%s minisim=%s" % [
-		seed_value, String(BoardGraph.BOARD.id), turn_cap, roster.size(),
+	print("PROCESSION boot seed=%d board=%s turn_cap=%d nights=%d players=%d autoplay=%s minisim=%s" % [
+		seed_value, String(BoardGraph.BOARD.id), turn_cap, match_nights, roster.size(),
 		str(_autoplay), str(_minisim)])
-	_run_night()
+	_run_match()
 
 func _parse_cli() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -254,6 +329,10 @@ func _parse_cli() -> void:
 			seed_value = int(arg.trim_prefix("--seed="))
 		elif arg.begins_with("--turncap="):
 			turn_cap = clampi(int(arg.trim_prefix("--turncap=")), 4, 40)
+		elif arg.begins_with("--nights="):
+			# The 3-NIGHT MATCH dial (landmine 1: never the estate's night_length,
+			# which means games-per-night). --nights=1 is the single-night probe.
+			match_nights = clampi(int(arg.trim_prefix("--nights=")), 1, 5)
 		elif arg.begins_with("--deedgoal=") or arg.begins_with("--preset="):
 			# Ring-era dials, retired with the Codicil (doc 28). Accepted so old
 			# command lines don't crash; they change nothing.
@@ -301,6 +380,28 @@ func _apply_longnames() -> void:
 func _init_arrays() -> void:
 	var n := roster.size()
 	grudge.resize(n); deeds.resize(n); positions.resize(n); moved_total.resize(n)
+	wreaths.resize(n)
+	mini_wins_match.resize(n)
+	board_firsts.resize(n)
+	night_final_rank.resize(n)
+	wreath_src.clear()
+	letters.clear()
+	for i in n:
+		wreaths[i] = 0
+		mini_wins_match[i] = 0
+		board_firsts[i] = 0
+		night_final_rank[i] = 0
+		wreath_src.append({"arrival": 0, "mini": 0, "award": 0, "liquid": 0})
+		letters.append(false)
+	_mini_pool = MINIGAME_ORDER.duplicate()
+	_invitation_pick = ""
+	pending_die.resize(n)
+	pending_lucky.resize(n)
+	for i in n:
+		pending_die[i] = 0
+		pending_lucky[i] = 0
+	debt_traps.clear()
+	_wisp_dest = -1
 	_react_last.resize(n)
 	for i in n:
 		_react_last[i] = -100000
@@ -318,9 +419,10 @@ func _init_arrays() -> void:
 		moved_total[i] = 0
 		trail.append([0])               # walked history (slip-backs retrace it)
 		arrived.append(false)
-		items.append({"pin": 0, "ribbon": 0, "salt": 0})
+		items.append({})                # ware_id -> count (the priced cart's economy)
 		stats.append({"moved": 0, "graves": 0, "lost": 0, "duels": 0,
-			"shrines": 0, "deeds_bought": 0, "spent": 0})
+			"shrines": 0, "deeds_bought": 0, "spent": 0,
+			"hazards": 0, "seances": 0, "mini_wins": 0})
 
 # --------------------------------------------------------------------------
 # WORLD + HUD
@@ -358,8 +460,13 @@ func _build_world() -> void:
 	add_child(board_camera)
 	board_camera.setup(cam, board, _fast)
 
-	putt = PawnPutt.new()
-	add_child(putt)
+	# THE LAST BREATH (P2): the sequential roll meter. It owns its own
+	# CanvasLayer (never occludable, RD §5), so it needs no HUD host.
+	breath = LastBreath.new()
+	add_child(breath)
+	breath.configure(roster, _mirror)
+	breath._fast = _fast
+	breath.all_released.connect(_on_breath_released)
 
 	executor = Executor.new()
 	add_child(executor)
@@ -421,7 +528,7 @@ func _build_hud() -> void:
 		row.add_child(col)
 		var name_l := _chip_label(String(roster[i].name), 28, roster[i].color)
 		col.add_child(name_l)
-		var stat_l := _chip_label("2♠  ◆0", 30, Color(0.95, 0.95, 1.0))
+		var stat_l := _chip_label("—", 30, Color(0.95, 0.95, 1.0))
 		col.add_child(stat_l)
 		chiprow.add_child(panel)
 		_chips.append({"grudge": stat_l, "panel": panel})
@@ -523,14 +630,6 @@ func _build_hud() -> void:
 	_ui.add_child(_minimap)
 	_minimap.configure(board, roster)
 
-	# A dedicated full-rect Control hosts the four corner putt meters.
-	var meter_host := Control.new()
-	meter_host.name = "MeterHost"
-	meter_host.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	meter_host.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_ui.add_child(meter_host)
-	putt.configure(roster, meter_host, _mirror)
-
 	# The FX layer rides ABOVE the chips so flying numbers + the Deed token land
 	# on the HUD (F10/F11/F17). A full-rect, input-transparent Control.
 	_fx_host = Control.new()
@@ -568,26 +667,28 @@ func _pawn_src(seat: int) -> Vector3:
 		return (board.pawns[seat] as Node3D).global_position + Vector3(0, 1.15, 0)
 	return board.space_pos(positions[seat]) + Vector3(0, 1.0, 0) if board else Vector3.ZERO
 
-## A grudge (or deed) delta popup at the seat's pawn, arcing to its chip. glyph
-## carries the currency; the sign + glyph mean it never reads as colour alone.
-func _pop_grudge(seat: int, amount: int, glyph := "♠") -> void:
+## A pennies (or deed/wreath) delta popup at the seat's pawn, arcing to its
+## chip. glyph carries the currency ("" = the penny glyph from the display
+## seam); the sign + glyph mean it never reads as colour alone.
+func _pop_grudge(seat: int, amount: int, glyph := "") -> void:
 	if _fast or fx == null or amount == 0:
 		return
-	fx.fly_number(amount, glyph, _pawn_src(seat), _chip_screen_pos(seat), roster[seat].color)
+	var g := glyph if glyph != "" else Spaces.PENNY_GLYPH
+	fx.fly_number(amount, g, _pawn_src(seat), _chip_screen_pos(seat), roster[seat].color)
 
 ## A grudge TRANSFER: the value lifts off the payer's pawn and flies to the
 ## collector's chip in the COLLECTOR's colour — the MP "Orb" toll, made visible.
 func _pop_transfer(from_seat: int, to_seat: int, amount: int) -> void:
 	if _fast or fx == null or amount <= 0:
 		return
-	fx.fly_number(amount, "♠", _pawn_src(from_seat), _chip_screen_pos(to_seat), roster[to_seat].color)
+	fx.fly_number(amount, Spaces.PENNY_GLYPH, _pawn_src(from_seat), _chip_screen_pos(to_seat), roster[to_seat].color)
 
 ## A flying number lifting off a fixed world point (a stone, a gate) rather than a
 ## pawn — used for pass-through tolls where the payer is mid-hop.
 func _pop_at(world_from: Vector3, seat_target: int, amount: int, color: Color) -> void:
 	if _fast or fx == null or amount == 0:
 		return
-	fx.fly_number(amount, "♠", world_from, _chip_screen_pos(seat_target), color)
+	fx.fly_number(amount, Spaces.PENNY_GLYPH, world_from, _chip_screen_pos(seat_target), color)
 
 ## Screen-space centre of a seat's HUD chip — the homing target for flying numbers
 ## and the Deed token (F10/F11/F17).
@@ -616,13 +717,17 @@ func _refresh_hud() -> void:
 			_objective_lbl.text = "☠ THE BELL HAS RUNG — LAST TURN"
 		else:
 			_objective_lbl.text = "LYCHGATE → MANOR GATE"
+	# PENNIES + WREATHS on every chip (P2 display seam — internal names keep
+	# "grudge"; the couch reads the two currencies at a glance, doc 28 §0).
 	for i in _chips.size():
+		var purse := "%d%s  %s%d" % [grudge[i], Spaces.PENNY_GLYPH,
+			Spaces.WREATH_GLYPH, wreaths[i]]
 		if bool(arrived[i]):
-			_chips[i].grudge.text = "%d♠  ◆%d  HOME #%d" % [
-				grudge[i], deeds[i], arrival_order.find(i) + 1]
+			_chips[i].grudge.text = "%s  ◆%d  HOME #%d" % [
+				purse, deeds[i], arrival_order.find(i) + 1]
 		else:
-			_chips[i].grudge.text = "%d♠  ◆%d  %d⚑" % [
-				grudge[i], deeds[i], board.dist_to_gate(positions[i]) if board else 0]
+			_chips[i].grudge.text = "%s  ◆%d  %d⚑" % [
+				purse, deeds[i], board.dist_to_gate(positions[i]) if board else 0]
 	_sync_minimap()
 
 ## Show THE DRIVE inset only during MOVE/REVEAL (place legibility while the camera
@@ -775,13 +880,27 @@ func _choose_clauses() -> void:
 	]
 
 # --------------------------------------------------------------------------
-# THE NIGHT
+# THE MATCH — 3 nights (doc 28 §2), then THE READING. Wreaths, pennies,
+# inventory and deeds persist across nights; the board resets between them.
 # --------------------------------------------------------------------------
-func _run_night() -> void:
+func _run_match() -> void:
 	_phase = "intro"
 	if final_kit and final_kit.has_method("play_started"):
 		final_kit.play_started()
 	await _intro()
+	for n in range(1, match_nights + 1):
+		night_index = n
+		await _night_open()
+		await _run_night_cycles()
+		await _night_settlement()
+		if night_index < match_nights:
+			_board_reset()
+	await _finale()
+
+## The cycle loop: roll phase → move/resolve → MINIGAME (every cycle, doc 28
+## §2) → the odd HOUSE AWAKENS, until the FINAL BELL's one-more-round closes
+## it or the turn cap falls (doc 28 §8 rule 4: distance ranks the rest).
+func _run_night_cycles() -> void:
 	while true:
 		round_num += 1
 		_refresh_hud()
@@ -790,7 +909,7 @@ func _run_night() -> void:
 			break
 		# Once THE FINAL BELL has rung the night is closing — the stragglers get
 		# their one roll and nothing else. Blocks only fire on an open road.
-		if bell_round < 0 and round_num % 2 == 0:
+		if bell_round < 0:
 			await _minigame_block()
 		if bell_round < 0 and round_num % 3 == 0:
 			await _house_awakens()
@@ -799,11 +918,387 @@ func _run_night() -> void:
 				_announce_text(Dialog.text("procession.bell.closing"), Color(1, 0.6, 0.4))
 				await _beat(2.0)
 				_hide_announce()
-			break   # doc 28 §8 rule 4: the cap ends it; distance ranks the rest
+			break
+
+# --------------------------------------------------------------------------
+# NIGHT OPEN — banner, the 3 announced awards, THE LETTERS (doc 28 §7/§8r5)
+# --------------------------------------------------------------------------
+const AWARD_WREATHS := 4
+## The award pool (doc 28 §7 — majority luck/behaviour-weighted, measured
+## design law). BLOODIEST HAND is the ONE skill award; at most one skill
+## award may be drawn per night.
+const AWARD_POOL := [
+	{"id": "longest", "stat": "moved", "skill": false},
+	{"id": "mourned", "stat": "hazards", "skill": false},
+	{"id": "generous", "stat": "spent", "skill": false},
+	{"id": "uninvited", "stat": "seances", "skill": false},
+	{"id": "bloodiest", "stat": "mini_wins", "skill": true},
+]
+var night_awards: Array = []          # tonight's 3 drawn award dicts
+var _night_award_results: Array = []  # [[id, winner|-1], ...] for the night record
+var _night_start_wreaths: Array[int] = []   # snapshot for the bounded legacy grant
+
+func _award_title(a: Dictionary) -> String:
+	return Dialog.text("procession.awards.%s_title" % String(a.id))
+
+func _award_desc(a: Dictionary) -> String:
+	return Dialog.text("procession.awards.%s_desc" % String(a.id))
+
+func _night_open() -> void:
+	_phase = "night_open"
+	Music.play_slot("grounds")
+	_mini_pool = MINIGAME_ORDER.duplicate()
+	_night_start_wreaths = wreaths.duplicate()
+	if not _fast and match_nights > 1:
+		_announce_text(Dialog.text("procession.night.open") % [night_index, match_nights],
+			Color(1, 0.88, 0.5))
+		await _beat(2.0)
+		_hide_announce()
+	_draw_night_awards()
+	await _announce_awards()
+	await _letters_offer()
+
+## Draw 3 of 5 at night start (EVENT stream, without replacement). At most one
+## SKILL award may be drawn — with BLOODIEST HAND the pool's only skill entry
+## the guard is structural, but the doctrine is enforced, not assumed.
+func _draw_night_awards() -> void:
+	night_awards.clear()
+	_night_award_results.clear()
+	var pool := AWARD_POOL.duplicate()
+	var skill_drawn := false
+	while night_awards.size() < 3 and not pool.is_empty():
+		var i := _event_rng.randi_range(0, pool.size() - 1)
+		var a: Dictionary = pool[i]
+		pool.remove_at(i)
+		if bool(a.skill) and skill_drawn:
+			continue
+		if bool(a.skill):
+			skill_drawn = true
+		night_awards.append(a)
+
+## ANNOUNCED at night start by the Executor (never a hidden bonus star —
+## R-A doctrine), races visible at the interim reading.
+func _announce_awards() -> void:
+	if _fast:
+		return
+	_reveal_seat = -1
+	executor.say(Dialog.text("procession.awards.announce"), Color(0.85, 0.78, 1.0))
+	await _beat(1.6)
+	executor.clear_banner()
+	var lines: Array[String] = []
+	for a in night_awards:
+		lines.append(Dialog.text("procession.awards.line") % [_award_title(a),
+			_award_desc(a), AWARD_WREATHS, Spaces.WREATH_GLYPH])
+	_announce_text(Dialog.text("procession.awards.header") + "\n\n" + "\n".join(lines),
+		Color(0.85, 0.78, 1.0))
+	if _capture and night_index == 1:
+		await _cap_snap("night_awards")
+	await _beat(3.0)
+	_hide_announce()
+
+## LETTERS OF ADMINISTRATION (doc 28 §8 rule 5, locked v1): at night start a
+## player with ZERO minigame wins so far AND bottom wreaths may PUBLICLY accept
+## — the Executor reads it as a dry legal formality (comedy doing balance
+## work). That night only: cart 30% off (it IS the discount), one free CROW'S
+## CUT, arrival award bumped one tier. Opt-in, announced, time-boxed.
+func _letters_offer() -> void:
+	for i in roster.size():
+		letters[i] = false
+	if night_index < 2:
+		return   # night 1 has no bottom to lift — everyone is tied at nothing
+	var lo := wreaths[0]
+	var hi := wreaths[0]
+	for w in wreaths:
+		lo = mini(lo, w)
+		hi = maxi(hi, w)
+	if hi <= lo:
+		return
+	for i in roster.size():
+		if mini_wins_match[i] > 0 or wreaths[i] != lo:
+			continue
+		var accept := true
+		if _is_local_human(i) and _drama_visible():
+			var pick: int = await _pick_prompt(
+				Dialog.text("procession.letters.header") % roster[i].name,
+				Dialog.text("procession.letters.sub"), roster[i].color,
+				[{"label": Dialog.text("procession.letters.accept_label")}],
+				Dialog.text("procession.letters.decline_label"), true, 8.0)
+			accept = pick == 0
+		if not accept:
+			continue
+		letters[i] = true
+		_grant_ware(i, "crows_cut")   # one free CROW'S CUT (cap 3 still binds)
+		if not _fast:
+			_reveal_seat = i
+			executor.say(Executor.pick(Dialog.paras("procession.letters.reading"),
+				_voice_rng, [roster[i].name]), roster[i].color)
+			await _beat(2.6)
+			executor.clear_banner()
+
+# --------------------------------------------------------------------------
+# NIGHT SETTLEMENT — arrivals, awards, the will, standings, LAST RITES
+# --------------------------------------------------------------------------
+var _carry_spent: Array[int] = []   # LAST RITES spending counts toward the NEXT night's race
+
+func _night_settlement() -> void:
+	await _arrival_wreaths()
+	await _award_payouts()
 	await _will_reading()
+	await _standings_reveal()
+	# LAST RITES lands after this night's GENEROUS award has already been read —
+	# its spending seeds the NEXT night's race instead of vanishing in the reset.
+	var spent_before: Array[int] = []
+	for i in roster.size():
+		spent_before.append(int(stats[i].spent))
+	await _last_rites()
+	_carry_spent.clear()
+	for i in roster.size():
+		_carry_spent.append(int(stats[i].spent) - spent_before[i])
+	_legacy_grant()
+	_emit_night_record()
+
+## The 3 announced award races pay out: 4 wreaths each, strict-max leader;
+## GENUINE ties break by SEEDED rng, VISIBLY (announced as the estate's coin —
+## doc 28 §8 law 3: no stable-sort bias, ever). Zero-data awards go unclaimed.
+func _award_payouts() -> void:
+	_phase = "awards"
+	var lines: Array[String] = []
+	for a in night_awards:
+		var stat := String(a.stat)
+		var best_v := 0
+		for i in roster.size():
+			best_v = maxi(best_v, int(stats[i].get(stat, 0)))
+		if best_v <= 0:
+			_night_award_results.append([String(a.id), -1])
+			lines.append(Dialog.text("procession.awards.unclaimed") % _award_title(a))
+			continue
+		var tied: Array = []
+		for i in roster.size():
+			if int(stats[i].get(stat, 0)) == best_v:
+				tied.append(i)
+		var win := int(tied[0])
+		var tie_note := ""
+		if tied.size() > 1:
+			win = int(tied[_event_rng.randi_range(0, tied.size() - 1)])
+			tie_note = Dialog.text("procession.awards.tie_note")
+		wreaths[win] += AWARD_WREATHS
+		wreath_src[win].award += AWARD_WREATHS
+		_night_award_results.append([String(a.id), win])
+		lines.append(Dialog.text("procession.awards.pay_line") % [_award_title(a),
+			roster[win].name, best_v, AWARD_WREATHS, Spaces.WREATH_GLYPH] + tie_note)
+		_pop_grudge(win, AWARD_WREATHS, Spaces.WREATH_GLYPH)
+	if not _fast:
+		_announce_text(Dialog.text("procession.awards.pay_header") + "\n\n" + "\n".join(lines),
+			Color(0.85, 0.78, 1.0))
+		_refresh_hud()
+		await _beat(3.2)
+		_hide_announce()
+	else:
+		_refresh_hud()
+
+## The wreath standings, revealed plainly at each night's end (doc 28 §2).
+func _standings_reveal() -> void:
+	if _fast:
+		return
+	var order := _roll_order()
+	var lines: Array[String] = []
+	for rank in order.size():
+		var p := int(order[rank])
+		lines.append(Dialog.text("procession.standings.line") % [rank + 1, roster[p].name,
+			wreaths[p], Spaces.WREATH_GLYPH, grudge[p], Spaces.PENNY_GLYPH])
+	_announce_text(Dialog.text("procession.standings.header") + "\n\n" + "\n".join(lines),
+		Color(1, 0.88, 0.5))
+	await _beat(3.0)
+	_hide_announce()
+
+## LAST RITES — the night-interlude store beat: every mourner visits the cart,
+## trailers first (the rubber-band shops before the leaders do).
+func _last_rites() -> void:
+	_phase = "last_rites"
+	if not _fast:
+		_announce_text(Dialog.text("procession.lastrites.header"), Color(1, 0.88, 0.5))
+		await _beat(1.6)
+		_hide_announce()
+	var order := _roll_order()
+	order.reverse()
+	for seat in order:
+		await _shop(int(seat))
+
+## Landmine 4: EstateState.end_night's legacy conversion must keep receiving a
+## BOUNDED night-points source or the wardrobe economy starves. The procession
+## grants each seat its night's wreath take, clamped 1..12, at every night end
+## — real play only (autoplay probes never touch the save).
+func _legacy_grant() -> void:
+	if _autoplay:
+		return
+	for i in roster.size():
+		var gained := wreaths[i] - int(_night_start_wreaths[i]) if i < _night_start_wreaths.size() else 1
+		EstateState.legacy[i] = int(EstateState.legacy.get(i, 0)) + clampi(gained, 1, 12)
+	EstateState.save_estate()
+
+## One deterministic per-night record line for the match receipt.
+func _emit_night_record() -> void:
+	var rec := {
+		"night": night_index, "rounds": round_num, "bell_round": bell_round,
+		"arrivals": arrival_order.duplicate(), "awards": _night_award_results.duplicate(true),
+		"wreaths": wreaths.duplicate(), "grudge": grudge.duplicate(),
+		"letters": letters.duplicate(),
+	}
+	print("PROCESSION_NIGHT ", JSON.stringify(rec))
+
+## The interlude board reset (doc 28 §2): wreaths, pennies, inventory and
+## deeds persist; positions, arrivals, the bell, traps and the per-night stat
+## races reset with the board.
+func _board_reset() -> void:
+	arrival_order.clear()
+	_arrived_this_round.clear()
+	bell_round = -1
+	round_num = 0
+	for i in roster.size():
+		positions[i] = 0
+		arrived[i] = false
+		trail[i] = [0]
+		pending_die[i] = 0
+		pending_lucky[i] = 0
+		board.seat_pawn(i, 0)
+		for k in stats[i]:
+			stats[i][k] = 0
+		if i < _carry_spent.size():
+			stats[i].spent = int(_carry_spent[i])
+	_carry_spent.clear()
+	debt_traps.clear()
+	board.clear_all_debt_markers()
+	if final_kit and final_kit.has_method("round_reset"):
+		final_kit.round_reset()
+	_refresh_hud()
+	_push_net()
+
+# --------------------------------------------------------------------------
+# THE READING — the finale (doc 28 §2): totals revealed stream by stream,
+# liquidation, most wreaths INHERITS. Tie-break chain per §15 — never a coin
+# flip for the estate; a full tie crowns JOINT HEIRS.
+# --------------------------------------------------------------------------
+func _finale() -> void:
+	_phase = "finale"
+	executor.clear_banner()
+	Music.play_slot("ceremony")
+	# Liquidation FIRST (10 pennies -> 1 wreath, game end only) so the streams
+	# below sum to the crowning totals.
+	for i in roster.size():
+		var lw := grudge[i] / 10
+		wreaths[i] += lw
+		wreath_src[i].liquid += lw
+	if not _fast:
+		_reveal_seat = -1
+		executor.say(Dialog.text("procession.finale.opener"), Color(0.85, 0.75, 1.0))
+		await _beat(2.0)
+		executor.clear_banner()
+	await _finale_stream("arrival", Color(1, 0.88, 0.5))
+	await _finale_stream("mini", Color(0.85, 0.9, 1.0))
+	await _finale_stream("award", Color(0.85, 0.78, 1.0))
+	await _finale_stream("liquid", Color(0.75, 0.95, 0.8))
+	# The totals card — the last read before the crown.
+	if not _fast:
+		var order := _match_order()
+		var lines: Array[String] = []
+		for rank in order.size():
+			var p := int(order[rank])
+			lines.append(Dialog.text("procession.standings.line") % [rank + 1,
+				roster[p].name, wreaths[p], Spaces.WREATH_GLYPH, grudge[p], Spaces.PENNY_GLYPH])
+		_announce_text(Dialog.text("procession.finale.totals_header") + "\n\n" + "\n".join(lines),
+			Color(1, 0.88, 0.5))
+		if _capture:
+			await _cap_snap("reading_totals")
+		await _beat(3.4)
+		_hide_announce()
 	await ProcessionEulogy.deliver(self, executor)   # B2-HOOK: procedural closing eulogy (F33)
 	await _heir_crowned()
 	_emit_tally()
+
+## One stream card: the per-seat take from a single wreath source.
+func _finale_stream(src: String, col: Color) -> void:
+	if _fast:
+		return
+	var lines: Array[String] = []
+	for i in roster.size():
+		lines.append(Dialog.text("procession.finale.stream_line") % [roster[i].name,
+			int(wreath_src[i].get(src, 0)), Spaces.WREATH_GLYPH])
+	_announce_text(Dialog.text("procession.finale.stream_%s" % src) + "\n\n" + "\n".join(lines), col)
+	await _beat(2.4)
+	_hide_announce()
+
+## Grand standings: wreaths desc, then the ANNOUNCED tie-break chain (doc 28
+## §15): most board firsts → best last-night board rank → most minigame
+## firsts. Seat index orders the display only — it can never decide the heir.
+func _match_order() -> Array:
+	var order: Array = []
+	for i in roster.size():
+		order.append(i)
+	order.sort_custom(func(a, b):
+		if wreaths[a] != wreaths[b]:
+			return wreaths[a] > wreaths[b]
+		if board_firsts[a] != board_firsts[b]:
+			return board_firsts[a] > board_firsts[b]
+		if night_final_rank[a] != night_final_rank[b]:
+			return night_final_rank[a] < night_final_rank[b]
+		if mini_wins_match[a] != mini_wins_match[b]:
+			return mini_wins_match[a] > mini_wins_match[b]
+		return a < b)
+	return order
+
+## Everyone still tied with the top seat after the WHOLE chain inherits
+## together — JOINT HEIRS, never a coin flip (doc 28 §15).
+func _match_heirs() -> Array:
+	var order := _match_order()
+	var top := int(order[0])
+	var heirs: Array = [top]
+	for k in range(1, order.size()):
+		var p := int(order[k])
+		if wreaths[p] == wreaths[top] and board_firsts[p] == board_firsts[top] \
+				and night_final_rank[p] == night_final_rank[top] \
+				and mini_wins_match[p] == mini_wins_match[top]:
+			heirs.append(p)
+	return heirs
+
+## ARRIVAL WREATHS (doc 28 §6/§15): the FINAL BELL pays arrival order on the
+## escalating night table — crossing order first, then dist_to_gate ranking
+## for everyone still on the road (_final_order does exactly that). A LETTERS
+## holder's award is bumped ONE TIER (doc 28 §8 rule 5), announced.
+func _arrival_wreaths() -> void:
+	_phase = "arrival_pay"
+	var table: Array = ARRIVAL_WREATHS[clampi(night_index - 1, 0, ARRIVAL_WREATHS.size() - 1)]
+	var order := _final_order()
+	var lines: Array[String] = []
+	for rank in order.size():
+		var p := int(order[rank])
+		var tier := rank
+		var bumped := false
+		if bool(letters[p]) and tier > 0:
+			tier -= 1
+			bumped = true
+		var wd := int(table[mini(tier, table.size() - 1)])
+		wreaths[p] += wd
+		wreath_src[p].arrival += wd
+		var home := arrival_order.find(p)
+		var line := Dialog.text("procession.arrival.line") % [rank + 1, roster[p].name,
+			wd, Spaces.WREATH_GLYPH]
+		if home < 0:
+			line += Dialog.text("procession.arrival.on_road")
+		if bumped:
+			line += Dialog.text("procession.arrival.bumped")
+		lines.append(line)
+	board_firsts[int(order[0])] += 1
+	if night_index >= match_nights:
+		for rank in order.size():
+			night_final_rank[int(order[rank])] = rank
+	if not _fast:
+		_announce_text(Dialog.text("procession.arrival.header") + "\n\n" + "\n".join(lines),
+			Color(1, 0.88, 0.5))
+		_refresh_hud()
+		await _beat(3.0)
+		_hide_announce()
+	else:
+		_refresh_hud()
 
 func _intro() -> void:
 	Music.play_slot("grounds")
@@ -839,13 +1334,6 @@ func _intro() -> void:
 	await _beat(3.0)
 	_hide_announce()
 	executor.clear_banner()
-
-## Capture only: snap the live putt-target reticles a beat into the roll, without
-## blocking the roll's all_released await.
-func _snap_putt_preview_later() -> void:
-	await _beat(0.85)
-	if _preview_active:
-		await _cap_snap("putt_preview")
 
 ## Any human tap (A or B) breaks the opening flyover — the director polls this
 ## each frame during its tour. All-bots (autoplay/capture) never trips it, so the
@@ -883,121 +1371,714 @@ func _capture_showcase() -> void:
 	cam.global_position = _cam_home
 	cam.look_at(board.CENTER, Vector3.UP)
 
+## ONE ROUND, SEQUENTIAL (doc 28 §2/§8 law 1): every live seat takes a full
+## turn — roll on THE LAST BREATH, walk, resolve — one at a time, in current
+## wreath-standings order LEADER FIRST (leader commits blind, trailers act
+## informed). Home pawns sit their turns out entirely (the simultaneous-roll
+## wart died with pawn_putt).
 func _round() -> void:
 	_phase = "roll"
 	_hide_announce()
-	_sync_minimap()          # the roll owns the corners — hide the inset
+	_sync_minimap()
+	_arrived_this_round.clear()
 	executor.begin_round()   # B2-HOOK: page-turn the ledger between rounds (F7)
 	if not _fast:
 		_reveal_seat = -1
 		executor.aside(Executor.ROUND_OPENER, Color(0.82, 0.80, 0.92), [round_num])   # B2-HOOK: dead-air aside (F9)
-	# --- ROLL: all live pawns putt at once (own corner meter). ---
-	# Windowed capture: pose the four corner meters mid-charge for a clean shot
-	# before the live roll (the fast soak resolves a real roll in a few frames).
-	if _capture and round_num == 1:
-		putt.stage_midcharge([0.42, 0.58, 0.50, 0.64])
-		await _cap_snap("putt_meters")
-		putt.end_roll_visuals()
-	var targets := _bot_targets()
-	putt.begin_roll(targets, _roll_rng)
-	_preview_active = true   # F29: live target reticles follow each charging meter
-	if not _capture:
-		VerifyCapture.snap("putt_meters")
-	elif round_num == 2:
-		# Fire-and-forget so the delayed snap never sits between begin_roll and the
-		# all_released await (which would risk missing the signal). Round 2 spreads
-		# the pawns down the roads so the reticles land at distinct stones.
-		_snap_putt_preview_later()
-	var results: Array = await putt.all_released
-	_preview_active = false
-	board.clear_all_putt_previews()
-	putt.end_roll_visuals()
-	# spaces per seat, adjusted by held items (announced when spent). Pawns
-	# already HOME roll with the table (pawn_putt meters all seats) but their
-	# result is discarded — home pawns are beyond the reach of the road.
-	var moved: Array[int] = []
-	moved.resize(roster.size())
-	for i in roster.size():
-		moved[i] = 1
-	for r in results:
-		var seat := int(r.seat)
-		moved[seat] = int(r.spaces)
-	_apply_item_movement(moved)
-	for i in roster.size():
-		if bool(arrived[i]):
-			moved[i] = 0
-
-	# --- WALK RESOLUTION: node-to-node along each seat's road. A walk that
-	# reaches a CROSSROADS picks a branch — humans via the A/B/C prompt, bots
-	# by strategy (leader → safe, trailers → gamble; ROLL stream). Seat order,
-	# so the stream stays deterministic. Excess movement past the gate is
-	# forfeited (the manor does not do refunds). ---
-	_phase = "move"
-	_arrived_this_round.clear()
-	var paths: Array = []
-	for i in roster.size():
-		var path: Array = await _resolve_walk(i, moved[i])
-		paths.append(path)
-		moved[i] = path.size()   # the true stones walked (gate clamps)
-	# --- MOVE: every pawn travels at once; the low raking dolly TRAVELS (F2). ---
-	board_camera.move_travel(0.9)
-	var tweens: Array = []
-	for i in roster.size():
-		if (paths[i] as Array).is_empty():
+		await _beat(0.9)
+	for seat in _roll_order():
+		if bool(arrived[seat]):
 			continue
-		_pay_passthrough_tolls(i, paths[i] as Array)
-		var tw: Tween = board.advance_pawn_path(i, paths[i] as Array)
-		tweens.append(tw)
-		positions[i] = int((paths[i] as Array).back())
-		(trail[i] as Array).append_array(paths[i] as Array)
-		moved_total[i] += moved[i]
-		stats[i].moved += moved[i]
-		if board.type_at(positions[i]) == Spaces.GATE and not bool(arrived[i]):
-			arrived[i] = true
-			arrival_order.append(i)
-			_arrived_this_round.append(i)
-	_sync_minimap()   # THE DRIVE inset lights up for the travel + reveal
-	if not _fast:
-		for tw in tweens:
-			if tw and tw.is_valid():
-				await tw.finished
-	else:
-		for i in roster.size():
-			board.seat_pawn(i, positions[i])
-	if _capture and round_num == 1:
-		await _cap_snap("drive_minimap")   # THE DRIVE ribbons, first travel beat
-	_push_net()
-
-	# --- THE FINAL BELL: the first crossing this night rings it. ---
-	if bell_round < 0 and not _arrived_this_round.is_empty():
-		bell_round = round_num
-		var ringer := int(_arrived_this_round[0])
-		if final_kit:
-			final_kit.escalate()
-		Sfx.play("match_win", -4.0)
-		MomentScribe.capture("final_bell", "%s RINGS THE FINAL BELL" % roster[ringer].name,
-			3, [ringer], "procession")
-		if not _fast:
-			board_camera.landing_push(board.reveal_shot(board.gate_id(), Spaces.GATE))
-			_announce_text(Dialog.text("procession.bell.header") + "\n\n"
-				+ Dialog.text("procession.bell.rung") % roster[ringer].name,
-				Color(1, 0.85, 0.4))
-			if _capture:
-				await _cap_snap("final_bell")
-			await _beat(2.6)
-			_hide_announce()
-
-	# --- REVEAL: staggered Executor cascade, one landing at a time. Seats that
-	# did not walk (home already) have no landing to reveal. ---
-	_phase = "reveal"
-	var order := _reveal_order(moved)
-	for seat in order:
-		if moved[seat] > 0:
-			await _reveal_landing(seat)
+		await _take_turn(seat)
 	executor.clear_banner()
 	executor.settle_body()   # B2-HOOK: host eases home after the cascade (F7)
 	board_camera.whole_board(0.5)   # camera belongs to the director (F1-F3)
 	_refresh_hud()
+
+## Roll order = CURRENT WREATH STANDINGS, leader first (doc 28 §8 law 1).
+## Every tie explicit and stable: wreaths desc → pennies desc → seat asc.
+func _roll_order() -> Array:
+	var order: Array = []
+	for i in roster.size():
+		order.append(i)
+	order.sort_custom(func(a, b):
+		if wreaths[a] != wreaths[b]:
+			return wreaths[a] > wreaths[b]
+		if grudge[a] != grudge[b]:
+			return grudge[a] > grudge[b]
+		return a < b)
+	return order
+
+## ONE TURN: the pre-roll item beat, then roll THE LAST BREATH (heatmap live),
+## walk the stones (forks prompt/strategize), ring the bell on a crossing,
+## reveal the landing. The whole table watches one seat at a time — the reveal
+## cascade is now inline with the turn.
+func _take_turn(seat: int) -> void:
+	_phase = "roll"
+	_sync_minimap()
+	_move_item_used = false
+	_offense_hit.clear()
+	# --- THE ITEM BEAT: use held wares before the roll (doc 28 §15 resolution
+	# order — movement items apply before travel). May teleport (wisp), dig
+	# (shovel — possibly through the gate), arm boosts/writs, or sabotage. ---
+	await _item_beat(seat)
+	var path: Array = []
+	var walked := 0
+	if bool(arrived[seat]):
+		pass   # the shovel carried them home — no roll, straight to the bell
+	elif _wisp_dest >= 0:
+		# WILL-O'-THE-WISP: the teleport IS the movement. One hop, nothing
+		# crossed; ONLY the landing stone resolves (doc 28 §15).
+		path = [_wisp_dest]
+		_wisp_dest = -1
+	else:
+		if not _fast:
+			_frame_roller(seat)
+		# Windowed capture: pose the meter + heatmap once for the verification
+		# still (the fast soak resolves a live roll in a single frame).
+		if _capture and not _breath_posed:
+			_breath_posed = true
+			await _pose_breath_shot(seat)
+		var faces := N_FACES_BASE
+		if pending_die[seat] > 0:   # an armed WRIT widens this roll's die
+			faces = pending_die[seat]
+			pending_die[seat] = 0
+		var face := await _roll_breath(seat, faces)
+		var steps := face + pending_lucky[seat]
+		if pending_lucky[seat] > 0:
+			_flash_line(Dialog.text("procession.items.lucky_spent") % [roster[seat].name,
+				pending_lucky[seat]], roster[seat].color, seat)
+			pending_lucky[seat] = 0
+		# --- WALK: node-to-node along the seat's road; forks prompt humans,
+		# bots draw strategy from the ROLL stream. Excess past the gate is
+		# forfeited (the manor does not do refunds). ---
+		_phase = "move"
+		path = await _resolve_walk(seat, steps)
+		walked = path.size()
+	if not path.is_empty():
+		if walked > 0:
+			_pay_passthrough_tolls(seat, path)
+		board_camera.move_travel(0.9)
+		var tw: Tween = board.advance_pawn_path(seat, path)
+		positions[seat] = int(path.back())
+		(trail[seat] as Array).append_array(path)
+		moved_total[seat] += walked
+		stats[seat].moved += walked
+		if board.type_at(positions[seat]) == Spaces.GATE and not bool(arrived[seat]):
+			arrived[seat] = true
+			arrival_order.append(seat)
+			_arrived_this_round.append(seat)
+		_sync_minimap()   # THE DRIVE inset lights up for the travel + reveal
+		if not _fast and tw and tw.is_valid():
+			await tw.finished
+		elif _fast:
+			board.seat_pawn(seat, positions[seat])
+	if _capture and round_num == 1 and seat == _roll_order().back():
+		await _cap_snap("drive_minimap")   # THE DRIVE ribbons, first travel beat
+	_push_net()
+	# --- WREATH OF DEBT: a rival's trap on the landing stone collects now. ---
+	if not path.is_empty():
+		_check_debt_trap(seat)
+	# --- THE FINAL BELL: the first crossing this night rings it, mid-round —
+	# the rest of the queue still takes this turn (phase completes), then one
+	# more full round for everyone (doc 28 §15 roll-phase completion). ---
+	if bell_round < 0 and _arrived_this_round.has(seat):
+		await _ring_bell(seat)
+	# --- REVEAL: the landing, Executor voice, type-aware close-up. A shovel
+	# that dug clean through the gate still gets its arrival read. ---
+	_phase = "reveal"
+	if not path.is_empty() or _arrived_this_round.has(seat):
+		await _reveal_landing(seat)
+	if breath.meter != null:
+		breath.meter.visible = false
+
+func _ring_bell(ringer: int) -> void:
+	bell_round = round_num
+	if final_kit:
+		final_kit.escalate()
+	Sfx.play("match_win", -4.0)
+	MomentScribe.capture("final_bell", "%s RINGS THE FINAL BELL" % roster[ringer].name,
+		3, [ringer], "procession")
+	if not _fast:
+		board_camera.landing_push(board.reveal_shot(board.gate_id(), Spaces.GATE))
+		_announce_text(Dialog.text("procession.bell.header") + "\n\n"
+			+ Dialog.text("procession.bell.rung") % roster[ringer].name,
+			Color(1, 0.85, 0.4))
+		if _capture:
+			await _cap_snap("final_bell")
+		await _beat(2.6)
+		_hide_announce()
+
+# --------------------------------------------------------------------------
+# THE LAST BREATH turn plumbing (P2)
+# --------------------------------------------------------------------------
+## Run one seat's roll on the meter. Each turn gets its OWN child stream seeded
+## from the ROLL stream (one randi here), so the meter's documented consumption
+## (crit band + period + one face draw) can never smear across turns, and bot
+## brains (a separate salt-derived stream inside the component) re-deal per
+## turn. Returns the face (1..n_faces).
+func _roll_breath(seat: int, n_faces: int) -> int:
+	var turn_rng := RandomNumberGenerator.new()
+	turn_rng.seed = _roll_rng.randi()
+	_breath_faces = []
+	_heat_seat = seat
+	breath.begin_night_roll([seat], _turn_targets(seat, n_faces), turn_rng, n_faces)
+	while _breath_faces.is_empty():
+		await get_tree().process_frame
+	_heat_seat = -1
+	board.clear_heatmap()
+	return clampi(int(_breath_faces[seat]), 1, n_faces)
+
+func _on_breath_released(faces: Array) -> void:
+	_breath_faces = faces
+
+## The bot's wanted face for this turn: the highest-value stone reachable in
+## 1..n_faces down its preferred road (previewed with the same no-rng walk the
+## heatmap uses); a small ROLL-stream jitter keeps four bots distinct.
+## Humans aim by hand — their slot is inert.
+func _turn_targets(seat: int, n_faces: int) -> Array:
+	var out: Array = []
+	out.resize(roster.size())
+	out.fill(3)
+	if not bool(roster[seat].bot):
+		return out
+	var best_n := 1
+	var best_v := -999.0
+	for n in range(1, n_faces + 1):
+		var v: float = Spaces.bot_value(board.type_at(_preview_dest(seat, n)))
+		v += _roll_rng.randf_range(-0.6, 0.6)
+		if v > best_v:
+			best_v = v
+			best_n = n
+	out[seat] = best_n
+	return out
+
+## Frame the active roller: a raised shot from behind their stone looking down
+## the road, so the meter (bottom-center) and the glowing heatmap stones share
+## the frame. P3's over-shoulder minifig camera replaces this.
+func _frame_roller(seat: int) -> void:
+	var here := board.space_pos(positions[seat])
+	var ahead := board.space_pos(_preview_dest(seat, 4))
+	var dir := ahead - here
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.1 else Vector3.FORWARD
+	board_camera.landing_push({"pos": here - dir * 5.4 + Vector3(0, 4.6, 0),
+		"look": here + dir * 3.4 + Vector3(0, 0.4, 0)})
+
+## Windowed capture only: pose the meter mid-sweep with the crit band telegraphed
+## and the heatmap lit at the same needle position, snap, tear down. Never
+## touches any rng stream (weights_for_p is side-effect-free).
+func _pose_breath_shot(seat: int) -> void:
+	if breath.meter == null:
+		return
+	var pose_p := 0.62
+	breath.meter.retarget(seat, String(roster[seat].name), roster[seat].color, 0.5, N_FACES_BASE)
+	breath.meter.set_needle(0.3)     # sweep past the crit band once…
+	breath.meter.set_needle(pose_p)  # …so the tell is drawn at the pose
+	breath.meter.visible = true
+	var weights: Array[float] = breath.weights_for_p(pose_p, N_FACES_BASE)
+	var wmax := 0.0001
+	for w in weights:
+		wmax = maxf(wmax, float(w))
+	var entries: Array = []
+	for f in weights.size():
+		entries.append({"node": _preview_dest(seat, f + 1), "face": f + 1,
+			"p": float(weights[f]), "w": float(weights[f]) / wmax})
+	board.show_heatmap(entries, roster[seat].color)
+	# Pose the camera too: steep over-behind the roller, the glowing road and
+	# its percent tags running up-frame over the meter (the couch read,
+	# verified against the committed still).
+	executor.clear_banner()   # the round aside must not sit over the road
+	board_camera.hold()
+	var here := board.space_pos(positions[seat])
+	var ahead := board.space_pos(_preview_dest(seat, 4))
+	var dir := ahead - here
+	dir.y = 0.0
+	dir = dir.normalized() if dir.length() > 0.1 else Vector3.FORWARD
+	cam.global_position = here - dir * 3.0 + Vector3(0.0, 7.5, 0.0)
+	cam.look_at(ahead + dir * 1.5, Vector3.UP)
+	await _beat(0.5)
+	await _cap_snap("breath_heatmap")
+	board.clear_heatmap()
+	breath.meter.visible = false
+	_frame_roller(seat)   # hand the frame back to the director's roll shot
+
+# --------------------------------------------------------------------------
+# THE ITEM BEAT + WARES (P2 — doc 28 §6/§15). Guardrails: inventory cap 3,
+# max ONE die/movement item armed per turn, offensive items never stack on
+# the same target in the same roll. Every use is ANNOUNCED (nothing hidden
+# decides). Bot decisions draw from the EVENT stream, deterministically.
+# --------------------------------------------------------------------------
+func _item_beat(seat: int) -> void:
+	if _inv_total(seat) <= 0:
+		return
+	if bool(roster[seat].bot) or not _drama_visible():
+		await _bot_item_policy(seat)
+		return
+	for _k in Spaces.INV_CAP:
+		var usable := _usable_items(seat)
+		if usable.is_empty():
+			return
+		var entries: Array = []
+		for id in usable:
+			var w := Spaces.ware(String(id))
+			entries.append({"label": "%s ×%d" % [String(w.name), _count_item(seat, String(id))],
+				"sub": String(w.rule)})
+		var pick: int = await _pick_prompt(
+			Dialog.text("procession.items.header") % roster[seat].name, "",
+			roster[seat].color, entries, Dialog.text("procession.items.keep_label"),
+			true, 8.0)
+		if pick < 0:
+			return
+		await _use_item(seat, String(usable[pick]))
+
+## Held items a seat can legally spend RIGHT NOW (the guardrails as a filter).
+## BLACK VEIL is passive — it spends itself on the next hazard.
+func _usable_items(seat: int) -> Array:
+	var out: Array = []
+	var ids: Array = items[seat].keys()
+	ids.sort()
+	for raw in ids:
+		var id := String(raw)
+		if _count_item(seat, id) <= 0:
+			continue
+		match id:
+			"black_veil":
+				continue
+			"lucky_penny", "shovel", "writ_d10", "writ_d12":
+				if not _move_item_used:
+					out.append(id)
+			"wisp":
+				if not _move_item_used and _wisp_target(seat) >= 0:
+					out.append(id)
+			"crows_cut":
+				if not _crow_targets(seat).is_empty():
+					out.append(id)
+			"funeral_bell":
+				var lead := _track_leader(seat)
+				if lead >= 0 and not _offense_hit.has(lead):
+					out.append(id)
+			"wreath_debt":
+				var node := positions[seat]
+				if not debt_traps.has(node) and node != 0 \
+						and board.type_at(node) != Spaces.GATE:
+					out.append(id)
+			"invitation":
+				out.append(id)
+	return out
+
+## The bot's pre-roll spending brain: EVENT stream, every draw conditional on
+## a held item (deterministic per seed). At most one movement/die arm + a
+## sabotage swing per turn — bots obey the same guardrails humans do.
+func _bot_item_policy(seat: int) -> void:
+	# one die/movement item, priority: the wider die first
+	if not _move_item_used:
+		if _count_item(seat, "writ_d12") > 0 and _event_rng.randf() < 0.6:
+			await _use_item(seat, "writ_d12")
+		elif _count_item(seat, "writ_d10") > 0 and _event_rng.randf() < 0.6:
+			await _use_item(seat, "writ_d10")
+		elif _count_item(seat, "lucky_penny") > 0 and _event_rng.randf() < 0.5:
+			await _use_item(seat, "lucky_penny")
+		elif _count_item(seat, "shovel") > 0 and _event_rng.randf() < 0.35:
+			await _use_item(seat, "shovel")
+		elif _count_item(seat, "wisp") > 0 and _wisp_target(seat) >= 0 \
+				and _event_rng.randf() < 0.3:
+			await _use_item(seat, "wisp")
+	if _count_item(seat, "crows_cut") > 0 and not _crow_targets(seat).is_empty() \
+			and _event_rng.randf() < 0.5:
+		await _use_item(seat, "crows_cut")
+	if _count_item(seat, "funeral_bell") > 0:
+		var lead := _track_leader(seat)
+		if lead >= 0 and lead != seat and not _offense_hit.has(lead) \
+				and _event_rng.randf() < 0.5:
+			await _use_item(seat, "funeral_bell")
+	if _count_item(seat, "wreath_debt") > 0 and not debt_traps.has(positions[seat]) \
+			and positions[seat] != 0 and board.type_at(positions[seat]) != Spaces.GATE \
+			and _event_rng.randf() < 0.35:
+		await _use_item(seat, "wreath_debt")
+	if _count_item(seat, "invitation") > 0 and _event_rng.randf() < 0.5:
+		await _use_item(seat, "invitation")
+
+## Spend one item. Human target/game choices prompt (no rng); bot choices
+## draw from the EVENT stream. A cancelled human choice consumes NOTHING.
+func _use_item(seat: int, id: String) -> void:
+	if _count_item(seat, id) <= 0:
+		return
+	var name := String(roster[seat].name)
+	var col: Color = roster[seat].color
+	match id:
+		"lucky_penny":
+			_take_item(seat, id)
+			_move_item_used = true
+			pending_lucky[seat] = 3
+			_flash_line(Dialog.text("procession.items.lucky") % name, col, seat)
+		"writ_d10", "writ_d12":
+			_take_item(seat, id)
+			_move_item_used = true
+			pending_die[seat] = 10 if id == "writ_d10" else 12
+			_flash_line(Dialog.text("procession.items.writ") % [name,
+				"d10" if id == "writ_d10" else "d12"], col, seat)
+		"shovel":
+			_take_item(seat, id)
+			_move_item_used = true
+			await _shovel_advance(seat)
+		"wisp":
+			var dest := _wisp_target(seat)
+			if dest < 0:
+				return
+			_take_item(seat, id)
+			_move_item_used = true
+			_wisp_dest = dest
+			_flash_line(Dialog.text("procession.items.wisp") % name, col, seat)
+		"crows_cut":
+			var target := await _pick_crow_target(seat)
+			if target < 0:
+				return
+			_take_item(seat, id)
+			_offense_hit[target] = true
+			_crow_strike(seat, target)
+		"funeral_bell":
+			var lead := _track_leader(seat)
+			if lead < 0:
+				return
+			_take_item(seat, id)
+			_offense_hit[lead] = true
+			_bell_drag(seat, lead)
+		"wreath_debt":
+			_take_item(seat, id)
+			debt_traps[positions[seat]] = seat
+			board.set_debt_marker(positions[seat], col)
+			_flash_line(Dialog.text("procession.items.debt_set") % name, col, seat)
+		"invitation":
+			var pick := await _pick_invitation(seat)
+			if pick == "":
+				return
+			_take_item(seat, id)
+			_invitation_pick = pick
+			_flash_line(Dialog.text("procession.items.invitation") % [name,
+				String((MINIGAMES[pick] as Dictionary).name)], col, seat)
+
+## CROW'S CUT: steal 5 pennies from the chosen rival. The victim's BLACK VEIL
+## can swallow it (the item is still spent — crows were fed either way).
+func _crow_strike(seat: int, target: int) -> void:
+	if _veil_negates(target):
+		_flash_line(Dialog.text("procession.items.crow_blocked") % roster[target].name,
+			roster[target].color, target)
+		return
+	var pay := mini(5, grudge[target])
+	grudge[target] -= pay
+	grudge[seat] += pay
+	stats[target].lost += pay
+	stats[target].hazards += 1
+	_pop_transfer(target, seat, pay)
+	_flash_line(Dialog.text("procession.items.crow") % [roster[seat].name, pay,
+		Spaces.PENNY_GLYPH, roster[target].name], roster[seat].color, seat)
+	_refresh_hud()
+
+## FUNERAL BELL: the track leader retraces 4 stones of their own trail. No
+## triggers, no resolution (a reposition, doc 28 §15) — and NEVER a home pawn
+## (_track_leader only ranks seats still on the road).
+func _bell_drag(seat: int, lead: int) -> void:
+	if _veil_negates(lead):
+		_flash_line(Dialog.text("procession.items.bell_blocked") % roster[lead].name,
+			roster[lead].color, lead)
+		return
+	_slip_back(lead, 4)
+	stats[lead].hazards += 1
+	_flash_line(Dialog.text("procession.items.bell") % roster[lead].name,
+		roster[seat].color, lead)
+	_refresh_hud()
+	_push_net()
+
+## PALLBEARER'S SHOVEL: dig ahead 4 stones down the preferred road. Nothing
+## triggers on the way (no tolls, no boxes); the stop resolves ONLY if the
+## turn ends there — i.e. the gate (an arrival is an arrival).
+func _shovel_advance(seat: int) -> void:
+	var path: Array = []
+	var cur := positions[seat]
+	var pref := _route_pref(seat)
+	for _k in 4:
+		var nxt := board.next_of(cur)
+		if nxt.is_empty():
+			break
+		var step := int(nxt[0])
+		if nxt.size() > 1:
+			for opt in board.branch_options(cur):
+				if String((opt as Dictionary).route) == pref:
+					step = int((opt as Dictionary).node)
+					break
+		cur = step
+		path.append(cur)
+	if path.is_empty():
+		return
+	_flash_line(Dialog.text("procession.items.shovel") % roster[seat].name,
+		roster[seat].color, seat)
+	positions[seat] = cur
+	(trail[seat] as Array).append_array(path)
+	moved_total[seat] += path.size()
+	stats[seat].moved += path.size()
+	if board.type_at(cur) == Spaces.GATE and not bool(arrived[seat]):
+		arrived[seat] = true
+		arrival_order.append(seat)
+		_arrived_this_round.append(seat)
+	if _fast:
+		board.seat_pawn(seat, positions[seat])
+	else:
+		var tw := board.advance_pawn_path(seat, path)
+		if tw and tw.is_valid():
+			await tw.finished
+
+## WILL-O'-THE-WISP destination: the next FIXTURE down the seat's preferred
+## road — the Peddler's Cart first, else the first grave-goods box or séance
+## circle. -1 when the road ahead holds nothing worth haunting.
+func _wisp_target(seat: int) -> int:
+	var pref := _route_pref(seat)
+	var cur := positions[seat]
+	var fallback := -1
+	var guard := board.node_count() + 4
+	while guard > 0:
+		guard -= 1
+		var nxt := board.next_of(cur)
+		if nxt.is_empty():
+			break
+		var step := int(nxt[0])
+		if nxt.size() > 1:
+			for opt in board.branch_options(cur):
+				if String((opt as Dictionary).route) == pref:
+					step = int((opt as Dictionary).node)
+					break
+		cur = step
+		match board.type_at(cur):
+			Spaces.CART:
+				return cur
+			Spaces.GRAVE_GOODS, Spaces.SEANCE:
+				if fallback < 0:
+					fallback = cur
+	return fallback
+
+## The track leader still ON THE ROAD (fewest stones to the gate; ties to the
+## earlier seat). Home pawns are beyond the reach of grudges — doc 28 §8 law 2.
+func _track_leader(exclude: int) -> int:
+	var best := -1
+	for j in roster.size():
+		if j == exclude or bool(arrived[j]):
+			continue
+		if best < 0 or board.dist_to_gate(positions[j]) < board.dist_to_gate(positions[best]):
+			best = j
+	return best
+
+## Rivals a CROW'S CUT can mark: on the road, holding pennies, not already
+## struck this roll (offensive items no-stack per target per roll).
+func _crow_targets(seat: int) -> Array:
+	var out: Array = []
+	for j in roster.size():
+		if j == seat or bool(arrived[j]) or grudge[j] <= 0 or _offense_hit.has(j):
+			continue
+		out.append(j)
+	return out
+
+## Spend a held BLACK VEIL against an incoming hazard. Callers announce their
+## own contextual line; this just eats the veil.
+func _veil_negates(seat: int) -> bool:
+	if _count_item(seat, "black_veil") <= 0:
+		return false
+	_take_item(seat, "black_veil")
+	return true
+
+## WREATH OF DEBT collection: the first RIVAL to land on a trapped stone pays
+## its owner 5 (veil-negatable). The trap is spent either way.
+func _check_debt_trap(seat: int) -> void:
+	var node := positions[seat]
+	if not debt_traps.has(node):
+		return
+	var owner := int(debt_traps[node])
+	if owner == seat:
+		return
+	debt_traps.erase(node)
+	board.clear_debt_marker(node)
+	if _veil_negates(seat):
+		_flash_line(Dialog.text("procession.items.veil") % roster[seat].name,
+			roster[seat].color, seat)
+		return
+	var pay := mini(5, grudge[seat])
+	grudge[seat] -= pay
+	grudge[owner] += pay
+	stats[seat].lost += pay
+	stats[seat].hazards += 1
+	_pop_transfer(seat, owner, pay)
+	_flash_line(Dialog.text("procession.items.debt_paid") % [roster[seat].name, pay,
+		Spaces.PENNY_GLYPH, roster[owner].name], roster[owner].color, seat)
+	_refresh_hud()
+
+# ---- inventory primitives ----
+func _inv_total(seat: int) -> int:
+	var total := 0
+	for id in items[seat]:
+		total += int(items[seat][id])
+	return total
+
+func _count_item(seat: int, id: String) -> int:
+	return int(items[seat].get(id, 0))
+
+func _take_item(seat: int, id: String) -> void:
+	var c := _count_item(seat, id) - 1
+	if c <= 0:
+		items[seat].erase(id)
+	else:
+		items[seat][id] = c
+
+func _grant_ware(seat: int, id: String) -> bool:
+	if _inv_total(seat) >= Spaces.INV_CAP:
+		return false
+	items[seat][id] = _count_item(seat, id) + 1
+	return true
+
+# ---- human choice prompts (no rng — pure input, crossroads doctrine) ----
+func _pick_prompt(header: String, sub: String, col: Color, entries: Array,
+		leave_label: String, focus_leave: bool, window: float) -> int:
+	var prompt := CartPrompt.new()
+	_ui.add_child(prompt)
+	prompt.open(header, sub, col, entries, leave_label, focus_leave, window)
+	var pick: int = await prompt.run()
+	prompt.queue_free()
+	return pick
+
+## The crow's mark: bots take the richest rival (EVENT-free, deterministic);
+## humans choose. -1 = cancelled, nothing spent.
+func _pick_crow_target(seat: int) -> int:
+	var targets := _crow_targets(seat)
+	if targets.is_empty():
+		return -1
+	if bool(roster[seat].bot) or not _drama_visible():
+		var best := int(targets[0])
+		for t in targets:
+			if grudge[int(t)] > grudge[best]:
+				best = int(t)
+		return best
+	var entries: Array = []
+	for t in targets:
+		entries.append({"label": "%s — %d%s" % [roster[int(t)].name, grudge[int(t)],
+			Spaces.PENNY_GLYPH], "color": roster[int(t)].color})
+	var pick: int = await _pick_prompt(
+		Dialog.text("procession.items.crow_header") % roster[seat].name, "",
+		roster[seat].color, entries, Dialog.text("procession.items.keep_label"), false, 10.0)
+	return -1 if pick < 0 else int(targets[pick])
+
+## THE INVITATION's game: bots draw from the night pool (EVENT stream);
+## humans pick by name. "" = cancelled.
+func _pick_invitation(seat: int) -> String:
+	var pool := _mini_pool.duplicate()
+	if pool.is_empty():
+		pool = MINIGAME_ORDER.duplicate()
+	if bool(roster[seat].bot) or not _drama_visible():
+		return String(pool[_event_rng.randi_range(0, pool.size() - 1)])
+	var entries: Array = []
+	for id in pool:
+		entries.append({"label": String((MINIGAMES[String(id)] as Dictionary).name)})
+	var pick: int = await _pick_prompt(
+		Dialog.text("procession.items.invitation_header") % roster[seat].name, "",
+		roster[seat].color, entries, Dialog.text("procession.items.keep_label"), false, 12.0)
+	return "" if pick < 0 else String(pool[pick])
+
+# --------------------------------------------------------------------------
+# THE PEDDLER'S CART, PRICED (P2 — doc 28 §6). Landing on the cart fixture
+# opens the shop; LAST RITES reopens it at every night interlude. Rubber-band:
+# wreath LAST place shops at 30% off — an ANNOUNCED line, never hidden. The
+# LETTERS OF ADMINISTRATION are the same 30% (it IS the discount; no stack).
+# --------------------------------------------------------------------------
+func _shop(seat: int) -> void:
+	var disc := _discount_for(seat)
+	if float(disc.mult) < 0.999 and not _fast:
+		_flash_line(String(disc.reason) % roster[seat].name, roster[seat].color, seat)
+		await _beat(1.2)
+	if _capture and not _cart_demoed:
+		_cart_demoed = true
+		await _demo_cart(seat)
+	if bool(roster[seat].bot) or not _drama_visible():
+		_bot_shop(seat)
+		return
+	while _inv_total(seat) < Spaces.INV_CAP:
+		var entries: Array = []
+		for w in Spaces.CART_WARES:
+			var wd := w as Dictionary
+			var price := _price_for(seat, wd)
+			entries.append({"label": "%s — %d%s" % [String(wd.name), price, Spaces.PENNY_GLYPH],
+				"sub": String(wd.rule), "disabled": grudge[seat] < price})
+		var sub := Dialog.text("procession.cart.sub") % [roster[seat].name, grudge[seat],
+			Spaces.PENNY_GLYPH, _inv_total(seat), Spaces.INV_CAP]
+		var pick: int = await _pick_prompt(Dialog.text("procession.cart.header"), sub,
+			Color(1, 0.88, 0.5), entries, Dialog.text("procession.cart.leave_label"),
+			false, 15.0)
+		if pick < 0:
+			break
+		var ware: Dictionary = Spaces.CART_WARES[pick]
+		var price := _price_for(seat, ware)
+		if grudge[seat] < price:
+			continue
+		_buy_ware(seat, ware, price)
+
+## Bot shopping: one considered purchase per visit, EVENT stream, every draw
+## conditional on an affordable shelf (deterministic per seed).
+func _bot_shop(seat: int) -> void:
+	if _inv_total(seat) >= Spaces.INV_CAP:
+		return
+	var afford: Array = []
+	for w in Spaces.CART_WARES:
+		if grudge[seat] >= _price_for(seat, w as Dictionary):
+			afford.append(w)
+	if afford.is_empty():
+		return
+	if _event_rng.randf() > 0.65:
+		return   # window-shops and moves on
+	var ware: Dictionary = afford[_event_rng.randi_range(0, afford.size() - 1)]
+	_buy_ware(seat, ware, _price_for(seat, ware))
+
+func _price_for(seat: int, ware: Dictionary) -> int:
+	return int(ceil(float(int(ware.cost)) * float(_discount_for(seat).mult)))
+
+## The one discount rule. LETTERS first (it IS the discount — no stacking);
+## else wreath LAST place (everyone tied at the bottom when someone stands
+## higher counts; a four-way tie is no last place).
+func _discount_for(seat: int) -> Dictionary:
+	if bool(letters[seat]):
+		return {"mult": 0.7, "reason": Dialog.text("procession.cart.discount_letters")}
+	var lo := wreaths[0]
+	var hi := wreaths[0]
+	for w in wreaths:
+		lo = mini(lo, w)
+		hi = maxi(hi, w)
+	if hi > lo and wreaths[seat] == lo:
+		return {"mult": 0.7, "reason": Dialog.text("procession.cart.discount_last")}
+	return {"mult": 1.0, "reason": ""}
+
+func _buy_ware(seat: int, ware: Dictionary, price: int) -> void:
+	grudge[seat] -= price
+	stats[seat].spent += price
+	_grant_ware(seat, String(ware.id))
+	Sfx.play("card", -6.0)
+	_pop_grudge(seat, -price)
+	_flash_line(Dialog.text("procession.cart.buy") % [roster[seat].name,
+		String(ware.name), price, Spaces.PENNY_GLYPH], roster[seat].color, seat)
+	_refresh_hud()
+
+## Windowed capture only: pose the cart UI with bot data for the verification
+## screenshot, then tear it down. Never headless.
+func _demo_cart(seat: int) -> void:
+	var entries: Array = []
+	for w in Spaces.CART_WARES:
+		var wd := w as Dictionary
+		var price := _price_for(seat, wd)
+		entries.append({"label": "%s — %d%s" % [String(wd.name), price, Spaces.PENNY_GLYPH],
+			"sub": String(wd.rule), "disabled": grudge[seat] < price})
+	var prompt := CartPrompt.new()
+	_ui.add_child(prompt)
+	prompt.open(Dialog.text("procession.cart.header"),
+		Dialog.text("procession.cart.sub") % [roster[seat].name, grudge[seat],
+			Spaces.PENNY_GLYPH, _inv_total(seat), Spaces.INV_CAP],
+		Color(1, 0.88, 0.5), entries, Dialog.text("procession.cart.leave_label"), false, 6.0)
+	await _beat(0.7)
+	await _cap_snap("peddler_cart")
+	prompt.queue_free()
 
 ## Walk `steps` stones from the seat's node, resolving forks. Returns the node
 ## path (may be shorter than steps: the gate ends every walk). Bot/soak fork
@@ -1103,38 +2184,6 @@ func _preview_dest(seat: int, n: int) -> int:
 		cur = step
 	return cur
 
-## Bots aim for the highest-value stone reachable in 1..6 (previewed down
-## their preferred road); a small ROLL-stream jitter keeps four bots distinct.
-## Fixed draw shape: exactly 6 floats per bot seat, every round.
-func _bot_targets() -> Array[int]:
-	var out: Array[int] = []
-	out.resize(roster.size())
-	for i in roster.size():
-		if not bool(roster[i].bot):
-			out[i] = 3
-			continue
-		var best_n := 1
-		var best_v := -999.0
-		for n in range(1, 7):
-			var v: float = Spaces.bot_value(board.type_at(_preview_dest(i, n)))
-			v += _roll_rng.randf_range(-0.6, 0.6)
-			if v > best_v:
-				best_v = v
-				best_n = n
-		out[i] = best_n
-	return out
-
-func _apply_item_movement(moved: Array[int]) -> void:
-	for i in roster.size():
-		if items[i].pin > 0:
-			items[i].pin -= 1
-			moved[i] += 1
-			_flash_line(Dialog.text("procession.narration.pin") % roster[i].name, roster[i].color, i)
-		if items[i].ribbon > 0:
-			items[i].ribbon -= 1
-			moved[i] = maxi(1, moved[i] - 1)
-			_flash_line(Dialog.text("procession.narration.ribbon") % roster[i].name, roster[i].color, i)
-
 ## THE FERRYMAN'S TOLL, in passing: crossing a toll stone mid-walk pays 2♠ to
 ## the Ferryman (the estate; no player owns the river — doc 28 §6). Landing on
 ## one is handled in the reveal. The player-owned tollgate died with the ring.
@@ -1142,26 +2191,22 @@ func _pay_passthrough_tolls(seat: int, path: Array) -> void:
 	for k in path.size() - 1:   # intermediate stones only; the landing reveals
 		var idx := int(path[k])
 		if board.type_at(idx) == Spaces.FERRY_TOLL:
+			if _veil_negates(seat):
+				if not _fast:
+					_flash_line(Dialog.text("procession.items.veil") % roster[seat].name,
+						roster[seat].color, seat)
+				continue
 			var pay := mini(2, grudge[seat])
 			if pay <= 0:
 				continue
 			grudge[seat] -= pay
 			stats[seat].lost += pay
+			stats[seat].hazards += 1
 			_pop_at(board.space_pos(idx) + Vector3(0, 1.0, 0), seat, -pay,
 				roster[seat].color)   # F11: the fee falls off at the arch
 			if not _fast:
 				_flash_line(Dialog.text("procession.narration.ferry_pass") % roster[seat].name,
 					roster[seat].color, seat)
-
-func _reveal_order(moved: Array[int]) -> Array:
-	var order: Array = []
-	for i in roster.size():
-		order.append(i)
-	order.sort_custom(func(a, b):
-		if moved[a] != moved[b]:
-			return moved[a] < moved[b]
-		return a < b)
-	return order
 
 func _reveal_landing(seat: int) -> void:
 	var idx := positions[seat]
@@ -1183,7 +2228,7 @@ func _reveal_landing(seat: int) -> void:
 			Spaces.OFFERING: _resolve_offering(seat, name, col)
 			Spaces.OPEN_GRAVE: _resolve_grave(seat, name, col)
 			Spaces.GRAVE_GOODS: _resolve_box(seat, name, col)
-			Spaces.CART: _resolve_cart(seat, name, col)
+			Spaces.CART: await _resolve_cart(seat, name, col)
 			Spaces.SEANCE: await _resolve_seance(seat, name, col)
 			Spaces.FERRY_TOLL: _resolve_ferry(seat, name, col)
 			Spaces.CROSSROADS: executor.say(Executor.pick(Executor.CROSSROADS_LAND, _voice_rng, [name]), col)
@@ -1289,12 +2334,12 @@ func _resolve_offering(seat: int, name: String, col: Color) -> void:
 	executor.say(Executor.pick(Executor.OFFERING, _voice_rng, [name]), col)
 
 func _resolve_grave(seat: int, name: String, col: Color) -> void:
-	if items[seat].salt > 0:
-		items[seat].salt -= 1
-		executor.say(Dialog.text("procession.narration.grave_salt") % name, col)
+	if _veil_negates(seat):
+		executor.say(Dialog.text("procession.items.veil_grave") % name, col)
 		return
 	var owner := board.grave_owner(positions[seat])
 	stats[seat].graves += 1
+	stats[seat].hazards += 1
 	if owner >= 0 and owner != seat:
 		var toll := mini(2, grudge[seat])
 		grudge[seat] -= toll
@@ -1311,24 +2356,32 @@ func _resolve_grave(seat: int, name: String, col: Color) -> void:
 		_pop_grudge(seat, -loss)   # F11: −N♠ falls from the pawn
 		executor.say(Executor.pick(Executor.GRAVE, _voice_rng, [name]), col)
 
-## GRAVE GOODS — the free item box (EVENT stream picks the item).
+## GRAVE GOODS — the free item box: one CHEAP-tier ware (EVENT stream), the
+## modern-MP positive-variance read. Full hands leave the box rattling.
 func _resolve_box(seat: int, name: String, col: Color) -> void:
-	var item := _grant_item(seat)
+	var id := String(Spaces.BOX_POOL[_event_rng.randi_range(0, Spaces.BOX_POOL.size() - 1)])
 	Sfx.play("card", -6.0)
-	executor.say(Executor.pick(Executor.GRAVE_GOODS, _voice_rng, [name]) + "  (%s)" % item.name, col)
+	if _grant_ware(seat, id):
+		executor.say(Executor.pick(Executor.GRAVE_GOODS, _voice_rng, [name])
+			+ "  (%s)" % String(Spaces.ware(id).name), col)
+	else:
+		executor.say(Dialog.text("procession.items.box_full") % name, col)
 
-## THE PEDDLER'S CART — tonight it hands over one item with better patter; the
-## priced shop (doc 28 §6 wares table) is the economy lane's to build (P2).
+## THE PEDDLER'S CART — the PRICED shop (doc 28 §6 wares table). The free
+## handout died with P2; the peddler quotes prices and the table watches.
 func _resolve_cart(seat: int, name: String, col: Color) -> void:
-	var item := _grant_item(seat)
-	Sfx.play("card", -6.0)
-	executor.say(Executor.pick(Executor.CART, _voice_rng, [name]) + "  (%s)" % item.name, col)
+	executor.say(Executor.pick(Executor.CART, _voice_rng, [name]), col)
+	await _shop(seat)
 
 ## THE FERRYMAN'S TOLL, landed on: pay 2♠ to the river. No owner, no refunds.
 func _resolve_ferry(seat: int, name: String, col: Color) -> void:
+	if _veil_negates(seat):
+		executor.say(Dialog.text("procession.items.veil") % name, col)
+		return
 	var pay := mini(2, grudge[seat])
 	grudge[seat] -= pay
 	stats[seat].lost += pay
+	stats[seat].hazards += 1
 	Sfx.play("sink", -4.0)
 	_pop_grudge(seat, -pay)
 	executor.say(Executor.pick(Executor.FERRY, _voice_rng, [name]), col)
@@ -1342,26 +2395,13 @@ func _resolve_arrival(seat: int, name: String, col: Color) -> void:
 	MomentScribe.capture("gate_arrival", "%s REACHES THE MANOR GATE (#%d)" % [name, rank],
 		2, [seat], "procession")
 
-## Deal one announced item from the shared pool (EVENT stream). The black
-## ribbon aims itself at the race leader, as ever.
-func _grant_item(seat: int) -> Dictionary:
-	var pool := Spaces.ITEMS
-	var item: Dictionary = pool[_event_rng.randi_range(0, pool.size() - 1)]
-	match String(item.id):
-		"mourning_pin": items[seat].pin += 1
-		"grave_salt": items[seat].salt += 1
-		"black_ribbon":
-			var leader := _race_leader(seat)
-			if leader >= 0:
-				items[leader].ribbon += 1
-	return item
-
 func _resolve_seance(seat: int, name: String, col: Color) -> void:
 	# The SIM decides the slot (unchanged rng draw); the visible wheel is theater
 	# that spins TO it (F13). Effects apply as the needle lands, so the dial reads
 	# like it caused the outcome — but it never decides anything.
 	var slot := _event_rng.randi_range(0, Spaces.SEANCE_WHEEL.size() - 1)
 	var w: Dictionary = Spaces.SEANCE_WHEEL[slot]
+	stats[seat].seances += 1
 	Sfx.play("bumper", -6.0)
 	if not _fast:
 		# Match the lower-third to the séance during the spin (the outcome line
@@ -1630,6 +2670,16 @@ func _interim_reading() -> void:
 	await _beat(1.8)
 	executor.clear_banner()
 	var lines: Array[String] = []
+	# The three ANNOUNCED award races first (doc 28 §7 — races visible), then
+	# the will-clause races (the ◆ ceremony trophies).
+	for a in night_awards:
+		var alead := _stat_leader(String(a.stat))
+		if alead >= 0:
+			lines.append(Dialog.text("procession.interim.line") % [_award_title(a),
+				roster[alead].name,
+				Dialog.text("procession.interim.metric_generic") % int(stats[alead].get(String(a.stat), 0))])
+		else:
+			lines.append(Dialog.text("procession.interim.contested") % _award_title(a))
 	for c in clauses:
 		var lead := _stat_leader(String(c.stat))
 		if lead >= 0:
@@ -1715,52 +2765,119 @@ func _snap_epitaph(loser: int) -> void:
 	await _cap_snap("epitaph")
 
 # --------------------------------------------------------------------------
-# MINIGAME BLOCK  (every 2nd round)
+# MINIGAME BLOCK — one per CYCLE (doc 28 §2), drawn WITHOUT replacement per
+# night from the full 15-game catalog; THE INVITATION overrides one draw.
 # --------------------------------------------------------------------------
 func _minigame_block() -> void:
 	_phase = "minigame"
 	executor.clear_banner()
-	# item offer — a quick shop beat: each seat is handed a random item (EVENT
-	# stream; the ribbon aims itself at the race leader inside _grant_item).
-	for i in roster.size():
-		_grant_item(i)
-	# The EVENT stream picks the game; the roulette (F22) is theater that lands
-	# on it, then calls "TAKE YOUR PLACES" (the estate's voice, doc 26).
-	var mid: String = CONTRACT_POOL[_event_rng.randi_range(0, CONTRACT_POOL.size() - 1)]
+	var mid := _draw_minigame()
+	# The roulette (F22) is theater that lands on the pre-decided card.
 	if _fast:
 		pass   # the soak skips the roulette entirely
 	elif _capture:
-		roulette.present(CONTRACT_POOL, mid)   # fire, snap mid-spin, then wait out
+		roulette.present(MINIGAME_ORDER, mid)   # fire, snap mid-spin, then wait out
 		await _beat(1.2)
 		await _cap_snap("roulette")
 		while not roulette.finished:
 			await get_tree().process_frame
 	else:
-		await roulette.present(CONTRACT_POOL, mid)
+		await roulette.present(MINIGAME_ORDER, mid)
 	_hide_announce()
 	var placements: Array = await _run_minigame(mid)
-	# RECKONING — placements pay 5/3/2/1 Grudge.
+	if placements.is_empty():
+		return   # module error already surfaced — the cycle is voided, never randomized
+	await _settle_minigame(mid, placements)
+
+## Draw the cycle's game: without replacement per night (pool refills at night
+## start); THE INVITATION's pick takes the slot and leaves the pool intact
+## minus itself. EVENT stream, one randi per natural draw.
+func _draw_minigame() -> String:
+	if _mini_pool.is_empty():
+		_mini_pool = MINIGAME_ORDER.duplicate()
+	if _invitation_pick != "":
+		var pick := _invitation_pick
+		_invitation_pick = ""
+		_mini_pool.erase(pick)
+		return pick
+	return String(_mini_pool.pop_at(_event_rng.randi_range(0, _mini_pool.size() - 1)))
+
+## THE RECKONING — settlement per cycle (doc 28 §6): pennies 10/6/3/1 +
+## wreaths 2/1/1/0. TEAM-AWARE (doc 28 §15): a 2v2 game pays the winning
+## teammates equal FIRST-tier and the losers equal THIRD-tier — never
+## seat-ordinal inequity. Genuine ties (equal module scores) take the LOWER
+## award. Results were validated against the real roster before this runs.
+func _settle_minigame(mid: String, placements: Array) -> void:
 	_phase = "reckoning"
+	var meta: Dictionary = MINIGAMES.get(mid, {})
+	var tiers: Array[int] = []
+	tiers.resize(placements.size())
+	if String(meta.get("team", "ffa")) == "2v2" and placements.size() == 4:
+		tiers[0] = 0; tiers[1] = 0; tiers[2] = 2; tiers[3] = 2
+	else:
+		for k in placements.size():
+			tiers[k] = k
+		_apply_tie_tiers(placements, tiers)
 	var lines: Array[String] = []
-	for rank in placements.size():
-		var p := int(placements[rank])
-		var pay: int = POINTS[rank] if rank < POINTS.size() else 0
-		grudge[p] += pay
-		lines.append(Dialog.text("procession.reckoning.line") % [roster[p].name, rank + 1, pay])
+	for k in placements.size():
+		var p := int(placements[k])
+		var tier := int(tiers[k])
+		var pd: int = MINI_PENNIES[tier] if tier < MINI_PENNIES.size() else 0
+		var wd: int = MINI_WREATHS[tier] if tier < MINI_WREATHS.size() else 0
+		grudge[p] += pd
+		wreaths[p] += wd
+		wreath_src[p].mini += wd
+		if tier == 0:
+			stats[p].mini_wins += 1
+			mini_wins_match[p] += 1
+		lines.append(Dialog.text("procession.reckoning.line") % [
+			roster[p].name, k + 1, pd, Spaces.PENNY_GLYPH, wd, Spaces.WREATH_GLYPH])
+		_pop_grudge(p, pd)
 	_announce_text(Dialog.text("procession.reckoning.header") + "\n\n" + "\n".join(lines), Color(0.95, 0.85, 0.6))
 	_refresh_hud()
+	_push_net()
 	await _beat(2.4)
 	_hide_announce()
 
+## Genuine ties, FFA only: when the module reports scores ("points": seat ->
+## score) and adjacent placements hold EQUAL scores, the whole tied group takes
+## the LOWEST rank's award (doc 28 §15 — no seat-index favoritism). The sim
+## path reports no scores, so it never ties.
+func _apply_tie_tiers(placements: Array, tiers: Array[int]) -> void:
+	var scores: Dictionary = _mini_results.get("points", {})
+	if scores.is_empty():
+		return
+	for v in placements:
+		if not scores.has(int(v)):
+			return   # partial score sheet — placements stand as ranked
+	var k := 0
+	while k < placements.size():
+		var j := k
+		while j + 1 < placements.size() \
+				and int(scores[int(placements[j + 1])]) == int(scores[int(placements[k])]):
+			j += 1
+		for m in range(k, j + 1):
+			tiers[m] = j
+		k = j + 1
+
 ## The real module contract, reused from inside the board (spec §3). Under
 ## --autoplay the deterministic MINISIM stands in so the full night resolves
-## fast and byte-identically; --realmini forces the live module.
+## fast and byte-identically; --realmini forces the live module. Results are
+## VALIDATED against the real roster — a misfiling module voids the cycle
+## with a surfaced error, it never gets silently re-randomized (doc 28 §15).
 func _run_minigame(id: String) -> Array:
-	if _minisim or not MODULE_SCENES.has(id):
+	var meta: Dictionary = MINIGAMES.get(id, {})
+	if _minisim:
 		return _sim_placements()
-	var scene: PackedScene = load(MODULE_SCENES[id])
+	if String(meta.get("launch", "contract")) == "legacy":
+		# Landmine 3: Par is a legacy launcher (no begin(); root-parented;
+		# GameState reset). The draw stands; the module simulates until the
+		# P3 catalog-level adapter.
+		print("PROCESSION note: %s is a legacy launcher — simulated placements until the P3 adapter" % id)
+		return _sim_placements()
+	var scene: PackedScene = load(String(meta.get("scene", "")))
 	if scene == null:
-		return _sim_placements()
+		return await _module_error(id, "scene missing")
 	var module: Node = scene.instantiate()
 	board.visible = false
 	cam.current = false
@@ -1768,6 +2885,7 @@ func _run_minigame(id: String) -> Array:
 	add_child(module)
 	_mini_done = false
 	_mini_out = []
+	_mini_results = {}
 	module.finished.connect(_on_mini_finished, CONNECT_ONE_SHOT)
 	var mroster: Array = []
 	for pl in roster:
@@ -1781,14 +2899,39 @@ func _run_minigame(id: String) -> Array:
 	board.visible = true
 	cam.current = true
 	_ui.visible = true
-	if _mini_out.size() != roster.size():
-		return _sim_placements()
+	if not _valid_placements(_mini_out):
+		return await _module_error(id, str(_mini_out))
 	return _mini_out
+
+## Placements must be a permutation of the real roster — every seat exactly
+## once. Anything else is a module bug the table deserves to SEE.
+func _valid_placements(p: Array) -> bool:
+	if p.size() != roster.size():
+		return false
+	var seen := {}
+	for v in p:
+		var s := int(v)
+		if s < 0 or s >= roster.size() or seen.has(s):
+			return false
+		seen[s] = true
+	return true
+
+func _module_error(id: String, got: String) -> Array:
+	print("PROCESSION MODULE ERROR game=%s results=%s want=permutation of %d seats — cycle voided, no settlement" % [
+		id, got, roster.size()])
+	if not _fast:
+		_announce_text(Dialog.text("procession.mini.error") % String(
+			(MINIGAMES.get(id, {}) as Dictionary).get("name", id)), Color(1, 0.5, 0.4))
+		await _beat(2.2)
+		_hide_announce()
+	return []
 
 var _mini_done := false
 var _mini_out: Array = []
+var _mini_results := {}    # the module's full results dict (scores feed tie policy)
 
 func _on_mini_finished(results: Dictionary) -> void:
+	_mini_results = results
 	_mini_out = results.get("placements", [])
 	_mini_done = true
 
@@ -1827,9 +2970,15 @@ func _house_awakens() -> void:
 		if bool(arrived[i]):
 			continue
 		if not reached and not safe.has(positions[i]):
+			if _veil_negates(i):
+				if not _fast:
+					_flash_line(Dialog.text("procession.items.veil") % roster[i].name,
+						roster[i].color, i)
+				continue
 			_slip_back(i, 2)
 			caught.append(String(roster[i].name))
 			stats[i].lost += 1
+			stats[i].hazards += 1
 	if caught.is_empty():
 		_announce_text(Dialog.text("procession.house_awakens.header") + "\n\n" + Dialog.text("procession.house_awakens.safe"),
 			Color(0.7, 0.85, 1.0))
@@ -1905,27 +3054,37 @@ func _stat_leader(key: String) -> int:
 			best = i
 	return best
 
+## THE CROWN — most wreaths inherits the estate. JOINT HEIRS share the banner
+## (and the monument) when the whole tie-break chain holds.
 func _heir_crowned() -> void:
 	_phase = "heir"
-	winner = _final_winner()
+	var heirs := _match_heirs()
+	winner = int(heirs[0])
+	var joint := heirs.size() > 1
+	var heir_names: Array[String] = []
+	for h in heirs:
+		heir_names.append(String(roster[int(h)].name))
+	var crown_name := " & ".join(heir_names)
 	# The heir is written to the estate as a permanent monument (kind="heir").
 	# Skipped under the autoplay SOAK so the verification stays save-independent
 	# and byte-identical run to run (real play / the estate merge always writes).
 	var pl: Dictionary = roster[winner]
 	if not _autoplay:
-		EstateState.monuments.append({
-			"owner": String(pl.name),
-			"color": Color(pl.color).to_html(),
-			"label": Dialog.text("procession.heir.monument") % [pl.name, deeds[winner]],
-			"night": EstateState.nights_played,
-			"kind": "heir",
-		})
-		EstateState.add_graffiti(Dialog.text("procession.heir.graffiti") % pl.name)
+		for h in heirs:
+			var hp: Dictionary = roster[int(h)]
+			EstateState.monuments.append({
+				"owner": String(hp.name),
+				"color": Color(hp.color).to_html(),
+				"label": Dialog.text("procession.heir.monument") % [hp.name, wreaths[int(h)]],
+				"night": EstateState.nights_played,
+				"kind": "heir",
+			})
+			EstateState.add_graffiti(Dialog.text("procession.heir.graffiti") % hp.name)
 		EstateState.save_estate()
 	Music.play_slot("ceremony")
 	var podium := Podium.new()
 	add_child(podium)
-	var order := _final_order()
+	var order := _match_order()
 	var entries: Array = []
 	for rank in order.size():
 		var p := int(order[rank])
@@ -1938,14 +3097,20 @@ func _heir_crowned() -> void:
 	_reveal.visible = false
 	podium.stage_entries(entries)
 	# The seed is verification plumbing — real heirs get a clean crown.
-	var crown := Dialog.text("procession.heir.crown_gate") % pl.name
+	var crown: String
+	if joint:
+		crown = Dialog.text("procession.heir.crown_joint") % [crown_name, wreaths[winner],
+			Spaces.WREATH_GLYPH]
+	else:
+		crown = Dialog.text("procession.heir.crown_wreaths") % [crown_name, wreaths[winner],
+			Spaces.WREATH_GLYPH]
 	if _autoplay:
 		crown += " · SEED %d" % seed_value
 	_announce_text(crown, Color(pl.color))
 	_announce.visible = true
 	# The victor's crown — the newsreel's headline still (F5).
-	MomentScribe.capture("heir_crowned", "%s IS CROWNED HEIR (◆%d)" % [pl.name, deeds[winner]],
-		3, [winner], "procession")
+	MomentScribe.capture("heir_crowned", "%s INHERITS THE ESTATE (%d WREATHS)" % [
+		crown_name, wreaths[winner]], 3, heirs, "procession")
 	if _capture:
 		await _cap_snap("heir_crowned")
 	else:
@@ -1955,9 +3120,6 @@ func _heir_crowned() -> void:
 		podium.queue_free()
 	_topbar.visible = true
 	_chiprow.visible = true
-
-func _final_winner() -> int:
-	return int(_final_order()[0])
 
 ## The night's standings: arrival order first (crossing beats everything),
 ## then the DISTANCE RANKING (fewest stones to the gate — the doc 28 §8
@@ -1982,28 +3144,37 @@ func _final_order() -> Array:
 		return a < b)
 	return order
 
+## The MATCH record — the canonical receipt line (per-night PROCESSION_NIGHT
+## lines already printed at each settlement).
 func _emit_tally() -> void:
-	var routes: Array = []
-	var left: Array = []
+	var heirs := _match_heirs()
+	var heir_names: Array[String] = []
+	for h in heirs:
+		heir_names.append(String(roster[int(h)].name))
+	var src := {"arrival": [], "mini": [], "award": [], "liquid": []}
 	for i in roster.size():
-		routes.append(board.route_of(positions[i]))
-		left.append(board.dist_to_gate(positions[i]))
+		for k in src:
+			(src[k] as Array).append(int(wreath_src[i].get(k, 0)))
 	var tally := {
-		"seed": seed_value, "board": String(BoardGraph.BOARD.id), "rounds": round_num,
-		"turn_cap": turn_cap, "bell_round": bell_round,
-		"heir": winner, "heir_name": String(roster[winner].name),
-		"arrivals": arrival_order.duplicate(),
-		"grudge": grudge.duplicate(), "deeds": deeds.duplicate(),
-		"moved": moved_total.duplicate(), "positions": positions.duplicate(),
-		"routes": routes, "left": left,
+		"seed": seed_value, "board": String(BoardGraph.BOARD.id),
+		"nights": match_nights, "turn_cap": turn_cap,
+		"heirs": heirs.duplicate(), "heir": winner,
+		"heir_name": " & ".join(heir_names),
+		"wreaths": wreaths.duplicate(), "grudge": grudge.duplicate(),
+		"deeds": deeds.duplicate(), "src": src,
+		"board_firsts": board_firsts.duplicate(),
+		"mini_wins": mini_wins_match.duplicate(),
+		"moved": moved_total.duplicate(),
 	}
-	print("PROCESSION_TALLY ", JSON.stringify(tally))
+	print("PROCESSION_MATCH ", JSON.stringify(tally))
 	for i in roster.size():
-		var home := arrival_order.find(i)
-		print("  seat %d %s: ◆%d  %d♠  moved=%d  pos=%d  route=%s  left=%d%s" % [
-			i, roster[i].name, deeds[i], grudge[i], moved_total[i], positions[i],
-			routes[i], int(left[i]), ("  HOME#%d" % (home + 1)) if home >= 0 else ""])
-	print("PROCESSION_HEIR %s (seed %d, %d rounds)" % [roster[winner].name, seed_value, round_num])
+		print("  seat %d %s: %s%d (arr %d + mini %d + awd %d + liq %d)  %d%s  ◆%d  moved=%d%s" % [
+			i, roster[i].name, Spaces.WREATH_GLYPH, wreaths[i],
+			int(wreath_src[i].arrival), int(wreath_src[i].mini),
+			int(wreath_src[i].award), int(wreath_src[i].liquid),
+			grudge[i], Spaces.PENNY_GLYPH, deeds[i], moved_total[i],
+			"  HEIR" if heirs.has(i) else ""])
+	print("PROCESSION_HEIR %s (seed %d, %d nights)" % [" & ".join(heir_names), seed_value, match_nights])
 	night_over.emit(tally)
 	if _autoplay:
 		await _beat(0.3)

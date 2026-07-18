@@ -529,11 +529,12 @@
       "contested": "◆ %s — still contested. No one leads.",
       "metric_stones": "%d stones walked",
       "metric_bled": "%d♠ bled",
-      "metric_board": "%d taken on the board"
+      "metric_board": "%d taken on the board",
+      "metric_generic": "%d so far"
     },
     "reckoning": {
       "header": "THE RECKONING",
-      "line": "%s  #%d  +%d♠"
+      "line": "%s  #%d  +%d%s +%d%s"
     },
     "will_reading": {
       "header": "THE READING OF THE WILL",
@@ -548,8 +549,10 @@
     "heir": {
       "crown": "%s IS CROWNED HEIR\n◆%d DEEDS",
       "crown_gate": "%s IS CROWNED HEIR\nFIRST THROUGH THE MANOR GATE",
-      "monument": "%s — HEIR OF THE PROCESSION (◆%d)",
-      "graffiti": "%s inherited the manor at the procession"
+      "monument": "%s — HEIR OF THE PROCESSION (%d WREATHS)",
+      "graffiti": "%s inherited the manor at the procession",
+      "crown_wreaths": "%s INHERITS THE ESTATE\n%d%s AT THE READING",
+      "crown_joint": "JOINT HEIRS — %s\n%d%s APIECE. THE ESTATE SIGHS."
     },
     "epitaph_graffiti": "%s had the last word over %s: “%s”. The estate filed it.",
     "crossroads": {
@@ -561,6 +564,93 @@
       "header": "THE FINAL BELL",
       "rung": "%s rings the bell at the Manor Gate.\nONE LAST TURN for everyone still on the road.",
       "closing": "The road closes at dawn. The turn cap has been reached."
+    },
+    "arrival": {
+      "header": "ARRIVAL AT THE MANOR GATE",
+      "line": "#%d  %s  +%d%s",
+      "on_road": "  · still on the road",
+      "bumped": "  · the LETTERS raise it a tier"
+    },
+    "mini": {
+      "error": "%s has misfiled its results.\nThe estate refuses to guess — no pay this cycle."
+    },
+    "items": {
+      "header": "%s — SPEND AN ITEM?",
+      "keep_label": "KEEP THEM",
+      "lucky": "%s arms a LUCKY PENNY — +3 on this roll.",
+      "lucky_spent": "%s rides the LUCKY PENNY (+%d stones).",
+      "veil": "%s's BLACK VEIL swallows the harm.",
+      "veil_grave": "%s's BLACK VEIL swallows the grave. The estate files a complaint.",
+      "writ": "%s unseals a %s WRIT — the die widens for this roll.",
+      "shovel": "%s digs ahead four stones with the PALLBEARER'S SHOVEL. Nothing dares trigger.",
+      "wisp": "A WILL-O’-THE-WISP carries %s up the road.",
+      "crow": "%s's CROW'S CUT strips %d%s from %s.",
+      "crow_blocked": "The crows descend on %s — and find only a BLACK VEIL.",
+      "bell": "THE FUNERAL BELL tolls. %s is dragged back four stones.",
+      "bell_blocked": "THE FUNERAL BELL tolls — but %s walks on beneath a BLACK VEIL.",
+      "debt_set": "%s lays a WREATH OF DEBT upon this stone.",
+      "debt_paid": "%s lands on a WREATH OF DEBT — %d%s owed to %s.",
+      "invitation": "%s seals THE INVITATION. The next game will be %s.",
+      "invitation_header": "%s — CHOOSE THE NEXT GAME",
+      "crow_header": "%s — CHOOSE THE MARK",
+      "box_full": "%s's hands are full. The box keeps its secrets."
+    },
+    "cart": {
+      "header": "THE PEDDLER'S CART",
+      "sub": "%s — %d%s · %d/%d held",
+      "leave_label": "LEAVE THE CART",
+      "buy": "%s buys %s (−%d%s).",
+      "discount_letters": "The LETTERS OF ADMINISTRATION entitle %s to a mercy discount. It is so noted.",
+      "discount_last": "The estate notes who trails the wreaths. %s shops at a mercy discount."
+    },
+    "night": {
+      "open": "NIGHT %d OF %d"
+    },
+    "awards": {
+      "announce": "Three awards stand announced tonight. The races are public. Run accordingly.",
+      "header": "TONIGHT'S ANNOUNCED AWARDS",
+      "line": "◆ %s — %s · worth %d%s at dawn",
+      "pay_header": "THE AWARDS ARE READ",
+      "pay_line": "%s — %s (%d) · +%d%s",
+      "unclaimed": "%s — unclaimed. The estate keeps its wreaths.",
+      "tie_note": "  · TIED — the estate’s coin turned, in full view",
+      "longest_title": "THE LONGEST PROCESSION",
+      "longest_desc": "most stones moved",
+      "mourned_title": "THE MOST MOURNED",
+      "mourned_desc": "most graves and hazards eaten",
+      "generous_title": "GENEROUS TO A FAULT",
+      "generous_desc": "most pennies spent at the cart",
+      "uninvited_title": "THE UNINVITED",
+      "uninvited_desc": "most séance spins",
+      "bloodiest_title": "THE BLOODIEST HAND",
+      "bloodiest_desc": "most minigame wins"
+    },
+    "letters": {
+      "header": "%s — THE LETTERS OF ADMINISTRATION",
+      "sub": "A dignity clause. Mercy prices at the cart, one CROW’S CUT gratis, arrival raised a tier. Tonight only.",
+      "accept_label": "ACCEPT THE LETTERS",
+      "decline_label": "DECLINE, WITH DIGNITY",
+      "reading": [
+        "Let the record show %s has accepted the LETTERS OF ADMINISTRATION, pursuant to nothing in particular. The estate extends its cheapest mercy.",
+        "The LETTERS OF ADMINISTRATION pass to %s — a formality, a kindness, and an insult, in equal measure. So noted.",
+        "%s takes up the LETTERS. The estate observes that someone had to."
+      ]
+    },
+    "standings": {
+      "header": "THE WREATH STANDINGS",
+      "line": "#%d  %s — %d%s · %d%s"
+    },
+    "lastrites": {
+      "header": "LAST RITES — THE CART KEEPS LATE HOURS"
+    },
+    "finale": {
+      "opener": "The final night is filed. THE READING will now itemise the estate.",
+      "stream_arrival": "THE READING — ARRIVALS AT THE GATE",
+      "stream_mini": "THE READING — THE GAMES",
+      "stream_award": "THE READING — THE ANNOUNCED AWARDS",
+      "stream_liquid": "THE READING — LIQUIDATION · 10 PENNIES TO THE WREATH",
+      "stream_line": "%s — +%d%s",
+      "totals_header": "THE FINAL ACCOUNTING"
     }
   }
 }
