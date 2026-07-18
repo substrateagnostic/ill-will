@@ -297,6 +297,8 @@ func _boot(config: Dictionary) -> void:
 		seed_value = int(config.seed)
 	if config.has("turn_cap"):
 		turn_cap = clampi(int(config.turn_cap), 4, 40)
+	if config.has("match_nights"):
+		match_nights = clampi(int(config.match_nights), 1, 5)
 	# Seed the NAMED streams (header doctrine). Distinct affine salts per stream
 	# so no draw in one can ever shift another; presentation streams can never
 	# shift the tally at all.
@@ -316,10 +318,10 @@ func _boot(config: Dictionary) -> void:
 	# ceremonies — the tally stays byte-identical. Windowed play runs at 1.0.
 	if _autoplay and _fast:
 		Engine.time_scale = 8.0
-	print("PROCESSION boot seed=%d board=%s turn_cap=%d players=%d autoplay=%s minisim=%s" % [
-		seed_value, String(BoardGraph.BOARD.id), turn_cap, roster.size(),
+	print("PROCESSION boot seed=%d board=%s turn_cap=%d nights=%d players=%d autoplay=%s minisim=%s" % [
+		seed_value, String(BoardGraph.BOARD.id), turn_cap, match_nights, roster.size(),
 		str(_autoplay), str(_minisim)])
-	_run_night()
+	_run_match()
 
 func _parse_cli() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -327,6 +329,10 @@ func _parse_cli() -> void:
 			seed_value = int(arg.trim_prefix("--seed="))
 		elif arg.begins_with("--turncap="):
 			turn_cap = clampi(int(arg.trim_prefix("--turncap=")), 4, 40)
+		elif arg.begins_with("--nights="):
+			# The 3-NIGHT MATCH dial (landmine 1: never the estate's night_length,
+			# which means games-per-night). --nights=1 is the single-night probe.
+			match_nights = clampi(int(arg.trim_prefix("--nights=")), 1, 5)
 		elif arg.begins_with("--deedgoal=") or arg.begins_with("--preset="):
 			# Ring-era dials, retired with the Codicil (doc 28). Accepted so old
 			# command lines don't crash; they change nothing.
@@ -874,13 +880,27 @@ func _choose_clauses() -> void:
 	]
 
 # --------------------------------------------------------------------------
-# THE NIGHT
+# THE MATCH — 3 nights (doc 28 §2), then THE READING. Wreaths, pennies,
+# inventory and deeds persist across nights; the board resets between them.
 # --------------------------------------------------------------------------
-func _run_night() -> void:
+func _run_match() -> void:
 	_phase = "intro"
 	if final_kit and final_kit.has_method("play_started"):
 		final_kit.play_started()
 	await _intro()
+	for n in range(1, match_nights + 1):
+		night_index = n
+		await _night_open()
+		await _run_night_cycles()
+		await _night_settlement()
+		if night_index < match_nights:
+			_board_reset()
+	await _finale()
+
+## The cycle loop: roll phase → move/resolve → MINIGAME (every cycle, doc 28
+## §2) → the odd HOUSE AWAKENS, until the FINAL BELL's one-more-round closes
+## it or the turn cap falls (doc 28 §8 rule 4: distance ranks the rest).
+func _run_night_cycles() -> void:
 	while true:
 		round_num += 1
 		_refresh_hud()
@@ -889,7 +909,6 @@ func _run_night() -> void:
 			break
 		# Once THE FINAL BELL has rung the night is closing — the stragglers get
 		# their one roll and nothing else. Blocks only fire on an open road.
-		# A MINIGAME EVERY CYCLE (doc 28 §2 — the engine room's heartbeat).
 		if bell_round < 0:
 			await _minigame_block()
 		if bell_round < 0 and round_num % 3 == 0:
@@ -899,12 +918,347 @@ func _run_night() -> void:
 				_announce_text(Dialog.text("procession.bell.closing"), Color(1, 0.6, 0.4))
 				await _beat(2.0)
 				_hide_announce()
-			break   # doc 28 §8 rule 4: the cap ends it; distance ranks the rest
+			break
+
+# --------------------------------------------------------------------------
+# NIGHT OPEN — banner, the 3 announced awards, THE LETTERS (doc 28 §7/§8r5)
+# --------------------------------------------------------------------------
+const AWARD_WREATHS := 4
+## The award pool (doc 28 §7 — majority luck/behaviour-weighted, measured
+## design law). BLOODIEST HAND is the ONE skill award; at most one skill
+## award may be drawn per night.
+const AWARD_POOL := [
+	{"id": "longest", "stat": "moved", "skill": false},
+	{"id": "mourned", "stat": "hazards", "skill": false},
+	{"id": "generous", "stat": "spent", "skill": false},
+	{"id": "uninvited", "stat": "seances", "skill": false},
+	{"id": "bloodiest", "stat": "mini_wins", "skill": true},
+]
+var night_awards: Array = []          # tonight's 3 drawn award dicts
+var _night_award_results: Array = []  # [[id, winner|-1], ...] for the night record
+var _night_start_wreaths: Array[int] = []   # snapshot for the bounded legacy grant
+
+func _award_title(a: Dictionary) -> String:
+	return Dialog.text("procession.awards.%s_title" % String(a.id))
+
+func _award_desc(a: Dictionary) -> String:
+	return Dialog.text("procession.awards.%s_desc" % String(a.id))
+
+func _night_open() -> void:
+	_phase = "night_open"
+	Music.play_slot("grounds")
+	_mini_pool = MINIGAME_ORDER.duplicate()
+	_night_start_wreaths = wreaths.duplicate()
+	if not _fast and match_nights > 1:
+		_announce_text(Dialog.text("procession.night.open") % [night_index, match_nights],
+			Color(1, 0.88, 0.5))
+		await _beat(2.0)
+		_hide_announce()
+	_draw_night_awards()
+	await _announce_awards()
+	await _letters_offer()
+
+## Draw 3 of 5 at night start (EVENT stream, without replacement). At most one
+## SKILL award may be drawn — with BLOODIEST HAND the pool's only skill entry
+## the guard is structural, but the doctrine is enforced, not assumed.
+func _draw_night_awards() -> void:
+	night_awards.clear()
+	_night_award_results.clear()
+	var pool := AWARD_POOL.duplicate()
+	var skill_drawn := false
+	while night_awards.size() < 3 and not pool.is_empty():
+		var i := _event_rng.randi_range(0, pool.size() - 1)
+		var a: Dictionary = pool[i]
+		pool.remove_at(i)
+		if bool(a.skill) and skill_drawn:
+			continue
+		if bool(a.skill):
+			skill_drawn = true
+		night_awards.append(a)
+
+## ANNOUNCED at night start by the Executor (never a hidden bonus star —
+## R-A doctrine), races visible at the interim reading.
+func _announce_awards() -> void:
+	if _fast:
+		return
+	_reveal_seat = -1
+	executor.say(Dialog.text("procession.awards.announce"), Color(0.85, 0.78, 1.0))
+	await _beat(1.6)
+	executor.clear_banner()
+	var lines: Array[String] = []
+	for a in night_awards:
+		lines.append(Dialog.text("procession.awards.line") % [_award_title(a),
+			_award_desc(a), AWARD_WREATHS, Spaces.WREATH_GLYPH])
+	_announce_text(Dialog.text("procession.awards.header") + "\n\n" + "\n".join(lines),
+		Color(0.85, 0.78, 1.0))
+	if _capture and night_index == 1:
+		await _cap_snap("night_awards")
+	await _beat(3.0)
+	_hide_announce()
+
+## LETTERS OF ADMINISTRATION (doc 28 §8 rule 5, locked v1): at night start a
+## player with ZERO minigame wins so far AND bottom wreaths may PUBLICLY accept
+## — the Executor reads it as a dry legal formality (comedy doing balance
+## work). That night only: cart 30% off (it IS the discount), one free CROW'S
+## CUT, arrival award bumped one tier. Opt-in, announced, time-boxed.
+func _letters_offer() -> void:
+	for i in roster.size():
+		letters[i] = false
+	if night_index < 2:
+		return   # night 1 has no bottom to lift — everyone is tied at nothing
+	var lo := wreaths[0]
+	var hi := wreaths[0]
+	for w in wreaths:
+		lo = mini(lo, w)
+		hi = maxi(hi, w)
+	if hi <= lo:
+		return
+	for i in roster.size():
+		if mini_wins_match[i] > 0 or wreaths[i] != lo:
+			continue
+		var accept := true
+		if _is_local_human(i) and _drama_visible():
+			var pick: int = await _pick_prompt(
+				Dialog.text("procession.letters.header") % roster[i].name,
+				Dialog.text("procession.letters.sub"), roster[i].color,
+				[{"label": Dialog.text("procession.letters.accept_label")}],
+				Dialog.text("procession.letters.decline_label"), true, 8.0)
+			accept = pick == 0
+		if not accept:
+			continue
+		letters[i] = true
+		_grant_ware(i, "crows_cut")   # one free CROW'S CUT (cap 3 still binds)
+		if not _fast:
+			_reveal_seat = i
+			executor.say(Executor.pick(Dialog.paras("procession.letters.reading"),
+				_voice_rng, [roster[i].name]), roster[i].color)
+			await _beat(2.6)
+			executor.clear_banner()
+
+# --------------------------------------------------------------------------
+# NIGHT SETTLEMENT — arrivals, awards, the will, standings, LAST RITES
+# --------------------------------------------------------------------------
+var _carry_spent: Array[int] = []   # LAST RITES spending counts toward the NEXT night's race
+
+func _night_settlement() -> void:
 	await _arrival_wreaths()
+	await _award_payouts()
 	await _will_reading()
+	await _standings_reveal()
+	# LAST RITES lands after this night's GENEROUS award has already been read —
+	# its spending seeds the NEXT night's race instead of vanishing in the reset.
+	var spent_before: Array[int] = []
+	for i in roster.size():
+		spent_before.append(int(stats[i].spent))
+	await _last_rites()
+	_carry_spent.clear()
+	for i in roster.size():
+		_carry_spent.append(int(stats[i].spent) - spent_before[i])
+	_legacy_grant()
+	_emit_night_record()
+
+## The 3 announced award races pay out: 4 wreaths each, strict-max leader;
+## GENUINE ties break by SEEDED rng, VISIBLY (announced as the estate's coin —
+## doc 28 §8 law 3: no stable-sort bias, ever). Zero-data awards go unclaimed.
+func _award_payouts() -> void:
+	_phase = "awards"
+	var lines: Array[String] = []
+	for a in night_awards:
+		var stat := String(a.stat)
+		var best_v := 0
+		for i in roster.size():
+			best_v = maxi(best_v, int(stats[i].get(stat, 0)))
+		if best_v <= 0:
+			_night_award_results.append([String(a.id), -1])
+			lines.append(Dialog.text("procession.awards.unclaimed") % _award_title(a))
+			continue
+		var tied: Array = []
+		for i in roster.size():
+			if int(stats[i].get(stat, 0)) == best_v:
+				tied.append(i)
+		var win := int(tied[0])
+		var tie_note := ""
+		if tied.size() > 1:
+			win = int(tied[_event_rng.randi_range(0, tied.size() - 1)])
+			tie_note = Dialog.text("procession.awards.tie_note")
+		wreaths[win] += AWARD_WREATHS
+		wreath_src[win].award += AWARD_WREATHS
+		_night_award_results.append([String(a.id), win])
+		lines.append(Dialog.text("procession.awards.pay_line") % [_award_title(a),
+			roster[win].name, best_v, AWARD_WREATHS, Spaces.WREATH_GLYPH] + tie_note)
+		_pop_grudge(win, AWARD_WREATHS, Spaces.WREATH_GLYPH)
+	if not _fast:
+		_announce_text(Dialog.text("procession.awards.pay_header") + "\n\n" + "\n".join(lines),
+			Color(0.85, 0.78, 1.0))
+		_refresh_hud()
+		await _beat(3.2)
+		_hide_announce()
+	else:
+		_refresh_hud()
+
+## The wreath standings, revealed plainly at each night's end (doc 28 §2).
+func _standings_reveal() -> void:
+	if _fast:
+		return
+	var order := _roll_order()
+	var lines: Array[String] = []
+	for rank in order.size():
+		var p := int(order[rank])
+		lines.append(Dialog.text("procession.standings.line") % [rank + 1, roster[p].name,
+			wreaths[p], Spaces.WREATH_GLYPH, grudge[p], Spaces.PENNY_GLYPH])
+	_announce_text(Dialog.text("procession.standings.header") + "\n\n" + "\n".join(lines),
+		Color(1, 0.88, 0.5))
+	await _beat(3.0)
+	_hide_announce()
+
+## LAST RITES — the night-interlude store beat: every mourner visits the cart,
+## trailers first (the rubber-band shops before the leaders do).
+func _last_rites() -> void:
+	_phase = "last_rites"
+	if not _fast:
+		_announce_text(Dialog.text("procession.lastrites.header"), Color(1, 0.88, 0.5))
+		await _beat(1.6)
+		_hide_announce()
+	var order := _roll_order()
+	order.reverse()
+	for seat in order:
+		await _shop(int(seat))
+
+## Landmine 4: EstateState.end_night's legacy conversion must keep receiving a
+## BOUNDED night-points source or the wardrobe economy starves. The procession
+## grants each seat its night's wreath take, clamped 1..12, at every night end
+## — real play only (autoplay probes never touch the save).
+func _legacy_grant() -> void:
+	if _autoplay:
+		return
+	for i in roster.size():
+		var gained := wreaths[i] - int(_night_start_wreaths[i]) if i < _night_start_wreaths.size() else 1
+		EstateState.legacy[i] = int(EstateState.legacy.get(i, 0)) + clampi(gained, 1, 12)
+	EstateState.save_estate()
+
+## One deterministic per-night record line for the match receipt.
+func _emit_night_record() -> void:
+	var rec := {
+		"night": night_index, "rounds": round_num, "bell_round": bell_round,
+		"arrivals": arrival_order.duplicate(), "awards": _night_award_results.duplicate(true),
+		"wreaths": wreaths.duplicate(), "grudge": grudge.duplicate(),
+		"letters": letters.duplicate(),
+	}
+	print("PROCESSION_NIGHT ", JSON.stringify(rec))
+
+## The interlude board reset (doc 28 §2): wreaths, pennies, inventory and
+## deeds persist; positions, arrivals, the bell, traps and the per-night stat
+## races reset with the board.
+func _board_reset() -> void:
+	arrival_order.clear()
+	_arrived_this_round.clear()
+	bell_round = -1
+	round_num = 0
+	for i in roster.size():
+		positions[i] = 0
+		arrived[i] = false
+		trail[i] = [0]
+		pending_die[i] = 0
+		pending_lucky[i] = 0
+		board.seat_pawn(i, 0)
+		for k in stats[i]:
+			stats[i][k] = 0
+		if i < _carry_spent.size():
+			stats[i].spent = int(_carry_spent[i])
+	_carry_spent.clear()
+	debt_traps.clear()
+	board.clear_all_debt_markers()
+	if final_kit and final_kit.has_method("round_reset"):
+		final_kit.round_reset()
+	_refresh_hud()
+	_push_net()
+
+# --------------------------------------------------------------------------
+# THE READING — the finale (doc 28 §2): totals revealed stream by stream,
+# liquidation, most wreaths INHERITS. Tie-break chain per §15 — never a coin
+# flip for the estate; a full tie crowns JOINT HEIRS.
+# --------------------------------------------------------------------------
+func _finale() -> void:
+	_phase = "finale"
+	executor.clear_banner()
+	Music.play_slot("ceremony")
+	# Liquidation FIRST (10 pennies -> 1 wreath, game end only) so the streams
+	# below sum to the crowning totals.
+	for i in roster.size():
+		var lw := grudge[i] / 10
+		wreaths[i] += lw
+		wreath_src[i].liquid += lw
+	if not _fast:
+		_reveal_seat = -1
+		executor.say(Dialog.text("procession.finale.opener"), Color(0.85, 0.75, 1.0))
+		await _beat(2.0)
+		executor.clear_banner()
+	await _finale_stream("arrival", Color(1, 0.88, 0.5))
+	await _finale_stream("mini", Color(0.85, 0.9, 1.0))
+	await _finale_stream("award", Color(0.85, 0.78, 1.0))
+	await _finale_stream("liquid", Color(0.75, 0.95, 0.8))
+	# The totals card — the last read before the crown.
+	if not _fast:
+		var order := _match_order()
+		var lines: Array[String] = []
+		for rank in order.size():
+			var p := int(order[rank])
+			lines.append(Dialog.text("procession.standings.line") % [rank + 1,
+				roster[p].name, wreaths[p], Spaces.WREATH_GLYPH, grudge[p], Spaces.PENNY_GLYPH])
+		_announce_text(Dialog.text("procession.finale.totals_header") + "\n\n" + "\n".join(lines),
+			Color(1, 0.88, 0.5))
+		if _capture:
+			await _cap_snap("reading_totals")
+		await _beat(3.4)
+		_hide_announce()
 	await ProcessionEulogy.deliver(self, executor)   # B2-HOOK: procedural closing eulogy (F33)
 	await _heir_crowned()
 	_emit_tally()
+
+## One stream card: the per-seat take from a single wreath source.
+func _finale_stream(src: String, col: Color) -> void:
+	if _fast:
+		return
+	var lines: Array[String] = []
+	for i in roster.size():
+		lines.append(Dialog.text("procession.finale.stream_line") % [roster[i].name,
+			int(wreath_src[i].get(src, 0)), Spaces.WREATH_GLYPH])
+	_announce_text(Dialog.text("procession.finale.stream_%s" % src) + "\n\n" + "\n".join(lines), col)
+	await _beat(2.4)
+	_hide_announce()
+
+## Grand standings: wreaths desc, then the ANNOUNCED tie-break chain (doc 28
+## §15): most board firsts → best last-night board rank → most minigame
+## firsts. Seat index orders the display only — it can never decide the heir.
+func _match_order() -> Array:
+	var order: Array = []
+	for i in roster.size():
+		order.append(i)
+	order.sort_custom(func(a, b):
+		if wreaths[a] != wreaths[b]:
+			return wreaths[a] > wreaths[b]
+		if board_firsts[a] != board_firsts[b]:
+			return board_firsts[a] > board_firsts[b]
+		if night_final_rank[a] != night_final_rank[b]:
+			return night_final_rank[a] < night_final_rank[b]
+		if mini_wins_match[a] != mini_wins_match[b]:
+			return mini_wins_match[a] > mini_wins_match[b]
+		return a < b)
+	return order
+
+## Everyone still tied with the top seat after the WHOLE chain inherits
+## together — JOINT HEIRS, never a coin flip (doc 28 §15).
+func _match_heirs() -> Array:
+	var order := _match_order()
+	var top := int(order[0])
+	var heirs: Array = [top]
+	for k in range(1, order.size()):
+		var p := int(order[k])
+		if wreaths[p] == wreaths[top] and board_firsts[p] == board_firsts[top] \
+				and night_final_rank[p] == night_final_rank[top] \
+				and mini_wins_match[p] == mini_wins_match[top]:
+			heirs.append(p)
+	return heirs
 
 ## ARRIVAL WREATHS (doc 28 §6/§15): the FINAL BELL pays arrival order on the
 ## escalating night table — crossing order first, then dist_to_gate ranking
@@ -2303,6 +2657,16 @@ func _interim_reading() -> void:
 	await _beat(1.8)
 	executor.clear_banner()
 	var lines: Array[String] = []
+	# The three ANNOUNCED award races first (doc 28 §7 — races visible), then
+	# the will-clause races (the ◆ ceremony trophies).
+	for a in night_awards:
+		var alead := _stat_leader(String(a.stat))
+		if alead >= 0:
+			lines.append(Dialog.text("procession.interim.line") % [_award_title(a),
+				roster[alead].name,
+				Dialog.text("procession.interim.metric_generic") % int(stats[alead].get(String(a.stat), 0))])
+		else:
+			lines.append(Dialog.text("procession.interim.contested") % _award_title(a))
 	for c in clauses:
 		var lead := _stat_leader(String(c.stat))
 		if lead >= 0:
@@ -2677,27 +3041,37 @@ func _stat_leader(key: String) -> int:
 			best = i
 	return best
 
+## THE CROWN — most wreaths inherits the estate. JOINT HEIRS share the banner
+## (and the monument) when the whole tie-break chain holds.
 func _heir_crowned() -> void:
 	_phase = "heir"
-	winner = _final_winner()
+	var heirs := _match_heirs()
+	winner = int(heirs[0])
+	var joint := heirs.size() > 1
+	var heir_names: Array[String] = []
+	for h in heirs:
+		heir_names.append(String(roster[int(h)].name))
+	var crown_name := " & ".join(heir_names)
 	# The heir is written to the estate as a permanent monument (kind="heir").
 	# Skipped under the autoplay SOAK so the verification stays save-independent
 	# and byte-identical run to run (real play / the estate merge always writes).
 	var pl: Dictionary = roster[winner]
 	if not _autoplay:
-		EstateState.monuments.append({
-			"owner": String(pl.name),
-			"color": Color(pl.color).to_html(),
-			"label": Dialog.text("procession.heir.monument") % [pl.name, deeds[winner]],
-			"night": EstateState.nights_played,
-			"kind": "heir",
-		})
-		EstateState.add_graffiti(Dialog.text("procession.heir.graffiti") % pl.name)
+		for h in heirs:
+			var hp: Dictionary = roster[int(h)]
+			EstateState.monuments.append({
+				"owner": String(hp.name),
+				"color": Color(hp.color).to_html(),
+				"label": Dialog.text("procession.heir.monument") % [hp.name, wreaths[int(h)]],
+				"night": EstateState.nights_played,
+				"kind": "heir",
+			})
+			EstateState.add_graffiti(Dialog.text("procession.heir.graffiti") % hp.name)
 		EstateState.save_estate()
 	Music.play_slot("ceremony")
 	var podium := Podium.new()
 	add_child(podium)
-	var order := _final_order()
+	var order := _match_order()
 	var entries: Array = []
 	for rank in order.size():
 		var p := int(order[rank])
@@ -2710,14 +3084,20 @@ func _heir_crowned() -> void:
 	_reveal.visible = false
 	podium.stage_entries(entries)
 	# The seed is verification plumbing — real heirs get a clean crown.
-	var crown := Dialog.text("procession.heir.crown_gate") % pl.name
+	var crown: String
+	if joint:
+		crown = Dialog.text("procession.heir.crown_joint") % [crown_name, wreaths[winner],
+			Spaces.WREATH_GLYPH]
+	else:
+		crown = Dialog.text("procession.heir.crown_wreaths") % [crown_name, wreaths[winner],
+			Spaces.WREATH_GLYPH]
 	if _autoplay:
 		crown += " · SEED %d" % seed_value
 	_announce_text(crown, Color(pl.color))
 	_announce.visible = true
 	# The victor's crown — the newsreel's headline still (F5).
-	MomentScribe.capture("heir_crowned", "%s IS CROWNED HEIR (◆%d)" % [pl.name, deeds[winner]],
-		3, [winner], "procession")
+	MomentScribe.capture("heir_crowned", "%s INHERITS THE ESTATE (%d WREATHS)" % [
+		crown_name, wreaths[winner]], 3, heirs, "procession")
 	if _capture:
 		await _cap_snap("heir_crowned")
 	else:
@@ -2727,9 +3107,6 @@ func _heir_crowned() -> void:
 		podium.queue_free()
 	_topbar.visible = true
 	_chiprow.visible = true
-
-func _final_winner() -> int:
-	return int(_final_order()[0])
 
 ## The night's standings: arrival order first (crossing beats everything),
 ## then the DISTANCE RANKING (fewest stones to the gate — the doc 28 §8
@@ -2754,30 +3131,37 @@ func _final_order() -> Array:
 		return a < b)
 	return order
 
+## The MATCH record — the canonical receipt line (per-night PROCESSION_NIGHT
+## lines already printed at each settlement).
 func _emit_tally() -> void:
-	var routes: Array = []
-	var left: Array = []
+	var heirs := _match_heirs()
+	var heir_names: Array[String] = []
+	for h in heirs:
+		heir_names.append(String(roster[int(h)].name))
+	var src := {"arrival": [], "mini": [], "award": [], "liquid": []}
 	for i in roster.size():
-		routes.append(board.route_of(positions[i]))
-		left.append(board.dist_to_gate(positions[i]))
+		for k in src:
+			(src[k] as Array).append(int(wreath_src[i].get(k, 0)))
 	var tally := {
-		"seed": seed_value, "board": String(BoardGraph.BOARD.id), "rounds": round_num,
-		"turn_cap": turn_cap, "bell_round": bell_round,
-		"heir": winner, "heir_name": String(roster[winner].name),
-		"arrivals": arrival_order.duplicate(),
-		"grudge": grudge.duplicate(), "wreaths": wreaths.duplicate(),
-		"deeds": deeds.duplicate(),
-		"moved": moved_total.duplicate(), "positions": positions.duplicate(),
-		"routes": routes, "left": left,
+		"seed": seed_value, "board": String(BoardGraph.BOARD.id),
+		"nights": match_nights, "turn_cap": turn_cap,
+		"heirs": heirs.duplicate(), "heir": winner,
+		"heir_name": " & ".join(heir_names),
+		"wreaths": wreaths.duplicate(), "grudge": grudge.duplicate(),
+		"deeds": deeds.duplicate(), "src": src,
+		"board_firsts": board_firsts.duplicate(),
+		"mini_wins": mini_wins_match.duplicate(),
+		"moved": moved_total.duplicate(),
 	}
-	print("PROCESSION_TALLY ", JSON.stringify(tally))
+	print("PROCESSION_MATCH ", JSON.stringify(tally))
 	for i in roster.size():
-		var home := arrival_order.find(i)
-		print("  seat %d %s: %s%d  %d%s  ◆%d  moved=%d  pos=%d  route=%s  left=%d%s" % [
-			i, roster[i].name, Spaces.WREATH_GLYPH, wreaths[i], grudge[i],
-			Spaces.PENNY_GLYPH, deeds[i], moved_total[i], positions[i],
-			routes[i], int(left[i]), ("  HOME#%d" % (home + 1)) if home >= 0 else ""])
-	print("PROCESSION_HEIR %s (seed %d, %d rounds)" % [roster[winner].name, seed_value, round_num])
+		print("  seat %d %s: %s%d (arr %d + mini %d + awd %d + liq %d)  %d%s  ◆%d  moved=%d%s" % [
+			i, roster[i].name, Spaces.WREATH_GLYPH, wreaths[i],
+			int(wreath_src[i].arrival), int(wreath_src[i].mini),
+			int(wreath_src[i].award), int(wreath_src[i].liquid),
+			grudge[i], Spaces.PENNY_GLYPH, deeds[i], moved_total[i],
+			"  HEIR" if heirs.has(i) else ""])
+	print("PROCESSION_HEIR %s (seed %d, %d nights)" % [" & ".join(heir_names), seed_value, match_nights])
 	night_over.emit(tally)
 	if _autoplay:
 		await _beat(0.3)
