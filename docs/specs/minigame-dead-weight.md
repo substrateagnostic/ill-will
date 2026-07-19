@@ -54,6 +54,18 @@ force control, kill credits, best-of-3, results contract, seeded bots
 SHOULD: prop variety mass tiers, "CLAIMS" banners, wisp trails.
 WON'T (v1): destructible props, room variants, item pickups.
 
+## M4 addendum — BRACE / DASH / SUPER SMASH (playtest-requested, producer-ruled)
+
+Living players kept `move + A + B` (no third button — the anthology's own
+hard budget) but gained tap/hold escalation, same shape as Echo Chamber's:
+**A** hold ~1.7-1.9s charges a **SUPER SMASH** (radial shove, no facing gate,
+long cooldown, dropped if hit while charging); **B** hold ≥0.15s **BRACES**
+(rooted, resists knockback, stamina-capped, briefly MORE vulnerable right
+after release); a quick double-tap of a MOVE direction **DASH**es (short
+burst, no i-frames, no phase-through). The ghost furniture-fling is
+unchanged — these are counterweight tools for the living, not a nerf to the
+dead. Full spec + receipts: `minigames/dead_weight/VERIFY.md` §"M4 MOVESET".
+
 ## Risks & tests
 
 - Balance: ghost force tuned so 1 ghost ≈ 60% threat of 1 living player

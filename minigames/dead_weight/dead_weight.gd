@@ -90,11 +90,20 @@ var _balance_tally := {"living": 0, "ghost": 0, "void": 0}
 var _dbg := {"possess": 0, "ghost_hits": 0, "round_len": 0.0}
 var _ghost_hold: Dictionary = {}      # ghost bot possession dwell timers
 
+# M4 MOVESET bot policy — seeded, per-seat countdown timers (same shape as
+# _ghost_hold above) so a living bot's brace/dash/smash choices stay
+# deterministic under --dwbalance. Countdown to zero = "reconsider now";
+# on a fresh decision the timer resets from rng.randf_range(...).
+var _bot_smash_t: Dictionary = {}     # seat -> seconds until next smash consideration
+var _bot_brace_t: Dictionary = {}     # seat -> seconds until next brace consideration
+var _bot_dash_t: Dictionary = {}      # seat -> seconds until next dash consideration
+
 # fx
 var _shake := 0.0
 var _time_token := 0
 var _last_hitstop := -99.0       # HIT KIT global one-at-a-time hitstop throttle (0.14s)
 var _hitkit_cap := false         # --hitkitcap: stage the HIT KIT / cooldown-ring shots
+var _movecap := false            # --dwmovecap: stage the M4 BRACE/DASH/SUPER SMASH shots
 var _cap_dir := "verify_out/hitkit"
 var _banner_col := "ffffff"      # last banner color (mirrored as html)
 
@@ -106,7 +115,8 @@ var _banner_col := "ffffff"      # last banner color (mirrored as html)
 # snapshots — the armchair lunge is a streamed transform, the possession glow,
 # wobble and all impact juice fire locally from state deltas. Reduced-motion
 # (shake/hitstop) honors the CLIENT's own pref on every mirrored beat.
-const NET_ANIMS := ["Idle", "Running_A", "Hit_A", "Jump_Idle", "Interact", "Jump_Start"]
+const NET_ANIMS := ["Idle", "Running_A", "Hit_A", "Jump_Idle", "Interact", "Jump_Start",
+	"Blocking", "Dodge_Forward", "2H_Melee_Attack_Slice"]   # M4: BRACE / DASH / SUPER SMASH
 var _mirror := false
 var _mir := {}                   # last applied snapshot (delta source for juice)
 var _mir_snaps := {}             # evidence snapshots fired once (probe runs)
@@ -275,6 +285,8 @@ func _parse_args() -> void:
 			_awaken_override = maxf(0.5, float(arg.trim_prefix("--dwawaken=")))
 		elif arg == "--hitkitcap":
 			_hitkit_cap = true
+		elif arg == "--dwmovecap":
+			_movecap = true
 		elif arg.begins_with("--dwevict="):
 			_evict_pin = int(arg.trim_prefix("--dwevict="))
 		elif arg == "--dwoobtest":
@@ -284,7 +296,7 @@ func _parse_args() -> void:
 	if _aim_probe_on:
 		_dw_probe_manual = not _probe_shove
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
-	if _hitkit_cap:
+	if _hitkit_cap or _movecap:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://%s" % _cap_dir))
 
 func _seed_from_args() -> int:
@@ -308,6 +320,8 @@ func _default_config() -> Dictionary:
 		count = 2   # p0 = KBM human, p1 = inert stand-in (victim / bystander)
 	if _hitkit_cap:
 		count = 2   # p0 = RED attacker, p1 = BLUE victim (staged, frozen)
+	if _movecap:
+		count = 2   # p0 = RED demos BRACE/DASH/SUPER SMASH, p1 = BLUE bystander
 	var roster: Array = []
 	PlayerInput.auto_assign(count)
 	if _aim_probe_on:
@@ -355,8 +369,8 @@ const GAME_INTRO := {
 	"accent": Color(0.62, 0.78, 0.95),
 	"controls": [
 		{"action": "move", "label": "MOVE"},
-		{"action": "a", "label": "SHOVE"},
-		{"action": "b", "label": "HOP"},
+		{"action": "a", "label": "SHOVE (hold = SMASH)"},
+		{"action": "b", "label": "HOP (hold = BRACE)"},
 	],
 }
 
@@ -422,6 +436,7 @@ func _begin(config: Dictionary) -> void:
 			f.name = "Fighter%d" % i
 			spawn_root.add_child(f)
 			f.setup(i, players[i].color, char_scene, self)
+			f.bot_driven = players[i].is_bot   # M4: gates the human-only double-tap DASH gesture
 			f.fell.connect(_on_fighter_fell)
 			_fighters.append(f)
 		else:
@@ -449,7 +464,7 @@ func _begin(config: Dictionary) -> void:
 		print("DW_MIRROR boot players=%d my_seat=%d" % [players.size(), NetSession.my_seat()])
 		return
 	# NIT 7: intro card at load; headless balance/probe/capture keep the sync start.
-	if _balance_rounds > 0 or _aim_probe_on or _hitkit_cap:
+	if _balance_rounds > 0 or _aim_probe_on or _hitkit_cap or _movecap:
 		_start_round()
 		if _aim_probe_on:
 			_run_dw_probe()
@@ -457,6 +472,8 @@ func _begin(config: Dictionary) -> void:
 		_intro_then(_start_round)
 	if _hitkit_cap:
 		_run_hitkit_cap()
+	if _movecap:
+		_run_movecap()
 
 func _layout_spawns(count: int) -> void:
 	_spawns.clear()
@@ -526,6 +543,9 @@ func _start_round() -> void:
 	_elim_order.clear()
 	_clear_ghosts()
 	_house_asleep()
+	_bot_smash_t.clear()
+	_bot_brace_t.clear()
+	_bot_dash_t.clear()
 	var darken := round_index * 0.22
 	for prop in _props:
 		prop.reset_for_round(darken)
@@ -675,6 +695,23 @@ func _resolve_round() -> void:
 			f.move_input = Vector2.ZERO
 			f.want_shove = false
 			f.want_hop = false
+			f.a_down = false
+			f.b_down = false
+			f.want_dash = false
+			f.want_smash = false
+			f.want_brace = false
+			# M4: a fighter's OWN _physics_process keeps running through BETWEEN
+			# (it isn't phase-gated) — an in-progress SUPER SMASH charge would
+			# otherwise keep ticking on its own timer and could auto-fire mid
+			# results screen, and a brace would sit rooted forever with no
+			# input driving a release. Force both closed here, same as a
+			# landed hit already does for a live charge.
+			if f._charging_smash:
+				f._charging_smash = false
+				f._a_active = false
+				f._set_smash_visual(false)
+			f._end_brace()
+			f._dash_t = -1.0
 			f.linear_velocity = Vector3(0, f.linear_velocity.y, 0)
 	# finishing order: survivors first, then reverse of death order
 	var survivors: Array = []
@@ -870,9 +907,12 @@ func _btn_hint(action: String, label: String) -> String:
 	return "%s: %s" % [label, " · ".join(parts)]
 
 ## The living bar, always real keys via describe_binding (matches the card).
+## M4 MOVESET: SHOVE/HOP keep their taps; a HOLD escalates to SUPER SMASH /
+## BRACE (echo_chamber's own A/B tap-hold split); DASH has no button (house
+## `move + A + B` budget, docs/design/16 §0) — a quick double-tap of MOVE.
 func _controls_bar() -> String:
-	return "MOVE   ·   %s   ·   %s   ·   THE DEAD POSSESS THE FURNITURE" % [
-		_btn_hint("a", "SHOVE"), _btn_hint("b", "HOP")]
+	return "MOVE (2x-tap = DASH)   ·   %s   ·   %s   ·   THE DEAD POSSESS THE FURNITURE" % [
+		_btn_hint("a", "SHOVE / hold SMASH"), _btn_hint("b", "HOP / hold BRACE")]
 
 ## Swap the shared hint bar to a dead-state legend the moment a HUMAN becomes a
 ## poltergeist — the dead need the twin-stick controls spelled out (LEFT drifts,
@@ -949,6 +989,8 @@ func _physics_process(delta: float) -> void:
 			continue   # the fling probe steers p0's ghost directly
 		if _oob_probe and i == 0:
 			continue   # --dwoobtest holds seat 0 pinned on the off-map spot
+		if _movecap:
+			continue   # --dwmovecap drives every seat itself, see _run_movecap()
 		if _ghosts.has(i):
 			_drive_ghost(i)
 		elif _fighters[i] != null and _fighters[i].alive:
@@ -1076,10 +1118,14 @@ func _drive_fighter(i: int) -> void:
 	else:
 		f.move_input = PlayerInput.get_move(i)
 		f.aim_face = PlayerInput.get_aim_dir(i, f.global_position, cam)   # ZERO for non-KBM
-		if PlayerInput.just_pressed(i, "a"):
-			f.want_shove = true
-		if PlayerInput.just_pressed(i, "b"):
-			f.want_hop = true
+		# M4 MOVESET: raw held state, not just_pressed edges — the fighter's own
+		# _tick_a_button/_tick_b_button resolve tap (SHOVE/HOP) vs hold (SUPER
+		# SMASH/BRACE) internally, house-style (echo_chamber's own A/B split).
+		# DASH has no dedicated button (docs/design/16 §0 — no third button
+		# anywhere in this anthology); it rides the double-tap-MOVE gesture the
+		# fighter already reads off move_input, so nothing extra is wired here.
+		f.a_down = PlayerInput.is_down(i, "a")
+		f.b_down = PlayerInput.is_down(i, "b")
 
 func _drive_ghost(i: int) -> void:
 	var g: DWGhost = _ghosts[i]
@@ -1144,6 +1190,55 @@ func _bot_living(f: DWFighter) -> void:
 			mv += perp * 1.3
 	if mv.length() > 0.01:
 		mv = mv.normalized()
+
+	# ---- M4 MOVESET bot policy (seeded via the shared `rng`, so --dwbalance
+	# stays reproducible for a given seed) — countdown timers pace how often a
+	# bot RECONSIDERS each move, mirroring _ghost_hold's own dwell-timer shape,
+	# rather than a raw per-tick coin flip that would fire dozens of times a
+	# second while conditions hold.
+	var seat := f.index
+	var pd := get_physics_process_delta_time()
+	var target_here := Vector2.ZERO
+	var target_dist := 1e9
+	if target != null:
+		target_here = Vector2(target.global_position.x, target.global_position.z)
+		target_dist = here.distance_to(target_here)
+
+	# SUPER SMASH: commit to a full charge when an enemy is close and the long
+	# cooldown is ready — a smash mid-charge roots the bot, so only start one
+	# when a target is actually in reach, not speculatively.
+	var st: float = _bot_smash_t.get(seat, 0.0) - pd
+	if st <= 0.0:
+		st = rng.randf_range(1.4, 3.0)
+		if f._smash_cd <= 0.0 and not f._charging_smash and not f._bracing \
+				and target_dist < DWFighter.SMASH_RANGE + 1.4 and rng.randf() < 0.35:
+			f.want_smash = true
+	_bot_smash_t[seat] = st
+
+	# BRACE: an opportunistic defensive plant near the void edge under threat.
+	# DW's shove has no windup frames to read defensively (unlike Echo's
+	# parry), so the bot reacts to PROXIMITY + EDGE instead of a real tell.
+	var bt: float = _bot_brace_t.get(seat, 0.0) - pd
+	if bt <= 0.0:
+		bt = rng.randf_range(1.0, 2.4)
+		var near_edge := absf(here.x) > 4.0 or absf(here.y) > 4.0
+		var threatened := threat != null or target_dist < DWFighter.SHOVE_RANGE + 0.4
+		if f._brace_cd <= 0.0 and not f._bracing and not f._charging_smash \
+				and near_edge and threatened and rng.randf() < 0.45:
+			f.want_brace = true
+	_bot_brace_t[seat] = bt
+
+	# DASH: escape an incoming possessed prop, or occasionally close distance
+	# fast on a far target.
+	var dt: float = _bot_dash_t.get(seat, 0.0) - pd
+	if dt <= 0.0:
+		dt = rng.randf_range(1.2, 2.6)
+		if f._dash_cd <= 0.0 and threat != null and rng.randf() < 0.55:
+			f.want_dash = true
+		elif f._dash_cd <= 0.0 and target_dist > 3.2 and target_dist < 1e8 and rng.randf() < 0.25:
+			f.want_dash = true
+	_bot_dash_t[seat] = dt
+
 	f.move_input = mv
 
 func _bot_ghost(g: DWGhost) -> void:
@@ -1269,6 +1364,19 @@ func on_shove_landed(_pos: Vector3) -> void:
 			_last_hitstop = game_time
 			_time_hit(0.15, 0.045)
 
+## M4 SUPER SMASH landed-hit dressing — the HIT KIT "heavy hit" tier (55ms
+## hitstop, shake up to 0.5, doc 08 Appendix), mirrors on_shove_landed() so a
+## smash reads as a bigger relative of the same verb, not a different one.
+func on_smash_landed(_pos: Vector3) -> void:
+	if not fx_on():
+		return
+	Sfx.play("bumper", -1.0)
+	if not _reduced_motion():
+		_shake = maxf(_shake, 0.5)
+		if game_time - _last_hitstop >= 0.14:
+			_last_hitstop = game_time
+			_time_hit(0.15, 0.055)
+
 ## Visual FX gate — OFF in the reproducible all-bot balance sim (--dwbalance),
 ## so none of the HIT KIT / cooldown-ring code runs there (determinism receipt).
 func fx_on() -> bool:
@@ -1382,6 +1490,77 @@ func _shove_arc_mesh(r: float) -> ImmediateMesh:
 		im.surface_add_vertex(i1)
 	im.surface_end()
 	return im
+
+## M4 SUPER SMASH readability burst — fired the instant a smash releases: a
+## RADIAL (no facing gate — this move has none) double ring shockwave in the
+## attacker's color, bigger and slower than on_shove_fired()'s single ring so
+## it reads unmistakably as "the big one."
+func on_smash_fired(pos: Vector3, col: Color) -> void:
+	if not fx_on():
+		return
+	var root := Node3D.new()
+	add_child(root)
+	root.global_position = pos + Vector3(0, 0.14, 0)
+	var gc := col.lerp(Color(1, 1, 1), 0.3)
+	var rings: Array = []
+	for k in 2:
+		var ring2 := MeshInstance3D.new()
+		var tm := TorusMesh.new()
+		tm.inner_radius = 0.3
+		tm.outer_radius = 0.5
+		ring2.mesh = tm
+		var rm := StandardMaterial3D.new()
+		rm.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		rm.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		rm.albedo_color = Color(1, 1, 1, 0.95)
+		rm.emission_enabled = true
+		rm.emission = gc
+		rm.emission_energy_multiplier = 3.4
+		ring2.material_override = rm
+		ring2.rotation.x = PI / 2.0
+		root.add_child(ring2)
+		rings.append({"mesh": ring2, "mat": rm})
+	var tw := create_tween()
+	tw.set_parallel(true)
+	for k in rings.size():
+		var r: Dictionary = rings[k]
+		var mesh: MeshInstance3D = r["mesh"]
+		var mat: StandardMaterial3D = r["mat"]
+		tw.tween_property(mesh, "scale", Vector3(3.4, 3.4, 3.4), 0.38).set_delay(k * 0.06) \
+			.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+		tw.tween_property(mat, "albedo_color:a", 0.0, 0.34).set_delay(k * 0.06)
+	tw.chain().tween_callback(root.queue_free)
+
+## M4 DASH trail — a bright streak stretching along the burst direction, in
+## the dasher's color, so a dash reads as a real evasive move even at 45° in
+## a 4-player scrum.
+func on_dash_fired(pos: Vector3, dir: Vector3, col: Color) -> void:
+	if not fx_on():
+		return
+	var flat := Vector3(dir.x, 0.0, dir.z)
+	if flat.length() < 0.01:
+		flat = Vector3(0, 0, 1)
+	flat = flat.normalized()
+	var trail := MeshInstance3D.new()
+	add_child(trail)
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.4, 0.06, 1.6)
+	trail.mesh = bm
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(col.r, col.g, col.b, 0.65)
+	mat.emission_enabled = true
+	mat.emission = col
+	mat.emission_energy_multiplier = 2.2
+	trail.material_override = mat
+	trail.global_position = pos + Vector3(0, 0.1, 0) - flat * 0.7
+	trail.rotation.y = atan2(flat.x, flat.z)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(trail, "scale:z", 2.2, 0.22).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tw.tween_property(mat, "albedo_color:a", 0.0, 0.24)
+	tw.chain().tween_callback(trail.queue_free)
 
 func on_possess(_g: DWGhost, _p: DWProp) -> void:
 	if _balance_rounds > 0:
@@ -1702,6 +1881,65 @@ func _run_hitkit_cap() -> void:
 	print("DW_HITKIT_CAP_DONE")
 	get_tree().quit()
 
+# ---------------------------------------------------------------- M4 MOVESET capture
+# --dwmovecap (windowed): stages the three M4 telegraph moments — BRACE stance,
+# DASH trail, and the SUPER SMASH wind-up mid-charge — by driving seat 0
+# DIRECTLY through the fighter's own internal action functions (same house
+# pattern as _run_hitkit_cap above), then films each and quits. Verify-only;
+# every seat is excluded from normal _drive_fighter/_bot_living driving while
+# this flag is set (see the `_movecap` skip in _physics_process).
+func _run_movecap() -> void:
+	while phase != Phase.ROUND:
+		await get_tree().physics_frame
+	var f0: DWFighter = _fighters[0]    # RED — demos all three moves
+	var f1: DWFighter = _fighters[1]    # BLUE — bystander, gives the frame scale/company
+	if f0 == null or f1 == null:
+		print("DW_MOVECAP_ABORT no fighters")
+		get_tree().quit()
+		return
+	banner.visible = false
+
+	# 1) BRACE STANCE — held pose (Blocking anim, chunky coil) + the identity
+	#    ring's own emission pulsed up (no dedicated cooldown ring by design).
+	f0.global_position = Vector3(-0.6, 0.1, 1.6)
+	f1.global_position = Vector3(1.8, 0.1, 1.6)
+	f0.linear_velocity = Vector3.ZERO
+	f0._face = Vector3(0, 0, -1)
+	if f0.model_pivot:
+		f0.model_pivot.rotation.y = atan2(f0._face.x, f0._face.z)
+	f0._start_brace()
+	await _settle(0.16)
+	await _cap_shot("movecap_brace")
+	f0._end_brace()
+	await _settle(0.2)
+
+	# 2) DASH TRAIL — a real dash burst, captured mid-flight so the fading
+	#    streak (on_dash_fired) is still stretching behind the body.
+	f0.global_position = Vector3(-2.6, 0.1, -1.6)
+	f0.linear_velocity = Vector3.ZERO
+	f0._try_dash(Vector3(1, 0, 0.35))
+	await _settle(0.09)
+	await _cap_shot("movecap_dash")
+	await _settle(0.3)
+
+	# 3) SUPER SMASH WIND-UP — mid-charge, the grow/glow telegraph clearly
+	#    built up (not the instant snap of a fresh press, not the release).
+	#    BLUE demos it here, not RED — Echo's fixed red-hot overlay (house
+	#    language, reused verbatim per the brief) reads far more clearly
+	#    against a cool identity color than it would against RED's own hue.
+	f0.global_position = Vector3(0.0, 0.1, 2.4)
+	f1.global_position = Vector3(-0.05, 0.1, 2.2)
+	f0.linear_velocity = Vector3.ZERO
+	f1.linear_velocity = Vector3.ZERO
+	f1._arm_smash_charge()
+	await _settle(0.95)
+	await _cap_shot("movecap_smash_charge")
+	f1._charging_smash = false
+	f1._set_smash_visual(false)
+	await _settle(0.1)
+	print("DW_MOVECAP_DONE")
+	get_tree().quit()
+
 # ---------------------------------------------------------------- ONLINE (phase 2)
 # House pattern (docs/verify/online-seance-VERIFY.md PATTERN NOTES): host sim
 # untouched, _net_state() = one flat dict of PUBLIC facts, _net_apply() diffs
@@ -1717,7 +1955,7 @@ func _net_state() -> Dictionary:
 	for i in players.size():
 		var f: DWFighter = _fighters[i]
 		if f == null:
-			fs.append_array([0, 0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0, 0.0, 0.0, 0])
+			fs.append_array([0, 0.0, 0.0, 0.0, 0.0, 0, 0.0, 0.0, 0, 0.0, 0.0, 0, 0.0, 0, 0, 0, 0])
 			continue
 		fs.append(1 if f.alive else 0)
 		fs.append(snappedf(f.global_position.x, 0.01))
@@ -1731,6 +1969,15 @@ func _net_state() -> Dictionary:
 		fs.append(snappedf(f.net_hit_dir.x, 0.01))
 		fs.append(snappedf(f.net_hit_dir.z, 0.01))
 		fs.append(f.net_shoves)
+		# M4 MOVESET facts — dash cooldown (ring resync), bracing/charging
+		# booleans (continuous state, so the mirror's own glow/pose tracks the
+		# whole hold, not just the fire moment), and fire-counters (dash,
+		# smash) for the one-shot attacker-side telegraph on delta.
+		fs.append(snappedf(maxf(f._dash_cd, 0.0), 0.02))
+		fs.append(1 if f._bracing else 0)
+		fs.append(1 if f._charging_smash else 0)
+		fs.append(f.net_dashes)
+		fs.append(f.net_smashes)
 	var gs: Array = []
 	for i in players.size():
 		if _ghosts.has(i):
@@ -1816,8 +2063,8 @@ func _net_apply(state: Dictionary) -> void:
 	var fs: Array = state.get("f", [])
 	var pfs: Array = prev.get("f", [])
 	for i in players.size():
-		var b := i * 12
-		if b + 11 >= fs.size():
+		var b := i * 17
+		if b + 16 >= fs.size():
 			break
 		var f: DWFighter = _fighters[i]
 		if f == null:
@@ -1852,6 +2099,40 @@ func _net_apply(state: Dictionary) -> void:
 			var yaw := float(fs[b + 4])
 			on_shove_fired(f.global_position, Vector3(sin(yaw), 0.0, cos(yaw)), players[i].color)
 			f.windup_coil(false)
+		# ---- M4 MOVESET mirror facts --------------------------------------
+		var dcd := float(fs[b + 12])
+		if absf(f._dash_cd - dcd) > 0.1:
+			f._dash_cd = dcd
+		# BRACE / SUPER SMASH charge are continuous states (not one-shot
+		# counters) — edge-triggered here so the ring pulse / grow-glow fires
+		# for the WHOLE hold on the client, exactly like the host. f._bracing/
+		# f._charging_smash double as the "previous" cache since a mirror
+		# fighter's own _physics_process never runs (frozen puppet).
+		var bracing_now := int(fs[b + 13]) == 1
+		if bracing_now != f._bracing:
+			f._bracing = bracing_now
+			if bracing_now:
+				if not _reduced_motion():
+					Sfx.play("confirm", -4.0)
+				if f._ring_mat:
+					f._ring_mat.emission_energy_multiplier = CooldownRing.READY_EMISSION * DWFighter.RING_BASE_EMISSION
+			elif f._ring_mat:
+				f._ring_mat.emission_energy_multiplier = DWFighter.RING_BASE_EMISSION
+		var charging_now := int(fs[b + 14]) == 1
+		if charging_now != f._charging_smash:
+			f._charging_smash = charging_now
+			f._set_smash_visual(charging_now)
+		var dashes := int(fs[b + 15])
+		var pdashes := int(pfs[b + 15]) if b + 15 < pfs.size() else dashes
+		if dashes > pdashes and alive:
+			Sfx.play("bounce", -6.0)
+			var dyaw := float(fs[b + 4])
+			on_dash_fired(f.global_position, Vector3(sin(dyaw), 0.0, cos(dyaw)), players[i].color)
+		var smashes := int(fs[b + 16])
+		var psmashes := int(pfs[b + 16]) if b + 16 < pfs.size() else smashes
+		if smashes > psmashes and alive:
+			Sfx.play("bumper", -1.0)
+			on_smash_fired(f.global_position, players[i].color)
 	# --- deaths: fx + shake + hitstop (client's reduced-motion pref rules)
 	var dth: Array = state.get("dth", [])
 	var pdth: Array = prev.get("dth", [])
@@ -1955,8 +2236,8 @@ func _mirror_tick(delta: float) -> void:
 	var w := 1.0 - exp(-14.0 * delta)
 	var fs: Array = _mir.get("f", [])
 	for i in players.size():
-		var b := i * 12
-		if b + 11 >= fs.size():
+		var b := i * 17
+		if b + 16 >= fs.size():
 			break
 		var f: DWFighter = _fighters[i]
 		if f == null or not f.alive:
@@ -1968,6 +2249,7 @@ func _mirror_tick(delta: float) -> void:
 		f._set_anim(NET_ANIMS[clampi(int(fs[b + 5]), 0, NET_ANIMS.size() - 1)])
 		f._shove_cd = maxf(0.0, f._shove_cd - delta)   # smooth ring fill between snaps
 		f._hop_cd = maxf(0.0, f._hop_cd - delta)
+		f._dash_cd = maxf(0.0, f._dash_cd - delta)     # M4 — DASH ring fill between snaps
 		f._drive_rings(delta)
 	var gs: Array = _mir.get("g", [])
 	for i in players.size():
