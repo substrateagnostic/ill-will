@@ -2699,3 +2699,48 @@ slot_1.json sha unchanged (autoplay skips the estate save). Import clean; unrela
 Screenshots in verify_out/m2 (gitignored): menu_play/settings/wardrobe, game_introcard + game_hintbar
 for both kbm & pad, shot_01xx podium with the SPACE · CONTINUE affordance. Re-capture any time with
 `--m2shots=kbm|pad --shots=999999 --outdir=verify_out/m2` and `podium_probe.tscn -- --affordance`.
+
+---
+
+## ZR — THE FINISH WAVE (lane worktree-agent-aa07bea1f6986c8a7, following on doc 30's audit)
+
+Executed both waves doc 30 proposed. 60cr spent of 975 approved (balance after: 915).
+
+- **Retexture, 6/6 KEEP, zero re-attempts.** Meshy `/retexture` (text-driven re-skin on the
+  EXISTING geometry, `enable_pbr=false`, house matte suffix) on the 6 assets doc 30 flagged
+  PLASTIC: `grave_headstone_plain`, `grave_small_obelisk`, `board_grim_signpost`,
+  `estate_broken_angel`, `monument_obelisk_small`, `lychgate`. Every candidate was downloaded
+  alongside the original (`<id>_retex_v1.glb`), judged on a technical stddev pass
+  (`tools/finish_audit.gd`) **and** a paired before/after contact sheet
+  (`docs/verify/shots/asset_finish_retex_pair_*.png`) before being promoted over the original
+  filename — same paths every consumer already used, so **zero code changes**. `lychgate` (the
+  procession's opening landmark, the worst offender in the whole 66-asset audit at σ=4.0) and
+  `estate_broken_angel` (the single flattest asset, σ=3.4) show the most dramatic reads: lychgate
+  went from flat cream plaster to visible oak grain + moss-patched roof shakes + a stone footing;
+  the angel gained marble veining, robe-fold shading, and moss at the base. `monument_obelisk_small`
+  is the one case where the numeric stddev proxy actually *dropped* slightly (14.9→11.6, the flat
+  original had incidental corner-shadow contrast) but the paired screenshot clearly reads as carved
+  stone with a distinct two-tone base now — visual judgment overrode the number, matching doc 30's
+  own "reads fine in context" standard. Final in-place sheet:
+  `docs/verify/shots/asset_finish_retex_promoted_all6.png`.
+- **Seagull rig: definitively not feasible via auto-rig.** Two `/rigging` attempts (0.6m display
+  height, then 1.7m API-default height, to rule out a scale-driven rejection) both came back
+  `HTTP 422 "Pose estimation failed"` — a pre-flight content rejection, 0cr charged either time.
+  Meshy's rigging docs confirm the endpoint only supports humanoid/bipedal shapes; a bird (two legs,
+  two folded wings, no arms) never produces a pose estimate. Closes doc 30's open feasibility
+  caveat with a clean answer instead of a guess. Kept the existing empty-wing-pivot version in
+  `minigames/tilt/seagull.gd` (TiltSeagull) and `core/ambient_life.gd` (Seagull) — **no code
+  touched**, so this cannot have moved any receipt by construction. (Had it worked, the closest
+  catalog animation by name search across all 680 entries was `Jumping Jacks`, id 326 — the only
+  cyclic, symmetric two-limb up/down motion in an otherwise all-humanoid library; never reached,
+  since no rig_task_id was ever created.) The doc-30-documented fallback (hand-split wing mesh, zero
+  further Meshy spend) remains the only path to a real flap and is out of scope for an API-only wave.
+- **Tooling**: new `tools/meshy_retexture_wave.ps1` (same conventions as the forge/rig-wave
+  scripts — retry wrapper, resumable report, API key never logged). Ledger extended additively in
+  `tools/meshy_forge_report.json` (`retexture_wave`, `seagull_rig_feasibility_test` blocks).
+- **Verify:** receipts unmoved — seed 7 → HEIR GOLD [36,41,56,43], boardgraph checksum b269c570,
+  tilt edge-slide PASS off at t=0.83s (sanity-checked even though seagull.gd wasn't touched). Fresh
+  worktree had no `.godot/` cache; the first full import crashed 3× (a known headless-import
+  segfault-and-resume pattern on this box — each retry makes forward progress since already-imported
+  files are skipped) before landing clean. Unrelated `.import` churn from that rebuild (395 files,
+  all uid/CRLF noise, zero content diff) reverted before commit.
