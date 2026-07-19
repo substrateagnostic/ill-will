@@ -72,6 +72,14 @@ const MARK_X := [-3.7, -1.25, 1.25, 3.7]
 const SEAT_TAP_PITCH := [0.9, 1.0, 1.12, 1.26]
 const SUMMONS_TICK_DB := -4.0
 const SUMMONS_GAP := 0.35          # seconds between the three summons ticks
+# per-COLOUR audio motif (producer ruling: "a voiceover for the colours, to
+# show who should look and not look" + ADA compliance). No VO pipeline and no
+# new assets, so identity rides a distinct existing-bank TIMBRE, not just a
+# pitch-shifted click — SAME mapping as minigames/seance/seance.gd (bell /
+# bell-toll / organ / raven), at the SAME SEAT_TAP_PITCH anchor, so the sound a
+# seat is taught in one theater game is the exact sound it hears in the other.
+const SEAT_MOTIF_KEY := ["bell_small", "bell_toll", "organ_stab", "raven"]
+const STANDDOWN_DB := -7.0          # the "don't look" half — quieter, one note, pitched down
 # CASTING COMPRESSION (doc 09 §12.3, Alex-signed): the eyes-closed ceremony
 # cost too much wall-clock across 4 rounds. Roll-call teaches the colours ONCE
 # (round 1 only — they're learned), and from round 2 the silence between one
@@ -185,6 +193,7 @@ var _match_champ := -1
 # client mirror scratch
 var _mir_reveal_open := false
 var _mir_cast_sig := ""            # last applied casting overlay signature
+var _mir_my_flip_open := false     # my own card is the one currently shown (DON'T LOOK gate)
 var _mir_call_card := {}           # MY private cast card (play title / understudy)
 var _mir_reh_beat := -999          # last grid beat rendered
 var _mir_reh_locked := -1          # locked cue already painted this beat
@@ -763,6 +772,11 @@ func _tick_casting(delta: float) -> void:
 			peek = true
 		if peek:
 			_play_summons_tick(_cast_seat)   # fourth confirmation tick as the card turns
+			# LOOK, felt: a rumble pulse on THIS seat's own pad the instant their
+			# private window opens. PlayerInput.rumble no-ops for bots/remote/
+			# keyboard (a remote seat's own client rumbles itself — see
+			# _apply_mir_cast's flip case below), so safe to call unconditionally.
+			PlayerInput.rumble(pl.index, 0.25, 0.55, 0.16)
 			if NetSession.is_host() and NetSession.is_seat_remote(_cast_seat):
 				# the card already left via rpc_id — the HOST screen (and every
 				# other guest's mirror) shows a REDACTED flip. The role flash
@@ -792,6 +806,11 @@ func _tick_casting(delta: float) -> void:
 		if _cast_bot_t > 7.0:
 			commit = true
 		if commit:
+			# DON'T LOOK, heard + felt: this seat's own family, one low note, plus
+			# a rumble pulse on their own pad only — the window is closing.
+			if not _tally:
+				_play_standdown_tick(_cast_seat)
+				PlayerInput.rumble(pl.index, 0.12, 0.2, 0.12)
 			_cast_seat += 1
 			_cast_bot_t = 0.0
 			if _cast_seat >= players.size():
@@ -852,7 +871,13 @@ func _bank_stream(key: String) -> AudioStream:
 	var bank: Dictionary = Sfx.BANK
 	if not bank.has(key) or (bank[key] as Array).is_empty():
 		return null
-	return load("res://assets/audio/%s.ogg" % str(bank[key][0]))
+	# gothic-layer motif samples ship as declicked .wav (see scripts/sfx.gd
+	# _load_sample); prefer that, fall back to .ogg for the legacy keys.
+	var sample := str(bank[key][0])
+	var wav := "res://assets/audio/%s.wav" % sample
+	if ResourceLoader.exists(wav):
+		return load(wav)
+	return load("res://assets/audio/%s.ogg" % sample)
 
 func _play_pitched(key: String, pitch: float, volume_db: float) -> void:
 	if _tally or _pitched_players.is_empty():
@@ -869,14 +894,28 @@ func _play_pitched(key: String, pitch: float, volume_db: float) -> void:
 	p.volume_db = volume_db
 	p.play()
 
-## The turn summons — a seat's OWN pitch (same mapping as the seance chant tick),
-## loud enough to carry with eyes shut. Reads only the seat index. Inert in tally.
+## The turn summons — a seat's OWN motif (SEAT_MOTIF_KEY family at its
+## SEAT_TAP_PITCH anchor, same mapping as the séance), loud enough to carry
+## with eyes shut. Reads only the seat index. Inert in tally.
 func _play_summons_tick(seat: int) -> void:
 	if _tally:
 		return
 	var pitch: float = SEAT_TAP_PITCH[seat % SEAT_TAP_PITCH.size()]
-	_play_pitched("card", pitch, SUMMONS_TICK_DB)
-	print("US_SUMMONS seat=%d %s pitch=%.2f" % [seat, players[seat].name, pitch])
+	var key: String = SEAT_MOTIF_KEY[seat % SEAT_MOTIF_KEY.size()]
+	_play_pitched(key, pitch, SUMMONS_TICK_DB)
+	print("US_SUMMONS seat=%d %s pitch=%.2f motif=%s" % [seat, players[seat].name, pitch, key])
+
+## The "don't look" half of the colour cue (producer ruling: "show who should
+## look and not look"). Same seat family as the summons, one note pitched DOWN
+## instead of the summons anchor. Fired once per private window close; inert
+## in tally.
+func _play_standdown_tick(seat: int) -> void:
+	if _tally:
+		return
+	var pitch: float = SEAT_TAP_PITCH[seat % SEAT_TAP_PITCH.size()] * 0.72
+	var key: String = SEAT_MOTIF_KEY[seat % SEAT_MOTIF_KEY.size()]
+	_play_pitched(key, pitch, STANDDOWN_DB)
+	print("US_STANDDOWN seat=%d %s pitch=%.2f motif=%s" % [seat, players[seat].name, pitch, key])
 
 # ============================================================== rehearsal
 func _enter_rehearsal() -> void:
@@ -1712,6 +1751,7 @@ func _mir_phase_change(ph: int, _prev_ph: int) -> void:
 			_mir_vote_built = false
 			_mir_res_shown = false
 			_mir_cast_sig = ""
+			_mir_my_flip_open = false
 			_mir_call_card = {}
 			board.hide_all()
 			_set_base_ui(true)
@@ -1741,12 +1781,21 @@ func _apply_mir_cast(state: Dictionary) -> void:
 			reveal_ui.close()
 			_mir_reveal_open = false
 			_mir_cast_sig = ""
+			_mir_my_flip_open = false
 		return
 	var mode := str(c.get("m", "closed"))
 	var seat := int(c.get("seat", -1))
 	var sig := mode + ":" + str(seat)
 	if sig == _mir_cast_sig:
 		return
+	# DON'T LOOK, heard + felt: the public fact just moved past MY OWN flip
+	# (to the next seat's call/gap, or casting closing) — my private window is
+	# over. Fires exactly once per window, on THIS client only.
+	if _mir_my_flip_open and not (mode == "flip" and seat == NetSession.my_seat()):
+		_mir_my_flip_open = false
+		var my := NetSession.my_seat()
+		_play_standdown_tick(my)
+		PlayerInput.rumble(my, 0.12, 0.2, 0.12)
 	_mir_cast_sig = sig
 	match mode:
 		"closed":
@@ -1770,6 +1819,7 @@ func _apply_mir_cast(state: Dictionary) -> void:
 		"flip":
 			_mir_open_reveal()
 			if seat == NetSession.my_seat() and not _mir_call_card.is_empty():
+				_mir_my_flip_open = true
 				_mir_show_my_card()
 			elif seat >= 0 and seat < players.size():
 				reveal_ui.show_call(players[seat].name, players[seat].color, PlayerBadge.glyph(players[seat].index))
@@ -1790,6 +1840,7 @@ func _mir_show_my_card() -> void:
 		reveal_ui.flip_to_understudy(_mir_call_card.get("cands", []))
 	else:
 		reveal_ui.flip_to_cast(str(_mir_call_card.get("title", "")))
+	PlayerInput.rumble(seat, 0.25, 0.55, 0.16)   # LOOK, felt — my own pad only
 	_mir_snap_soon("mirror_card", 0.45)   # after the flip tween settles
 
 func _apply_mir_reh(state: Dictionary) -> void:
