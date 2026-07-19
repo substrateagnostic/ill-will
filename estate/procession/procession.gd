@@ -261,7 +261,9 @@ func _paint_heatmap(seat: int) -> void:
 	for f in weights.size():
 		entries.append({"node": _preview_dest(seat, f + 1 + bonus), "face": f + 1,
 			"p": float(weights[f]), "w": float(weights[f]) / wmax})
-	board.show_heatmap(entries, roster[seat].color)
+	# THE A-LOOK heatmap: brightness = probability, no percents. Pass the live
+	# crit-band state so a crit-release prospect sharpens the contrast.
+	board.show_heatmap(entries, roster[seat].color, breath.in_crit_band())
 
 ## Announced movement bonuses that shift every face's landing (an armed LUCKY
 ## PENNY). Kept honest: the heatmap must glow the stones you will actually reach.
@@ -1654,6 +1656,10 @@ func _take_turn(seat: int) -> void:
 		# toward its stone (doc 28 §9: the camera frames the DECISION, not the walk).
 		var land := int(path.back())
 		board_camera.travel_cut(board.reveal_shot(land, board.type_at(land)))
+		# ZERO-ENGLISH: the ONE space-name a normal turn shows — the destination
+		# names itself while the toy hops toward it (cleared after the reveal).
+		if not _fast:
+			board.show_landing_label(land, roster[seat].color)
 		var tw: Tween = board.advance_pawn_path(seat, path)
 		positions[seat] = land
 		(trail[seat] as Array).append_array(path)
@@ -2505,6 +2511,8 @@ func _reveal_landing(seat: int) -> void:
 	else:
 		VerifyCapture.snap("reveal")
 		await _reveal_beat(seat, REVEAL_BEAT)
+	# The board returns to wordless once the landing has been read (ZERO-ENGLISH).
+	board.clear_landing_label()
 
 # --------------------------------------------------------------------------
 # F24 — REVEAL-CASCADE REACT BUTTONS. During a landing reveal the WAITING players
