@@ -6,6 +6,36 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **⚘⚘⚘⚘⚘⚘⚘⚘ MENU #8 — THE EIGHTH WATCH (2026-07-19, the live jam day).
+  The day the game got taste.**
+
+  **THE SHAPE:** you were AT the keys — every decision same-hour. Ten lanes
+  merged: M1 bugs (intro-card A-press race, DW quit hang, LAST WILL camera,
+  console wrapper OFF), M2 stationery menus + podium A·CONTINUE + always-on
+  hints + the silent glyph-bridge bug, M3 nine feel-tunes (+TILT banner race
+  fix), M4 DW brace/dash/super-smash, M5 séance beat-gated telegraph +
+  color motifs + rumble, M6 vocabulary pass, ZA plastic-mystery audit
+  (metallic=1.0 wiring bug + PALLBEARERS phantom-coffin fix), ZR retextures
+  6/6 (lychgate reborn; seagull rig refused — birds can't pose-estimate,
+  wings queued in-engine), AL THE A-LOOK (neon dead, brightness heatmap,
+  ring patterns), DR the Deed retired (+1⚘ will clauses, eulogy can never
+  crown the wrong heir again).
+
+  **DECIDED TODAY (all in docs):** doc 32 BOOK OF THE DEAD (B-toggle) + THE
+  CORONER — build-ready · doc 33 THE GROUNDS biome map (hedge maze/forest/
+  bog, world-first stations, G1-G4 hub unification) — THE LAW · verb budget
+  → 4 buttons · Melville-by-Hemingway · CREDITS.md (Andrew's line, approved
+  untouched) · Meshy ULTRA (7915cr, 100 concurrent, free retries, 20 req/s).
+
+  **RECEIPT (current):** seed 7 → HEIR GOLD wreaths [37,38,58,48] ×3 ·
+  topology b269c570 eternal · package illwill-0.3.1.zip.
+
+  **NEXT WINDOW OPENS ON:** G1 — terrain, paths, stations, the hedge-maze
+  test stretch. Resume prompt at
+  `Claude's_Corner/resume-the-ninth-watch.md`. Playtest queue: DW
+  double-tap dash feel (#63), pause-tab shoulder buttons, timing audit.
+  Lane-detail entries below are superseded by this summary.
+
 - **🕯️ M5 — SÉANCE/UNDERSTUDY TELEGRAPH + ACCESSIBILITY (branch
   `worktree-agent-a4d85ccfbaf0facc1`, not merged).** Two complaints, both
   closed:
