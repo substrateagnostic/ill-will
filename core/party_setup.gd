@@ -401,6 +401,11 @@ func toggle() -> void:
 		_hide_phase_panel()
 		_rebuild_seats()
 		_rebuild_controls()
+		# M2 UI CONSISTENCY: the pause/SETTINGS overlay wore the old green pill theme
+		# and clashed with the title door. Dress its panel + every tab button in the
+		# house stationery (idempotent — the SEATS/CONTROLS tabs rebuild each open).
+		Stationery.panel(panel)
+		Stationery.apply_tree(panel)
 		# GAMEPAD EVERYWHERE (L1): park the pad-focus cursor on the first control of
 		# the visible tab (deferred, so it lands after the tabs rebuild) — the pause
 		# overlay was mouse-only. B (ui_cancel) closes it; Start toggles it.

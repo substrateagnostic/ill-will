@@ -349,11 +349,9 @@ func _start_round() -> void:
 	if _stretch != null:
 		_stretch.round_reset()   # FINAL STRETCH: light bed back on between rounds
 	_flash_banner("ROUND %d" % round_num, Color(1, 0.85, 0.2), 1.2)
-	hint_label.visible = round_num == 1
-	if round_num == 1:
-		var tw := create_tween()
-		tw.tween_interval(8.0)
-		tw.tween_callback(func() -> void: hint_label.visible = false)
+	# M2 CONTROL HINTS: the bottom hint bar stays up the whole game (the "always
+	# on" house policy — party guests forget the controls between rounds).
+	hint_label.visible = true
 	_rebuild_scoreboard()
 	_log("round_start %d pot=%d" % [round_num, pot_value])
 

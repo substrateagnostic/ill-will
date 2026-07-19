@@ -47,7 +47,13 @@ static func build(estate) -> void:
 		var pb := Button.new()
 		pb.custom_minimum_size = Vector2(150, 44)
 		pb.text = "%s  %d LEGACY" % [GameState.PLAYER_NAMES[i], EstateState.legacy_of(i)]
+		# M2: house stationery plate, but this is a per-player element — keep the
+		# seat color as the accent (re-applied after the kit's parchment font).
+		Stationery.button(pb)
 		pb.add_theme_color_override("font_color", GameState.PLAYER_COLORS[i])
+		pb.add_theme_color_override("font_hover_color", GameState.PLAYER_COLORS[i])
+		pb.add_theme_color_override("font_focus_color", GameState.PLAYER_COLORS[i])
+		pb.add_theme_color_override("font_disabled_color", GameState.PLAYER_COLORS[i])
 		pb.disabled = i == estate._wardrobe_player
 		pb.pressed.connect(func():
 			estate._wardrobe_player = i

@@ -800,7 +800,11 @@ func _refresh_hint() -> void:
 			hint_label.text = "SEAGULLS ON THE WING — %s to fly · %s = drop a BOMB" % [mv, bomb]
 		hint_label.visible = true
 	else:
-		hint_label.visible = false
+		# M2 CONTROL HINTS: no human seagull right now — show the living controls
+		# bar instead of hiding (the "always on" house policy). It swaps to the
+		# seagull legend above the moment a human goes over the edge.
+		hint_label.text = _controls_bar()
+		hint_label.visible = true
 
 func _gull_hint_line(p: int) -> String:
 	var nm: String = (roster[p] as Dictionary).name

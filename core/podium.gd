@@ -18,6 +18,17 @@ signal done
 const BLOCK_HEIGHTS := [1.5, 1.0, 0.6]
 const BLOCK_X := [0.0, -1.7, 1.7]
 const CEREMONY_TIME := 6.5
+## M2 PODIUM EXIT (Andrew: "getting stuck in the podium screen for awhile — let
+## the player exit at their leisure"). Once the coronation has read for this brief
+## beat, a human couch hands the pace to the players: any seat's A (or click /
+## Enter) advances immediately, and the screen then waits as long as they like —
+## never a forced timer. An all-bot / verify session has no one to press A, so it
+## auto-advances on the ceremony clock exactly as before (receipts unaffected).
+const REVEAL_MIN := 1.6
+
+var _continue_layer: CanvasLayer = null
+var _continue_ready := false
+var _continue_hit := false
 
 # --- estate set dressing (all committed GLBs; guarded so a bare checkout still
 # renders the tableau). Placed BEHIND the podium — the camera looks down +z. ---
@@ -110,8 +121,141 @@ func _lamppost(pos: Vector3) -> void:
 func present(entries: Array, ceremony_time := CEREMONY_TIME) -> void:
 	stage_entries(entries)
 	_scribe_victor(entries)
-	await get_tree().create_timer(ceremony_time).timeout
+	if _has_human():
+		# A human is watching: let the coronation land, then it's theirs to leave.
+		await get_tree().create_timer(REVEAL_MIN).timeout
+		await await_continue()
+	else:
+		# Bots / verify / attract: no hands on the couch — keep the old clock.
+		await get_tree().create_timer(ceremony_time).timeout
 	done.emit()
+
+## Show the subtle "A · CONTINUE" affordance and return the moment any seat's A
+## (or a click / Enter) is pressed. For callers that stage the tableau themselves
+## (procession's heir crown) and want the couch to control the exit. Auto-returns
+## after `bot_fallback` seconds when no human is present so nothing can hang.
+func await_continue(bot_fallback := 2.5) -> void:
+	if not _has_human():
+		await get_tree().create_timer(bot_fallback).timeout
+		return
+	_show_continue()
+	_continue_ready = true
+	_continue_hit = false
+	# Swallow one frame so an A still held from the final gameplay input doesn't
+	# instantly skip the ceremony the couch just reached.
+	await get_tree().process_frame
+	var pi := get_node_or_null(^"/root/PlayerInput")
+	while not _continue_hit:
+		if pi != null:
+			for s in 4:
+				if pi.has_method("just_pressed") and pi.just_pressed(s, "a"):
+					_continue_hit = true
+					break
+		if not _continue_hit:
+			await get_tree().process_frame
+	Sfx.play("ui_confirm")
+	_continue_ready = false
+
+## Any seat's A is polled in await_continue; a mouse click or Enter routes here.
+func _unhandled_input(event: InputEvent) -> void:
+	if not _continue_ready:
+		return
+	if event.is_action_pressed("ui_accept") \
+			or (event is InputEventMouseButton and event.pressed \
+				and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT):
+		_continue_hit = true
+		get_viewport().set_input_as_handled()
+
+## A human is anyone with a real device who is not a bot (remote guests count —
+## their injected input drives PlayerInput just like a couch pad).
+func _has_human() -> bool:
+	var pi := get_node_or_null(^"/root/PlayerInput")
+	if pi == null:
+		return false
+	for s in 4:
+		if pi.has_method("is_remote") and pi.is_remote(s):
+			return true
+		var is_bot: bool = pi.has_method("is_bot") and pi.is_bot(s)
+		var dev: int = pi.device_of(s) if pi.has_method("device_of") else -99
+		if not is_bot and dev != -99:
+			return true
+	return false
+
+## The affordance: a subtle bottom-center "A · CONTINUE" in the house stationery,
+## the A drawn as the first human seat's real device glyph (pad button or key)
+## with a describe_binding text fallback. Gently pulses so it reads as "ready when
+## you are", never a nag.
+func _show_continue() -> void:
+	if _continue_layer != null and is_instance_valid(_continue_layer):
+		return
+	_continue_layer = CanvasLayer.new()
+	_continue_layer.layer = 5
+	add_child(_continue_layer)
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 12)
+	row.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	row.anchor_top = 1.0
+	row.offset_top = -96.0
+	row.offset_bottom = -40.0
+	_continue_layer.add_child(row)
+	var seat := _first_human_seat()
+	var tex: Texture2D = _glyph_a(seat)
+	if tex != null:
+		var tr := TextureRect.new()
+		tr.texture = tex
+		tr.custom_minimum_size = Vector2(40, 40)
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		row.add_child(tr)
+	else:
+		var akey := Label.new()
+		akey.text = _a_text(seat)
+		if _imfell:
+			akey.add_theme_font_override("font", _imfell)
+		akey.add_theme_font_size_override("font_size", 30)
+		akey.add_theme_color_override("font_color", Color(1.0, 0.86, 0.45))
+		akey.add_theme_color_override("font_outline_color", Color(0.04, 0.03, 0.06))
+		akey.add_theme_constant_override("outline_size", 6)
+		row.add_child(akey)
+	var lbl := Label.new()
+	lbl.text = "CONTINUE"
+	if _imfell:
+		lbl.add_theme_font_override("font", _imfell)
+	lbl.add_theme_font_size_override("font_size", 28)
+	lbl.add_theme_color_override("font_color", Color(0.90, 0.86, 0.76))
+	lbl.add_theme_color_override("font_outline_color", Color(0.04, 0.03, 0.06))
+	lbl.add_theme_constant_override("outline_size", 6)
+	row.add_child(lbl)
+	# fade in, then a soft breathing pulse — "ready when you are"
+	row.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(row, "modulate:a", 1.0, 0.4)
+	tw.chain().set_loops()
+	tw.tween_property(row, "modulate:a", 0.55, 0.9).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(row, "modulate:a", 1.0, 0.9).set_trans(Tween.TRANS_SINE)
+
+func _first_human_seat() -> int:
+	var pi := get_node_or_null(^"/root/PlayerInput")
+	if pi == null:
+		return 0
+	for s in 4:
+		if pi.has_method("is_remote") and pi.is_remote(s):
+			continue   # a glyph for a remote seat can't be drawn on this machine
+		var is_bot: bool = pi.has_method("is_bot") and pi.is_bot(s)
+		var dev: int = pi.device_of(s) if pi.has_method("device_of") else -99
+		if not is_bot and dev != -99:
+			return s
+	return 0
+
+func _glyph_a(seat: int) -> Texture2D:
+	# Device-aware: a pad seat gets its button glyph, a KBM seat its key glyph.
+	return InputGlyphs.texture_for(seat, "a")
+
+func _a_text(seat: int) -> String:
+	var pi := get_node_or_null(^"/root/PlayerInput")
+	if pi != null and pi.has_method("describe_binding"):
+		return str(pi.describe_binding(seat, "a"))
+	return "A"
 
 ## THE ESTATE'S MEMORY: the winner tableau is a picture worth keeping. Wait a
 ## beat so the champion has struck their cheer and the confetti is falling, then

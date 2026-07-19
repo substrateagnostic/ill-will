@@ -333,10 +333,8 @@ func _start_round() -> void:
 	widow.weep(true)
 	_set_lights(false, true)
 	_flash_banner("THE WIDOW WEEPS", Color(0.8, 0.88, 1.0), 1.4)
+	# M2 CONTROL HINTS: keep the bar up all game (the "always on" house policy).
 	hint_label.visible = true
-	var tw := create_tween()
-	tw.tween_interval(8.0)
-	tw.tween_callback(func() -> void: hint_label.visible = false)
 	_rebuild_scoreboard()
 	_log("round_start time=%.0f relics=%d" % [round_time, relics.size()])
 

@@ -134,6 +134,10 @@ func _ready() -> void:
 	# survivor there is a stale game stacking under this boot. Sweep first.
 	PartySetup.free_stray_root_nodes()
 	Engine.time_scale = 1.0
+	# M2: dress the shared estate-desk panel in the house stationery (ink + gold
+	# hairline) instead of the old grey theme panel, so every desk built into it
+	# matches the title door.
+	Stationery.panel(phase_panel)
 	# Slot panel picks (PLAY THIS ESTATE / START FRESH) reload this scene; the
 	# player expects to be IN the game, not back at the title (Andrew: "trying
 	# to start a new estate game just brings me back to the main menu").
@@ -724,33 +728,10 @@ func _enter_title_swap() -> void:
 ## unifying the whole door into the house's one gothic voice. The grow-on-focus
 ## is added by FrontEndDirector's focus hook, which complements the gold ring.
 func _style_title_button(btn: Button) -> void:
-	var serif: Font = load("res://assets/fonts/IMFellEnglish-Regular.ttf")
-	if serif != null:
-		btn.add_theme_font_override("font", serif)
-	btn.add_theme_stylebox_override("normal", _title_btn_box(
-		Color(0.05, 0.045, 0.07, 0.92), Color(0.60, 0.50, 0.30, 0.85), 2))
-	btn.add_theme_stylebox_override("hover", _title_btn_box(
-		Color(0.10, 0.09, 0.12, 0.96), Color(0.85, 0.70, 0.40, 1.0), 2))
-	btn.add_theme_stylebox_override("pressed", _title_btn_box(
-		Color(0.03, 0.028, 0.045, 0.96), Color(0.72, 0.60, 0.34, 1.0), 2))
-	var foc := _title_btn_box(Color(0.85, 0.70, 0.35, 0.14), Color(1.0, 0.86, 0.45, 1.0), 3)
-	foc.expand_margin_left = 3.0; foc.expand_margin_right = 3.0
-	foc.expand_margin_top = 3.0; foc.expand_margin_bottom = 3.0
-	btn.add_theme_stylebox_override("focus", foc)
-	btn.add_theme_color_override("font_color", Color(0.90, 0.86, 0.76))
-	btn.add_theme_color_override("font_hover_color", Color(1.0, 0.95, 0.82))
-	btn.add_theme_color_override("font_focus_color", Color(1.0, 0.95, 0.82))
-	btn.add_theme_color_override("font_pressed_color", Color(0.86, 0.80, 0.64))
-
-func _title_btn_box(bg: Color, border: Color, bw: int) -> StyleBoxFlat:
-	var sb := StyleBoxFlat.new()
-	sb.bg_color = bg
-	sb.set_corner_radius_all(8)
-	sb.set_border_width_all(bw)
-	sb.border_color = border
-	sb.content_margin_left = 18.0; sb.content_margin_right = 18.0
-	sb.content_margin_top = 8.0; sb.content_margin_bottom = 10.0
-	return sb
+	# M2: the title door and every front-of-house menu now share ONE definition of
+	# the stationery — core/ui_kit/stationery.gd. This delegates so the door and the
+	# PLAY/SETTINGS/WARDROBE/lobby desks can never drift apart again.
+	Stationery.button(btn)
 
 func _hide_title() -> void:
 	if _title_layer != null:
@@ -1699,6 +1680,12 @@ func _pad_reclaim_test_run() -> void:
 ## its documented couch model (A join/ready, B leave, hold Start to begin); the
 ## settings SEATS tab is the focus-navigable way to drive seats from a pad.
 func _focus_panel_deferred() -> void:
+	# M2 UI CONSISTENCY: every estate desk (PLAY, NEW GAME, HOST/JOIN NIGHT, the
+	# lobby seats, free roam) is built into phase_box and reaches here one idle
+	# frame later — the single choke point to dress its buttons in the house
+	# stationery, before UiFocus wires the gold ring + lift. Runs even for the
+	# lobby (which skips the pad-focus grab) so its seat buttons match too.
+	Stationery.apply_tree(phase_box)
 	if _skip_panel_focus:
 		_skip_panel_focus = false
 		return
