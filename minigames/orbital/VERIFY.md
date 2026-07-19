@@ -196,6 +196,54 @@ shown; RED/BLUE 1 kill each -> 2 points. Exact match with the event log.
   rendered frames; this box runs ~144fps) and each kill's slow-mo beat
   adds ~0.28s of wall time; banner windows (2-2.8s) absorb both.
 
+## v1.1 — TUNING PASS: score feedback (playtest)
+
+Friend playtest note verbatim: *"How am I getting points? Pretty fun, in a
+good spot."* — explicitly scoped as FEEDBACK only, no scoring changes. Two
+additions, both pure presentation:
+
+**1. Floating "+N" popups** (`orbital.gd`, new `_score_popup()`, called from
+`_do_catch()` and `_do_kill()` right after `_points[...]` is already
+updated — never touches scoring itself). A world-space `Label3D` billboard,
+adapted from `tilt.gd`'s proven `_floaty()` house pattern, that rises and
+fades at the moment points land:
+- **Kill** (+`KILL_POINTS`=2): appears at the impact point — the VICTIM's
+  `body_center()` (where the camera's attention already is) — tinted in the
+  KILLER's color, so it reads as "this hit was worth +2 to them."
+- **Catch-steal** (+`CATCH_POINTS`=1): appears at the catcher's own
+  `body_center()`, tinted in their color (only fires when `stolen == true`,
+  i.e. an actual steal of someone else's orbit — matches the existing
+  scoring gate exactly, no popup for catching your own ball).
+- Rises along the pawn's LOCAL surface normal (`pw.srf_n`), not world Y — a
+  fixed world-up would rise INTO the planet for a pawn standing on the far
+  side of a sphere.
+
+**2. Intro-card legend.** Added an optional `legend` field to the shared
+`core/ui_kit/intro_card.gd` (opt-in, empty by default — every other game's
+`present()` call is unaffected) for a small STATIC line under the rotating
+`tips` carousel, since a scoring key that rotates away after 2.6s risks never
+being read. Orbital sets `spec["legend"] = "+2 KILL · +1 CATCH-STEAL (grab a
+ball someone else threw, mid-orbit)"`, built from the same `KILL_POINTS`/
+`CATCH_POINTS` constants the sim uses (can't drift out of sync).
+
+**Verified zero sim impact** — same command, same seed, byte-identical to
+the receipt already on file above:
+```
+godot --headless --path . res://minigames/orbital/orbital.tscn -- --orbbots --seed=7 --fast=10 --autoquit
+# ORBITAL_RESULTS placements":[3,0,2,1] points":{0:13,1:6,2:10,3:14}   <- unchanged
+# ORBITAL_ASSERT max_flight_age=46.4s (<75s): PASS                     <- unchanged
+```
+No deliberate-change entry needed — the popups/legend are drawn AFTER the
+scoring math, and the receipt above proves it.
+
+**Screenshots** (`verify_out/orbital_m3_final/`, seed=11):
+- `orbital_intro_legend.png` — the intro card: rotating tip line above, the
+  new static "+2 KILL · +1 CATCH-STEAL..." legend line below it, both
+  readable before the READY ring fills.
+- `orbital_kill_popups.png` — two back-to-back kills at t=24.4/24.9
+  ("GOLD SMACKS MINT!"): two gold "+2" popups floating up from the impact
+  point, one per kill, both clearly attributable to GOLD's color.
+
 ## Wishes (assets_raw not available in worktrees)
 
 - A soft round particle sprite (kenney_particles) for star dots and death

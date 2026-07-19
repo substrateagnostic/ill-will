@@ -55,6 +55,7 @@ const BALL_SPAWN_EVERY := 45.0
 const MAX_BALLS := 8
 const KILL_POINTS := 2
 const CATCH_POINTS := 1
+const POPUP_FONT := preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
 const GHOST_AGE := 10.0
 const MONUMENT_AGE := 25.0
 const RESPAWN_DELAY := 3.0
@@ -327,6 +328,10 @@ func _present_intro_card() -> void:
 	spec["name"] = Dialog.text("intro.orbital.name")
 	spec["goal"] = Dialog.text("intro.orbital.goal")
 	spec["tips"] = Dialog.paras("intro.orbital.tips")
+	# playtest: "How am I getting points?" — a tiny STATIC scoring key (never
+	# rotates away like the tips do) so it's read once and remembered.
+	spec["legend"] = "+%d KILL   ·   +%d CATCH-STEAL (grab a ball someone else threw, mid-orbit)" \
+		% [KILL_POINTS, CATCH_POINTS]
 	spec["seats"] = _human_seats()
 	_intro_card.present(spec)
 
@@ -834,6 +839,7 @@ func _do_catch(pw: OrbPawn, bb: OrbBall) -> void:
 	if stolen:
 		_points[pw.index] += CATCH_POINTS
 		_update_score_rows()
+		_score_popup(pw.body_center(), pw.srf_n, CATCH_POINTS, pawn_color(pw.index))
 	Sfx.play("bumper")
 	_shake = maxf(_shake, 0.18)
 	_spawn_burst(pw.body_center(), Color(1, 1, 1), 16)
@@ -880,6 +886,9 @@ func _do_kill(pw: OrbPawn, bb: OrbBall) -> void:
 	elif killer >= 0:
 		kills[killer] += 1
 		_points[killer] += KILL_POINTS
+		# at the impact point (the victim, not the off-screen killer), tinted in
+		# the SCORER's color — reads as "this hit was worth +2 to them"
+		_score_popup(pw.body_center(), pw.srf_n, KILL_POINTS, pawn_color(killer))
 		PlayerInput.rumble_hit(killer, 0.35)   # RUMBLE: the thrower feels the hit connect
 
 		if ball_age > GHOST_AGE:
@@ -1240,6 +1249,32 @@ func _spawn_burst(pos: Vector3, color: Color, amount: int) -> void:
 	part.material_override = mat
 	part.emitting = true
 	get_tree().create_timer(1.6).timeout.connect(part.queue_free)
+
+## Playtest note: "How am I getting points?" — a world-space "+N" that rises
+## and fades at the moment points actually land (kill vs catch-steal), tinted
+## in the scoring player's color. `up` is the LOCAL surface normal (srf_n),
+## not world Y — a fixed world-up would rise INTO the planet for a pawn
+## standing on the far side. Presentation only: called AFTER _points[] is
+## already updated, never touches scoring itself.
+func _score_popup(pos: Vector3, up: Vector3, amount: int, color: Color) -> void:
+	var lb := Label3D.new()
+	lb.text = "+%d" % amount
+	lb.font = POPUP_FONT
+	lb.font_size = 140
+	lb.pixel_size = 0.0045
+	lb.modulate = color
+	lb.outline_size = 24
+	lb.outline_modulate = Color(0.05, 0.05, 0.08)
+	lb.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	lb.no_depth_test = true
+	_fx_root.add_child(lb)
+	lb.global_position = pos
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(lb, "global_position", pos + up * 1.3, 0.9) \
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(lb, "modulate:a", 0.0, 0.4).set_delay(0.5)
+	tw.chain().tween_callback(lb.queue_free)
 
 ## --- THREAT LADDER presentation ---------------------------------------------
 

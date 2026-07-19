@@ -23,6 +23,10 @@ extends CanvasLayer
 ##                   {action="b", label="BOOST"}],
 ##       glyph_seat = 0,                          # seat to read bindings from (default first of `seats`)
 ##       tips = ["Ram a rival to steal their turf.", "Overtime doubles your cut."],
+##       legend = "+2 KILL   ·   +1 CATCH-STEAL",     # optional: a small STATIC
+##                                                     # scoring key under the tip
+##                                                     # line (never rotates, unlike
+##                                                     # `tips` — opt-in per game).
 ##       auto_secs = 12.0,
 ##   })
 
@@ -122,6 +126,18 @@ func _build_ui() -> void:
 	if not _tips.is_empty():
 		_tip_label.text = "TIP:  " + str(_tips[0])
 	col.add_child(_tip_label)
+
+	# optional static legend (e.g. a scoring key) — unlike `tips` this never
+	# rotates, so it's the right place for a small fact a player should be
+	# able to read once and keep in mind (playtest: "How am I getting
+	# points?"). Opt-in via spec["legend"]; every other game's present() call
+	# is unaffected since this is empty by default.
+	var legend := str(_spec.get("legend", ""))
+	if legend != "":
+		var legend_lbl := _mk_label(_FONT_BODY, 18, HORIZONTAL_ALIGNMENT_CENTER)
+		legend_lbl.text = legend
+		legend_lbl.add_theme_color_override("font_color", Color(0.68, 0.7, 0.8))
+		col.add_child(legend_lbl)
 
 	col.add_child(_spacer(16))
 
