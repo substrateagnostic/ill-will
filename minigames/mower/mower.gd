@@ -125,7 +125,7 @@ var _tally_mid2_snapped := false
 @onready var timer_label: Label = $UI/TimerLabel
 @onready var banner: Label = $UI/Banner
 @onready var hint_label: Label = $UI/HintLabel
-@onready var score_rows: VBoxContainer = $UI/ScorePanel/ScoreRows
+@onready var score_rows: HBoxContainer = $UI/ScorePanel/ScoreRows   # bottom strip (playtest note)
 @onready var meter_holder: Control = $UI/MeterHolder
 
 func _ready() -> void:
