@@ -12,6 +12,14 @@ Estate Stirs major/minor split · Book of the Dead cosmetic-first.*
 
 ## 0a. Design laws (producer, 2026-07-19)
 
+- **THE VERB BUDGET (amended 2026-07-19):** the old "move + A + B, no third
+  button" rule (doc 16 §0) is RELAXED — up to FOUR buttons allowed.
+  "Gameplay ease beats minimalism with control surfaces." Producer flag:
+  DEAD WEIGHT's double-tap dash may be an imprecise human input — playtest
+  pending; if it fails, dash moves to its own button under the new budget.
+- **THE PROSE TARGET (producer's words):** "Melville written by Hemingway
+  is precisely the edge to catch." Voice stays rich; sentences get short.
+
 - **THE STANDALONE LAW:** every element — the board game and each individual
   minigame — is built so it could legitimately grow into an interesting full
   indie (if not AAA) game on its own. No filler minigames; no board that
@@ -24,6 +32,18 @@ Estate Stirs major/minor split · Book of the Dead cosmetic-first.*
 - **FINISH CONSISTENCY (pre-release):** no mix of painted-toy and
   unpainted-3D-print looks across props; everything that can/should move
   gets rigged (the unrigged gliding ravens are beloved but temporary).
+- **THE GROUNDS BAR (producer, 2026-07-19, board look decision):** A-look
+  ships NOW (ground-surround rings, brightness heatmap, labels/percents
+  dead). The road to D is approved with a raised bar: the environment is
+  built to genuine near-AAA RPG path craft — NO flat ground (sculpted
+  terrain), NO visible tiling repetition (unique/varied natural elements),
+  path surfaces vary by place (grass/gravel/stone/dirt/mud/plank), B's
+  lanterns as dressing, C's props for type identity. Perf envelope:
+  "gently push the no-real-GPU-needed spec without actually pushing it" —
+  integrated-GPU friendly (draw-call budget, EnvKit lighting, no
+  per-pixel-heavy effects; richness from asset variety and composition,
+  not shader cost). Meshy environment wave to be scoped generously —
+  producer funds tokens.
 
 ## 0. Executive summary
 
