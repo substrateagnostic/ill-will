@@ -35,6 +35,25 @@ const POWER_MAX := 13.0
 ## frozen debug_putt changes — the sim itself stays byte-identical.
 const FLINCH_DEG := 13.0
 const STAGGER_T := 0.45
+## Playtest: "rotation snapping to almost 60 degree angles." Input-side only —
+## no putt-feel constant touched (see the header note above). _read_aim()'s
+## pad/kb-half branch imposed its OWN mv.length() > 0.2 magnitude gate on top
+## of PlayerInput.get_move()'s already-house-standard 0.18 deadzone — a
+## redundant SECOND gate, stricter than the first, that PAR alone paid.
+## Between 0.18 and 0.2 the stick had already cleared the shared deadzone
+## (get_move() returns real movement to every other game at that magnitude)
+## but PAR's aim still silently ignored it and kept showing the stale
+## direction — so a player making a small, careful correction got no visual
+## feedback at all until the push happened to clear PAR's private extra
+## margin, then the display jumped straight to wherever the stick had
+## actually ended up. That "nothing, nothing, nothing... jump" pattern reads
+## exactly like coarse angle-snapping even though nothing is discretized in
+## code. Fix: drop PAR's own gate to a bare noise floor (just enough to avoid
+## normalizing a nakedly-zero vector) and let the shared get_move() deadzone
+## — the same one every other game already tunes its feel against — be the
+## only threshold aim has to clear. Local to this file; get_move() itself
+## (core/player_input.gd) is untouched, so no other game's movement changes.
+const AIM_STICK_GATE := 0.02
 
 var state: int = State.IDLE
 var actor := -1
@@ -366,14 +385,14 @@ func _read_aim() -> Vector3:
 			return v
 	elif d >= 0 or d == -1 or d == -2:
 		var mv: Vector2 = PlayerInput.get_move(actor)
-		if mv.length() > 0.2 and cam != null:
+		if mv.length() > AIM_STICK_GATE and cam != null:
 			var fwd := -cam.global_transform.basis.z
 			fwd.y = 0.0
 			var right := cam.global_transform.basis.x
 			right.y = 0.0
 			if fwd.length() > 0.01 and right.length() > 0.01:
 				var v := right.normalized() * mv.x + fwd.normalized() * (-mv.y)
-				if v.length() > 0.2:
+				if v.length() > AIM_STICK_GATE:
 					return v.normalized()
 	else:
 		# -3 mouse/shared (and unassigned hotseat): cursor on the ground plane

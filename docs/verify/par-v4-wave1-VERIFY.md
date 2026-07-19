@@ -185,7 +185,10 @@ also covered by the swingplay address/charge snaps. Estate boot smoke
 - **Human input paths** (`-3` cursor/LMB, `-4`, pad stick) share the state
   machine with the harness-driven paths but the device reads themselves need
   Alex's hands-on playtest (no headless harness injects real mouse/pad state —
-  same as v1-v3 drag verification).
+  same as v1-v3 drag verification). M3 tuning pass (§8) found and fixed a
+  real granularity bug in the pad-stick branch specifically (an over-strict
+  local deadzone gate) via full code-path tracing, but — same limit — the
+  actual stick FEEL still wants hands-on confirmation.
 - Dogleg full bot matches are slow in real time (bank-shot misses + walk
   cadence) — same note as the v3 receipts.
 - Avatar may clip trap meshes visually in dense fields (spec OQ5 accepts;
@@ -193,3 +196,67 @@ also covered by the swingplay address/charge snaps. Estate boot smoke
 - Wave 2 hooks ready: `PlayerAvatar` collision exceptions are per-ball (easy to
   drop for griefers), `is_pending/is_addressed` expose machine state, chaos
   already runs embodied turn-based shots under the DIORAMA camera.
+
+## 8. M3 tuning — analog-stick aim granularity (playtest, `scripts/avatar_shot.gd`)
+
+Friend playtest note verbatim: *"rotation snapping to almost 60 degree
+angles."* Scoped input-side only per the M3 lane brief — **PUTT PHYSICS ARE
+FROZEN (this doc's §1/§6, VERIFY-PARV3.md)**; nothing below touches
+`Ball.putt`, damping, the cup magnet, or the power/angle resolution. The only
+thing that changed is how a raw stick vector becomes the `Vector3` fed INTO
+`debug_putt(power, angle)` — the file's own header already draws this exact
+boundary ("this node only decides WHEN debug_putt is called and with what").
+
+**Root cause found:** `_read_aim()`'s pad/kb-half branch imposed its OWN
+`mv.length() > 0.2` magnitude gate on top of `PlayerInput.get_move()`'s
+already-house-standard 0.18 deadzone (`core/player_input.gd`, shared by every
+game's movement — untouched). Between 0.18 and 0.2 the stick had already
+cleared the shared deadzone (every OTHER game already treats that magnitude
+as real input) but PAR's aim still silently held the stale direction. A
+player making a small, careful correction near center got zero feedback
+until the push happened to clear PAR's own extra private margin — at which
+point the displayed aim jumped straight to wherever the stick had ended up.
+That "nothing, nothing, nothing... jump" pattern reads exactly like coarse
+angle-snapping even though nothing in the code is discretized into a fixed
+set of angles. No literal N-way (e.g. 6-way/60°) quantization exists anywhere
+in the aim pipeline — traced fully: `_read_aim()` -> camera-relative
+transform -> `_dir_for_angle()` -> `PlayerAvatar.face_dir()` ->
+`PuttController.show_aim_preview()`/`_render_arrow()`; all continuous math,
+no `snapped()`/`round()`/`floor()` on any angle anywhere in that chain.
+
+**Fix:** new `const AIM_STICK_GATE := 0.02` (a bare noise floor, just enough
+to avoid normalizing a nakedly-zero vector) replaces BOTH of `_read_aim()`'s
+local `0.2` checks. `get_move()`'s own 0.18 deadzone — the same one every
+other game's movement already tunes its feel against — is now the only
+threshold aim input has to clear, restoring full analog resolution for
+anything a real stick reports as intentional movement. `core/player_input.gd`
+itself is untouched, so no other game's input changes.
+
+**Verification.** Frozen-physics regression (both commands from this doc's
+own §1/§4 and VERIFY-PARV3.md §2, re-run unchanged):
+```
+godot --headless --path . -- --skipmenu --course=the_gauntlet --seed=1 --players=2 --rounds=1 \
+  --autoplay="13:-90,13:-90,5:-77,5:-77,4:-76,4:-76,4:-78,4:-78,3:-75,3:-75"
+# GUTTER: RED took the channel -> near cup
+# GUTTER_DONE: delivered near cup at 5.8,-4.6
+# BALL_SUNK p=0 round=1                                    <- byte-identical to the documented receipt
+
+godot --headless --path . -- --skipmenu --course=fairway --seed=11 --players=4 --rounds=1 --parbots --quitafter=30000
+# BALL_SUNK p=0/1/2/3 round=1, MATCH_OVER champ=RED, FLYOVER_DONE, 0 SCRIPT ERROR
+```
+Import pass clean, 0 script/parse errors. `--greedtest`-style pure-kinematic
+receipts don't apply here (PAR has none), so the gutter autoplay (a fixed,
+scripted drag/angle sequence that bypasses `_read_aim()` entirely, exactly
+like bots/autoplay always have per this file's header) is the strongest
+available proof that the swing/putt RESOLUTION pipeline is untouched.
+
+**What could not be verified headlessly (pre-existing limit, §7 above):**
+`_read_aim()`'s pad/kb-half branch is real-hardware-gated
+(`Input.get_joy_axis` / `Input.is_physical_key_pressed`) — no headless
+harness in this environment injects a real analog stick, same limitation
+already on file for every human input device this game reads (§7: "the
+device reads themselves need Alex's hands-on playtest"). The fix is a
+2-line, fully-traced, isolated threshold change in a pure function with no
+side effects outside its own return value (confirmed by reading the entire
+call chain above) — confidence comes from that isolation plus the frozen-
+physics regression proof, not from a synthetic stick sweep.
