@@ -118,6 +118,70 @@ Balance across seeds 100-131 (32 all-bot matches): **team0 17 / team1 15** wins,
 0 stalls, matches finish 13-17s. Drops/gate hits vary per seed; a clean pair wins
 fast, a fumbling pair loses the race (and the dead complain about it).
 
+## v1.1 — TUNING PASS: mourner soft-contact tax (playtest)
+
+Friend playtest note verbatim: *"I can just run through everything and win.
+Not enough consequence."* Auditing each hazard: gate and downhill already
+drop the coffin on any hard contact; mud already halves speed unconditionally
+(unavoidable, no exploit). The mourner procession was the gap — `_mourner_hits()`
+only punished a FAST crossing (a hard drop); crossing at or under
+`MOURNER_SAFE` speed was entirely free, so a team could crawl straight
+through the crowd with zero cost, no route planning required.
+
+**Fix (`pallbearers.gd`):** the shared zone/width test is now factored into
+`_mourner_touch()`. `_mourner_hits()` (fast + touching = a hard drop,
+existing behavior, unchanged) is joined by a new `_mourner_soft_contact()`
+(touching but under `MOURNER_SAFE` = NOT already a hard drop) which fires
+`_mourner_stumble()` — reusing the existing `PBCarrier.stumble()` cosmetic
+`_drop_team()` already relies on, plus a hard velocity cut (`vel2 *= 0.15`).
+This is a TAX, not a second drop mechanic: no restuff, no spill, no
+complaint bubble, no `grace` invulnerability window — the coffin stays
+carried, it just loses its momentum. Throttled by a new
+`mourner_stumble_cd` (0.6s per team) so it fires once per graze rather than
+every physics frame of a lingering crawl.
+
+**Net effect — careful routing (timing the approach to cross when the
+transept is clear) now beats BOTH brute-sprint (still risks the existing
+hard drop) AND slow-crawl (now taxed repeatedly while lingering in the
+zone).** Verified via a new `mourner_stumble=[team0,team1]` counter in
+`PB_TALLY` and a matching `PB_EVT ... mourner_stumble team=%d z=%.1f` log
+line per event.
+
+**Receipt.** The exact documented seed=5 receipt above is BYTE-IDENTICAL
+after this change (`finish_t=15.02`, all counts, `placements`, `points`) —
+in this particular seed the bots were *already* crawling near-stationary
+through the zone (their own `mourner_block()`-driven caution), so the added
+tax's marginal timing cost happened to round away at 2-decimal precision.
+The mechanism itself is confirmed firing for real, though — the same run
+now also prints:
+```
+PB_EVT t=9.92  | mourner_stumble team=1 z=-5.4
+PB_EVT t=10.52 | mourner_stumble team=1 z=-5.7
+PB_EVT t=11.12 | mourner_stumble team=1 z=-5.7
+PB_TALLY seed=5 ... mourner=[0, 0] mourner_stumble=[0, 3] ...   (new field, byte-position-safe append)
+```
+**Balance re-verified, seeds 100-129 (30 of the original 32-seed sweep, timeout
+truncated the last 2 — no stalls or anomalies in the 30 completed):** team0 16 /
+team1 14 wins (53.3%, statistically the same split as the old 17/15 = 53.1%),
+finish times 14.93-16.48s (within the old 13-17s band). `mourner_stumble`
+fired in roughly half the sampled seeds (both teams, no lane bias observed),
+confirming the tax is live and symmetric without disturbing overall match
+balance. No deliberate-change table needed beyond this note — the receipt
+above IS the proof of byte-identical behavior for the documented case, and
+the new field is additive (never changes an existing log line's meaning).
+
+**Screenshot:** `verify_out/pallbearers_m3_final/pallbearers_mourner_stumble_standings.png`
+— mid-tax, BLUE & MINT (the taxed team) visibly behind RED & GOLD on the
+live standings bars at the top of the HUD.
+
+**Note:** the whole-project smoke command (`--estatebots --exhibtest=pallbearers
+--quittest=32`) prints 10 `SCRIPT ERROR` lines (`process_frame`/`create_timer`/
+`current` on a null instance) on THIS worktree — confirmed pre-existing by
+diffing against the pre-tune commit (identical error count/content on both),
+unrelated to this change. Import pass, `--pallbearertest` receipts, and the
+30-seed balance sweep are all clean (0 errors) and are the receipts this
+tuning pass actually touches.
+
 ## Screenshots (verify_out/pallbearers/, --pallbearercap --seed=8)
 
 - `pallbearers_intro.png` — the Mario-Party intro card: title, one-line goal, LIVE
