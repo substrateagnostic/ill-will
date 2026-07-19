@@ -31,38 +31,34 @@ const S := preload("res://estate/procession/board_spaces.gd")
 # --------------------------------------------------------------------------
 # BOARD DATA — the one dictionary future boards vary.
 # --------------------------------------------------------------------------
+## G1 (doc 33): the world-first inversion. Geometry left this table — every
+## world position now comes from ProcessionGrounds.station_map() (the land's
+## authored path splines export stations; the graph snaps on). The board keeps
+## what it owns: counts, types, ratios, fixtures — the data the receipts hash.
 const BOARD := {
 	"id": "estate_procession",
 	"layout_seed": 771177,             # LAYOUT stream — board data, never the night seed
-	"lychgate": Vector3(0.0, 0.0, 26.0),
-	"fork1": Vector3(0.0, 0.0, 19.0),
-	"fork2": Vector3(0.0, 0.0, 0.0),
-	"merge": Vector3(0.0, 0.0, -19.0),
-	"gate": Vector3(0.0, 0.0, -26.0),
 	"approach_types": ["offering"],    # stones LYCHGATE → CROSSROADS 1
 	"homestretch": 1,                  # path stones MERGE → MANOR GATE
 	"routes": [
 		{
 			"tag": "garden", "label": "GARDEN ROW", "color": Color("6fbf6a"),
 			"blurb": "SAFE AND LONG · OFFERINGS AND THE PEDDLER'S CART",
-			"half_a": 12, "half_b": 13, "bulge_a": 21.0, "bulge_b": 19.0,
-			"wobble": 1.0, "rise": 0.0,
+			"half_a": 12, "half_b": 13,
 			"ratios": {"offering": 0.40, "seance": 0.12, "grave_goods": 0.05},
 			"fixtures": [{"type": "cart", "half": "a", "at": 0.5}],
 		},
 		{
 			"tag": "hollow", "label": "HOLLOW WOODS", "color": Color("9a6fd8"),
 			"blurb": "SHORT AND WILD · GRAVE GOODS AND SÉANCE CIRCLES",
-			"half_a": 10, "half_b": 11, "bulge_a": -9.0, "bulge_b": -7.5,
-			"wobble": 1.5, "rise": 0.7,
+			"half_a": 10, "half_b": 11,
 			"ratios": {"grave_goods": 0.22, "seance": 0.28, "offering": 0.07},
 			"fixtures": [],
 		},
 		{
 			"tag": "valley", "label": "WEEPING VALLEY", "color": Color("5f8fb3"),
 			"blurb": "THE GAMBLE · OPEN GRAVES AND THE FERRYMAN'S TOLL",
-			"half_a": 12, "half_b": 11, "bulge_a": -21.0, "bulge_b": -19.0,
-			"wobble": 1.2, "rise": -0.4,
+			"half_a": 12, "half_b": 11,
 			"ratios": {"open_grave": 0.17, "ferry_toll": 0.13, "offering": 0.08,
 				"seance": 0.14, "grave_goods": 0.05},
 			"fixtures": [],
@@ -72,8 +68,9 @@ const BOARD := {
 
 ## The grounds' focal centre + the shared overview camera home (board_camera
 ## and procession read these so the director and posed shots stay in lock-step).
+## G1: the world grew ~3x (station spacing law) — the home climbed with it.
 const CENTER := Vector3(0.0, 0.0, 0.0)
-const OVERVIEW_POS := Vector3(-4.0, 38.0, 42.0)
+const OVERVIEW_POS := Vector3(-12.0, 78.0, 86.0)
 
 # ---- SWAP-POINTS: the shipped meshy gothic batch (docs/verify/meshy-forge-
 # VERIFY.md), carried over from the ring wholesale. Fallbacks keep a fresh
@@ -126,9 +123,10 @@ const ZF_WIDOW := GEN_DIR + "npc_widow_idle.glb"             # native 1.6m
 const ZF_REAPER_BASE := GEN_DIR + "npc_reaper.glb"           # the standing sculpt — dormant
 const ZF_SCYTHE := GEN_DIR + "reaper_scythe.glb"             # forged separately (hand-parent later)
 ## THE REAPER's dormant post — the far graveyard edge beyond Weeping Valley,
-## outside every route bulge, barely lit. He activates in a future Estate
-## Stirs lane; tonight he is just... present.
-const REAPER_POST := Vector3(-25.0, 0.0, -13.0)
+## outside every route, barely lit. He activates in a future Estate Stirs
+## lane; tonight he is just... present. (G1: pushed out with the world; y is
+## ground-snapped at placement.)
+const REAPER_POST := Vector3(-43.0, 0.0, -33.0)
 
 # --------------------------------------------------------------------------
 # GRAPH STATE (filled by build() from generate())
@@ -153,22 +151,22 @@ static func generate(board_data: Dictionary = BOARD) -> Dictionary:
 	var out_nodes: Array = []
 	var landmarks := {}
 
+	# THE GROUNDS LAW (doc 33 G1): the land was authored first; the graph
+	# snaps onto its exported stations. Positions are the ONLY thing that
+	# changed hands — ids, types, edges, dist (everything the checksum and
+	# the match receipts hash) are built exactly as before.
+	var st: Dictionary = ProcessionGrounds.station_map(data)
+
 	# --- common approach: LYCHGATE -> approach stones -> CROSSROADS 1 ---
-	var lych: Vector3 = data.lychgate
-	var fork1: Vector3 = data.fork1
-	var fork2: Vector3 = data.fork2
-	var merge: Vector3 = data.merge
-	var gate: Vector3 = data.gate
 	landmarks["lychgate"] = out_nodes.size()
-	out_nodes.append({"id": 0, "type": S.BLANK, "route": "common", "pos": lych, "next": []})
+	out_nodes.append({"id": 0, "type": S.BLANK, "route": "common", "pos": st.lychgate, "next": []})
 	var approach: Array = data.approach_types
 	for k in approach.size():
-		var t := float(k + 1) / float(approach.size() + 1)
 		out_nodes.append({"id": out_nodes.size(), "type": String(approach[k]),
-			"route": "common", "pos": lych.lerp(fork1, t), "next": []})
+			"route": "common", "pos": (st.approach as Array)[k], "next": []})
 	landmarks["fork1"] = out_nodes.size()
 	out_nodes.append({"id": out_nodes.size(), "type": S.CROSSROADS, "route": "common",
-		"pos": fork1, "next": []})
+		"pos": st.fork1, "next": []})
 
 	# --- route halves. Types are assigned per route over both halves at once
 	# (ratios -> counts by largest remainder; hazards never adjacent; the first
@@ -180,30 +178,29 @@ static func generate(board_data: Dictionary = BOARD) -> Dictionary:
 		var rd := r as Dictionary
 		var types := _route_types(rd, lrng)
 		half_a_start[rd.tag] = out_nodes.size()
-		_append_half(out_nodes, rd, "a", fork1, fork2, types)
+		_append_half(out_nodes, rd, st[String(rd.tag) + "_a"] as Array, "a", types)
 		route_meta.append({"tag": rd.tag, "label": rd.label, "color": rd.color,
 			"blurb": rd.blurb, "half_a": int(rd.half_a), "half_b": int(rd.half_b)})
 	landmarks["fork2"] = out_nodes.size()
 	out_nodes.append({"id": out_nodes.size(), "type": S.CROSSROADS, "route": "common",
-		"pos": fork2, "next": []})
+		"pos": st.fork2, "next": []})
 	for r in data.routes:
 		var rd := r as Dictionary
 		var types_b: Dictionary = rd.get("_types_b", {})
 		half_b_start[rd.tag] = out_nodes.size()
-		_append_half(out_nodes, rd, "b", fork2, merge, types_b)
+		_append_half(out_nodes, rd, st[String(rd.tag) + "_b"] as Array, "b", types_b)
 
 	# --- merge + homestretch + MANOR GATE ---
 	landmarks["merge"] = out_nodes.size()
 	out_nodes.append({"id": out_nodes.size(), "type": S.BLANK, "route": "common",
-		"pos": merge, "next": []})
+		"pos": st.merge, "next": []})
 	var stretch := int(data.homestretch)
 	for k in stretch:
-		var t := float(k + 1) / float(stretch + 1)
 		out_nodes.append({"id": out_nodes.size(), "type": S.BLANK, "route": "common",
-			"pos": merge.lerp(gate, t), "next": []})
+			"pos": (st.homestretch as Array)[k], "next": []})
 	landmarks["gate"] = out_nodes.size()
 	out_nodes.append({"id": out_nodes.size(), "type": S.GATE, "route": "common",
-		"pos": gate, "next": []})
+		"pos": st.gate, "next": []})
 
 	# --- edges: chains, forks fan out in route declaration order ---
 	var f1 := int(landmarks.fork1)
@@ -350,57 +347,16 @@ static func _hazard_beside(placed: Dictionary, slot: Dictionary) -> bool:
 			return true
 	return false
 
-## One half of a route: stones evenly spaced (arc length) along a quadratic
-## bezier between the two anchor forks, with a gentle perpendicular wobble and
-## the route's rise/dip. types maps local index -> type (default path).
-static func _append_half(out_nodes: Array, rd: Dictionary, half: String,
-		from: Vector3, to: Vector3, types: Dictionary) -> void:
+## One half of a route: stones seated on the land's exported stations (already
+## arc-length-even, deck-aware, spacing-law-compliant — doc 33). types maps
+## local index -> type (default path). The bezier that used to live here died
+## with the world-first inversion — geometry belongs to ProcessionGrounds now.
+static func _append_half(out_nodes: Array, rd: Dictionary, pts: Array,
+		half: String, types: Dictionary) -> void:
 	var n := int(rd.half_a) if half == "a" else int(rd.half_b)
-	var bulge := float(rd.bulge_a) if half == "a" else float(rd.bulge_b)
-	var ctrl := (from + to) * 0.5 + Vector3(bulge, 0.0, 0.0)
-	var pts := _even_bezier(from, ctrl, to, n)
 	for k in n:
-		var p: Vector3 = pts[k]
-		# perpendicular wobble (deterministic sine, never rng) + route rise
-		var t := float(k + 1) / float(n + 1)
-		var tangent := _bezier_tangent(from, ctrl, to, t)
-		var perp := tangent.cross(Vector3.UP).normalized()
-		var phase := 0.9 if half == "a" else 2.3
-		p += perp * float(rd.wobble) * sin(float(k) * 1.7 + phase)
-		var route_t := t * 0.5 if half == "a" else 0.5 + t * 0.5
-		p.y = 0.04 + float(rd.rise) * sin(PI * route_t)
 		out_nodes.append({"id": out_nodes.size(), "type": String(types.get(k, S.BLANK)),
-			"route": String(rd.tag), "pos": p, "next": []})
-
-static func _bezier(a: Vector3, c: Vector3, b: Vector3, t: float) -> Vector3:
-	var u := 1.0 - t
-	return u * u * a + 2.0 * u * t * c + t * t * b
-
-static func _bezier_tangent(a: Vector3, c: Vector3, b: Vector3, t: float) -> Vector3:
-	var v := 2.0 * (1.0 - t) * (c - a) + 2.0 * t * (b - c)
-	return v.normalized() if v.length() > 0.001 else Vector3.FORWARD
-
-## n interior points at even arc length along the bezier (endpoints excluded —
-## they are the fork/merge nodes themselves).
-static func _even_bezier(a: Vector3, c: Vector3, b: Vector3, n: int) -> Array:
-	var samples := 256
-	var cum: Array[float] = [0.0]
-	var prev := a
-	for s in range(1, samples + 1):
-		var p := _bezier(a, c, b, float(s) / float(samples))
-		cum.append(cum[s - 1] + prev.distance_to(p))
-		prev = p
-	var total: float = cum[samples]
-	var out: Array = []
-	for k in range(1, n + 1):
-		var target := total * float(k) / float(n + 1)
-		var s := 1
-		while s < samples and cum[s] < target:
-			s += 1
-		var seg: float = cum[s] - cum[s - 1]
-		var frac: float = 0.0 if seg <= 0.0 else (target - cum[s - 1]) / seg
-		out.append(_bezier(a, c, b, (float(s - 1) + frac) / float(samples)))
-	return out
+			"route": String(rd.tag), "pos": pts[k], "next": []})
 
 # --------------------------------------------------------------------------
 # TOPOLOGY RECEIPT (--boardgraphtest)
@@ -570,14 +526,21 @@ func grave_owner(node_id: int) -> int:
 # --------------------------------------------------------------------------
 # BUILD — the world from the graph
 # --------------------------------------------------------------------------
+var grounds: ProcessionGrounds = null
+
 func build(players: Array, monuments: Array) -> void:
 	graph = generate()
 	nodes = graph.nodes
-	_build_ground()
+	# THE GROUNDS (doc 33 G1): the land builds itself first — terrain, water,
+	# surfaced paths, the hedge maze, the bridges, the manor on its rise. The
+	# old flat plane + box ribbons died with the inversion: the paths ARE the
+	# world's, and the stones sit on their stations.
+	grounds = ProcessionGrounds.new()
+	add_child(grounds)
+	grounds.build_all()
 	stone_nodes.clear()
 	for n in nodes:
 		_build_stone(int(n.id), String(n.type))
-	_build_ribbons()
 	_map_monuments(monuments, players)
 	_build_furniture()
 	for pl in players:
@@ -586,42 +549,15 @@ func build(players: Array, monuments: Array) -> void:
 		pawns[int(pl.index)] = pawn
 		seat_pawn(int(pl.index), 0)
 
-func _build_ground() -> void:
-	var ground := MeshInstance3D.new()
-	var pm := PlaneMesh.new()
-	pm.size = Vector2(64, 72)
-	ground.mesh = pm
-	var gmat := StandardMaterial3D.new()
-	gmat.albedo_color = Color(0.055, 0.065, 0.085)   # cool damp lawn under moonlight
-	gmat.roughness = 1.0
-	ground.material_override = gmat
-	ground.position = CENTER + Vector3(0, -0.02, 0)
-	add_child(ground)
-
-## Flagstone ribbons under every edge so each road reads as a walked path even
-## in the dark. THE A-LOOK dims the route tint to near-subliminal — route
-## IDENTITY lives in THE DRIVE minimap; the world stays dark and moody, the
-## ribbon just a faint darker seam of a path underfoot.
-func _build_ribbons() -> void:
-	for n in nodes:
-		for nx in (n.next as Array):
-			var a: Vector3 = n.pos
-			var b: Vector3 = nodes[int(nx)].pos
-			var seg := MeshInstance3D.new()
-			var bm := BoxMesh.new()
-			bm.size = Vector3(1.5, 0.05, a.distance_to(b))
-			seg.mesh = bm
-			var mat := StandardMaterial3D.new()
-			var rcol: Color = route_info(route_of(int(nx))).color if route_of(int(nx)) != "common" \
-				else Color(0.5, 0.5, 0.55)
-			mat.albedo_color = Color(0.105, 0.11, 0.13).lerp(rcol, 0.05)
-			mat.roughness = 0.95
-			seg.material_override = mat
-			add_child(seg)
-			var mid := (a + b) * 0.5
-			seg.global_position = Vector3(mid.x, (a.y + b.y) * 0.5 - 0.03, mid.z)
-			if a.distance_to(b) > 0.01:
-				seg.look_at(Vector3(b.x, seg.global_position.y, b.z), Vector3.UP)
+## Ground-snap: keep a placement's xz, let the LAND decide its y (+dy skirt
+## sink). Every piece of furniture goes through here — nothing floats over a
+## dip, nothing drowns: a placement over the bog water stands IN the shallows
+## (base at the waterline), never on the lakebed with its lantern bobbing
+## like a ghost light. (Stations already carry deck-aware y.)
+func _gsnap(p: Vector3, dy := 0.0) -> Vector3:
+	var g := ProcessionGrounds.snap(p, dy)
+	g.y = maxf(g.y, ProcessionGrounds.WATER_Y - 0.12 + dy)
+	return g
 
 func _build_stone(i: int, type: String) -> void:
 	var pos := space_pos(i)
@@ -856,48 +792,70 @@ func _build_furniture() -> void:
 		var out := _outward(i)
 		match type:
 			S.OFFERING:
-				_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.4), here + out * 1.1 + Vector3(0, 0.06, 0))
+				_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.4), _gsnap(here + out * 1.4))
 			S.OPEN_GRAVE:
-				_place(_prop(_grave_variant_for(i), FB_GRAVE, 1.7), here + out * 0.9 + Vector3(0, 0.06, 0))
+				_place(_prop(_grave_variant_for(i), FB_GRAVE, 1.7), _gsnap(here + out * 1.2))
 			S.GRAVE_GOODS:
 				# ZF: the grave-goods chest, scaled small — a coffer, not a crate.
-				_place(_prop(ZF_CHEST, FB_CRATE, 0.55), here + out * 1.1 + Vector3(0, 0.06, 0))
-				_place(_prop(FB_LANTERN, FB_LANTERN, 1.5), here + out * 1.15 + Vector3(0.7, 0.06, 0.2))
+				_place(_prop(ZF_CHEST, FB_CRATE, 0.55), _gsnap(here + out * 1.3))
+				_place(_prop(FB_LANTERN, FB_LANTERN, 1.5), _gsnap(here + out * 1.35 + Vector3(0.7, 0, 0.2)))
 			S.SEANCE:
-				_place(_prop(GEN_PLANCHETTE, FB_LANTERN, 0.35), here + out * 1.05 + Vector3(0, 0.06, 0))
+				_place(_prop(GEN_PLANCHETTE, FB_LANTERN, 0.35), _gsnap(here + out * 1.25))
 			S.FERRY_TOLL:
-				_place_facing(_prop(GEN_TOLLARCH, FB_TOLLARCH, 3.4), here + Vector3(0, 0.06, 0),
+				# The toll arch straddles the walked line itself — on the boardwalk
+				# it stands ON the deck (station y), on the causeway likewise.
+				_place_facing(_prop(GEN_TOLLARCH, FB_TOLLARCH, 3.4), here + Vector3(0, 0.02, 0),
 					here + _flow_dir(i) * 4.0)
 				# ZF: THE FERRYMAN and his skiff hold the valley toll (first one only —
 				# one ferryman works this river; further tolls keep the bare arch).
 				if not ferry_dressed and route_of(i) == "valley":
 					ferry_dressed = true
-					var moor := here + out * 2.7 + Vector3(0, 0.02, 0)
+					var moor := here + out * 3.2
+					# the skiff FLOATS if its mooring lies over the water; else it
+					# sits beached on the mud
+					if ProcessionGrounds.under_water(moor.x, moor.z):
+						moor.y = ProcessionGrounds.WATER_Y + 0.04
+					else:
+						moor = _gsnap(moor, 0.02)
 					_place_facing(_prop(ZF_SKIFF, FB_CRATE, 0.8), moor, moor + _flow_dir(i) * 4.0)
 					_place_facing(_rigged_npc(ZF_FERRYMAN, 1.85, 1.85),
-						here + out * 1.8 + Vector3(0, 0.04, 0), here)
+						here + out * 1.8, here)
 			S.CART:
 				# ZF: the hearse-drawn Peddler's Cart replaces the ring-era hearse.
-				_place_facing(_prop(ZF_CART, FB_HEARSE, 2.4), here + out * 1.6 + Vector3(0, 0.06, 0), here)
-				_place(_prop(FB_LANTERN, FB_LANTERN, 1.5), here + out * 2.3 + Vector3(0.5, 0.06, 0.3))
+				# Inside the hedge maze the generic outboard offset would park the
+				# hearse THROUGH a wall — it backs into THE CART COURT instead
+				# (the opened cell beside its station, doc 33 G1).
+				var cart_at := here + out * 2.0
+				if ProcessionGrounds.in_maze(cart_at.x, cart_at.z):
+					cart_at = Vector3(ProcessionGrounds.CART_COURT.x, 0, ProcessionGrounds.CART_COURT.y)
+				_place_facing(_prop(ZF_CART, FB_HEARSE, 2.4), _gsnap(cart_at), here)
+				_place(_prop(FB_LANTERN, FB_LANTERN, 1.5),
+					_gsnap(cart_at + (here - cart_at) * 0.35 + Vector3(0.4, 0, 0.3)))
 			S.CROSSROADS:
-				_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), here + out * 1.4 + Vector3(0, 0.06, 0))
+				_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), _gsnap(here + out * 1.7))
 				# ZF: a checkpoint shrine marks each crossroads landmark, opposite the post.
-				_place(_prop(ZF_SHRINE, FB_LANTERN, 2.5), here - out * 1.6 + Vector3(0, 0.06, 0))
+				_place(_prop(ZF_SHRINE, FB_LANTERN, 2.5), _gsnap(here - out * 1.9))
 		# Sparse route-biome dressing every 4th stone, outboard.
 		if type == S.BLANK and i % 4 == 1:
 			match route_of(i):
 				"garden":
-					_place(_prop(GEN_TOPIARY, FB_COLUMN, 2.2), here + out * 2.6 + Vector3(0, 0.04, 0))
+					_place(_prop(GEN_TOPIARY, FB_COLUMN, 2.2), _gsnap(here + out * 3.0, -0.04))
 				"hollow":
-					_place(_prop(GEN_DEADTREE, FB_COLUMN, 3.8), here + out * 2.8 + Vector3(0, 0.04, 0))
+					_place(_prop(GEN_DEADTREE, FB_COLUMN, 3.8), _gsnap(here + out * 3.2, -0.04))
 				"valley":
-					_place(_prop([GEN_WELL, GEN_ANGEL, GEN_WHEELBARROW][posmod(i, 3)],
-						FB_COLUMN, 2.2), here + out * 2.7 + Vector3(0, 0.04, 0))
+					var vp := here + out * 3.1
+					if not ProcessionGrounds.under_water(vp.x, vp.z):
+						_place(_prop([GEN_WELL, GEN_ANGEL, GEN_WHEELBARROW][posmod(i, 3)],
+							FB_COLUMN, 2.2), _gsnap(vp, -0.04))
 	# ZF: the merge landmark gets its own shrine — the roads reunite in prayer.
 	var mg := int((graph.landmarks as Dictionary).merge)
 	_place(_prop(ZF_SHRINE, FB_LANTERN, 2.5),
-		space_pos(mg) + _outward(mg) * 1.8 + Vector3(0, 0.06, 0))
+		_gsnap(space_pos(mg) + _outward(mg) * 2.2))
+	# The processional climb is lamp-lined (doc 33 surface table) — paired
+	# lamps flanking the cut-stone road up the rise.
+	for lz in [-45.5, -50.5, -55.5]:
+		for lx in [-3.0, 3.0]:
+			_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.4), _gsnap(Vector3(lx, 0, lz)))
 	_build_lychgate()
 	_build_manor_gate()
 	_build_npc_troupe()
@@ -911,16 +869,16 @@ func _build_furniture() -> void:
 func _build_npc_troupe() -> void:
 	var dig_id := _route_mid_id("hollow")
 	_place_facing(_rigged_npc(ZF_GRAVEDIGGER, 1.7, 1.7),
-		space_pos(dig_id) + _outward(dig_id) * 3.2 + Vector3(0, 0.04, 0), space_pos(dig_id))
+		_gsnap(space_pos(dig_id) + _outward(dig_id) * 3.4), space_pos(dig_id))
 	var wid_id := _route_mid_id("garden")
 	_place_facing(_rigged_npc(ZF_WIDOW, 1.6, 1.6),
-		space_pos(wid_id) + _outward(wid_id) * 3.0 + Vector3(0, 0.04, 0), space_pos(wid_id))
+		_gsnap(space_pos(wid_id) + _outward(wid_id) * 3.2), space_pos(wid_id))
 	# THE REAPER — the standing sculpt, motionless at the graveyard's edge,
 	# facing across the valley toward the gate; his scythe planted beside him.
 	if ResourceLoader.exists(ZF_REAPER_BASE):
 		_place_facing(_prop(ZF_REAPER_BASE, FB_COLUMN, 4.1),
-			REAPER_POST, gate_pos() + Vector3(0, 0.0, 4.0))
-		_place(_prop(ZF_SCYTHE, FB_LANTERN, 3.6), REAPER_POST + Vector3(1.4, 0.0, 0.6))
+			_gsnap(REAPER_POST, -0.08), gate_pos() + Vector3(0, 0.0, 4.0))
+		_place(_prop(ZF_SCYTHE, FB_LANTERN, 3.6), _gsnap(REAPER_POST + Vector3(1.4, 0.0, 0.6)))
 		# Barely lit: one faint, sickly pool so the silhouette reads at distance —
 		# never a hero light. (Existing kit only; shadows off, tight range.)
 		var pall := OmniLight3D.new()
@@ -930,7 +888,7 @@ func _build_npc_troupe() -> void:
 		pall.omni_range = 7.0
 		pall.shadow_enabled = false
 		add_child(pall)
-		pall.global_position = REAPER_POST + Vector3(0.6, 3.2, 0.6)
+		pall.global_position = _gsnap(REAPER_POST + Vector3(0.6, 0, 0.6), 3.2)
 
 ## The node id at the middle of a route's first half (placement anchor).
 func _route_mid_id(tag: String) -> int:
@@ -970,9 +928,9 @@ func _flow_dir(i: int) -> Vector3:
 func _build_lychgate() -> void:
 	var start := lychgate_pos()
 	var flow := _flow_dir(0)
-	_place_facing(_prop(ZF_LYCHGATE, FB_TOLLARCH, 4.4), start + Vector3(0, 0.06, 0), start + flow * 6.0)
-	_place_facing(_prop(GEN_HEARSE, FB_HEARSE, 2.1), start + Vector3(-3.0, 0.06, 1.2), start)
-	_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), start + Vector3(2.6, 0.06, 0.6))
+	_place_facing(_prop(ZF_LYCHGATE, FB_TOLLARCH, 4.4), start + Vector3(0, 0.02, 0), start + flow * 6.0)
+	_place_facing(_prop(GEN_HEARSE, FB_HEARSE, 2.1), _gsnap(start + Vector3(-3.4, 0, 1.4)), start)
+	_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), _gsnap(start + Vector3(3.0, 0, 0.8)))
 	# A-LOOK / ZERO-ENGLISH: the covered lychgate arch + hearse + signpost ARE
 	# the read — no floating "THE LYCHGATE" caption. (The pawns start here; the
 	# name never needs to surface.)
@@ -983,9 +941,9 @@ func _build_manor_gate() -> void:
 	var back := (gate - CENTER)
 	back.y = 0.0
 	back = back.normalized() if back.length() > 0.01 else Vector3.BACK
-	_place_facing(_prop(ZF_MANORGATE, FB_TOLLARCH, 5.6), gate + back * 1.4 + Vector3(0, 0.06, 0), CENTER)
-	_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.6), gate + back * 0.8 + Vector3(3.2, 0.06, 0))
-	_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.6), gate + back * 0.8 + Vector3(-3.2, 0.06, 0))
+	_place_facing(_prop(ZF_MANORGATE, FB_TOLLARCH, 5.6), _gsnap(gate + back * 1.6), CENTER)
+	_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.6), _gsnap(gate + back * 0.9 + Vector3(3.6, 0, 0)))
+	_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.6), _gsnap(gate + back * 0.9 + Vector3(-3.6, 0, 0)))
 	# A warm pool of light on the finish — the one gold glow on the grounds
 	# (the Codicil's beacon language, re-pointed at the true objective).
 	var lamp := OmniLight3D.new()
@@ -1000,22 +958,33 @@ func _build_manor_gate() -> void:
 	# grounds ARE the beacon — no floating "THE MANOR GATE" caption. Its name
 	# surfaces only on ARRIVAL, via the travelling pawn's landing label.
 
-## Sparse fixed perimeter dressing — deterministic hand-placed set, scaled to
-## the A-to-B grounds. Never draws from any rng.
+## Sparse fixed perimeter dressing — deterministic hand-placed set, re-seated
+## on the G1 geography (doc 33 map). Never draws from any rng; every piece
+## ground-snapped.
 func _build_perimeter() -> void:
 	var pieces: Array = [
-		{"p": GEN_CRYPT, "pos": Vector3(-14.0, 0.06, 12.0), "h": 3.4},
-		{"p": GEN_DEADTREE, "pos": Vector3(14.5, 0.06, 8.0), "h": 4.3},
-		{"p": GEN_ANGEL, "pos": Vector3(-15.5, 0.06, -9.0), "h": 3.0},
-		{"p": GEN_WELL, "pos": Vector3(13.5, 0.06, -12.0), "h": 2.4},
-		{"p": GEN_FOUNTAIN, "pos": Vector3(0.0, 0.02, 9.5), "h": 1.5},
-		{"p": GEN_IRONGATE, "pos": Vector3(7.5, 0.06, 22.0), "h": 2.3},
-		{"p": GEN_IRONGATE, "pos": Vector3(-7.5, 0.06, 22.0), "h": 2.3},
-		{"p": GEN_TOPIARY, "pos": Vector3(9.0, 0.06, -21.0), "h": 2.6},
-		{"p": GEN_TOPIARY, "pos": Vector3(-9.0, 0.06, -21.0), "h": 2.6},
+		# THE CRYPT's sealed door, set into the manor rise's dark west flank
+		# (future Estate Stirs entrance — present, shut, waiting).
+		{"p": GEN_CRYPT, "pos": Vector3(-10.0, 0, -52.0), "h": 3.4},
+		# a dead sentinel east of the maze block
+		{"p": GEN_DEADTREE, "pos": Vector3(46.0, 0, 2.0), "h": 4.3},
+		# the broken angel watches the valley road begin
+		{"p": GEN_ANGEL, "pos": Vector3(-18.0, 0, 27.0), "h": 3.0},
+		# the covered well between the garden loop and the climb
+		{"p": GEN_WELL, "pos": Vector3(12.0, 0, -28.0), "h": 2.4},
+		# the dry fountain holds the garden court inside garden_b's curve
+		{"p": GEN_FOUNTAIN, "pos": Vector3(31.0, 0, -29.0), "h": 1.5},
+		# iron gates flank the forecourt walk south of the lychgate
+		{"p": GEN_IRONGATE, "pos": Vector3(7.5, 0, 44.0), "h": 2.3},
+		{"p": GEN_IRONGATE, "pos": Vector3(-7.5, 0, 44.0), "h": 2.3},
+		# clipped topiary sentries at the maze mouth and its far door
+		{"p": GEN_TOPIARY, "pos": Vector3(21.6, 0, 18.3), "h": 2.6},
+		{"p": GEN_TOPIARY, "pos": Vector3(26.9, 0, 18.3), "h": 2.6},
+		{"p": GEN_TOPIARY, "pos": Vector3(35.1, 0, -14.6), "h": 2.6},
+		{"p": GEN_TOPIARY, "pos": Vector3(40.4, 0, -14.6), "h": 2.6},
 	]
 	for e in pieces:
-		_place(_prop(String(e["p"]), FB_COLUMN, float(e["h"])), e["pos"] as Vector3)
+		_place(_prop(String(e["p"]), FB_COLUMN, float(e["h"])), _gsnap(e["pos"] as Vector3, -0.04))
 
 ## Instance a generated GLB if present, else the committed fallback, else a
 ## tinted primitive. Never returns null; purely visual. (Ring-era code, kept.)
@@ -1176,15 +1145,25 @@ func advance_pawn_path(seat: int, path: Array) -> Tween:
 	if not pawns.has(seat) or path.is_empty():
 		tw.tween_interval(0.01)
 		return tw
+	# G1: stations sit ~6-9u apart (spacing law) — the hop scales its arc and
+	# hang-time with the gap so a long stride reads as a bigger toy throw, not
+	# a flat glide. Purely presentational; the walk itself was decided upstream.
+	var prev: Vector3 = pawns[seat].global_position
 	for node_id in path:
 		var target := space_pos(int(node_id)) + _seat_offset(seat)
-		tw.tween_property(pawns[seat], "global_position", target + Vector3(0, 0.55, 0), 0.13) \
+		var gap := prev.distance_to(target)
+		var lift := clampf(0.45 + gap * 0.06, 0.55, 1.05)
+		var up_t := clampf(0.10 + gap * 0.010, 0.13, 0.20)
+		var apex := (prev + target) * 0.5 + Vector3(0, lift, 0)
+		apex.y = maxf(apex.y, maxf(prev.y, target.y) + lift * 0.6)
+		tw.tween_property(pawns[seat], "global_position", apex, up_t) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-		tw.tween_property(pawns[seat], "global_position", target, 0.11) \
+		tw.tween_property(pawns[seat], "global_position", target, up_t * 0.85) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 		# The figurine's clack: dry and woody (house bank, no new asset) — a toy
 		# base knocking on stone, not a card flip.
 		tw.tween_callback(Sfx.play.bind("impact_wood", -13.0, 0.2))
+		prev = target
 	return tw
 
 # --------------------------------------------------------------------------
@@ -1288,11 +1267,11 @@ func clear_landing_label() -> void:
 		_landing_label.visible = false
 
 ## Walkabout approach-reveal: name every SPECIAL stone whose position is within
-## `radius` metres of `world_pos` (≈2 stones at the graph's ~2.2m spacing),
-## hide the rest. The estate walkabout hub calls this each frame with the
-## stroller's ground position; the board stays wordless until a character walks
-## up to a stone. Pooled + idempotent — safe to call every frame.
-func reveal_names_near(world_pos: Vector3, radius := 6.0) -> void:
+## `radius` metres of `world_pos` (≈2 stones at the G1 grounds' ~7m station
+## spacing), hide the rest. The estate walkabout hub calls this each frame with
+## the stroller's ground position; the board stays wordless until a character
+## walks up to a stone. Pooled + idempotent — safe to call every frame.
+func reveal_names_near(world_pos: Vector3, radius := 15.0) -> void:
 	for n in nodes:
 		var i := int(n.id)
 		var t := String(n.type)

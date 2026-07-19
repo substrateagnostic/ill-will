@@ -1513,9 +1513,10 @@ func _flyover_skip() -> bool:
 func _capture_showcase() -> void:
 	executor.clear_banner()   # hero shots stand clean, no greeting banner
 	# A clean elevated hero of the WHOLE branching board — lychgate at the
-	# bottom of frame, the three route ribbons, the Manor Gate glowing at top.
-	cam.global_position = Vector3(0.0, 42.0, 44.0)
-	cam.look_at(board.CENTER + Vector3(0, 0.5, -2.0), Vector3.UP)
+	# bottom of frame, the three lands, the Manor Gate glowing on its rise.
+	# (G1: the world grew ~3x with THE GROUNDS — the hero climbed with it.)
+	cam.global_position = Vector3(0.0, 82.0, 92.0)
+	cam.look_at(board.CENTER + Vector3(0, 0.5, -8.0), Vector3.UP)
 	print("SHOWCASE board_wide cam=", cam.global_position)
 	await _cap_snap("board_wide")
 	# An open grave in close: a headstone with its lit rim, board dark behind.

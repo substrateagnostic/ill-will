@@ -6,6 +6,48 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🌍 MENU #9 — THE NINTH WATCH (2026-07-19 overnight): G1 OF THE GROUNDS
+  IS IN. The estate has soil.**
+
+  **THE HEADLINE:** the world-first inversion (doc 33) landed in one lane.
+  New `estate/procession/grounds.gd` owns the LAND — sculpted terrain (pure
+  deterministic noise, engine-proof), authored path splines with real
+  surfaces (flagstone forecourt walk → gravel garden → grass INSIDE the
+  hedge maze → dirt hollow track → stone causeway + plank boardwalk over
+  bog water → cut-stone climb, lamp-lined, to the gate), shaped water,
+  bridges (bone bridge over the pond's dark arm + a garden footbridge over
+  the new brook), a terrain rim that rolls into the dark, and a MANOR
+  SILHOUETTE on the rise with lit windows — visible from the lychgate, the
+  moving target made literal. `board_graph.generate()` now snaps its nodes
+  onto the land's exported stations (≥2 stone-widths, deck-aware).
+
+  **RECEIPTS: UNTOUCHED.** checksum b269c570 BOARDGRAPH_OK; seed 7 → HEIR
+  GOLD ⚘[37,38,58,48] ×3 — byte-identical before/after, clean exits.
+  Proven hard: the mid-lane noise swap moved every station's height and no
+  receipt moved. World positions are presentation, formally.
+
+  **YOUR STILLS** (`estate/procession/shots/g1_*.png` — 9): the promised
+  TEST STRETCH first — `g1_t1_maze_overhead` (the maze reads as a MAZE:
+  true path + false corridors + dead ends + THE CART COURT, a carved
+  clearing where the hearse-cart now parks), `g1_t2_maze_corridor` (green
+  canyon, lamp, manor beyond), `g1_t3_maze_mouth` (topiary sentries).
+  Then the lands: `g1_w1_overview`, `g1_w2_boardwalk` (planks + posts +
+  ferryman), `g1_w3_bone_bridge`, `g1_w5_merge_climb` (crypt door in the
+  rise flank, stepped slabs, the warm gate), `g1_w6_forecourt` (lychgate +
+  hearse + iron gates — and the manor visible clear across the world),
+  `g1_w7_brook_bridge`.
+
+  **DIRECTOR'S HONEST NOTES (already on the G2 list):** hedge walls are
+  in-engine box-clusters — right STRUCTURE and green, but the leafy skin
+  is exactly what the Meshy HEDGE kit re-dresses onto these same wall
+  lines in G2 (~120cr of the ~900cr manifest, balance 7915). The hollow
+  has no trees yet (FOREST kit is G2's biggest line). Brook reads too
+  dark under its bridge (reeds + shimmer, G2). Board-camera framings
+  (travel cuts, over-shoulder) inherit the new positions and WORK, but
+  fine-tuning wants your eyes at the live session. NEEDS YOU: bless the
+  test stretch + lands as the G1 base (or redline), then I fire G2's
+  Meshy wave. Everything fixable tomorrow, as you said.
+
 - **⚘⚘⚘⚘⚘⚘⚘⚘ MENU #8 — THE EIGHTH WATCH (2026-07-19, the live jam day).
   The day the game got taste.**
 

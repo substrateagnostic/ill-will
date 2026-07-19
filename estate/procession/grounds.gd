@@ -1,0 +1,853 @@
+class_name ProcessionGrounds
+extends Node3D
+## THE GROUNDS (doc 33, G1) — the world-first inversion. This node owns the
+## LAND: sculpted terrain, the water, the authored path network with real
+## surfaces (flagstone / gravel / grass / dirt / plank / causeway / cut stone),
+## the hedge maze, the bridges, and the manor silhouette on its rise.
+##
+## The board does NOT lay the world out any more — the world was here first.
+## Each path segment exports STATIONS (arc-length-even points along its
+## authored spline, ≥2 stone-widths apart) and board_graph.generate() snaps
+## its logical nodes onto them. Node ids, types, edges, and dist are untouched
+## — only world positions moved — so the topology checksum (positions
+## excluded) and every match receipt survive the inversion (doc 33 §3).
+##
+## Everything static here is PURE and deterministic (fixed-seed noise, no
+## scene access), because generate() runs headless for --boardgraphtest.
+## GROUNDS BAR (doc 28 §0a): no flat ground, no visible tiling, surfaces vary
+## by place, integrated-GPU envelope — MultiMesh for every repeated element.
+
+# --------------------------------------------------------------------------
+# WORLD ANCHORS — south (+z) to north (-z): forecourt, lands, manor rise.
+# --------------------------------------------------------------------------
+const WATER_Y := -1.55             # the Weeping Valley's standing water
+const BROOK_Y := -0.45             # the garden brook's surface
+const PLANK_Y := -1.05             # boardwalk deck over the bog water
+const TERRAIN_SEED := 33771       # doc 33's own stream — never the night seed
+
+# --------------------------------------------------------------------------
+# PATH SEGMENTS — authored control polylines (xz; y is sampled from the land).
+# Surface spans are control-point index ranges. THE MAZE IS THE PATH: the
+# garden_a points walk the true solution of the hedge maze (grid below).
+# --------------------------------------------------------------------------
+const SEGS := {
+	"approach": {
+		"pts": [Vector2(0, 38), Vector2(0, 31), Vector2(0, 24)],
+		"surf": [[0, 2, "flagstone"]],
+	},
+	"garden_a": {
+		"pts": [Vector2(0, 24), Vector2(8, 22.5), Vector2(16, 20),
+			Vector2(24.25, 15.25), Vector2(28.75, 15.25), Vector2(33.25, 15.25),
+			Vector2(33.25, 10.75), Vector2(33.25, 6.25), Vector2(28.75, 6.25),
+			Vector2(28.75, 1.75), Vector2(28.75, -2.75), Vector2(33.25, -2.75),
+			Vector2(37.75, -2.75), Vector2(37.75, -7.25), Vector2(37.75, -11.75),
+			Vector2(30, -14.5), Vector2(19, -15.5), Vector2(9, -16), Vector2(0, -16)],
+		"surf": [[0, 3, "gravel"], [3, 14, "grass"], [14, 18, "gravel"]],
+	},
+	"garden_b": {
+		"pts": [Vector2(0, -16), Vector2(12, -18), Vector2(25, -20),
+			Vector2(34, -23), Vector2(38, -30), Vector2(34, -37),
+			Vector2(28, -40), Vector2(22, -43), Vector2(12, -45), Vector2(0, -42)],
+		"surf": [[0, 6, "gravel"], [6, 7, "bridge"], [7, 9, "gravel"]],
+	},
+	"hollow_a": {
+		"pts": [Vector2(0, 24), Vector2(-7, 19), Vector2(-14, 15),
+			Vector2(-9, 9), Vector2(-16, 3), Vector2(-9, -2),
+			Vector2(-15, -8), Vector2(-6, -12), Vector2(0, -16)],
+		"surf": [[0, 8, "dirt"]],
+	},
+	"hollow_b": {
+		"pts": [Vector2(0, -16), Vector2(-7, -20), Vector2(-4, -26),
+			Vector2(-11, -30), Vector2(-7, -36), Vector2(-2, -39), Vector2(0, -42)],
+		"surf": [[0, 6, "dirt"]],
+	},
+	"valley_a": {
+		"pts": [Vector2(0, 24), Vector2(-12, 22), Vector2(-24, 20),
+			Vector2(-33, 15), Vector2(-38, 7), Vector2(-40, -2),
+			Vector2(-36, -9), Vector2(-24, -14), Vector2(-12, -16), Vector2(0, -16)],
+		"surf": [[0, 3, "causeway"], [3, 6, "plank"], [6, 9, "causeway"]],
+	},
+	"valley_b": {
+		"pts": [Vector2(0, -16), Vector2(-12, -19), Vector2(-24, -22),
+			Vector2(-31, -26), Vector2(-30, -33), Vector2(-24, -37),
+			Vector2(-16, -40), Vector2(-8, -42), Vector2(0, -42)],
+		"surf": [[0, 3, "causeway"], [3, 4, "bridge"], [4, 8, "causeway"]],
+	},
+	"homestretch": {
+		"pts": [Vector2(0, -42), Vector2(0, -50), Vector2(0, -58)],
+		"surf": [[0, 2, "road"]],
+	},
+}
+
+## Landmark anchors = segment endpoints (kept explicit so a reader can see the
+## geography without tracing splines).
+const LYCH_XZ := Vector2(0, 38)
+const FORK1_XZ := Vector2(0, 24)
+const FORK2_XZ := Vector2(0, -16)
+const MERGE_XZ := Vector2(0, -42)
+const GATE_XZ := Vector2(0, -58)
+
+## The garden brook — carved into the land, crossed once by garden_b's
+## footbridge, ending in a reed pool at the rise's toe.
+const BROOK := [Vector2(40, -34), Vector2(32, -39), Vector2(24, -42),
+	Vector2(16, -44), Vector2(13.5, -44.5)]
+
+# --------------------------------------------------------------------------
+# THE HEDGE MAZE (Garden Row half a) — a 4x7 cell grid, 4.5u cells. The true
+# path is garden_a's control points; every other cell is a dead-end branch so
+# the block reads as a MAZE from the air and a green canyon from the couch.
+# Walls are listed as OPEN pairs (everything not open is hedge).
+# --------------------------------------------------------------------------
+const MAZE_CELL := 4.5
+const MAZE_COLS := 4
+const MAZE_ROWS := 7
+const MAZE_ORIGIN := Vector2(24.25, 15.25)   # cell (0,0) centre; +col=+x, +row=-z
+## east-west openings "c,r" = open between (c,r) and (c+1,r)
+const MAZE_OPEN_E := ["0,0", "1,0", "2,0", "1,2", "1,4", "2,4",
+	"0,1", "1,3", "2,2", "0,6", "1,6", "1,5"]
+## north-south openings "c,r" = open between (c,r) and (c,r+1)
+## ("2,3" opens THE CART COURT — the dead-end cell beside the cart's station
+## becomes a market clearing off the corridor; the hearse-cart hero parks IN
+## it instead of clipping a hedge wall.)
+const MAZE_OPEN_N := ["2,0", "2,1", "1,2", "1,3", "3,4", "3,5",
+	"3,0", "1,0", "0,1", "0,2", "3,2", "1,4", "2,5", "0,4", "0,5", "2,3"]
+const HEDGE_H := 1.85
+const HEDGE_T := 1.0
+const CART_COURT := Vector2(33.25, 1.75)   # cell (2,3)'s centre
+
+## True when a ground point stands inside the maze block (apron included) —
+## furniture placement asks before parking anything wide off a corridor.
+static func in_maze(x: float, z: float) -> bool:
+	return _maze_mask(x, z) > 0.55
+
+# --------------------------------------------------------------------------
+# TERRAIN — a pure authored height function. Features, in reading order: the
+# universal unrest (no flat ground, ever), the forecourt table, the manor
+# rise, the valley basin + the bone-bridge lobe, the brook cut, the levelled
+# parterre around the maze.
+# --------------------------------------------------------------------------
+## Hand-rolled value noise — no FastNoiseLite Resource (a static Resource
+## leaks + segfaults at headless exit), no engine-version dependence: the land
+## is deterministic FOREVER, same doctrine as the LAYOUT stream.
+static func _hash2(ix: int, iz: int, salt: int) -> float:
+	var h := ix * 374761393 + iz * 668265263 + (TERRAIN_SEED + salt) * 1442695041
+	h = (h ^ (h >> 13)) * 1274126177
+	h = h ^ (h >> 16)
+	return float(h & 0xFFFF) / 32768.0 - 1.0
+
+static func _vnoise(x: float, z: float, salt: int) -> float:
+	var ix := floori(x)
+	var iz := floori(z)
+	var fx := x - float(ix)
+	var fz := z - float(iz)
+	var ux := fx * fx * (3.0 - 2.0 * fx)
+	var uz := fz * fz * (3.0 - 2.0 * fz)
+	return lerpf(
+		lerpf(_hash2(ix, iz, salt), _hash2(ix + 1, iz, salt), ux),
+		lerpf(_hash2(ix, iz + 1, salt), _hash2(ix + 1, iz + 1, salt), ux), uz)
+
+## broad land unrest (two octaves) · fine grain
+static func _n1(x: float, z: float) -> float:
+	return _vnoise(x * 0.045, z * 0.045, 11) * 0.72 \
+		+ _vnoise(x * 0.094 + 37.0, z * 0.094, 23) * 0.28
+
+static func _n2(x: float, z: float) -> float:
+	return _vnoise(x * 0.13, z * 0.13, 47)
+
+static func _ss(t: float) -> float:   # smootherstep 0..1
+	var c := clampf(t, 0.0, 1.0)
+	return c * c * c * (c * (c * 6.0 - 15.0) + 10.0)
+
+static func height(x: float, z: float) -> float:
+	var h := _n1(x, z) * 0.62 + _n2(x, z) * 0.22
+	# the forecourt table (south) — the hub's future ground, gently raised
+	h += 1.3 * _ss((z - 32.0) / 8.0)
+	# the manor rise (north) — the finish visible from everywhere
+	h += 5.0 * _ss((-z - 44.0) / 16.0)
+	# the valley basin — water below path grade, drama for the boardwalk
+	var bdx := (x + 34.0) / 13.0
+	var bdz := (z + 6.0) / 22.0
+	h += -3.0 * exp(-(bdx * bdx + bdz * bdz))
+	# the bone-bridge lobe — the pond's dark southern arm
+	var ldx := (x + 30.0) / 8.0
+	var ldz := (z + 30.0) / 7.0
+	h += -2.3 * exp(-(ldx * ldx + ldz * ldz))
+	# the brook cut
+	var bd := _brook_dist(x, z)
+	h += -1.15 * exp(-(bd * bd) / (2.1 * 2.1))
+	# the parterre level — hedges want tended ground (blend, never a slab)
+	var flat := _maze_mask(x, z)
+	h = lerpf(h, h * 0.30 + 0.25, flat)
+	return h
+
+static func _brook_dist(x: float, z: float) -> float:
+	var p := Vector2(x, z)
+	var best := 999.0
+	for i in BROOK.size() - 1:
+		var a: Vector2 = BROOK[i]
+		var b: Vector2 = BROOK[i + 1]
+		var ab := b - a
+		var t := clampf((p - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+		best = minf(best, p.distance_to(a + ab * t))
+	return best
+
+static func _maze_mask(x: float, z: float) -> float:
+	# rounded-rect falloff around the maze block (+2u apron)
+	var half_w := MAZE_COLS * MAZE_CELL * 0.5 + 2.0
+	var half_h := MAZE_ROWS * MAZE_CELL * 0.5 + 2.0
+	var cx := MAZE_ORIGIN.x - MAZE_CELL * 0.5 + MAZE_COLS * MAZE_CELL * 0.5
+	var cz := MAZE_ORIGIN.y + MAZE_CELL * 0.5 - MAZE_ROWS * MAZE_CELL * 0.5
+	var dx := maxf(absf(x - cx) - half_w, 0.0)
+	var dz := maxf(absf(z - cz) - half_h, 0.0)
+	return 1.0 - _ss(sqrt(dx * dx + dz * dz) / 6.0)
+
+## True when this ground point stands under the valley's open water.
+static func under_water(x: float, z: float) -> bool:
+	return height(x, z) < WATER_Y - 0.05
+
+## Ground-snap: keep xz, resolve y from the land (+dy). The one helper every
+## placement in the world goes through — nothing floats, nothing drowns.
+static func snap(p: Vector3, dy := 0.0) -> Vector3:
+	return Vector3(p.x, height(p.x, p.z) + dy, p.z)
+
+# --------------------------------------------------------------------------
+# SPLINES + STATIONS — centripetal-ish Catmull-Rom through the authored
+# points, arc-length table, even stations. All static, all deterministic.
+# --------------------------------------------------------------------------
+static func _cr(p0: Vector2, p1: Vector2, p2: Vector2, p3: Vector2, t: float) -> Vector2:
+	var t2 := t * t
+	var t3 := t2 * t
+	return 0.5 * ((2.0 * p1) + (-p0 + p2) * t
+		+ (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+		+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
+
+## Sample the segment's spline into a dense polyline: [{p:Vector2, s:float,
+## t01:float}] where s = cumulative arc length, t01 = control-point param
+## (idx + frac) / (n-1) — surface spans key off t01.
+static func sample_segment(tag: String, per_span := 14) -> Array:
+	var pts: Array = (SEGS[tag] as Dictionary).pts
+	var n := pts.size()
+	var out: Array = []
+	var s := 0.0
+	var prev: Vector2 = pts[0]
+	out.append({"p": prev, "s": 0.0, "t01": 0.0})
+	for i in n - 1:
+		var p0: Vector2 = pts[maxi(i - 1, 0)]
+		var p1: Vector2 = pts[i]
+		var p2: Vector2 = pts[i + 1]
+		var p3: Vector2 = pts[mini(i + 2, n - 1)]
+		for k in range(1, per_span + 1):
+			var t := float(k) / float(per_span)
+			var p := _cr(p0, p1, p2, p3, t)
+			s += prev.distance_to(p)
+			prev = p
+			out.append({"p": p, "s": s, "t01": (float(i) + t) / float(n - 1)})
+	return out
+
+## Surface name at a segment param (t01 in control-point space).
+static func surface_at(tag: String, t01: float) -> String:
+	var pts: Array = (SEGS[tag] as Dictionary).pts
+	var n1 := float(pts.size() - 1)
+	for span in ((SEGS[tag] as Dictionary).surf as Array):
+		if t01 >= float(span[0]) / n1 - 0.0001 and t01 <= float(span[1]) / n1 + 0.0001:
+			return String(span[2])
+	return "dirt"
+
+## Deck-aware ground height for a point ON the path at param t01: plank spans
+## ride the boardwalk, bridge spans arch bank-to-bank, everything else walks
+## the land.
+static func path_y(tag: String, t01: float, p: Vector2) -> float:
+	var surf := surface_at(tag, t01)
+	if surf == "plank":
+		return PLANK_Y
+	if surf == "bridge":
+		var span := _span_of(tag, "bridge")
+		var pts: Array = (SEGS[tag] as Dictionary).pts
+		var n1 := float(pts.size() - 1)
+		var a: Vector2 = pts[int(span[0])]
+		var b: Vector2 = pts[int(span[1])]
+		var tt := clampf((t01 - float(span[0]) / n1) / maxf(float(span[1] - span[0]) / n1, 0.001), 0.0, 1.0)
+		var ya := height(a.x, a.y)
+		var yb := height(b.x, b.y)
+		return lerpf(ya, yb, tt) + 0.55 * sin(PI * tt) + 0.10
+	if surf == "causeway":
+		return maxf(height(p.x, p.y), WATER_Y + 0.35) + 0.10
+	return height(p.x, p.y) + 0.02
+
+static func _span_of(tag: String, surf: String) -> Array:
+	for span in ((SEGS[tag] as Dictionary).surf as Array):
+		if String(span[2]) == surf:
+			return span
+	return [0, 0, surf]
+
+## n arc-length-even interior stations along a segment (endpoints excluded —
+## they are the landmark nodes themselves). Returns Array[Vector3], y resolved
+## deck-aware. THE STATION LAW: counts come from board data; the land decides
+## where they stand.
+static func stations(tag: String, n: int) -> Array:
+	var line := sample_segment(tag)
+	var total: float = line[line.size() - 1].s
+	var out: Array = []
+	var j := 0
+	for k in range(1, n + 1):
+		var target := total * float(k) / float(n + 1)
+		while j < line.size() - 1 and float(line[j].s) < target:
+			j += 1
+		var j0 := maxi(j - 1, 0)
+		var seg := float(line[j].s) - float(line[j0].s)
+		var frac := 0.0 if seg <= 0.0 else (target - float(line[j0].s)) / seg
+		var p: Vector2 = (line[j0].p as Vector2).lerp(line[j].p, frac)
+		var t01 := lerpf(float(line[j0].t01), float(line[j].t01), frac)
+		out.append(Vector3(p.x, path_y(tag, t01, p) + 0.02, p.y))
+	return out
+
+## The full station map the board generator consumes: landmark anchors + every
+## segment's interior stations, counts read from board data (grounds own the
+## geometry; the board owns the counts and types).
+static func station_map(board_data: Dictionary) -> Dictionary:
+	var out := {
+		"lychgate": Vector3(LYCH_XZ.x, height(LYCH_XZ.x, LYCH_XZ.y) + 0.04, LYCH_XZ.y),
+		"fork1": Vector3(FORK1_XZ.x, height(FORK1_XZ.x, FORK1_XZ.y) + 0.04, FORK1_XZ.y),
+		"fork2": Vector3(FORK2_XZ.x, height(FORK2_XZ.x, FORK2_XZ.y) + 0.04, FORK2_XZ.y),
+		"merge": Vector3(MERGE_XZ.x, height(MERGE_XZ.x, MERGE_XZ.y) + 0.04, MERGE_XZ.y),
+		"gate": Vector3(GATE_XZ.x, height(GATE_XZ.x, GATE_XZ.y) + 0.04, GATE_XZ.y),
+	}
+	out["approach"] = stations("approach", (board_data.approach_types as Array).size())
+	out["homestretch"] = stations("homestretch", int(board_data.homestretch))
+	var seg_for := {"garden": ["garden_a", "garden_b"], "hollow": ["hollow_a", "hollow_b"],
+		"valley": ["valley_a", "valley_b"]}
+	for r in (board_data.routes as Array):
+		var rd := r as Dictionary
+		var tags: Array = seg_for[String(rd.tag)]
+		out[String(tags[0])] = stations(String(tags[0]), int(rd.half_a))
+		out[String(tags[1])] = stations(String(tags[1]), int(rd.half_b))
+	return out
+
+# --------------------------------------------------------------------------
+# BUILD — the land made visible. Instance side only; every repeated element
+# rides a MultiMesh (GROUNDS BAR perf envelope).
+# --------------------------------------------------------------------------
+const EXT_X := Vector2(-58.0, 52.0)      # terrain extents
+const EXT_Z := Vector2(-80.0, 58.0)
+const GRID := 1.4                         # terrain vertex pitch
+
+func build_all() -> void:
+	_build_terrain()
+	_build_water()
+	for tag in SEGS:
+		_build_path(String(tag))
+	_build_hedge_maze()
+	_build_manor_silhouette()
+
+## Sculpted heightmesh with per-vertex biome colour — one draw call. Colour
+## carries the land's identity (mossy lawn, wood loam, bog murk, worn climb);
+## a fine mottle keeps any two yards from matching (no visible tiling).
+func _build_terrain() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var nx := int((EXT_X.y - EXT_X.x) / GRID)
+	var nz := int((EXT_Z.y - EXT_Z.x) / GRID)
+	for iz in range(nz + 1):
+		for ix in range(nx + 1):
+			var x := EXT_X.x + float(ix) * GRID
+			var z := EXT_Z.x + float(iz) * GRID
+			# the rim rolls DOWN into the dark (mesh-only droop — the height()
+			# the stations read never changes): no floating table edge on the
+			# horizon, the estate just... ends.
+			var rim := minf(minf(x - EXT_X.x, EXT_X.y - x), minf(z - EXT_Z.x, EXT_Z.y - z))
+			var droop := 0.0
+			if rim < 5.0:
+				var rt := (5.0 - rim) / 5.0
+				droop = -7.0 * rt * rt
+			st.set_color(_ground_color(x, z).darkened(clampf(-droop * 0.09, 0.0, 0.55)))
+			st.set_uv(Vector2(float(ix) / float(nx), float(iz) / float(nz)))
+			st.add_vertex(Vector3(x, height(x, z) + droop, z))
+	for iz in range(nz):
+		for ix in range(nx):
+			var a := iz * (nx + 1) + ix
+			var b := a + 1
+			var c := a + (nx + 1)
+			var d := c + 1
+			st.add_index(a); st.add_index(c); st.add_index(b)
+			st.add_index(b); st.add_index(c); st.add_index(d)
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.name = "Terrain"
+	mi.mesh = st.commit()
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.albedo_color = Color(1, 1, 1)
+	mat.roughness = 1.0
+	mi.material_override = mat
+	add_child(mi)
+
+func _ground_color(x: float, z: float) -> Color:
+	var lawn := Color(0.088, 0.108, 0.078)        # damp moonlit green
+	var garden := Color(0.080, 0.122, 0.068)      # tended, a shade richer
+	var woods := Color(0.066, 0.077, 0.050)       # loam under gloom
+	var bog := Color(0.085, 0.079, 0.058)         # olive murk
+	var worn := Color(0.106, 0.104, 0.097)        # the climb, trodden grey
+	var c := lawn
+	c = c.lerp(garden, _ss((x - 8.0) / 12.0) * _ss((z + 48.0) / 24.0))
+	c = c.lerp(woods, clampf(1.0 - absf(x + 8.0) / 14.0, 0.0, 1.0) * 0.85)
+	var bdx := (x + 33.0) / 17.0
+	var bdz := (z + 12.0) / 26.0
+	c = c.lerp(bog, clampf(exp(-(bdx * bdx + bdz * bdz)) * 1.7, 0.0, 1.0))
+	c = c.lerp(worn, _ss((-z - 42.0) / 12.0))
+	c = c.lerp(worn, _ss((z - 33.0) / 7.0) * 0.7)  # forecourt wear
+	# mud ring where the land dips toward standing water
+	var h := height(x, z)
+	if h < WATER_Y + 0.9:
+		c = c.lerp(Color(0.062, 0.055, 0.044), clampf((WATER_Y + 0.9 - h) / 0.9, 0.0, 1.0))
+	# the mottle — the lawn is never one green
+	var m := _n2(x * 1.7 + 40.0, z * 1.7 - 40.0)
+	c = c.lightened(m * 0.08) if m > 0.0 else c.darkened(-m * 0.10)
+	return c
+
+## The valley's standing water + the brook — SHAPED to the land: quads are
+## emitted only where the ground actually lies below the waterline, so the
+## shore is the terrain's own contour, never a plane's edge. Dark murk with a
+## faint self-glow (a bog at night is its own lamp), one material, one mesh.
+func _build_water() -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var step := 1.4
+	var count := 0
+	var x := EXT_X.x
+	while x < EXT_X.y:
+		var z := EXT_Z.x
+		while z < EXT_Z.y:
+			var lvl := _water_level(x + step * 0.5, z + step * 0.5)
+			if not is_nan(lvl):
+				# emit if ANY corner dips under — the last quad tucks its far
+				# edge beneath the rising shore
+				var below := false
+				for cx in [x, x + step]:
+					for cz in [z, z + step]:
+						if height(float(cx), float(cz)) < lvl + 0.06:
+							below = true
+				if below:
+					st.add_vertex(Vector3(x, lvl, z))
+					st.add_vertex(Vector3(x, lvl, z + step))
+					st.add_vertex(Vector3(x + step, lvl, z))
+					st.add_vertex(Vector3(x + step, lvl, z))
+					st.add_vertex(Vector3(x, lvl, z + step))
+					st.add_vertex(Vector3(x + step, lvl, z + step))
+					count += 1
+			z += step
+		x += step
+	if count == 0:
+		return
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.name = "Water"
+	mi.mesh = st.commit()
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.024, 0.043, 0.050)
+	mat.metallic = 0.35
+	mat.roughness = 0.14
+	mat.emission_enabled = true
+	mat.emission = Color(0.05, 0.11, 0.12)
+	mat.emission_energy_multiplier = 0.42
+	mi.material_override = mat
+	add_child(mi)
+
+## Waterline at a point: the valley pond in its basin bounds, the brook along
+## its cut. NAN = dry land.
+static func _water_level(x: float, z: float) -> float:
+	if x > -59.0 and x < -8.0 and z > -40.0 and z < 12.0:
+		return WATER_Y
+	if _brook_dist(x, z) < 3.4:
+		return BROOK_Y
+	return NAN
+
+# --------------------------------------------------------------------------
+# PATHS — each surface built its own way; ribbons conform to the land.
+# --------------------------------------------------------------------------
+func _build_path(tag: String) -> void:
+	var line := sample_segment(tag, 18)
+	# split the dense polyline into runs of one surface each
+	var runs: Array = []
+	var cur := ""
+	for e in line:
+		var s := surface_at(tag, float(e.t01))
+		if s != cur:
+			runs.append({"surf": s, "pts": []})
+			cur = s
+		(runs[runs.size() - 1].pts as Array).append(e)
+	for run in runs:
+		var pts: Array = run.pts
+		if pts.size() < 2:
+			continue
+		match String(run.surf):
+			"gravel":
+				_ribbon(tag, pts, 2.3, Color(0.155, 0.148, 0.132), 0.35, 0.03)
+			"grass":
+				_ribbon(tag, pts, 1.9, Color(0.078, 0.108, 0.058), 0.25, 0.015)
+			"dirt":
+				_ribbon(tag, pts, 1.7, Color(0.108, 0.090, 0.070), 0.55, 0.025)
+			"causeway":
+				_causeway(tag, pts)
+			"plank":
+				_boardwalk(tag, pts)
+			"bridge":
+				_bridge(tag, pts)
+			"flagstone":
+				_slab_road(tag, pts, 2.9, 1.35, Color(0.135, 0.135, 0.145))
+			"road":
+				_slab_road(tag, pts, 3.2, 1.5, Color(0.140, 0.138, 0.148))
+
+## A terrain-conforming strip with ragged, wandering edges — a WALKED path,
+## never a printed one. Width breathes with noise; edges jitter per vertex.
+func _ribbon(tag: String, pts: Array, width: float, col: Color, rag: float, lift: float) -> void:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	for i in pts.size():
+		var p: Vector2 = pts[i].p
+		var t01: float = pts[i].t01
+		var nxt: Vector2 = (pts[mini(i + 1, pts.size() - 1)].p as Vector2)
+		var prv: Vector2 = (pts[maxi(i - 1, 0)].p as Vector2)
+		var dir := (nxt - prv)
+		if dir.length() < 0.001:
+			dir = Vector2(0, -1)
+		var perp := Vector2(-dir.y, dir.x).normalized()
+		var breathe := 1.0 + 0.18 * _n2(p.x * 2.0, p.y * 2.0)
+		var half := width * 0.5 * breathe
+		var jl := rag * _n2(p.x * 3.1 + 11.0, p.y * 3.1)
+		var jr := rag * _n2(p.x * 3.1 - 17.0, p.y * 3.1 + 5.0)
+		var l := p + perp * (half + jl)
+		var r := p - perp * (half + jr)
+		var shade := 1.0 + 0.10 * _n1(p.x * 1.3, p.y * 1.3)
+		st.set_color(Color(col.r * shade, col.g * shade, col.b * shade))
+		st.add_vertex(Vector3(l.x, path_y(tag, t01, l) + lift, l.y))
+		st.set_color(Color(col.r * shade, col.g * shade, col.b * shade).darkened(0.12))
+		st.add_vertex(Vector3(r.x, path_y(tag, t01, r) + lift, r.y))
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = 1.0
+	mi.material_override = mat
+	add_child(mi)
+
+## Cut stone slabs laid two abreast with stagger and settle — the processional
+## road and the forecourt walk. One MultiMesh per run.
+func _slab_road(tag: String, pts: Array, width: float, slab_len: float, col: Color) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	var bm := BoxMesh.new()
+	bm.size = Vector3(width * 0.46, 0.10, slab_len * 0.88)
+	mm.mesh = bm
+	var xforms: Array = []
+	var total: float = pts[pts.size() - 1].s
+	var start: float = pts[0].s
+	var d := start
+	var row := 0
+	while d < total:
+		var e := _at_arc(pts, d)
+		var p: Vector2 = e.p
+		var dir: Vector2 = e.dir
+		var perp := Vector2(-dir.y, dir.x)
+		for side: float in [-1.0, 1.0]:
+			var off := perp * side * width * 0.25
+			off += dir * (0.5 * slab_len * 0.5 * (1.0 if side > 0 else -1.0) * float(row % 2))
+			var c := p + off
+			var y := path_y(tag, float(e.t01), c) + 0.02
+			var basis := Basis(Vector3.UP, atan2(dir.x, dir.y))
+			basis = basis.rotated(basis.x, 0.02 * sin(float(row) * 3.7 + side))
+			xforms.append({"t": Transform3D(basis, Vector3(c.x, y, c.y)),
+				"c": Color(col.lightened(0.06 * sin(float(row) * 5.3 + side * 2.0)))})
+		d += slab_len
+		row += 1
+	mm.instance_count = xforms.size()
+	for i in xforms.size():
+		mm.set_instance_transform(i, xforms[i].t)
+		mm.set_instance_color(i, xforms[i].c)
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = 0.9
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = mat
+	add_child(mmi)
+
+## The bog causeway: a low stone spine kept above the waterline, with rough
+## curb stones along its edges.
+func _causeway(tag: String, pts: Array) -> void:
+	_ribbon(tag, pts, 2.2, Color(0.125, 0.124, 0.118), 0.2, 0.03)
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.42, 0.26, 0.62)
+	mm.mesh = bm
+	var xforms: Array = []
+	var total: float = pts[pts.size() - 1].s
+	var d: float = pts[0].s
+	var k := 0
+	while d < total:
+		var e := _at_arc(pts, d)
+		var p: Vector2 = e.p
+		var dir: Vector2 = e.dir
+		var perp := Vector2(-dir.y, dir.x)
+		var side := 1.0 if k % 2 == 0 else -1.0
+		var c := p + perp * side * 1.25
+		var y := path_y(tag, float(e.t01), c)
+		var basis := Basis(Vector3.UP, atan2(dir.x, dir.y) + 0.35 * sin(float(k) * 7.1))
+		xforms.append({"t": Transform3D(basis, Vector3(c.x, y + 0.06, c.y)),
+			"c": Color(0.118, 0.117, 0.112).lightened(0.05 * sin(float(k) * 3.3))})
+		d += 1.9
+		k += 1
+	_commit_mm(mm, xforms, 0.95)
+
+## The boardwalk: planks laid crosswise on paired posts sunk into the water.
+func _boardwalk(tag: String, pts: Array) -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	var bm := BoxMesh.new()
+	bm.size = Vector3(2.5, 0.07, 0.5)
+	mm.mesh = bm
+	var xforms: Array = []
+	var post_mm := MultiMesh.new()
+	post_mm.transform_format = MultiMesh.TRANSFORM_3D
+	post_mm.use_colors = true
+	var pmesh := CylinderMesh.new()
+	pmesh.top_radius = 0.09
+	pmesh.bottom_radius = 0.11
+	pmesh.height = 1.6
+	post_mm.mesh = pmesh
+	var posts: Array = []
+	var total: float = pts[pts.size() - 1].s
+	var d: float = pts[0].s
+	var k := 0
+	while d < total:
+		var e := _at_arc(pts, d)
+		var p: Vector2 = e.p
+		var dir: Vector2 = e.dir
+		var yaw := atan2(dir.x, dir.y)
+		var wob := 0.02 * sin(float(k) * 5.7) + 0.015 * sin(float(k) * 11.3)
+		var basis := Basis(Vector3.UP, yaw + wob * 3.0)
+		basis = basis.rotated(basis.z, wob)
+		var wood := Color(0.118, 0.094, 0.066).lightened(0.07 * sin(float(k) * 2.9))
+		xforms.append({"t": Transform3D(basis, Vector3(p.x, PLANK_Y + wob, p.y)), "c": wood})
+		if k % 4 == 2:
+			var perp := Vector2(-dir.y, dir.x)
+			for side: float in [-1.0, 1.0]:
+				var c := p + perp * side * 1.15
+				posts.append({"t": Transform3D(Basis(Vector3.UP, yaw),
+					Vector3(c.x, PLANK_Y - 0.75, c.y)), "c": Color(0.095, 0.078, 0.058)})
+		d += 0.62
+		k += 1
+	_commit_mm(mm, xforms, 0.9)
+	_commit_mm(post_mm, posts, 0.95)
+
+## A bridge span: the BONE BRIDGE hero over the valley's dark arm; a humble
+## stone footbridge over the garden brook. The deck math (path_y) is the
+## truth — the model dresses it.
+const BONE_BRIDGE := "res://assets/models/meshy/generated/bone_bridge.glb"
+
+func _bridge(tag: String, pts: Array) -> void:
+	var a: Vector2 = pts[0].p
+	var b: Vector2 = (pts[pts.size() - 1].p as Vector2)
+	var mid := (a + b) * 0.5
+	var span := a.distance_to(b)
+	var mid_t: float = pts[pts.size() / 2].t01
+	var deck_mid := path_y(tag, mid_t, mid)
+	if tag == "valley_b" and ResourceLoader.exists(BONE_BRIDGE):
+		var bridge := MeshyProp.instance(BONE_BRIDGE, span * 0.46)
+		add_child(bridge)
+		bridge.global_position = Vector3(mid.x, deck_mid - 1.6, mid.y)
+		var to := Vector3(b.x, deck_mid - 1.6, b.y)
+		bridge.look_at(to, Vector3.UP)
+		return
+	# the garden footbridge (G2 swaps in the Meshy hero): a gentle slab arch
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	var steps := 14
+	var dirv := (b - a).normalized()
+	var perp := Vector2(-dirv.y, dirv.x)
+	for i in range(steps + 1):
+		var t := float(i) / float(steps)
+		var p := a.lerp(b, t)
+		var t01 := lerpf(float(pts[0].t01), float(pts[pts.size() - 1].t01), t)
+		var y := path_y(tag, t01, p)
+		st.set_color(Color(0.130, 0.130, 0.138))
+		var l := p + perp * 1.1
+		var r := p - perp * 1.1
+		st.add_vertex(Vector3(l.x, y, l.y))
+		st.set_color(Color(0.118, 0.118, 0.126))
+		st.add_vertex(Vector3(r.x, y, r.y))
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.mesh = st.commit()
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = 0.85
+	mi.material_override = mat
+	add_child(mi)
+	# low parapet walls
+	for side: float in [-1.0, 1.0]:
+		var wall := MeshInstance3D.new()
+		var wm := BoxMesh.new()
+		wm.size = Vector3(0.22, 0.4, span * 0.9)
+		wall.mesh = wm
+		var wmat := StandardMaterial3D.new()
+		wmat.albedo_color = Color(0.115, 0.115, 0.122)
+		wmat.roughness = 0.9
+		wall.material_override = wmat
+		add_child(wall)
+		var c := mid + perp * side * 1.05
+		wall.global_position = Vector3(c.x, path_y(tag, mid_t, c) + 0.30, c.y)
+		wall.look_at(Vector3(b.x + perp.x * side * 1.05, deck_mid + 0.30, b.y + perp.y * side * 1.05), Vector3.UP)
+
+## Arc-length lookup on a dense run: {p, dir, t01}.
+func _at_arc(pts: Array, d: float) -> Dictionary:
+	var j := 0
+	while j < pts.size() - 1 and float(pts[j].s) < d:
+		j += 1
+	var p: Vector2 = pts[j].p
+	var prv: Vector2 = (pts[maxi(j - 1, 0)].p as Vector2)
+	var nxt: Vector2 = (pts[mini(j + 1, pts.size() - 1)].p as Vector2)
+	var dir := (nxt - prv)
+	dir = dir.normalized() if dir.length() > 0.001 else Vector2(0, -1)
+	return {"p": p, "dir": dir, "t01": float(pts[j].t01)}
+
+func _commit_mm(mm: MultiMesh, xforms: Array, rough: float) -> void:
+	mm.instance_count = xforms.size()
+	for i in xforms.size():
+		mm.set_instance_transform(i, (xforms[i] as Dictionary).t)
+		mm.set_instance_color(i, (xforms[i] as Dictionary).c)
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = rough
+	var mmi := MultiMeshInstance3D.new()
+	mmi.multimesh = mm
+	mmi.material_override = mat
+	add_child(mmi)
+
+# --------------------------------------------------------------------------
+# THE HEDGE MAZE — walls wherever the grid is not OPEN. Each wall run is a
+# body box + jittered crown clumps, all one MultiMesh; corner posts stand a
+# head taller. G2 re-dresses the same wall lines with the Meshy hedge kit.
+# --------------------------------------------------------------------------
+func _build_hedge_maze() -> void:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_colors = true
+	var bm := BoxMesh.new()
+	bm.size = Vector3(1.0, 1.0, 1.0)   # unit box; scale per instance
+	mm.mesh = bm
+	var xforms: Array = []
+	for r in range(MAZE_ROWS):
+		for c in range(MAZE_COLS):
+			# east wall of (c,r)
+			if c < MAZE_COLS - 1 and not MAZE_OPEN_E.has("%d,%d" % [c, r]):
+				_hedge_run(xforms, _cell(c, r) + Vector2(MAZE_CELL * 0.5, 0), Vector2(0, 1))
+			# north wall of (c,r)
+			if r < MAZE_ROWS - 1 and not MAZE_OPEN_N.has("%d,%d" % [c, r]):
+				_hedge_run(xforms, _cell(c, r) + Vector2(0, -MAZE_CELL * 0.5), Vector2(1, 0))
+	# boundary: south (entrance gap at col 0), north (exit gap at col 3),
+	# west and east full runs
+	for c in range(MAZE_COLS):
+		if c != 0:
+			_hedge_run(xforms, _cell(c, 0) + Vector2(0, MAZE_CELL * 0.5), Vector2(1, 0))
+		if c != 3:
+			_hedge_run(xforms, _cell(c, MAZE_ROWS - 1) + Vector2(0, -MAZE_CELL * 0.5), Vector2(1, 0))
+	for r in range(MAZE_ROWS):
+		_hedge_run(xforms, _cell(0, r) + Vector2(-MAZE_CELL * 0.5, 0), Vector2(0, 1))
+		_hedge_run(xforms, _cell(MAZE_COLS - 1, r) + Vector2(MAZE_CELL * 0.5, 0), Vector2(0, 1))
+	_commit_mm(mm, xforms, 1.0)
+
+func _cell(c: int, r: int) -> Vector2:
+	return Vector2(MAZE_ORIGIN.x + float(c) * MAZE_CELL, MAZE_ORIGIN.y - float(r) * MAZE_CELL)
+
+## One wall segment (cell-edge length) centred at `at`, running along `dir`.
+## Built as THREE overlapping sub-boxes with tiny offsets, yaw and height
+## jitter (the wall face breaks into planes that catch the moon differently —
+## a clipped living thing, not poured concrete), plus low crown clumps. The
+## green is calibrated against the estate_hedge_topiary hero (t3 A/B).
+func _hedge_run(xforms: Array, at: Vector2, dir: Vector2) -> void:
+	var yaw := atan2(dir.x, dir.y)
+	var perp := Vector2(-dir.y, dir.x)
+	var y := height(at.x, at.y)
+	var seedf := at.x * 3.1 + at.y * 7.7
+	var green := Color(0.092, 0.182, 0.050)
+	var seg_len := (MAZE_CELL + HEDGE_T * 0.5) / 3.0
+	for k in 3:
+		var along := (float(k) - 1.0) * seg_len
+		var cpos := at + dir * along + perp * 0.09 * sin(seedf * 5.3 + float(k) * 2.4)
+		var h := HEDGE_H + 0.16 * sin(seedf * 3.1 + float(k) * 1.9)
+		var body := Basis(Vector3.UP, yaw + 0.045 * sin(seedf * 1.7 + float(k) * 3.7)) \
+			* Basis(Vector3.FORWARD, 0.025 * sin(seedf + float(k))) \
+			* Basis.from_scale(Vector3(HEDGE_T + 0.06 * sin(seedf * 7.7 + float(k)), h, seg_len + 0.55))
+		var v := 0.07 * sin(seedf * 2.3 + float(k) * 5.1)
+		var tone := green.lightened(v) if v > 0.0 else green.darkened(-v * 1.3)
+		xforms.append({"t": Transform3D(body, Vector3(cpos.x, y + h * 0.5 - 0.14, cpos.y)), "c": tone})
+		# a crown clump riding each sub-box — unclipped growth on the top line
+		var s := 0.8 + 0.35 * absf(sin(seedf * 5.1 + float(k) * 3.3))
+		var crown := Basis(Vector3.UP, yaw + sin(seedf + float(k)) * 0.6) \
+			* Basis.from_scale(Vector3(HEDGE_T * 0.85 * s, 0.5 * s, 1.05 * s))
+		xforms.append({"t": Transform3D(crown,
+			Vector3(cpos.x, y + h - 0.16 + 0.1 * sin(seedf * 7.0 + float(k)), cpos.y)),
+			"c": tone.darkened(0.10)})
+
+# --------------------------------------------------------------------------
+# THE MANOR — a dark massing on its rise beyond the gate, warm windows lit.
+# Never visited (yet); always visible. The moving target, doc 33 §3.
+# --------------------------------------------------------------------------
+func _build_manor_silhouette() -> void:
+	var root := Node3D.new()
+	root.name = "ManorSilhouette"
+	add_child(root)
+	var base_y := height(0.0, -70.0)
+	root.position = Vector3(0.0, base_y, -70.0)
+	var dark := StandardMaterial3D.new()
+	dark.albedo_color = Color(0.040, 0.041, 0.050)
+	dark.roughness = 0.95
+	var blocks := [
+		{"s": Vector3(17.0, 7.5, 6.5), "p": Vector3(0, 3.75, 0)},          # hall
+		{"s": Vector3(6.5, 5.5, 5.5), "p": Vector3(-11.0, 2.75, 0.8)},     # west wing
+		{"s": Vector3(6.5, 6.0, 5.5), "p": Vector3(11.0, 3.0, 0.6)},       # east wing
+		{"s": Vector3(3.2, 11.5, 3.2), "p": Vector3(4.2, 5.75, -1.0)},     # tower
+	]
+	for bdef in blocks:
+		var b := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		bm.size = (bdef as Dictionary).s
+		b.mesh = bm
+		b.material_override = dark
+		b.position = (bdef as Dictionary).p
+		root.add_child(b)
+	var roofs := [
+		{"s": Vector3(17.6, 3.4, 7.1), "p": Vector3(0, 9.2, 0)},
+		{"s": Vector3(7.1, 2.6, 6.1), "p": Vector3(-11.0, 6.8, 0.8)},
+		{"s": Vector3(7.1, 2.6, 6.1), "p": Vector3(11.0, 7.3, 0.6)},
+		{"s": Vector3(4.0, 2.2, 4.0), "p": Vector3(4.2, 12.6, -1.0)},
+	]
+	for rdef in roofs:
+		var pr := MeshInstance3D.new()
+		var pm := PrismMesh.new()
+		pm.size = (rdef as Dictionary).s
+		pr.mesh = pm
+		pr.material_override = dark
+		pr.position = (rdef as Dictionary).p
+		root.add_child(pr)
+	# a few windows awake — warm, faint, watching
+	var lit := StandardMaterial3D.new()
+	lit.albedo_color = Color(0.3, 0.22, 0.1)
+	lit.emission_enabled = true
+	lit.emission = Color(1.0, 0.72, 0.35)
+	lit.emission_energy_multiplier = 1.6
+	for wdef in [Vector3(-3.5, 4.6, 3.31), Vector3(2.0, 5.4, 3.31),
+			Vector3(6.2, 3.4, 3.31), Vector3(4.2, 9.8, 0.66),
+			Vector3(-11.0, 3.9, 3.61)]:
+		var w := MeshInstance3D.new()
+		var qm := BoxMesh.new()
+		qm.size = Vector3(0.55, 0.95, 0.06)
+		w.mesh = qm
+		w.material_override = lit
+		w.position = wdef
+		root.add_child(w)
