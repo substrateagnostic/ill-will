@@ -122,6 +122,10 @@ var debt_traps := {}                # node_id -> owner seat (WREATH OF DEBT)
 var _move_item_used := false        # max ONE die/movement item per turn
 var _offense_hit := {}              # per turn: target seat -> true (no-stack per target)
 var _wisp_dest := -1                # WILL-O'-THE-WISP teleport (replaces the roll)
+# ---- THE BOOK OF THE DEAD (doc 32 v1 — sealed side-bets, cosmetic) ----
+var book: ProcessionBook = null     # the per-seat bet surface (UI builds it)
+var _cycle_mini := ""               # this cycle's game, drawn at roll-phase start
+var _laurel_next: Array = []        # per seat: correct bet -> laurel wisp next cycle
 var _cart_demoed := false           # capture poses the cart UI once (P2 screenshot b)
 var round_num := 0
 var winner := -1
@@ -586,6 +590,15 @@ func _build_hud() -> void:
 			gap.custom_minimum_size = Vector2(700, 0)
 			chiprow.add_child(gap)
 
+	# THE BOOK OF THE DEAD rides its own control above the chips (doc 32):
+	# per-seat hint + strip + wax seals, anchored to the chip row it was born
+	# under. Added after the chips so it always draws over them.
+	_laurel_next.resize(roster.size())
+	_laurel_next.fill(false)
+	book = ProcessionBook.new()
+	_ui.add_child(book)
+	book.setup(self, roster)
+
 	# ---- REVEAL lower-third: a broadcast-style band pinned bottom-centre, with a
 	# dark translucent scrim + gold rule, the affected player's PlayerBadge, and
 	# the Executor's line set in the anthology's heaviest face. Slides up 0.25s.
@@ -797,7 +810,12 @@ func _chip_label(text: String, size: int, color: Color) -> Label:
 
 func _refresh_hud() -> void:
 	if _round_lbl:
-		_round_lbl.text = "ROUND %d / %d" % [round_num, turn_cap]
+		# the BOOK announcement (doc 32): the cycle's drawn game rides the
+		# round strip so every bet is an informed one
+		var mini_tag := ""
+		if _cycle_mini != "" and MINIGAMES.has(_cycle_mini):
+			mini_tag = "   📖 %s" % String((MINIGAMES[_cycle_mini] as Dictionary).name)
+		_round_lbl.text = "ROUND %d / %d%s" % [round_num, turn_cap, mini_tag]
 	if _objective_lbl:
 		if bell_round >= 0:
 			_objective_lbl.text = "☠ THE BELL HAS RUNG — LAST TURN"
@@ -1061,6 +1079,8 @@ func _run_night_cycles() -> void:
 		# their one roll and nothing else. Blocks only fire on an open road.
 		if bell_round < 0:
 			await _minigame_block()
+		elif book != null and book.active:
+			book.slam()   # the bell shuts the book — no game left to bet on
 		if bell_round < 0 and round_num % 3 == 0:
 			await _house_awakens()
 		if round_num >= turn_cap:
@@ -1102,6 +1122,7 @@ func _night_open() -> void:
 	Music.play_slot("grounds")
 	_tracker_live = false   # new night, new races — re-armed at the interim reading
 	_mini_pool = MINIGAME_ORDER.duplicate()
+	_cycle_mini = ""   # a card left on the table when the bell rang dies with its night
 	_night_start_wreaths = wreaths.duplicate()
 	if not _fast and match_nights > 1:
 		_announce_text(Dialog.text("procession.night.open") % [night_index, match_nights],
@@ -1576,6 +1597,23 @@ func _round() -> void:
 	_hide_announce()
 	_sync_minimap()
 	_arrived_this_round.clear()
+	# THE BOOK OF THE DEAD (doc 32): the cycle's minigame is drawn NOW —
+	# announced on the round strip — so bets are informed and the roll phase
+	# gains anticipation. Sanctioned EVENT-order shift; receipts re-frozen
+	# (VERIFY-BOARD §4). After the FINAL BELL there is no game to bet on.
+	if bell_round < 0:
+		if _cycle_mini == "":
+			_cycle_mini = _draw_minigame()
+		if book != null:
+			book.open_phase()
+			for i in roster.size():
+				if bool(roster[i].bot):
+					book.place_bet(i, _bot_bet_target(i))
+		# the laurel wisps from last cycle's correct bets ride this cycle
+		for i in roster.size():
+			board.set_laurel(i, bool(_laurel_next[i]))
+			_laurel_next[i] = false
+		_refresh_hud()   # the round strip announces the drawn card at once
 	executor.begin_round()   # B2-HOOK: page-turn the ledger between rounds (F7)
 	if not _fast:
 		_reveal_seat = -1
@@ -1613,6 +1651,8 @@ func _take_turn(seat: int) -> void:
 	_sync_minimap()
 	_move_item_used = false
 	_offense_hit.clear()
+	if book != null:
+		book.meter_seat = seat   # the roller's A belongs to THE LAST BREATH
 	# --- THE ITEM BEAT: use held wares before the roll (doc 28 §15 resolution
 	# order — movement items apply before travel). May teleport (wisp), dig
 	# (shovel — possibly through the gate), arm boosts/writs, or sabotage. ---
@@ -1717,6 +1757,8 @@ func _take_turn(seat: int) -> void:
 		await _reveal_landing(seat)
 	if breath.meter != null:
 		breath.meter.visible = false
+	if book != null:
+		book.meter_seat = -1   # the roller's hands are their own again
 
 func _ring_bell(ringer: int) -> void:
 	bell_round = round_num
@@ -3037,7 +3079,22 @@ func _snap_epitaph(loser: int) -> void:
 func _minigame_block() -> void:
 	_phase = "minigame"
 	executor.clear_banner()
-	var mid := _draw_minigame()
+	# The BOOK ordering (doc 32): the card was drawn at roll-phase start.
+	# THE INVITATION still takes the slot — the pre-drawn card returns to the
+	# night's pool (without-replacement stays honest); sealed bets STAND (you
+	# bet on the cycle's outcome, whatever card ends up on the table).
+	var mid := _cycle_mini
+	_cycle_mini = ""
+	if _invitation_pick != "":
+		if mid != "":
+			_mini_pool.append(mid)
+		mid = _invitation_pick
+		_invitation_pick = ""
+		_mini_pool.erase(mid)
+	if mid == "":
+		mid = _draw_minigame()
+	if book != null:
+		book.slam()   # last call — the thump is the intro card's herald
 	# The roulette (F22) is theater that lands on the pre-decided card.
 	if _fast:
 		pass   # the soak skips the roulette entirely
@@ -3133,6 +3190,26 @@ func _draw_minigame() -> String:
 		return pick
 	return String(_mini_pool.pop_at(_event_rng.randi_range(0, _mini_pool.size() - 1)))
 
+## A bot's Book of the Dead pick (doc 32): seeded, weighted, imperfect — the
+## form table (match minigame wins + wreath standings) tilts the odds, a real
+## scatter keeps the book humble, and a bot backs itself a shade too often
+## (the estate admires confidence). One EVENT draw per bot per cycle.
+func _bot_bet_target(seat: int) -> int:
+	var w: Array[float] = []
+	var total := 0.0
+	for t in roster.size():
+		var v := 1.0 + float(mini_wins_match[t]) * 0.55 + float(wreaths[t]) * 0.04
+		if t == seat:
+			v *= 1.15
+		w.append(v)
+		total += v
+	var roll := _event_rng.randf() * total
+	for t in w.size():
+		roll -= w[t]
+		if roll <= 0.0:
+			return t
+	return roster.size() - 1
+
 ## THE RECKONING — settlement per cycle (doc 28 §6): pennies 10/6/3/1 +
 ## wreaths 2/1/1/0. TEAM-AWARE (doc 28 §15): a 2v2 game pays the winning
 ## teammates equal FIRST-tier and the losers equal THIRD-tier — never
@@ -3149,6 +3226,31 @@ func _settle_minigame(mid: String, placements: Array) -> void:
 		for k in placements.size():
 			tiers[k] = k
 		_apply_tie_tiers(placements, tiers)
+	# THE BOOK pays FIRST (doc 32 v1 — before placements pay): seals flip to
+	# cameos, the correct catch gold; a laurel wisp rides the winners' toys
+	# next cycle; self-bet-and-lose earns the Executor's public ribbing.
+	if book != null:
+		var winners: Array = []
+		for k in placements.size():
+			if int(tiers[k]) == 0:
+				winners.append(int(placements[k]))
+		var correct: Array = book.reveal(winners, _fast)
+		for c in correct:
+			_laurel_next[int(c)] = true
+			if not _fast:
+				MomentScribe.capture("book_paid",
+					"%s READ THE NIGHT RIGHTLY" % roster[int(c)].name, 5, [int(c)], mid)
+		if not _fast:
+			await _beat(2.0)
+			for i in roster.size():
+				if int(book.bets[i]) == i and not winners.has(i):
+					_reveal_seat = i
+					executor.say(Dialog.text("procession.book.selfbet_ribbing") \
+						% [roster[i].name, roster[i].name], roster[i].color)
+					await _beat(2.0)
+					executor.clear_banner()
+					break   # the joke lands once per settlement
+			book.clear_reveal()
 	var lines: Array[String] = []
 	for k in placements.size():
 		var p := int(placements[k])

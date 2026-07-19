@@ -37,16 +37,46 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
   hearse + iron gates — and the manor visible clear across the world),
   `g1_w7_brook_bridge`.
 
-  **DIRECTOR'S HONEST NOTES (already on the G2 list):** hedge walls are
-  in-engine box-clusters — right STRUCTURE and green, but the leafy skin
-  is exactly what the Meshy HEDGE kit re-dresses onto these same wall
-  lines in G2 (~120cr of the ~900cr manifest, balance 7915). The hollow
-  has no trees yet (FOREST kit is G2's biggest line). Brook reads too
-  dark under its bridge (reeds + shimmer, G2). Board-camera framings
-  (travel cuts, over-shoulder) inherit the new positions and WORK, but
-  fine-tuning wants your eyes at the live session. NEEDS YOU: bless the
-  test stretch + lands as the G1 base (or redline), then I fire G2's
-  Meshy wave. Everything fixable tomorrow, as you said.
+  **THEN G2 LANDED THE SAME WATCH.** The 26-piece grounds kit forged
+  **26/26 first-try, 780cr** (balance ≈7135): the maze walls are LIVING
+  hedge now (arch over the mouth, overgrown runs, a weeping angel at the
+  end of the long false corridor, the hearse parked in a carved CART
+  COURT), the Hollow is a TRUE FOREST (4 canopy species + stumps, roots,
+  deadfall, mushrooms — trunks ARE the separation), the Valley grew its
+  bog (cattails on every shoreline, hummocks, willows, sunken fences, a
+  gallows tree, a ruined watchtower on the far shore), the garden its
+  parterres + statuary + abandoned tea table + a forged stone footbridge.
+  Draw-call receipt 118–1449 across 12 framings — inside the <1500
+  envelope. See `g2_w4_hollow_track.png` first. It's the shot of the
+  night.
+
+  **AND THE BOOK OF THE DEAD v1 IS BUILT** (#61, your approved doc-32
+  spec, gesture amendment included): the cycle's minigame is drawn at
+  ROLL-PHASE START and announced on the round strip (`ROUND 2/4 ·
+  📖 PALLBEARERS` — informed bets); `📖 B · BET` sits over each corner
+  chip; B toggles your strip, flick picks a cameo (mirror glint on
+  yourself), A seals — wax mark public, choice private; the book THUMPS
+  shut at the intro card or the FINAL BELL; the reveal flips seals at
+  settlement, correct picks catch gold and wear a laurel wisp on their
+  figurine next cycle; self-bet-and-lose earns the Executor's ribbing.
+  Bots bet (seeded, form-weighted, imperfect). Proof still:
+  `bd_book_announced.png`.
+
+  **RECEIPTS, honestly:** the GROUNDS moved nothing (b269c570 all
+  night). THE BOOK's draw-order change + bot bets are the sanctioned
+  shift your spec approved — the seed-7 match re-froze as **HEIR BLUE
+  ⚘[55,57,39,39]**, deterministic ×3 (hash in VERIFY-BOARD §4); the
+  LETTERS witness moved to GOLD-night-2 in both sweep seeds. All
+  documented supersessions, DR died with honor.
+
+  **NEEDS YOU (morning list):** ① bless/redline the dressed lands —
+  maze-green saturation at the overview and the cheerful reed green are
+  my two taste flags; ② playtest the B-toggle/flick/A-seal gesture at
+  the couch (doc-32 test plan — do guests find the hint unprompted?);
+  ③ w6_forecourt sits at 1449 draw calls — fine now, watch at G3;
+  ④ G3 (hub migration onto the forecourt) is the next lane and wants
+  you nearby — estate.gd is the riskiest file in the house. Everything
+  fixable today, as you said. Music cues (doc 31) still all yours.
 
 - **⚘⚘⚘⚘⚘⚘⚘⚘ MENU #8 — THE EIGHTH WATCH (2026-07-19, the live jam day).
   The day the game got taste.**

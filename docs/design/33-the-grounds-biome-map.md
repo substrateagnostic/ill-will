@@ -6,11 +6,15 @@ stations THROUGH it. One continuous terrain for hub and board — carefully.
 Laws in force: GROUNDS BAR (near-AAA path craft, no flat ground, no visible
 tiling, integrated-GPU envelope), ZERO-ENGLISH, spacing ≥2 stone-widths.*
 
-*STATUS (ninth watch, 2026-07-19 overnight): **G1 LANDED** —
-`estate/procession/grounds.gd` + the station snap in `board_graph.generate()`;
-both frozen receipts re-verified byte-identical (VERIFY-BOARD §7b); test
-stretch + lands stills committed (`estate/procession/shots/g1_*.png`),
-producer review pending the morning. G2 (Meshy kits) next.*
+*STATUS (ninth watch, 2026-07-19 overnight): **G1 + G2 BOTH LANDED** —
+`estate/procession/grounds.gd` + the station snap in `board_graph.generate()`
+(G1), then the 26-piece Meshy grounds kit (26/26 first-try, 780cr) dressing
+all three lands (G2): living hedge maze, true forest, grown bog, garden
+statuary, footbridge hero. Topology checksum b269c570 unmoved throughout;
+the match receipts were re-frozen the same watch by THE BOOK OF THE DEAD's
+sanctioned draw-order change (VERIFY-BOARD §4), not by the grounds. Draw-call
+receipt 118–1449 (<1500). Stills `g1_*.png` (bare land) + `g2_*.png`
+(dressed), producer review pending the morning. Next: G3 hub migration.*
 
 ## 1. The estate, as geography
 

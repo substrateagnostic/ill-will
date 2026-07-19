@@ -666,6 +666,9 @@
       "doormat_line": "%s, lowest in wreaths, calls for %s.",
       "deal_label": "LET THE ESTATE DEAL",
       "card_line": "%s — placements pay the usual pennies and wreaths."
+    },
+    "book": {
+      "selfbet_ribbing": "%s wagered on %s. The estate admires confidence, if nothing else."
     }
   }
 }
