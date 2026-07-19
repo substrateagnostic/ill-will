@@ -1128,8 +1128,9 @@ func _process(delta: float) -> void:
 	_update_timer_label()
 	if _stretch != null and phase == Phase.PLAY:
 		_stretch.tick(time_left)   # FINAL STRETCH last-10s ladder + timer pulse
-	if _hint_label.visible and now > 7.0:
-		_hint_label.visible = false
+	# M2 CONTROL HINTS: the controls bar stays up the whole game (the "always on"
+	# house policy) — the 7s auto-declutter is gone. The transient EVENT banner
+	# below still clears on its own timer.
 	if _event_label.visible and now > _event_until:
 		_event_label.visible = false
 	var motion_ok := _motion_ok()

@@ -3497,7 +3497,14 @@ func _heir_crowned() -> void:
 		await _cap_snap("heir_crowned")
 	else:
 		VerifyCapture.snap("heir_crowned")
-	await _beat(6.0 if not _fast else 0.2)
+	# M2 PODIUM EXIT (Andrew): the crown used to hold a fixed 6s before folding —
+	# the "stuck in the podium screen" beat. A human couch now leaves at its
+	# leisure (any seat's A / click / Enter), while the _fast verify path keeps its
+	# 0.2s clock so receipts are unchanged (the snap above already fired).
+	if _fast:
+		await _beat(0.2)
+	else:
+		await podium.await_continue(6.0)
 	if is_instance_valid(podium):
 		podium.queue_free()
 	_topbar.visible = true

@@ -2664,3 +2664,38 @@ review:
 - **Screenshots**: estate/procession/shots/p3_*.png — figurines mid-match,
   over-shoulder heatmap, standings+DRIVE, both dressed gates, the dormant
   Reaper, the simplified PLAY panel.
+
+---
+
+## M2 — UI CONSISTENCY PASS (Andrew's playtest, branch worktree-agent-ade5427d0ed690e62)
+
+Four complaints from your friend's playtest, all fixed. No in-game HUDs touched, no receipts moved.
+
+- **The bright green is gone.** The old `assets/ui/theme.tres` green-pill buttons clashed with the
+  title door's funeral-stationery look. New `core/ui_kit/stationery.gd` is now the ONE definition of
+  the house look (ink panels, gold hairline, IM Fell, gold focus lift), lifted verbatim from
+  `estate.gd _style_title_button` (D1). Applied to every front-of-house desk through the shared
+  `_clear_panel → _focus_panel_deferred` choke point (PLAY, NEW GAME, MINIGAMES, WARDROBE, HOST/JOIN
+  NIGHT, lobby, free roam) plus explicit calls in the SETTINGS overlay and the wardrobe seat row.
+  `_style_title_button` now delegates to the kit, so the door and the desks can never drift again.
+  Seat-color accents preserved (the wardrobe RED/BLUE/GOLD/MINT swatches keep their colors); L1's
+  gold focus ring preserved (the kit's focus box == `UiFocus._RING_GOLD`).
+- **No more getting stuck on the podium.** The procession heir crown held a forced 6s. Now, once the
+  coronation reads (~1.6s), any seat's A / click / Enter leaves at your leisure — a subtle pulsing
+  "A · CONTINUE" with the device's own glyph. All-bot / verify auto-advances on the clock (the
+  _fast 0.2s path is untouched, so receipts are safe). `core/podium.gd await_continue()`, wired into
+  the procession crown + `Podium.present()`.
+- **Hint bars are "always on" now.** Removed the flash-then-hide / N-second declutter from tilt,
+  echo_chamber, orbital, swap_meet, greed, widows_gaze, pallbearers. (mower, last_will, understudy,
+  throne, dead_weight, seance, masked_ball were already persistent; par is turn-based and surfaces
+  its controls per shot.)
+- **Instructions match the device each seat holds.** IntroCard was feature-detecting a global
+  `InputGlyphs.glyph(seat, action)` that never existed — added the bridge, so all 15 games' intro
+  cards now render the glyph for the seat's device (pad button vs KBM key), text fallback via
+  describe_binding. Hint bars were already device-aware.
+
+**Verify:** board receipts unmoved — seed 7 → HEIR GOLD [36,41,56,43], boardgraph checksum b269c570.
+slot_1.json sha unchanged (autoplay skips the estate save). Import clean; unrelated .import churn reverted.
+Screenshots in verify_out/m2 (gitignored): menu_play/settings/wardrobe, game_introcard + game_hintbar
+for both kbm & pad, shot_01xx podium with the SPACE · CONTINUE affordance. Re-capture any time with
+`--m2shots=kbm|pad --shots=999999 --outdir=verify_out/m2` and `podium_probe.tscn -- --affordance`.

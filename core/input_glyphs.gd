@@ -89,6 +89,17 @@ static func texture_for(player_idx: int, action: String) -> Texture2D:
 static func text_for(player_idx: int, action: String) -> String:
 	return PlayerInput.describe_binding(player_idx, action)
 
+## M2 DEVICE-AWARE INSTRUCTIONS — the bridge IntroCard (core/ui_kit/intro_card.gd)
+## feature-detects. It looks for a global class named "InputGlyphs" exposing a
+## static `glyph(seat, action) -> Texture2D`; we exposed `texture_for` instead, so
+## the detection silently failed and every intro card fell back to plain text.
+## This alias completes the rollout: with it present, all 15 games' intro cards
+## now show the glyph for the DEVICE EACH SEAT IS USING — a pad seat sees its
+## button, a KBM seat sees its key — with the describe_binding text as the
+## fallback whenever a glyph asset is missing (or the seat is remote).
+static func glyph(player_idx: int, action: String) -> Texture2D:
+	return texture_for(player_idx, action)
+
 static func texture_for_key(keycode: int) -> Texture2D:
 	return _texture(String(KEY_PATHS.get(keycode, "")))
 

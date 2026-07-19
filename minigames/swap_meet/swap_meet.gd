@@ -1611,8 +1611,8 @@ func _process(delta: float) -> void:
 		return
 	if _event_label.visible and now > _event_until:
 		_event_label.visible = false
-	if _hint_label.visible and now > 9.0:
-		_hint_label.visible = false
+	# M2 CONTROL HINTS: the controls bar stays up the whole game (the "always on"
+	# house policy) — the 9s auto-declutter is gone.
 	if _shake > 0.002:
 		var jx := randf_range(-1.0, 1.0)
 		_cam.h_offset = jx * _shake * 0.35

@@ -283,10 +283,8 @@ func _start_round() -> void:
 	_last_status = 0.0
 	_reset_all_teams()
 	_flash_banner("LATE FOR THE FUNERAL", Color(0.9, 0.86, 0.7), 1.4)
+	# M2 CONTROL HINTS: keep the bar up all game (the "always on" house policy).
 	hint_label.visible = true
-	var tw := create_tween()
-	tw.tween_interval(8.0)
-	tw.tween_callback(func() -> void: hint_label.visible = false)
 	_log("round_start time=%.0f" % round_time)
 
 

@@ -267,9 +267,7 @@ func begin(config: Dictionary) -> void:
 		_stretch = FinalStretch.attach(self, timer_label)
 		if controls_label != null:
 			controls_label.text = _controls_bar()
-			get_tree().create_timer(8.5, true, false, true).timeout.connect(func() -> void:
-				if is_instance_valid(controls_label):
-					controls_label.visible = false)
+			controls_label.visible = true   # M2: always on (house policy)
 		print("ECHO_MIRROR boot players=%d my_seat=%d" % [roster.size(), NetSession.my_seat()])
 		return
 	# Personalize the persistent hint bar with each human seat's REAL keys, once
@@ -291,15 +289,14 @@ func begin(config: Dictionary) -> void:
 		_run_aim_probe()
 
 
-## Show the persistent real-keys hint bar for the opening seconds, then declutter
-## (real-time timer so the hit-pause slow-mos never stretch the reveal).
+## Show the persistent real-keys hint bar. M2 CONTROL HINTS: it used to declutter
+## after 8.5s, but the house policy is now "always on" (party guests forget the
+## controls), so it simply stays up for the whole match.
 func _reveal_controls_bar() -> void:
 	if controls_label == null:
 		return
+	controls_label.text = _controls_bar()
 	controls_label.visible = true
-	get_tree().create_timer(8.5, true, false, true).timeout.connect(func() -> void:
-		if is_instance_valid(controls_label):
-			controls_label.visible = false)
 
 
 func _present_intro_card() -> void:
