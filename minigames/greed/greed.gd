@@ -489,7 +489,8 @@ func _tick_play(delta: float) -> void:
 		if grow_t <= 0.0:
 			grow_t = GROW_INTERVAL
 			pot_value += GROW_AMOUNT
-			Sfx.play("card", -14.0)
+			Sfx.play("bell_small", -14.0)   # playtest: "awful noise for getting the gold" — a
+			                                  # UI click ("card") read wrong for the pot filling
 		burst_t -= delta
 		if burst_t <= 0.0:
 			burst_t = BURST_INTERVAL
@@ -663,7 +664,7 @@ func _do_grab(p: int) -> void:
 		if q != p:
 			(players[q] as GreedPlayer).grab_hold = 0.0
 			(players[q] as GreedPlayer).show_grab_progress(0.0)
-	Sfx.play("confirm", -2.0)
+	Sfx.play("bell_small", -2.0)   # playtest: "awful noise for getting the gold"
 	_flash_pot("GRABBED!", roster[p].color)
 	_ev_grabs += 1
 	if NetSession.has_guests() and not _mir_snaps.has("host_carry"):
@@ -808,7 +809,12 @@ func _bank_ceremony(p: int, amount: int) -> void:
 	var pl: Dictionary = roster[p]
 	var at := chute_pos(p)
 	var world := Vector3(at.x, 0.2, at.y)
-	Sfx.play("match_win")
+	# playtest: "awful winning noise" — a bank happens many times a match and was
+	# reusing the SAME chiptune jingle as the true match_win fanfare (heard at
+	# _finish_match, line ~407), which both got repetitive AND cheapened the
+	# real victory. stinger_win is the house "deciding moment" cue (doc 21 §3),
+	# distinct and reserved for exactly this kind of mid-match high point.
+	Sfx.play("stinger_win")
 	_shake = maxf(_shake, 0.5)
 	_flash_banner("%s BANKS %d!" % [pl.name, amount], pl.color, 2.4)
 	_coin_rain(world, mini(amount, 40), pl.color)
@@ -871,7 +877,7 @@ func _tick_floor_coins() -> void:
 				(c.node as Node3D).queue_free()
 				floor_coins.remove_at(i)
 				points[p] = int(points[p]) + 1
-				Sfx.play("card", -10.0)
+				Sfx.play("bell_small", -10.0)   # playtest: "awful noise for getting the gold"
 				_rebuild_scoreboard()
 
 
@@ -1286,7 +1292,7 @@ func _net_apply(state: Dictionary) -> void:
 	var coins: Array = state.get("coins", [])
 	if coins != prev.get("coins", []):
 		if coins.size() < Array(prev.get("coins", [])).size():
-			Sfx.play("card", -10.0)
+			Sfx.play("bell_small", -10.0)   # mirror: match the couch's pickup swap
 		_mir_sync_coins(coins)
 	# --- event-counter juice (grabs/drops/banks/geysers/punished/leaks)
 	_mir_event_juice(state, prev)
@@ -1363,7 +1369,7 @@ func _mir_event_juice(state: Dictionary, prev: Dictionary) -> void:
 		pev.append(0)
 	# GRAB — the pot changed hands
 	if int(ev[0]) > int(pev[0]):
-		Sfx.play("confirm", -2.0)
+		Sfx.play("bell_small", -2.0)   # mirror: match the couch's pickup swap
 		if carrier_index >= 0:
 			_flash_pot("GRABBED!", roster[carrier_index].color)
 		_mir_snap_once("greed_mirror_carry")
@@ -1394,7 +1400,7 @@ func _mir_event_juice(state: Dictionary, prev: Dictionary) -> void:
 		if p >= 0 and p < players.size():
 			var at := chute_pos(p)
 			var world := Vector3(at.x, 0.2, at.y)
-			Sfx.play("match_win")
+			Sfx.play("stinger_win")   # mirror: match the couch's bank-ceremony swap
 			if not _reduced_motion():
 				_shake = maxf(_shake, 0.5)
 			_coin_rain(world, mini(int(lb[1]), 40), roster[p].color)
