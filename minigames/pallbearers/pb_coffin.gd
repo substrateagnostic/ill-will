@@ -7,14 +7,20 @@ extends Node3D
 ## + heading + a divergence-driven SWAY are set every physics tick. The lid pops
 ## and the deceased tumbles out on a drop; both are stuffed back on a restuff.
 ##
-## The coffin body is primitives behind a one-line Meshy swap seam (COFFIN_GLB) —
-## a handled carry-coffin is being forged tonight; until it lands the styled
-## casket reads as a shipped prop, not a graybox. The deceased is a wrapped
-## shroud (a KayKit body would read as a live person; a shroud reads as cargo).
+## The coffin body was primitives behind a one-line Meshy swap seam
+## (COFFIN_GLB) until the ZA finish audit (night 8) found the handled
+## carry-coffin had landed under `board_carry_coffin.glb` (the BOARD_DRESSING
+## wave) — this seam was still pointed at the pre-forge placeholder filename
+## `board_pall_coffin.glb`, which was never generated, so ResourceLoader.exists
+## silently fell through to the primitives every run. Rewired to the shipped
+## asset (walnut-red lid, gold corner fittings and carry handles — reads
+## PAINTED on the finish-audit contact sheet, docs/verify/shots/
+## asset_finish_board_*.png). The deceased is a wrapped shroud (a KayKit body
+## would read as a live person; a shroud reads as cargo).
 
 ## Swap seam: drop a committed coffin GLB here and it replaces the primitives
 ## with zero controller changes (MeshyProp-normalized to LID_LEN height).
-const COFFIN_GLB := "res://assets/models/meshy/generated/board_pall_coffin.glb"
+const COFFIN_GLB := "res://assets/models/meshy/generated/board_carry_coffin.glb"
 
 const LEN := 2.5                       # long axis (travel/feet-first direction, local Z)
 const WID := 0.72

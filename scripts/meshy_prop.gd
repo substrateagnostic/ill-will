@@ -42,6 +42,7 @@ static func instance_rigged(path: String, native_height: float,
 		var s := target_height / native_height
 		model.scale = Vector3(s, s, s)
 	wrap.add_child(model)
+	_degloss_rigged_materials(model)
 	if animate:
 		var anim: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
 		if anim != null and anim.get_animation_list().size() > 0:
@@ -49,6 +50,37 @@ static func instance_rigged(path: String, native_height: float,
 			anim.get_animation(first).loop_mode = Animation.LOOP_LINEAR
 			anim.play(first)
 	return wrap
+
+## WIRING FIX (ZA audit, night 8): Meshy's /rigging + /animation re-export
+## drops the house-style PBR values the original text-to-3D statics carry
+## (metallic 0.0, roughness 0.8 — flat, matte "toy" look) and silently falls
+## back to the glTF spec defaults (metallic 1.0, roughness ~0.4) whenever the
+## rig pass omits `pbrMetallicRoughness.metallicFactor`. Every rigged/animated
+## GLB shipped so far (npc_reaper_walk/_sweep, npc_ferryman_idle,
+## npc_gravedigger_idle, npc_groundskeeper_idle, npc_mourner_*_idle/_bow,
+## npc_widow_idle, executor_butler_idle) carries this: same albedo texture as
+## its static sibling, but metallic=1/roughness=0.41 instead of metallic=0/
+## roughness=0.8 — a hard glossy specular sheen on cloth that reads as
+## unpainted plastic/rubber next to the matte statics (contact-sheet receipt:
+## docs/design/30-asset-finish-audit.md). This is an import-default mismatch,
+## not an art/texture change — correct it once, here, for every rigged GLB
+## this helper ever instances (present and future).
+static func _degloss_rigged_materials(model: Node3D) -> void:
+	for n in model.find_children("*", "MeshInstance3D", true, false):
+		var mi := n as MeshInstance3D
+		if mi.mesh == null:
+			continue
+		for s in mi.mesh.get_surface_count():
+			var mat: Material = mi.get_active_material(s)
+			if not (mat is BaseMaterial3D):
+				continue
+			var bm := mat as BaseMaterial3D
+			if bm.metallic <= 0.0:
+				continue
+			var fixed: BaseMaterial3D = bm.duplicate()
+			fixed.metallic = 0.0
+			fixed.roughness = 0.8
+			mi.set_surface_override_material(s, fixed)
 
 static func instance(path: String, target_height: float,
 		yaw_deg := 0.0, base_at_zero := true, center_xz := true) -> Node3D:
