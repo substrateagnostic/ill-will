@@ -1384,8 +1384,11 @@ func _enforce_ring(delta: float) -> void:
 		if r > RING_R:
 			var t: float = float(_ring_warn.get(idx, 0.0)) + delta
 			_ring_warn[idx] = t
-			# flash the warning ~4Hz so it reads as an alarm, not a static label
-			f.set_ring_warning(true, fmod(t, 0.26) < 0.13)
+			# flash the warning ~4Hz so it reads as an alarm, not a static label;
+			# the drain ring at the fighter's feet fills 0->1 over RING_WARN_T so
+			# players can SEE how long they've been outside, not just read a blink
+			# (playtest note: "the ring to show how long the player has outside").
+			f.set_ring_warning(true, fmod(t, 0.26) < 0.13, t / RING_WARN_T, delta)
 			if t >= RING_WARN_T:
 				_ring_warn.erase(idx)
 				f.set_ring_warning(false)

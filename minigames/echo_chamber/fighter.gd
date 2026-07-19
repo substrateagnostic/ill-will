@@ -134,6 +134,8 @@ var _pivot: Node3D
 var _anim: AnimationPlayer
 var _ring: MeshInstance3D
 var _warn_label: Label3D
+var _dash_ring: CooldownRing        # playtest note: visible dash-cooldown pip
+var _ringout_ring: CooldownRing     # playtest note: visible drain timer while outside THE RING
 var _cur_anim := ""
 var _base_scale := 1.0
 var _mesh_instances: Array = []
@@ -218,6 +220,22 @@ func setup(seed_base: int) -> void:
 	_warn_label.visible = false
 	add_child(_warn_label)
 
+	# THE COOLDOWN RING (docs/design/08-gamefeel-research.md §B2), house pattern
+	# reused from lw_ghost.gd's gust ring: owner-colored, empty->full = charging->
+	# ready, ready-flash pop, auto-hides once idle-ready (playtest: "cooldown timer
+	# on dash with a bar the player can see").
+	_dash_ring = CooldownRing.new()
+	add_child(_dash_ring)
+	_dash_ring.setup(color, 0.68, 0.60, 0.05, 0.9)
+
+	# Ring-out drain timer (playtest: "same with the ring to show how long the
+	# player has outside the area"). Sits a hair further out than the dash ring
+	# so both can show at once; hot warning color (not owner color — this is a
+	# danger cue, not an identity cue). Driven by set_ring_drain() below.
+	_ringout_ring = CooldownRing.new()
+	add_child(_ringout_ring)
+	_ringout_ring.setup(Color(1.0, 0.28, 0.15), 0.82, 0.74, 0.05, 1.1)
+
 	_bot_rng.seed = seed_base * 131 + player_index * 977 + 7
 	_hop_rng.seed = seed_base * 331 + player_index * 613 + 11
 	_hop_intro_t = _hop_rng.randf_range(2.0, 6.0)
@@ -226,10 +244,25 @@ func setup(seed_base: int) -> void:
 
 ## Toggle the "THE RING DEMANDS" ring-out warning above this fighter. `blink`
 ## drives the flash (the controller passes an ~4Hz square wave); off hides it.
-func set_ring_warning(on: bool, blink := true) -> void:
+## `frac_out` (0.0 the instant you cross the boundary -> 1.0 at the KO) also
+## drives the visible drain-timer ring at the fighter's feet (playtest note:
+## "the ring to show how long the player has outside the area"). It's fed to
+## CooldownRing INVERTED (full-size the moment you cross the boundary, shrinking
+## to nothing exactly at the KO) — a shrinking ring reads as an urgent countdown
+## from frame one; the growing-fill orientation CooldownRing normally uses would
+## start as a barely-visible pinprick swallowed by the identity puck underfoot.
+## Visibility is force-held true while `on` so CooldownRing's own "hide once
+## idle-ready" behavior (meant for idle abilities, not an active death timer)
+## never blanks it mid-countdown.
+func set_ring_warning(on: bool, blink := true, frac_out := 0.0, delta := 0.0) -> void:
 	if _warn_label == null:
 		return
 	_warn_label.visible = on and blink
+	if _ringout_ring:
+		var reduced := not bool(PartySetup.pref("screen_shake", true))
+		_ringout_ring.tick(delta, clampf(1.0 - frac_out, 0.0, 1.0), on, reduced)
+		if on:
+			_ringout_ring.visible = true
 
 
 func _collect_meshes(node: Node) -> void:
@@ -245,6 +278,21 @@ func tick(delta: float) -> void:
 	_swing_cd = maxf(0.0, _swing_cd - delta)
 	_heavy_cd = maxf(0.0, _heavy_cd - delta)
 	_dash_cd = maxf(0.0, _dash_cd - delta)
+	if _dash_ring:
+		# Full-size the instant you dash, shrinking to nothing as it recharges
+		# (a WoW-style cooldown swipe, drained not filled). DASH_CD is short
+		# (1.2s) and the ring sits just outside the OPAQUE identity puck, so a
+		# fill-up-to-ready ring (CooldownRing's normal idiom, see lw_ghost.gd)
+		# would spend most of that 1.2s at a radius smaller than the puck and
+		# render underneath it — invisible for exactly the part of the wait
+		# that needed to read as "a bar the player can see" (playtest note).
+		# Visibility is driven directly off _dash_cd (not CooldownRing's own
+		# ready-flash-then-hide FSM, which assumes the opposite fill direction)
+		# so it disappears cleanly the instant the dash is actually ready.
+		var reduced := not bool(PartySetup.pref("screen_shake", true))
+		var dash_active := _dash_cd > 0.0
+		_dash_ring.tick(delta, clampf(_dash_cd / DASH_CD, 0.0, 1.0), dash_active, reduced)
+		_dash_ring.visible = dash_active
 	_parry_cd = maxf(0.0, _parry_cd - delta)
 	_iframe = maxf(0.0, _iframe - delta)
 	_riposte_t = maxf(0.0, _riposte_t - delta)

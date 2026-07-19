@@ -88,6 +88,79 @@ godot --path . res://minigames/echo_chamber/echo_chamber.tscn -- \
 
 ---
 
+## v1.3 — TUNING PASS: visible dash cooldown + ring-out drain timer (playtest)
+
+Friend playtest note verbatim: *"Cooldown timer on dash with a bar the player
+can see. Same with the ring to show how long the player has outside the
+area."* Two presentation-only additions, both reusing the house
+`core/cooldown_ring.gd` component (same class `lw_ghost.gd` uses for the gust
+recharge ring) — neither touches sim state, combat resolution, or bot logic.
+
+**1. Dash cooldown ring** (`fighter.gd` `tick()`, `_dash_ring`). A ring at each
+fighter's feet, owner-colored, radii 0.68/0.60 (a hair outside the identity
+puck). Fires **full-size the instant you dash** and shrinks to nothing as
+`DASH_CD` (1.2s) recharges, then disappears. This is the OPPOSITE fill
+direction from `lw_ghost.gd`'s gust ring (which fills UP to ready): that
+house idiom assumes a hollow, semi-transparent identity ring so a
+still-small charging ring stays visible underneath it. Echo Chamber's
+identity marker is an OPAQUE solid puck (`_ring`, a `CylinderMesh` disc, not a
+torus), so a fill-up ring spends most of a short 1.2s cooldown at a radius
+smaller than the puck and renders invisibly underneath it — exactly the part
+of the wait that needed to read as "a bar the player can see." Draining from
+full-size instead means the ring is large and clearly visible the instant you
+dash (the moment it matters most) and disappears cleanly the instant the dash
+is actually ready — driven directly off `_dash_cd` rather than
+`CooldownRing`'s own ready-flash-then-hide FSM (which assumes the opposite
+fill direction and would otherwise show/hide at the wrong ends).
+
+**2. Ring-out drain-timer ring** (`echo_chamber.gd` `_enforce_ring()` ->
+`fighter.gd` `set_ring_warning()`, `_ringout_ring`). A second, larger ring
+(radii 0.82/0.74, hot orange, distinct from any owner color) that appears the
+instant a live fighter crosses the yellow boundary (`RING_R`) and shrinks
+from full-size to nothing over the existing `RING_WARN_T` (1.5s) grace window,
+hitting empty exactly as the ring-out KO fires — a literal, geometric answer
+to "how long do I have left outside." Runs alongside the pre-existing
+flashing "THE RING DEMANDS" label (unchanged); the ring adds a continuous,
+colorblind-safe (shape/size, not just color) countdown on top of the discrete
+blink. Visibility is force-held true while the warning is active so
+`CooldownRing`'s own idle-hide behavior (built for abilities that go quiet
+once ready, not an active death timer) never blanks it mid-countdown.
+
+**Verified presentation-only — zero sim impact.** Full 5-round headless soak,
+same seed as the existing v1.2 receipt, is byte-identical to the value already
+recorded above:
+```
+godot --headless --path . res://minigames/echo_chamber/echo_chamber.tscn -- \
+  --echobots --echofast=3 --seed=1 --echocap --outdir=verify_out
+# ECHO_DETERMINISM round=1..5 max_err=0.000000 OK   (all five, unchanged)
+# ECHO_MATCH_OVER champ=BLUE placements=[1, 3, 0, 2]  (byte-identical to v1.2 receipt above)
+```
+No receipt values moved — this tuning pass needed no deliberate-change entry
+beyond this note, since the match/determinism receipts are unchanged.
+
+**Dash-ring logic proof** (headless trace, no display —
+`CooldownRing.tick()`/`.visible` run identically headless or windowed, only
+the PNG grab is display-gated): confirms full-size-on-fire -> smooth shrink
+-> clean hide at ready, matching the design exactly:
+```
+DASH_RING_TRACE cd=0.000 vis=false scale=1.000   <- idle-ready: hidden
+DASH_RING_TRACE cd=1.183 vis=true  scale=0.986   <- just dashed: ~full size
+DASH_RING_TRACE cd=0.600 vis=true  scale=0.500   <- half recharged: half size
+DASH_RING_TRACE cd=0.300 vis=true  scale=0.250   <- nearly ready: nearly gone
+```
+
+**Screenshots** (`verify_out/echo_tune_m3/`, seed=1):
+- `echo_ringwarn.png` (`--ringtest`) — RED parked at r=7.0 (outside `RING_R`):
+  "THE RING DEMANDS" flashing above a clearly visible bright-orange drain ring
+  at RED's feet, mid-countdown, well outside RED's own identity puck.
+- `shot_0800.png` (`--fixed-fps 60 --shots=800`) — round-1 opening scrum
+  shortly after the bots' first dashes; dash rings visible at multiple
+  fighters' feet (partially occluded on the Mage by that character's own
+  wide-brim hat mesh from the top-down camera — a pre-existing camera/model
+  interaction that affects the identity puck the same way, not a regression).
+
+---
+
 ### v1.1 required evidence (verify_out/, windowed seed=1)
 
 - **echo_heavy_windup.png** — a fighter mid-charge: red-tinted, scaled-up
