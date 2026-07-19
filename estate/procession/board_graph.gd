@@ -537,7 +537,10 @@ func build(players: Array, monuments: Array) -> void:
 	# world's, and the stones sit on their stations.
 	grounds = ProcessionGrounds.new()
 	add_child(grounds)
-	grounds.build_all()
+	var stations: Array = []
+	for n in nodes:
+		stations.append(n.pos)
+	grounds.build_all(stations)
 	stone_nodes.clear()
 	for n in nodes:
 		_build_stone(int(n.id), String(n.type))
@@ -1129,6 +1132,33 @@ static func _glaze_material() -> StandardMaterial3D:
 	m.rim = 0.45
 	m.rim_tint = 0.35
 	return m
+
+## THE BOOK's laurel wisp (doc 32 v1): a faint gold ring floating over a
+## figurine whose owner read the last cycle rightly. Cosmetic, one cycle.
+var _laurels := {}
+
+func set_laurel(seat: int, on: bool) -> void:
+	if on and not _laurels.has(seat) and pawns.has(seat):
+		var ring := MeshInstance3D.new()
+		var tm := TorusMesh.new()
+		tm.inner_radius = 0.28
+		tm.outer_radius = 0.35
+		tm.rings = 6
+		tm.ring_segments = 20
+		ring.mesh = tm
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.85, 0.72, 0.30)
+		m.emission_enabled = true
+		m.emission = Color(1.0, 0.85, 0.35)
+		m.emission_energy_multiplier = 1.5
+		ring.material_override = m
+		ring.position = Vector3(0, 1.28, 0)
+		ring.rotation_degrees.x = 14.0
+		(pawns[seat] as Node3D).add_child(ring)
+		_laurels[seat] = ring
+	elif not on and _laurels.has(seat):
+		(_laurels[seat] as Node).queue_free()
+		_laurels.erase(seat)
 
 ## Seat offset so four pawns share a stone without z-fighting.
 func _seat_offset(seat: int) -> Vector3:

@@ -331,13 +331,23 @@ const EXT_X := Vector2(-58.0, 52.0)      # terrain extents
 const EXT_Z := Vector2(-80.0, 58.0)
 const GRID := 1.4                         # terrain vertex pitch
 
-func build_all() -> void:
+## Station keep-out points (the board passes its node positions in) so the
+## scatter never crowds a stone a pawn must land on.
+var _keep_out: Array = []
+
+func build_all(keep_out: Array = []) -> void:
+	_keep_out = keep_out
 	_build_terrain()
 	_build_water()
 	for tag in SEGS:
 		_build_path(String(tag))
 	_build_hedge_maze()
 	_build_manor_silhouette()
+	# G2 — the lands dressed (each dresser is asset-gated: a fresh checkout
+	# without the Meshy kit still builds the full G1 world)
+	_dress_garden()
+	_dress_forest()
+	_dress_bog()
 
 ## Sculpted heightmesh with per-vertex biome colour — one draw call. Colour
 ## carries the land's identity (mossy lawn, wood loam, bog murk, worn climb);
@@ -663,7 +673,14 @@ func _bridge(tag: String, pts: Array) -> void:
 		var to := Vector3(b.x, deck_mid - 1.6, b.y)
 		bridge.look_at(to, Vector3.UP)
 		return
-	# the garden footbridge (G2 swaps in the Meshy hero): a gentle slab arch
+	# G2: the forged stone footbridge hero spans the garden brook
+	if tag == "garden_b" and ResourceLoader.exists(KIT + "garden_footbridge.glb"):
+		var fb := MeshyProp.instance(KIT + "garden_footbridge.glb", 1.7)
+		add_child(fb)
+		fb.global_position = Vector3(mid.x, deck_mid - 1.15, mid.y)
+		fb.look_at(Vector3(b.x, deck_mid - 1.15, b.y), Vector3.UP)
+		return
+	# the garden footbridge fallback (pre-kit): a gentle slab arch
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
 	var steps := 14
@@ -734,6 +751,51 @@ func _commit_mm(mm: MultiMesh, xforms: Array, rough: float) -> void:
 # head taller. G2 re-dresses the same wall lines with the Meshy hedge kit.
 # --------------------------------------------------------------------------
 func _build_hedge_maze() -> void:
+	# gather every wall run first — the SAME lines feed either dressing
+	var runs: Array = []
+	for r in range(MAZE_ROWS):
+		for c in range(MAZE_COLS):
+			# east wall of (c,r)
+			if c < MAZE_COLS - 1 and not MAZE_OPEN_E.has("%d,%d" % [c, r]):
+				runs.append({"at": _cell(c, r) + Vector2(MAZE_CELL * 0.5, 0), "dir": Vector2(0, 1)})
+			# north wall of (c,r)
+			if r < MAZE_ROWS - 1 and not MAZE_OPEN_N.has("%d,%d" % [c, r]):
+				runs.append({"at": _cell(c, r) + Vector2(0, -MAZE_CELL * 0.5), "dir": Vector2(1, 0)})
+	# boundary: south (entrance gap at col 0), north (exit gap at col 3),
+	# west and east full runs
+	for c in range(MAZE_COLS):
+		if c != 0:
+			runs.append({"at": _cell(c, 0) + Vector2(0, MAZE_CELL * 0.5), "dir": Vector2(1, 0)})
+		if c != 3:
+			runs.append({"at": _cell(c, MAZE_ROWS - 1) + Vector2(0, -MAZE_CELL * 0.5), "dir": Vector2(1, 0)})
+	for r in range(MAZE_ROWS):
+		runs.append({"at": _cell(0, r) + Vector2(-MAZE_CELL * 0.5, 0), "dir": Vector2(0, 1)})
+		runs.append({"at": _cell(MAZE_COLS - 1, r) + Vector2(MAZE_CELL * 0.5, 0), "dir": Vector2(0, 1)})
+	# G2: the living hedge kit re-dresses the wall lines (straight pieces,
+	# an overgrown variant ~1-in-5). G1 fallback: the jittered box clusters.
+	var straight := _kit_sources(KIT + "hedge_wall_straight.glb",
+		Vector3(1.15, HEDGE_H + 0.15, MAZE_CELL + 0.6))
+	var overgrown := _kit_sources(KIT + "hedge_wall_overgrown.glb",
+		Vector3(1.15, HEDGE_H + 0.15, MAZE_CELL + 0.6))
+	if not straight.is_empty():
+		var pl_s: Array = []
+		var pl_o: Array = []
+		for run in runs:
+			var at := run.at as Vector2
+			var dir := run.dir as Vector2
+			var seedf := at.x * 3.1 + at.y * 7.7
+			var yaw := atan2(dir.x, dir.y) + 0.03 * sin(seedf * 1.7)
+			# mirror half the pieces so no two neighbours read identical
+			var flip := PI if sin(seedf * 2.9) > 0.0 else 0.0
+			var basis := Basis(Vector3.UP, yaw + flip)
+			var t := Transform3D(basis, snap(Vector3(at.x, 0, at.y), -0.10))
+			if not overgrown.is_empty() and _h01(at.x, at.y, 223) < 0.20:
+				pl_o.append(t)
+			else:
+				pl_s.append(t)
+		_kit_multimesh(straight, pl_s)
+		_kit_multimesh(overgrown, pl_o)
+		return
 	var mm := MultiMesh.new()
 	mm.transform_format = MultiMesh.TRANSFORM_3D
 	mm.use_colors = true
@@ -741,24 +803,8 @@ func _build_hedge_maze() -> void:
 	bm.size = Vector3(1.0, 1.0, 1.0)   # unit box; scale per instance
 	mm.mesh = bm
 	var xforms: Array = []
-	for r in range(MAZE_ROWS):
-		for c in range(MAZE_COLS):
-			# east wall of (c,r)
-			if c < MAZE_COLS - 1 and not MAZE_OPEN_E.has("%d,%d" % [c, r]):
-				_hedge_run(xforms, _cell(c, r) + Vector2(MAZE_CELL * 0.5, 0), Vector2(0, 1))
-			# north wall of (c,r)
-			if r < MAZE_ROWS - 1 and not MAZE_OPEN_N.has("%d,%d" % [c, r]):
-				_hedge_run(xforms, _cell(c, r) + Vector2(0, -MAZE_CELL * 0.5), Vector2(1, 0))
-	# boundary: south (entrance gap at col 0), north (exit gap at col 3),
-	# west and east full runs
-	for c in range(MAZE_COLS):
-		if c != 0:
-			_hedge_run(xforms, _cell(c, 0) + Vector2(0, MAZE_CELL * 0.5), Vector2(1, 0))
-		if c != 3:
-			_hedge_run(xforms, _cell(c, MAZE_ROWS - 1) + Vector2(0, -MAZE_CELL * 0.5), Vector2(1, 0))
-	for r in range(MAZE_ROWS):
-		_hedge_run(xforms, _cell(0, r) + Vector2(-MAZE_CELL * 0.5, 0), Vector2(0, 1))
-		_hedge_run(xforms, _cell(MAZE_COLS - 1, r) + Vector2(MAZE_CELL * 0.5, 0), Vector2(0, 1))
+	for run in runs:
+		_hedge_run(xforms, run.at as Vector2, run.dir as Vector2)
 	_commit_mm(mm, xforms, 1.0)
 
 func _cell(c: int, r: int) -> Vector2:
@@ -851,3 +897,332 @@ func _build_manor_silhouette() -> void:
 		w.material_override = lit
 		w.position = wdef
 		root.add_child(w)
+
+# --------------------------------------------------------------------------
+# G2 — THE LANDS DRESSED (doc 33 §5). The Meshy biome kits re-dress the same
+# authored geometry: hedge wall lines get living hedge pieces, the Hollow
+# fills with forest, the Valley grows its bog, the Garden its parterres and
+# statuary. Every dresser is ASSET-GATED (missing GLB -> G1 fallback stays),
+# every scatter is DETERMINISTIC (hash of position, no rng streams), and
+# every repeated piece rides a MultiMesh built from the GLB's own meshes
+# (GROUNDS BAR: draw calls stay flat no matter how thick the forest).
+# --------------------------------------------------------------------------
+const KIT := "res://assets/models/meshy/generated/"
+
+## Extract MultiMesh sources from a GLB: one {mesh, norm} per MeshInstance3D,
+## where norm maps the ORIGINAL mesh into a box of target dims centred at
+## origin, base at y=0 (the same normalisation MeshyProp.instance applies,
+## baked into a transform so thousands of copies cost one draw call per mesh).
+## dims: x/z = footprint (NAN = keep aspect from the height scale), y = height.
+func _kit_sources(path: String, dims: Vector3) -> Array:
+	if not ResourceLoader.exists(path):
+		return []
+	var scene: PackedScene = load(path)
+	if scene == null:
+		return []
+	var model: Node3D = scene.instantiate()
+	var found: Array = []
+	_collect_meshes(model, Transform3D.IDENTITY, found)
+	var boxes: Array[AABB] = []
+	for f in found:
+		boxes.append((f.local as Transform3D) * ((f.mesh as Mesh).get_aabb()))
+	if boxes.is_empty():
+		model.free()
+		return []
+	var aabb: AABB = boxes[0]
+	for i in range(1, boxes.size()):
+		aabb = aabb.merge(boxes[i])
+	model.free()
+	if aabb.size.y < 0.0001:
+		return []
+	# longest horizontal axis becomes the LENGTH axis (z) — hedge pieces etc.
+	var pre := Basis.IDENTITY
+	var lx := aabb.size.x
+	var lz := aabb.size.z
+	if lx > lz:
+		pre = Basis(Vector3.UP, PI * 0.5)
+		var t := lx
+		lx = lz
+		lz = t
+	var sy := dims.y / aabb.size.y
+	var sx := sy if is_nan(dims.x) else dims.x / maxf(lx, 0.0001)
+	var sz := sy if is_nan(dims.z) else dims.z / maxf(lz, 0.0001)
+	var c := aabb.get_center()
+	var norm := Transform3D(Basis.from_scale(Vector3(sx, sy, sz)), Vector3.ZERO) \
+		* Transform3D(pre, Vector3.ZERO) \
+		* Transform3D(Basis.IDENTITY, Vector3(-c.x, -aabb.position.y, -c.z))
+	var out: Array = []
+	for f in found:
+		out.append({"mesh": f.mesh, "norm": norm * (f.local as Transform3D)})
+	return out
+
+func _collect_meshes(node: Node, xform: Transform3D, found: Array) -> void:
+	var here := xform
+	if node is Node3D:
+		here = xform * (node as Node3D).transform
+	if node is MeshInstance3D and (node as MeshInstance3D).mesh != null:
+		found.append({"mesh": (node as MeshInstance3D).mesh, "local": here})
+	for c in node.get_children():
+		_collect_meshes(c, here, found)
+
+## Commit a set of world placements against a kit source list — one MultiMesh
+## per source mesh, materials as authored in the GLB.
+func _kit_multimesh(sources: Array, placements: Array) -> void:
+	if sources.is_empty() or placements.is_empty():
+		return
+	for src in sources:
+		var mm := MultiMesh.new()
+		mm.transform_format = MultiMesh.TRANSFORM_3D
+		mm.mesh = src.mesh
+		mm.instance_count = placements.size()
+		for i in placements.size():
+			mm.set_instance_transform(i, (placements[i] as Transform3D) * (src.norm as Transform3D))
+		var mmi := MultiMeshInstance3D.new()
+		mmi.multimesh = mm
+		add_child(mmi)
+
+## One hero instance (single placement, full scene) — the garden statues,
+## the landmarks. Returns true if the asset existed.
+func _hero(path: String, h: float, pos: Vector3, yaw := 0.0) -> bool:
+	if not ResourceLoader.exists(path):
+		return false
+	var prop := MeshyProp.instance(path, h)
+	add_child(prop)
+	prop.global_position = pos
+	prop.rotation.y = yaw
+	return true
+
+# ---- scatter support -----------------------------------------------------
+
+## Distance from a point to the nearest control polyline of the named segs.
+func _path_dist(p: Vector2, tags: Array) -> float:
+	var best := 999.0
+	for tag in tags:
+		var pts: Array = (SEGS[String(tag)] as Dictionary).pts
+		for i in pts.size() - 1:
+			var a: Vector2 = pts[i]
+			var b: Vector2 = pts[i + 1]
+			var ab := b - a
+			var t := clampf((p - a).dot(ab) / maxf(ab.length_squared(), 0.001), 0.0, 1.0)
+			best = minf(best, p.distance_to(a + ab * t))
+	return best
+
+func _keep_dist(p: Vector2) -> float:
+	var best := 999.0
+	for k in _keep_out:
+		var kv := k as Vector3
+		best = minf(best, p.distance_to(Vector2(kv.x, kv.z)))
+	return best
+
+const ALL_SEGS := ["approach", "garden_a", "garden_b", "hollow_a", "hollow_b",
+	"valley_a", "valley_b", "homestretch"]
+
+## Deterministic 0..1 hash for a scatter cell.
+static func _h01(x: float, z: float, salt: int) -> float:
+	return _hash2(int(round(x * 7.0)), int(round(z * 7.0)), salt) * 0.5 + 0.5
+
+# ---- THE GARDEN (authored pieces — a tended land is placed, not scattered) -
+
+func _dress_garden() -> void:
+	# parterre beds flanking the gravel walk + the fountain court
+	var beds := [
+		{"p": Vector2(6.5, 25.8), "yaw": 0.35},
+		{"p": Vector2(6.5, 20.0), "yaw": 0.35},
+		{"p": Vector2(14.0, 23.6), "yaw": 0.42},
+		{"p": Vector2(27.6, -27.4), "yaw": -0.9},
+		{"p": Vector2(29.2, -33.2), "yaw": -0.7},
+	]
+	for b in beds:
+		var bp := b.p as Vector2
+		_hero(KIT + "garden_parterre_bed.glb", 0.55,
+			snap(Vector3(bp.x, 0, bp.y), -0.03), float(b.yaw))
+	# statuary — the mourner watches the fork2 stretch, the urnbearer the court
+	_hero(KIT + "garden_statue_mourner.glb", 2.4,
+		snap(Vector3(20.5, 0, -18.6), -0.04), PI * 0.8)
+	_hero(KIT + "garden_statue_urnbearer.glb", 2.4,
+		snap(Vector3(35.2, 0, -26.2), -0.04), -PI * 0.35)
+	# an abandoned tea table off the garden_b walk
+	_hero(KIT + "garden_table_abandoned.glb", 1.0,
+		snap(Vector3(24.5, 0, -23.6), -0.02), 0.6)
+	# the maze centrepiece — the weeping angel at the end of the long false
+	# corridor (cell 0,3): a reward only the lost (and the overhead camera) see
+	_hero(KIT + "maze_center_statue.glb", 2.5,
+		snap(Vector3(24.25, 0, 1.75), -0.03), PI)
+	# living arches over the maze mouth and its far door
+	_hero(KIT + "hedge_arch_gap.glb", 2.5,
+		snap(Vector3(MAZE_ORIGIN.x, 0, MAZE_ORIGIN.y + MAZE_CELL * 0.5 + 2.25), -0.1), 0.0)
+	_hero(KIT + "hedge_arch_gap.glb", 2.5,
+		snap(Vector3(_cell(3, 6).x, 0, _cell(3, 6).y - MAZE_CELL * 0.5), -0.1), 0.0)
+
+# ---- THE HOLLOW WOODS (a true forest — trunks ARE the separation) ---------
+
+func _dress_forest() -> void:
+	var canopy := [
+		{"path": KIT + "forest_tree_dark_oak.glb", "h": 6.5, "w": 0.30},
+		{"path": KIT + "forest_tree_twisted_pine.glb", "h": 7.0, "w": 0.30},
+		{"path": KIT + "forest_tree_bare_elm.glb", "h": 6.2, "w": 0.25},
+		{"path": KIT + "forest_tree_hollow_snag.glb", "h": 4.0, "w": 0.15},
+	]
+	var srcs: Array = []
+	var have := false
+	for t in canopy:
+		var s := _kit_sources(String(t.path), Vector3(NAN, float(t.h), NAN))
+		srcs.append(s)
+		if not s.is_empty():
+			have = true
+	if not have:
+		return
+	var buckets: Array = [[], [], [], []]
+	var woods_segs := ["hollow_a", "hollow_b"]
+	var x := -26.0
+	while x < 6.0:
+		var z := -34.0
+		while z < 30.0:
+			_forest_try(srcs, canopy, buckets, woods_segs, x, z)
+			z += 3.4
+		x += 3.4
+	for ti in canopy.size():
+		_kit_multimesh(srcs[ti], buckets[ti])
+	# undergrowth along the dirt track's edges
+	var under := [
+		{"path": KIT + "forest_stump.glb", "h": 0.7, "salt": 131, "rate": 0.30},
+		{"path": KIT + "forest_root_tangle.glb", "h": 0.9, "salt": 137, "rate": 0.35},
+		{"path": KIT + "forest_deadfall_log.glb", "h": 0.8, "salt": 139, "rate": 0.30},
+		{"path": KIT + "forest_mushroom_cluster.glb", "h": 0.5, "salt": 149, "rate": 0.45},
+	]
+	for u in under:
+		var us := _kit_sources(String(u.path), Vector3(NAN, float(u.h), NAN))
+		if us.is_empty():
+			continue
+		var pl: Array = []
+		var ux := -24.0
+		while ux < 4.0:
+			var uz := -32.0
+			while uz < 28.0:
+				var salt := int(u.salt)
+				var jx := ux + 2.2 * (_h01(ux, uz, salt) - 0.5)
+				var jz := uz + 2.2 * (_h01(ux, uz, salt + 1) - 0.5)
+				var p := Vector2(jx, jz)
+				var d := _path_dist(p, woods_segs)
+				if d > 2.2 and d < 5.5 and _keep_dist(p) > 3.2 \
+						and height(jx, jz) > WATER_Y + 0.3 \
+						and _h01(jx, jz, salt + 2) < float(u.rate):
+					var sc2 := 0.8 + 0.4 * _h01(jx, jz, salt + 3)
+					var b2 := Basis(Vector3.UP, TAU * _h01(jx, jz, salt + 4)) \
+						* Basis.from_scale(Vector3(sc2, sc2, sc2))
+					pl.append(Transform3D(b2, snap(Vector3(jx, 0, jz), -0.05)))
+				uz += 4.6
+			ux += 4.6
+		_kit_multimesh(us, pl)
+
+## One forest canopy candidate — returns true if a tree was placed.
+func _forest_try(srcs: Array, canopy: Array, buckets: Array, woods_segs: Array,
+		x: float, z: float) -> bool:
+	var jx := x + 3.0 * (_h01(x, z, 101) - 0.5)
+	var jz := z + 3.0 * (_h01(x, z, 103) - 0.5)
+	var p := Vector2(jx, jz)
+	var d_woods := _path_dist(p, woods_segs)
+	if d_woods < 3.2 or d_woods > 12.5:
+		return false
+	if _path_dist(p, ALL_SEGS) < 3.2 or _keep_dist(p) < 3.8:
+		return false
+	if height(jx, jz) < WATER_Y + 0.3 or _maze_mask(jx, jz) > 0.15:
+		return false
+	# the crossroads glades stay open — the forks breathe
+	if p.distance_to(FORK1_XZ) < 7.0 or p.distance_to(FORK2_XZ) < 7.0:
+		return false
+	var roll := _h01(jx, jz, 107)
+	var pick := 0
+	var acc := 0.0
+	for ti in canopy.size():
+		acc += float((canopy[ti] as Dictionary).w)
+		if roll <= acc:
+			pick = ti
+			break
+	if (srcs[pick] as Array).is_empty():
+		return false
+	var sc := 0.8 + 0.5 * _h01(jx, jz, 109)
+	var basis := Basis(Vector3.UP, TAU * _h01(jx, jz, 113)) * Basis.from_scale(Vector3(sc, sc, sc))
+	(buckets[pick] as Array).append(Transform3D(basis, snap(Vector3(jx, 0, jz), -0.06)))
+	return true
+
+# ---- THE WEEPING VALLEY (the bog grows in) --------------------------------
+
+func _dress_bog() -> void:
+	# reeds crowd every shoreline (pond AND brook) — the water reads as EDGES
+	var reeds := _kit_sources(KIT + "bog_reed_cluster.glb", Vector3(NAN, 1.4, NAN))
+	if not reeds.is_empty():
+		var pl: Array = []
+		var x := EXT_X.x + 2.0
+		while x < 46.0:
+			var z := EXT_Z.x + 2.0
+			while z < 20.0:
+				var jx := x + 2.0 * (_h01(x, z, 151) - 0.5)
+				var jz := z + 2.0 * (_h01(x, z, 153) - 0.5)
+				var h := height(jx, jz)
+				var lvl := _water_level(jx, jz)
+				if not is_nan(lvl) and h > lvl - 0.35 and h < lvl + 0.4 \
+						and _path_dist(Vector2(jx, jz), ALL_SEGS) > 2.4 \
+						and _keep_dist(Vector2(jx, jz)) > 3.0 \
+						and _h01(jx, jz, 157) < 0.6:
+					var sc := 0.75 + 0.5 * _h01(jx, jz, 159)
+					var b := Basis(Vector3.UP, TAU * _h01(jx, jz, 161)) \
+						* Basis.from_scale(Vector3(sc, sc, sc))
+					pl.append(Transform3D(b, Vector3(jx, maxf(h, lvl - 0.25) - 0.04, jz)))
+				z += 2.6
+			x += 2.6
+		_kit_multimesh(reeds, pl)
+	# hummocks dot the shallow water
+	var hums := _kit_sources(KIT + "bog_hummock.glb", Vector3(NAN, 0.5, NAN))
+	if not hums.is_empty():
+		var pl2: Array = []
+		var hx := -56.0
+		while hx < -10.0:
+			var hz := -38.0
+			while hz < 12.0:
+				var jx := hx + 2.5 * (_h01(hx, hz, 163) - 0.5)
+				var jz := hz + 2.5 * (_h01(hx, hz, 167) - 0.5)
+				var h := height(jx, jz)
+				if h < WATER_Y - 0.15 and h > WATER_Y - 0.8 \
+						and _path_dist(Vector2(jx, jz), ["valley_a", "valley_b"]) > 3.0 \
+						and _h01(jx, jz, 169) < 0.4:
+					var sc := 0.8 + 0.5 * _h01(jx, jz, 173)
+					var b := Basis(Vector3.UP, TAU * _h01(jx, jz, 179)) \
+						* Basis.from_scale(Vector3(sc, sc, sc))
+					pl2.append(Transform3D(b, Vector3(jx, WATER_Y - 0.10, jz)))
+				hz += 5.2
+			hx += 5.2
+		_kit_multimesh(hums, pl2)
+	# willows bow along the banks — sparse, mournful
+	var wil_a := _kit_sources(KIT + "bog_willow_weeping.glb", Vector3(NAN, 5.5, NAN))
+	var wil_b := _kit_sources(KIT + "bog_willow_gnarled.glb", Vector3(NAN, 4.5, NAN))
+	var wa: Array = []
+	var wb: Array = []
+	var wx := -56.0
+	while wx < -6.0:
+		var wz := -42.0
+		while wz < 20.0:
+			var jx := wx + 3.0 * (_h01(wx, wz, 181) - 0.5)
+			var jz := wz + 3.0 * (_h01(wx, wz, 191) - 0.5)
+			var h := height(jx, jz)
+			if h > WATER_Y + 0.15 and h < WATER_Y + 1.6 \
+					and _path_dist(Vector2(jx, jz), ALL_SEGS) > 3.4 \
+					and _keep_dist(Vector2(jx, jz)) > 4.0 \
+					and _h01(jx, jz, 193) < 0.45:
+				var sc := 0.8 + 0.45 * _h01(jx, jz, 197)
+				var b := Basis(Vector3.UP, TAU * _h01(jx, jz, 199)) \
+					* Basis.from_scale(Vector3(sc, sc, sc))
+				var t := Transform3D(b, snap(Vector3(jx, 0, jz), -0.08))
+				if _h01(jx, jz, 211) < 0.55:
+					wa.append(t)
+				else:
+					wb.append(t)
+			wz += 7.0
+		wx += 7.0
+	_kit_multimesh(wil_a, wa)
+	_kit_multimesh(wil_b, wb)
+	# authored loneliness: the sunken fences, the gallows tree, the watch ruin
+	_hero(KIT + "bog_fence_sunken.glb", 1.0, snap(Vector3(-20.0, 0, 10.5), -0.12), 0.5)
+	_hero(KIT + "bog_fence_sunken.glb", 1.0, snap(Vector3(-17.5, 0, -24.5), -0.14), -0.8)
+	_hero(KIT + "bog_gallows_tree.glb", 5.0, snap(Vector3(-45.5, 0, 11.0), -0.06), PI * 0.6)
+	_hero(KIT + "valley_watch_ruin.glb", 3.5, snap(Vector3(-49.0, 0, -20.0), -0.15), PI * 0.25)

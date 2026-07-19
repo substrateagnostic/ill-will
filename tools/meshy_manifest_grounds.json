@@ -1,0 +1,158 @@
+[
+  {
+    "id": "hedge_wall_straight",
+    "category": "GROUNDS_HEDGE",
+    "prompt": "A straight garden hedge wall segment, a dense clipped yew hedge block, rectangular with a flat clipped top that bulges slightly with a few unclipped leafy sprouts, deep dark green foliage with subtle lighter mottling, thick and solid like a living wall",
+    "target_height_hint": 1.9
+  },
+  {
+    "id": "hedge_wall_corner",
+    "category": "GROUNDS_HEDGE",
+    "prompt": "An L-shaped corner garden hedge wall, two dense clipped yew hedge blocks meeting at a right angle corner, flat clipped tops with a few wild leafy sprouts, deep dark green foliage with subtle lighter mottling, thick solid living wall corner piece",
+    "target_height_hint": 1.9
+  },
+  {
+    "id": "hedge_arch_gap",
+    "category": "GROUNDS_HEDGE",
+    "prompt": "A garden hedge wall segment with a tall arched doorway opening cut through its middle, dense clipped dark green yew hedge, the arch opening framed by slightly overgrown leafy edges, a living green gateway",
+    "target_height_hint": 2.3
+  },
+  {
+    "id": "hedge_wall_overgrown",
+    "category": "GROUNDS_HEDGE",
+    "prompt": "A broken overgrown garden hedge wall segment, a dense yew hedge block gone wild, one end collapsed and thinning with straggly bare twigs poking out, long unclipped shoots sprouting from the top, deep dark green with dry brown patches",
+    "target_height_hint": 1.9
+  },
+  {
+    "id": "garden_parterre_bed",
+    "category": "GROUNDS_GARDEN",
+    "prompt": "A formal rectangular parterre flower bed, a low clipped box hedge border framing dark soil planted with rows of deep red and near-black roses, a tidy Victorian mourning garden bed, low and wide",
+    "target_height_hint": 0.6
+  },
+  {
+    "id": "garden_statue_mourner",
+    "category": "GROUNDS_GARDEN",
+    "prompt": "A weathered stone statue of a cloaked mourning woman standing with head bowed, holding a small lantern in both hands at her waist, long hooded robe pooling at the base, pale grey stone with green moss stains, on a low square plinth",
+    "target_height_hint": 2.4
+  },
+  {
+    "id": "garden_statue_urnbearer",
+    "category": "GROUNDS_GARDEN",
+    "prompt": "A weathered stone statue of a robed figure solemnly carrying a large funeral urn on one shoulder, steadying it with both hands, pale grey stone with moss stains, on a low square plinth",
+    "target_height_hint": 2.4
+  },
+  {
+    "id": "garden_table_abandoned",
+    "category": "GROUNDS_GARDEN",
+    "prompt": "A small round cast-iron garden tea table with two matching cast-iron chairs, an abandoned tea setting with a teapot and two cups still on the table, ornate curled iron legs, blackened iron with rust spots",
+    "target_height_hint": 1.0
+  },
+  {
+    "id": "garden_footbridge",
+    "category": "GROUNDS_GARDEN",
+    "prompt": "A small arched stone footbridge over a garden brook, a single gentle stone arch with low solid stone parapet walls, worn flagstone walking surface, weathered grey stone blocks with moss in the joints",
+    "target_height_hint": 1.6
+  },
+  {
+    "id": "forest_tree_dark_oak",
+    "category": "GROUNDS_FOREST",
+    "prompt": "A gnarled old oak tree with a thick twisted trunk and a wide canopy of dense very dark green foliage in chunky clumps, ancient and looming, roots flaring at the base",
+    "target_height_hint": 6.5
+  },
+  {
+    "id": "forest_tree_twisted_pine",
+    "category": "GROUNDS_FOREST",
+    "prompt": "A tall crooked pine tree with a twisted leaning trunk and sparse tiers of dark blue-green needle foliage, bent by old wind, bark rough and dark",
+    "target_height_hint": 7.0
+  },
+  {
+    "id": "forest_tree_bare_elm",
+    "category": "GROUNDS_FOREST",
+    "prompt": "A tall bare dead elm tree, leafless with many crooked reaching branches spreading upward and outward like grasping fingers, smooth grey weathered wood, forlorn winter silhouette",
+    "target_height_hint": 6.5
+  },
+  {
+    "id": "forest_tree_hollow_snag",
+    "category": "GROUNDS_FOREST",
+    "prompt": "A thick broken tree snag, a dead hollow tree trunk snapped off at half height with a dark hollow opening in its side, jagged splintered top, a few stubby bare branches, grey-brown rotting wood with moss",
+    "target_height_hint": 4.0
+  },
+  {
+    "id": "forest_stump",
+    "category": "GROUNDS_FOREST",
+    "prompt": "A wide old tree stump cut low, cracked bark sides and a ringed cut surface, thick moss growing over one side, small mushrooms sprouting at its base",
+    "target_height_hint": 0.7
+  },
+  {
+    "id": "forest_root_tangle",
+    "category": "GROUNDS_FOREST",
+    "prompt": "A mound of exposed twisted tree roots breaking out of the ground, a tangle of thick gnarled woody roots arching and weaving over dark earth, old brown wood with moss patches",
+    "target_height_hint": 0.9
+  },
+  {
+    "id": "forest_deadfall_log",
+    "category": "GROUNDS_FOREST",
+    "prompt": "A long fallen tree log lying on the ground, broken jagged at one end with a few stubby snapped branch remnants, bark peeling, thick green moss carpeting the upper side",
+    "target_height_hint": 0.8
+  },
+  {
+    "id": "forest_mushroom_cluster",
+    "category": "GROUNDS_FOREST",
+    "prompt": "A cluster of tall pale toadstool mushrooms of varied heights growing together from a mossy patch, slender stems and rounded caps, ghostly pale cream and grey with faint spots",
+    "target_height_hint": 0.5
+  },
+  {
+    "id": "bog_willow_weeping",
+    "category": "GROUNDS_BOG",
+    "prompt": "A weeping willow tree with a thick leaning trunk and long drooping curtains of thin trailing branches hanging almost to the ground, sparse mournful dark olive-green fronds, bowed over as if grieving",
+    "target_height_hint": 5.5
+  },
+  {
+    "id": "bog_willow_gnarled",
+    "category": "GROUNDS_BOG",
+    "prompt": "A gnarled swamp willow tree, a squat twisted trunk splitting into crooked arching limbs with sparse drooping stringy foliage, roots spreading wide into mud, dark waterlogged bark",
+    "target_height_hint": 4.5
+  },
+  {
+    "id": "bog_reed_cluster",
+    "category": "GROUNDS_BOG",
+    "prompt": "A cluster of tall marsh reeds and cattails growing from a mud tuft, many thin upright stalks with narrow leaves and a few brown cattail heads, swamp plants in a clump",
+    "target_height_hint": 1.4
+  },
+  {
+    "id": "bog_hummock",
+    "category": "GROUNDS_BOG",
+    "prompt": "A small grassy bog hummock, a rounded tuft mound of wet earth capped with long unkempt marsh grass drooping over its sides, a lonely tussock island",
+    "target_height_hint": 0.5
+  },
+  {
+    "id": "bog_fence_sunken",
+    "category": "GROUNDS_BOG",
+    "prompt": "A short run of old crooked wooden fence half-sunk into bog mud, leaning tilted fence posts with two sagging broken horizontal rails, rotting waterlogged grey-brown wood",
+    "target_height_hint": 1.0
+  },
+  {
+    "id": "bog_gallows_tree",
+    "category": "GROUNDS_BOG",
+    "prompt": "A dead gallows tree, a stark bare black tree with one long thick horizontal bough, a short length of old frayed rope knotted around the bough swinging empty, ominous lonely silhouette",
+    "target_height_hint": 5.0
+  },
+  {
+    "id": "maze_center_statue",
+    "category": "GROUNDS_LANDMARK",
+    "prompt": "A weeping angel statue fountain centerpiece, a winged stone angel kneeling over a small round basin with her face buried in her hands, wings drooping low, weathered pale stone with moss, on a wide low round pedestal",
+    "target_height_hint": 2.6
+  },
+  {
+    "id": "forest_shrine_tree",
+    "category": "GROUNDS_LANDMARK",
+    "prompt": "A huge ancient tree trunk with a small shrine built into a hollow at its base, a tiny arched wooden altar nook with little candles inside the tree hollow, the great trunk rising to broken dark canopy, bark thick and gnarled",
+    "target_height_hint": 5.5
+  },
+  {
+    "id": "valley_watch_ruin",
+    "category": "GROUNDS_LANDMARK",
+    "prompt": "A ruined round stone watchtower stub, the bottom third of a collapsed tower with a jagged broken top edge, one dark empty doorway and one narrow window slit, tumbled stone blocks scattered at its base, weathered grey stone with moss",
+    "target_height_hint": 3.5
+  }
+]

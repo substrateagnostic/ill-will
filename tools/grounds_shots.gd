@@ -70,7 +70,10 @@ func _snap(tag: String) -> void:
 	var img := get_viewport().get_texture().get_image()
 	var path := "res://%s/%s.png" % [out_dir, tag]
 	img.save_png(path)
-	print("G1_SNAP ", ProjectSettings.globalize_path(path))
+	# doc 33 §6 frame-budget receipt: draw calls per framing (target < ~1500)
+	var dc := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME)
+	var prims := RenderingServer.get_rendering_info(RenderingServer.RENDERING_INFO_TOTAL_PRIMITIVES_IN_FRAME)
+	print("G1_SNAP %s draw_calls=%d prims=%dk" % [ProjectSettings.globalize_path(path), dc, prims / 1000])
 
 func _settle(frames := 8) -> void:
 	for i in frames:
