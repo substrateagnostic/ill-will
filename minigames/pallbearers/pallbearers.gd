@@ -188,6 +188,7 @@ var _mourner_right: Node3D = null
 var _ev_drops := [0, 0]
 var _ev_gate := [0, 0]
 var _ev_mourner := [0, 0]
+var _ev_mourner_stumble := [0, 0]   # playtest tune: soft-contact tax (see _mourner_stumble)
 var _ev_heaves := [0, 0]
 var _last_status := 0.0
 
@@ -395,6 +396,7 @@ func _process(delta: float) -> void:
 func _carry_step(t: int, delta: float) -> void:
 	var team: Dictionary = teams[t]
 	team.grace = maxf(0.0, float(team.grace) - delta)
+	team.mourner_stumble_cd = maxf(0.0, float(team.mourner_stumble_cd) - delta)
 	var invuln := float(team.grace) > 0.0
 	var fs: int = team.slots[0]
 	var bs: int = team.slots[1]
@@ -468,12 +470,23 @@ func _carry_step(t: int, delta: float) -> void:
 
 	# HAZARD drops (order: hard collisions, then the divergence clock). A fresh
 	# grip (grace) is briefly drop-immune so a coffin can escape the mud it fell in.
+	# Playtest: "I can just run through everything and win. Not enough
+	# consequence." A slow crossing of the mourner procession used to be
+	# entirely free (only a fast crossing dropped the coffin) — a team could
+	# just idle through the crowd with zero cost. _mourner_soft_contact() now
+	# taxes ANY contact that isn't already a hard drop: a forced near-stop +
+	# stumble, throttled so it fires once per graze rather than every frame
+	# while lingering. Timing the approach to cross when the transept is
+	# clear now beats both brute-sprint (drop risk) AND slow-crawl (stumble
+	# tax) — a careful route is the only free path.
 	if not invuln and _gate_hits(t):
 		_ev_gate[t] += 1
 		_drop_team(t, "gate")
 	elif not invuln and _mourner_hits(t):
 		_ev_mourner[t] += 1
 		_drop_team(t, "mourner")
+	elif not invuln and _mourner_soft_contact(t) and float(team.mourner_stumble_cd) <= 0.0:
+		_mourner_stumble(t)
 	elif not invuln and float(team.div) >= DROP_DIV:
 		_drop_team(t, "diverge")
 	elif float(team.pos2.y) <= CRYPT_Z:
@@ -759,17 +772,44 @@ func _mourner_front(t: int) -> float:
 	return lerpf(-9.0, 0.0, q) if float(TEAM_X[t]) < 0.0 else lerpf(9.0, 0.0, q)
 
 
-func _mourner_hits(t: int) -> bool:
+## Shared geometry test (zone + width) for BOTH mourner consequence tiers —
+## speed decides which one (see _mourner_hits / _mourner_soft_contact below).
+func _mourner_touch(t: int) -> bool:
 	var fx := _mourner_front(t)
 	if fx < -900.0:
 		return false
 	var pos: Vector2 = teams[t].pos2
 	if absf(pos.y - MOURNER_Z) > 1.2:
 		return false
-	if absf(pos.x - fx) > MOURNER_W:
-		return false
-	# fast into the grievers = a drop; slow = a soft block (handled in mourner_block)
-	return (teams[t].vel2 as Vector2).length() > MOURNER_SAFE
+	return absf(pos.x - fx) <= MOURNER_W
+
+
+func _mourner_hits(t: int) -> bool:
+	# fast into the grievers = a drop; slow = a soft-block stumble (below)
+	return _mourner_touch(t) and (teams[t].vel2 as Vector2).length() > MOURNER_SAFE
+
+
+## Playtest tuning: touching the procession too slowly to earn a hard drop
+## used to be entirely free — now it costs a forced near-stop + stumble
+## (throttled by mourner_stumble_cd so it fires once per graze, not every
+## frame of a lingering crawl). Never true when _mourner_hits() already is.
+func _mourner_soft_contact(t: int) -> bool:
+	return _mourner_touch(t) and (teams[t].vel2 as Vector2).length() <= MOURNER_SAFE
+
+
+## The soft-block tax: a hard brake (NOT a full drop — no restuff, no spill,
+## no complaint) + a visible stumble on both bearers, reusing the same
+## PBCarrier.stumble() cosmetic _drop_team() uses. Presence, not a penalty
+## box: the coffin stays carried, just loses its momentum.
+func _mourner_stumble(t: int) -> void:
+	var team: Dictionary = teams[t]
+	team.mourner_stumble_cd = 0.6
+	team.vel2 = (team.vel2 as Vector2) * 0.15
+	for slot in team.slots:
+		(carriers[slot].node as PBCarrier).stumble()
+	Sfx.play("impact_wood", -8.0, 0.05)
+	_ev_mourner_stumble[t] += 1
+	_log("mourner_stumble team=%d z=%.1f" % [t, float(team.pos2.y)])
 
 
 ## For bots: 0 clear .. 1 must stop, for a procession about to sweep the coffin.
@@ -968,10 +1008,10 @@ func _print_tally() -> void:
 	for slot in carriers.size():
 		if int(carriers[slot].roster_index) >= 0:
 			sm.append("%s=%.2f" % [str(carriers[slot].name), _smooth(slot)])
-	print("PB_TALLY seed=%d winner_team=%d finish_t=%.2f drops=%s gate=%s mourner=%s heaves=%s smooth=[%s] points=%s placements=%s" % [
+	print("PB_TALLY seed=%d winner_team=%d finish_t=%.2f drops=%s gate=%s mourner=%s mourner_stumble=%s heaves=%s smooth=[%s] points=%s placements=%s" % [
 		_cli_seed, winner_team,
 		(float(teams[winner_team].finish_tick) if winner_team >= 0 and float(teams[winner_team].finish_tick) > 0.0 else round_t),
-		str(_ev_drops), str(_ev_gate), str(_ev_mourner), str(_ev_heaves),
+		str(_ev_drops), str(_ev_gate), str(_ev_mourner), str(_ev_mourner_stumble), str(_ev_heaves),
 		", ".join(sm), JSON.stringify(points), str(_results.get("placements", []))])
 
 
@@ -1106,6 +1146,7 @@ func _build_teams(config: Dictionary) -> void:
 			"heading": PI, "coffin_y": CARRY_Y, "div": 0.0,
 			"phase": TeamPhase.CARRY, "restuff": 0.0, "runaway": 0.0, "grace": 1.0,
 			"finish_tick": 0.0, "drops": 0, "restuffs": 0, "mud_time": 0.0,
+			"mourner_stumble_cd": 0.0,
 		})
 	# mirror: no bots
 	if _mirror:
@@ -1132,6 +1173,7 @@ func _reset_all_teams() -> void:
 		team.restuff = 0.0
 		team.runaway = 0.0
 		team.grace = 1.2
+		team.mourner_stumble_cd = 0.0
 		(team.coffin as PBCoffin).reseat()
 		_place_team_carry(t, 0.016, 1.0)
 

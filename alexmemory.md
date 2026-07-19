@@ -2744,3 +2744,95 @@ Executed both waves doc 30 proposed. 60cr spent of 975 approved (balance after: 
   segfault-and-resume pattern on this box — each retry makes forward progress since already-imported
   files are skipped) before landing clean. Unrelated `.import` churn from that rebuild (395 files,
   all uid/CRLF noise, zero content diff) reverted before commit.
+
+---
+
+## M3 — MINIGAME FEEL/TUNING pass (worktree lane, friend playtest notes)
+
+Nine surgical tunes, one per game, each landed as its own commit on
+`worktree-agent-a07b8dfa9778edd3a` (no merge). Board receipts re-verified
+**unmoved** after all nine: `--procession --seed=7 --turncap=12 --nights=3
+--autoplay=bots` still prints `wreaths":[36,41,56,43]` / `PROCESSION_HEIR
+GOLD (seed 7, 3 nights)`, and `--boardgraphtest` still checksums
+`b269c570` — expected, since bot/probe board runs ride the deterministic
+minisim, not the real per-game code these tunes touch.
+
+1. **ECHO CHAMBER** ("cooldown timer on dash... same with the ring"): added
+   two `core/cooldown_ring.gd` instances — a dash-cooldown ring that fires
+   full-size on dash and shrinks to nothing as it recharges (inverted from
+   the house fill-up idiom on purpose: Echo's identity marker is an opaque
+   puck, not `lw_ghost.gd`'s hollow halo, so fill-up would render invisibly
+   underneath it for most of the 1.2s cooldown), and a ring-out drain timer
+   alongside the existing "THE RING DEMANDS" flash. Zero sim impact —
+   5-round soak byte-identical to the existing receipt.
+2. **TILT** ("sudden death comes on way too quickly"): the 75% trigger now
+   arms a 5s telegraph (klaxon + "SUDDEN DEATH IN N / REALIGN NOW" each
+   second) before the real physics engage — found and fixed a real bug along
+   the way (reusing `_flash_banner`'s one-shot hide-tween for a repeating
+   update raced itself, blanking the countdown almost instantly). **Sanctioned
+   receipt move**: seed-7 sudden-death PHYSICS timestamp t=23.9→28.90
+   (+5.00s exactly); the 75% TRIGGER point itself is unchanged. Documented
+   old vs new in `minigames/tilt/VERIFY.md`.
+3. **WIDOW'S GAZE** ("not enough leeway between turning and stopping"): the
+   whip-turn completing and the freeze check going live were the same
+   physics frame — added `GAZE_GRACE := 0.08` so catches hold fire briefly
+   right as the eyes lamp on (the eyes themselves are unchanged; only the
+   catch enforcement gets the pad). **Sanctioned receipt move**: bot-soak
+   catch counts shift per seed (a caught/escaped branch reorders every
+   subsequent RNG draw) — old/new documented per seed in the module VERIFY.
+4. **MOWER** ("keep fuel bars at the bottom, hard to look upper-left"): pure
+   UI reposition, `ScorePanel` moved from top-left to a bottom horizontal
+   strip. No receipt impact.
+5. **ORBITAL** ("how am I getting points? pretty fun, in a good spot" —
+   feedback only, no scoring changes): floating "+N" popups at kill/catch
+   (adapted from `tilt.gd`'s `_floaty()`), plus a new opt-in static `legend`
+   field on the shared `core/ui_kit/intro_card.gd` (empty by default, every
+   other game's card unaffected) showing the scoring key. Verified
+   byte-identical to the existing `ORBITAL_RESULTS`/`ORBITAL_ASSERT` receipt.
+6. **LAST WILL** ("needs a winner's curse, last place should catch up"): a
+   mild rubber-band — trailing racers get up to +18% `terrain_speed`
+   (curses still multiply on top, unchanged), saturating 25m behind the
+   leader, capped well under a leader's own uncursed sprint. Announced on
+   the intro card via the same new `legend` field. **Sanctioned receipt
+   move**: bot-soak death/curse-kill counts shift (races resolve faster
+   overall) — old vs new documented; determinism re-proven byte-identical
+   on a repeat run.
+7. **PALLBEARERS** ("I can just run through everything, not enough
+   consequence"): the mourner procession was the one hazard with a free
+   pass — slow-but-touching incurred zero cost (only a fast hit dropped the
+   coffin). Added a soft-contact stumble tax (hard brake + the existing
+   `stumble()` cosmetic, no restuff/spill, throttled to once per 0.6s) so a
+   slow crawl through the crowd isn't free either. Documented receipt is
+   byte-identical for the seed on file (that seed's bots were already
+   crawling near-stationary there); the mechanism's real firing is proven
+   by a new `mourner_stumble` counter + log line, and the 32-seed balance
+   sweep re-verified statistically unchanged.
+8. **GREED** ("awful noise for getting the gold, awful winning noise, AI
+   really suck"): swapped grab/floor-coin/growth-tick from `"card"`/
+   `"confirm"` to `"bell_small"` (an actual bell, existing sample, no new
+   audio), and the mid-round bank ceremony from `"match_win"` (the SAME
+   jingle as the true match-ending fanfare, reused every single bank) to
+   `"stinger_win"` — the real match win is meaningful again. Root-caused
+   the "pure mugger scores 0" bug to two gaps in `GreedBots.decide()`: no
+   fallback when a chase kept whiffing, and too high an engagement floor
+   for a bot whose whole personality is denial. Verified on seed 7/30s: the
+   forced heavy-mugger bot went from fully inert (0 events) to 2 successful
+   mugs and real points. `--greedtest=intercept` confirmed untouched (a
+   separate kinematic model).
+9. **PAR** ("rotation snapping to almost 60 degree angles" — input-side
+   only, putt physics frozen): traced the entire aim pipeline end to end —
+   no literal angle quantization exists anywhere. Real cause: `_read_aim()`
+   imposed its OWN 0.2 magnitude gate on top of `get_move()`'s already-
+   house-standard 0.18 deadzone — the sliver between them meant small,
+   careful stick corrections were silently ignored until a push cleared
+   PAR's private extra margin, then the aim jumped straight to wherever the
+   stick had ended up. New `AIM_STICK_GATE := 0.02` removes the redundant
+   local gate; `get_move()` itself (shared by every game) is untouched.
+   Frozen-physics regression re-run and byte-identical (gutter autoplay
+   sink, a full bot round). Real-hardware stick feel still wants your
+   hands — same pre-existing limit as every other human input device this
+   game reads (no headless harness injects real analog state).
+
+Screenshots throughout are per-game under `verify_out/` (gitignored) —
+paths listed in each touched game's own VERIFY.md alongside the receipt
+detail. Nine commits, one per item, `git log --oneline -9` on the branch.

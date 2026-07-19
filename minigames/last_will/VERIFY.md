@@ -81,7 +81,7 @@ godot --headless --editor --import --quit --path .
 - [x] HIT KIT + cooldown rings honored unchanged (shove coil/pop/sparks/
       arc/hitstop-throttle, SHOVE+HOP rings, ghost gust ring).
 
-## Key receipts (full log in docs/verify/lastwill-v2-VERIFY.md)
+## Key receipts (full log in docs/verify/lastwill-v2-VERIFY.md), PRE v1.1 tune
 
 ```
 WILL_TALLY seed=1 races=3 wills=22 curse_kills=6 gust_kills=0 deaths=22
@@ -91,6 +91,60 @@ all nine races reached the crypt (41-55s race clock); byte-identical reruns
 WILLTEST squish RESULT: PASS (t=3.90)
 LW_VALIDATE problems=0 []
 ```
+
+## v1.1 — TUNING PASS: winner's curse rubber-band (playtest)
+
+Friend playtest note verbatim: *"needs a winners curse — people in last
+place move a little faster to catch up."*
+
+**Mechanism (`last_will.gd`):** the per-tick terrain-modifier reset (which
+already zeroed every pawn's `terrain_speed`/`terrain_accel` back to 1.0
+before curses re-applied theirs on top — see `lw_pawn.gd`'s own header
+comment on this exact pattern) now seeds `terrain_speed` from a rubber-band
+baseline instead of a flat `1.0`. Each tick: `leader_x = max(best_x)` across
+the whole roster (dead or alive — `best_x` is a permanent high-water mark,
+so a racer who already finished still anchors the reference); each living
+racer's `gap = leader_x - best_x[i]`; `bonus = clamp(gap / 25.0, 0, 1) *
+0.18`; `terrain_speed = 1.0 + bonus`. Curses still multiply on top exactly
+as before (`*= 1.06` etc.) — this only changes the BASELINE they multiply
+against.
+
+**Capped, never faster than a leader sprinting:** `RUBBERBAND_MAX_BONUS =
+0.18` (max +18% speed, saturating at 25m behind — about a third of a
+66-72m course segment). A trailing racer's ceiling is `1.18x MOVE_SPEED`,
+comfortably under a leader's own full, uncursed sprint headroom — the bonus
+narrows gaps, it doesn't let someone from the back teleport past a leader
+who is actually racing well.
+
+**Announced on the intro card:** new `spec["legend"]` (reusing the static
+legend field added to `core/ui_kit/intro_card.gd` for Orbital's scoring key,
+same M3 lane) reads *"THE WINNER'S CURSE: fall behind, run a little faster
+(capped — never faster than a leader sprinting)."*
+
+**Receipt — deliberate-change doctrine.** This changes movement speed, so
+downstream bot-soak numbers move (races resolve faster overall since
+laggards catch up, changing hazard/curse exposure windows):
+```
+godot --headless --path . minigames/last_will/last_will.tscn -- --willbots --willtally --seed=N
+```
+| seed | OLD (pre-tune) | NEW (v1.1) |
+|---|---|---|
+| 1 | `wills=22 curse_kills=6 deaths=22` | `wills=13 curse_kills=3 deaths=13` |
+| 2 | `wills=13 curse_kills=2 deaths=13` | `wills=4 curse_kills=0 deaths=4` |
+| 3 | `wills=10 curse_kills=1 deaths=10` | `wills=14 curse_kills=2 deaths=14` |
+
+All nine races (3 seeds x 3 races) still reach the crypt cleanly — race
+clocks now cluster 41.4-50.0s (vs the old 41-55s spread; the top end
+compressed since laggards no longer drag races out). `TALLY_RESULT PASS`
+for every seed, full valid `LW_RESULTS` (placements/points/currency_events/
+highlights/monuments) each time, `LW_VALIDATE problems=0`. Determinism
+re-verified: seed=1 run twice, byte-identical `WILL_TALLY`/`LW_RESULTS`
+output. `WILLTEST squish RESULT: PASS (t=3.90)` — unchanged (the self-test's
+single stationary pawn has zero gap-behind-itself, so the rubber-band
+contributes nothing there).
+
+**Screenshot:** `verify_out/lastwill_m3_final/lastwill_winners_curse_intro.png`
+— the intro card showing the new legend line under the existing rotating tip.
 
 ## Screenshots (committed in shots/, Godot-ignored; read by eye)
 

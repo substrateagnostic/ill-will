@@ -176,6 +176,36 @@ over12` went from 7 → **0**.
 - Human couch input uses the identical `drive()` path the bots exercise, but
   was not physically controller-tested in this headless environment.
 
+## v1.1 — TUNING PASS: fuel/stat readouts moved to a bottom strip (playtest)
+
+Friend playtest note verbatim: *"keep the fuel and other stat bars at the
+bottom. Hard to look upper left while playing."* The per-player readout
+(`ScorePanel`/`ScoreRows`, built by `_rebuild_scoreboard()`) was anchored
+top-left (`anchor_left=0.0`, `offset_top=60`) as a narrow vertical stack —
+exactly the "hard to look upper left while driving" spot.
+
+**Fix (`mower.tscn` + `mower.gd`):** `ScorePanel` re-anchored to the bottom
+edge (`anchor_top/anchor_bottom = 1.0`, spanning the full width just above
+`HintLabel`) and `ScoreRows` changed from a `VBoxContainer` (vertical stack)
+to a `HBoxContainer` (`alignment=CENTER`, `separation=36`) so the four
+per-player entries lay out side by side as a strip, not a column. No change
+to `_rebuild_scoreboard()`'s row content or logic — same "NAME cov% fuel
+X%TAG" text per player, just relaid horizontally at the bottom. The small
+Splatoon-style top-left coverage-segment meter (`_meter_bar`, a colored bar
+chart, not per-player text) is untouched — the complaint was specifically
+about the text stat readout, not the territory-glance bar.
+
+**Verification:** `--covtest` coverage-identity assert still `PASS`
+(`sum=100.0000%`), import pass clean (0 script/parse errors), windowed
+screenshot capture (seed=7, `--mowbots --roundtime=45`) confirms the strip
+reads cleanly at both the intro (`0% fuel 100%` all four, bottom edge, above
+the control hint) and mid-round (`BLUE 25% fuel 95% SPUN! · RED 22% fuel 65%
+BOOST · GOLD 18% fuel 97% SPUN! · MINT 17% fuel 100%`, still legible against
+gameplay with a semi-transparent backing panel). Screenshots:
+`verify_out/mower_m3_final/mower_bottom_strip_intro.png` and
+`mower_bottom_strip_play.png`. Purely a UI reposition — no sim/receipt values
+touched, no deliberate-change entry needed.
+
 ## Wishes (assets/polish that would elevate it)
 
 - A looping small-engine idle sfx per mower (currently a pitched `putt` tick;

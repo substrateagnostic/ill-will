@@ -165,6 +165,99 @@ player banked nothing, +1 when mugged off the pot.
 
 ---
 
+## v1.1 — TUNING PASS: better stingers + credible mugger bots (playtest)
+
+Friend playtest note verbatim: *"Awful noise for getting the gold. Awful
+winning noise. AI really suck."* Two independent fixes, no new audio assets.
+
+### 1. SFX swap — existing-sample audition, no new audio (`greed.gd`)
+
+Audited the house Sfx bank (`scripts/sfx.gd`) against the two complaints:
+
+- **"Getting the gold"** — grab, floor-coin pickup, and the pot's automatic
+  growth tick all reused `"card"` (Kenney `click_00x` — a flat UI click) or
+  `"confirm"` (a generic confirmation chime). Neither reads as coins/treasure.
+  Swapped all three to **`"bell_small"`** (3 round-robin variants, source
+  "OGA bell_01/02 + Kenney bell" per `docs/design/21-sfx-overhaul.md` — a
+  proper bell, not a gong) — a bright chime that suits "the pot fills with
+  gold forever" and, on the automatic growth tick specifically, now reads as
+  a pleasant continuous coin-counting sound.
+- **"Awful winning noise"** — the mid-round BANK ceremony (`_bank_ceremony`,
+  fires every time anyone banks — several times a match) was reusing
+  `"match_win"` (`jingles_NES13`), the EXACT SAME jingle as the true
+  match-ending fanfare (`_finish_match`, unchanged). Repeating the "you won
+  the whole game" jingle on every routine bank both got old fast and
+  cheapened the real victory. Swapped the bank ceremony to **`"stinger_win"`**
+  (Kenney forceField swell, 0.88s — the house's own "deciding moment" cue
+  per doc 21 §3, "abstract SFX cues... your music lane," previously
+  earmarked for exactly this kind of mid-match high point and otherwise
+  unused by this game). `match_win` at the true match end is untouched — it
+  now reads as genuinely special again, distinct from every mid-match bank.
+- Mirror-side event-juice functions (`_mir_event_juice`, `_net_apply`'s coin
+  sync) updated in lockstep so online guests hear the identical swap.
+- Left `_leak_burst`'s `"card"` alone on purpose — that's the carrier's dash
+  LEAKING 2 coins (a loss, the "-2" flash), and a plain click reads as a
+  fitting negative/neutral contrast against the new warm pickup chime.
+
+Zero gameplay/logic change — purely which sample name each `Sfx.play()` call
+references. No receipt impact (verified: `--greedtest=intercept` unaffected,
+see below).
+
+### 2. Bot balance — credible interception + contest (`greed_bots.gd`)
+
+Known issue on file: *"Pure-mugger bots can score 0. A bot seeded as a heavy
+mugger with a high grab threshold may hunt all match and never bank."*
+Root-caused two compounding gaps in `decide()`:
+
+1. **Never gave up a cold chase.** A heavy mugger (`mugger[p] > 0.6`) always
+   preferred chasing the carrier over grabbing, with no fallback if it kept
+   whiffing tackles (dash-evasion, distance, bad luck). Added
+   `chase_frustration[p]`, incremented while actively chasing; at
+   `FRUSTRATION_LIMIT` (6.0s) of continuous fruitless pursuit, the bot gives
+   up FOR THIS TARGET and enters an `eager_t` window (5.0s) during which its
+   effective grab threshold drops to `EAGER_THRESHOLD` (9.0, well under the
+   normal 11-32 range) — a real hunter doesn't chase a cold trail forever,
+   and takes the sure thing instead.
+2. **Held out for a fat pot before engaging at all.** `worth_it` (the
+   pot-value floor to even bother chasing) was a flat `>= 7` for every bot
+   personality. A heavy mugger's whole identity is denial, not the haul —
+   holding out for a fat pot before it would even move meant it could sit
+   out entire matches with a low-value pot cycling past it. Heavy muggers
+   (`mugger[p] > 0.6`) now engage at `>= 4` instead.
+
+**Receipt — deliberate-change doctrine.** `--greedtest=intercept` (the
+kinematic pursuit-tuning model) is a SEPARATE simplified simulation, not
+`GreedBots.decide()` — confirmed byte-identical to the documented baseline
+after this change (seed 1 rate=0.80, seed 4 rate=0.68, seed 9 rate=0.72,
+seed 13 rate=0.72, all still PASS). The actual `decide()` behavior change is
+demonstrated on a real match instead — same seed, old vs new
+(`godot --headless --path . res://minigames/greed/greed.tscn -- --greedbots --seed=7 --rounds=1 --roundtime=30`):
+
+| | OLD (pre-tune) | NEW (v1.1, both fixes) |
+|---|---|---|
+| Final scores | `RED=0 BLUE=18 GOLD=12 MINT=0` | `RED=2 BLUE=7 GOLD=19 MINT=0` |
+| RED (forced heavy mugger, mugger=0.9) activity | sat out — 0 currency events, never contested | 2 successful mugs, mugged back twice, 2 royalty events, banked-nothing grudge still fires but RED is no longer inert |
+
+RED (the forced "hangs back and hunts" heavy-mugger archetype the known
+issue names specifically) went from fully inert (0 events, 0 points) to
+actively contesting and scoring. MINT (an unforced, randomly-seeded
+personality this particular seed happened to make both low-mugger and
+high-threshold) still ends at 0 in this sample — a different, more general
+"passive personality combo" than the "pure mugger" case the playtest note
+and the known-issue text specifically named; addressing every possible
+passive combination was out of scope for this tuning pass. Import pass
+clean, 0 script/parse errors.
+
+### Screenshots (`verify_out/greed_m3_final/`, seed=3, `--greedcap --roundtime=50`)
+
+`greed_arena.png` / `greed_grab.png` / `greed_bank.png` / `greed_drop.png` —
+all four capture beats still land cleanly with the new Sfx keys wired
+(confirmed via the event log: `grab p3 pot=8`, `bank p3 amount=6`,
+`drop victim=3 tackler=1`); `greed_bank.png` shows the "MINT BANKS 6!"
+ceremony now firing on `stinger_win`.
+
+---
+
 ## Known issues / notes
 
 - **Bot grab/drop grieflock (fixed).** Early bot tuning made every bot camp the
@@ -172,10 +265,11 @@ player banked nothing, +1 when mugged off the pot.
   zero banks. Fixed with: 0.5s post-grab grace immunity; muggers only engage pots
   worth >=7 (small pots are let through to bank and reset the cycle); guard bots
   loiter on their own side rather than swarming dead-centre.
-- **Pure-mugger bots can score 0.** A bot seeded as a heavy mugger with a high
-  grab threshold may hunt all match and never bank (it still participates —
-  guarding, chasing, landing royalties). Human play distributes scores far better;
-  not a code issue. Nobody is ever eliminated, so no dead air.
+- **Pure-mugger bots can score 0 (SOFTENED — see v1.1 tuning section below).**
+  A bot seeded as a heavy mugger with a high grab threshold may still hunt all
+  match without ever banking a huge pot outright, but it no longer sits at a
+  literal 0: it engages thinner pots and, if a chase keeps whiffing, gives up
+  and grabs directly instead of hunting forever for nothing.
 - **Standalone without `--greedbots`** drives only the shared/unassigned seats
   (device -3/-99) as bots, matching the house pattern (Tilt). Keyboard-half seats
   (-1/-2) idle until a human plays. Pass `--greedbots` for a fully self-playing demo.
@@ -186,8 +280,9 @@ player banked nothing, +1 when mugged off the pot.
 
 ## Asset wishes (committed assets only; this worktree has no assets_raw)
 
-- A dedicated **coin-shimmer / cha-ching** SFX for grabs, floor-coin pickups and
-  the growth tick (currently reuse Kenney `click`/`confirmation`/`impactBell`).
+- ~~A dedicated **coin-shimmer / cha-ching** SFX for grabs, floor-coin pickups
+  and the growth tick~~ — addressed in v1.1 below via an EXISTING-sample swap
+  (`bell_small`), not new audio.
 - A **"you are the carrier" heartbeat / tension loop** that ducks in while
   someone carries — would amplify the hunted feel beyond the visual glow.
 - A proper **coin-pile / treasure-heap mesh** (Kenney) for the pot instead of the

@@ -65,6 +65,13 @@ const SHOVE_RANGE := 1.7
 
 # ---- the gaze (all times seconds) ----
 const STING_TIME := 0.5             # the warning IS the skill window (spec)
+const GAZE_GRACE := 0.08            # playtest: "not enough leeway between her turning
+                                     # around and stopping" — catches aren't enforced
+                                     # for this long after the eyes lamp on. A modest
+                                     # widen (STING_TIME itself, the anticipation window,
+                                     # is untouched — this only softens the exact instant
+                                     # the whip-turn tween completes and the freeze check
+                                     # goes live, which previously landed on the same frame).
 const GREEN_EARLY := Vector2(2.6, 4.4)     # tuned: ~12 stings/round keeps hauls contested
 const GREEN_LATE := Vector2(1.8, 3.0)      # after escalation
 const WATCH_EARLY := Vector2(1.8, 2.6)
@@ -411,8 +418,11 @@ func _tick_play(delta: float, tiebreak := false) -> void:
 		_handle_grab(p, me, inp, delta)
 		me.tick_movement(delta)
 
-	# 4. THE GAZE TAKES: any moving body under the lamped eyes
-	if gaze == Gaze.WATCHING:
+	# 4. THE GAZE TAKES: any moving body under the lamped eyes. GAZE_GRACE holds
+	# fire for a beat right as the eyes lamp on (playtest: turning-around ->
+	# stopping had zero leeway) — the eyes still lamp on instantly, only the
+	# freeze CHECK gets a small head start of forgiveness behind it.
+	if gaze == Gaze.WATCHING and gaze_t >= GAZE_GRACE:
 		for p in roster.size():
 			var me: WGPawn = players[p]
 			if me.can_be_caught() and me.horizontal_speed() > WGPawn.STOP_EPSILON:

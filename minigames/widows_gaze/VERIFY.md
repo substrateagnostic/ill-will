@@ -18,16 +18,81 @@ Red light / green light at a wake, with sabotage. Single 75s round, 4 players
 - Shoved pawns stumble `0.4s` (knock 8.5, decay 22/s) — a shove landing in the
   sting's back half or under the gaze is a murder (attributed via `shove_by`).
 
+## v1.1 — TUNING PASS: widened catch grace (playtest)
+
+Friend playtest note verbatim: *"Not enough leeway between her turning around
+and stopping."* The catch enforcement (`widows_gaze.gd` step 4, "THE GAZE
+TAKES") and the Widow's `whip_turn(STING_TIME)` tween both complete at the
+exact same instant — `gaze_t >= STING_TIME` fires `_begin_watching()`, which
+calls `widow.set_gaze(true)` AND flips `gaze = Gaze.WATCHING` in the same
+frame the turn tween lands on `GAZE_YAW`. The catch check runs immediately
+after in the same tick, so there was literally zero buffer between "her turn
+visually finishes" and "the freeze check goes live" — a player reacting to
+the completed turn (rather than purely anticipating the sting's audio ladder)
+had no window at all.
+
+**Fix:** a new `GAZE_GRACE := 0.08` constant (`widows_gaze.gd`). The eyes
+still lamp on instantly at `gaze_t >= STING_TIME` (the visual telegraph is
+unchanged — no delay added to the tell itself), but the catch-check loop now
+reads `if gaze == Gaze.WATCHING and gaze_t >= GAZE_GRACE:` — holding fire for
+0.08s (≈5 frames @60fps, about a third of the ~0.215s full-stop decel curve)
+right as watching begins. `STING_TIME` (the 0.5s anticipation window itself)
+is untouched — this is a small forgiveness pad at the transition instant, not
+a lengthening of the tell.
+
+**Why 0.08s, not more:** tested 0.06/0.08/0.12 against the 3-seed bot soak.
+All three measurably loosen catch rates (seeded bot decisions sit close to
+the STOP_EPSILON timing boundary, so a few extra frames of forgiveness flips
+several close calls per match — and because a caught-vs-escaped branch
+reorders every subsequent RNG draw in that seed's stream, small input changes
+cascade into materially different match lengths/outcomes, not just a
+proportionally smaller version of the same match). 0.08s was chosen as a
+constant that reads as "a handful of frames," not a redesign — modest by
+construction, whatever its downstream bot-stat footprint turns out to be.
+
+**Receipt — deliberate-change doctrine.** `godot --headless --path . res://minigames/widows_gaze/widows_gaze.tscn -- --wgbots --wgtally --seed=N --wgfast=4`:
+
+| seed | OLD (pre-tune) | NEW (v1.1, GAZE_GRACE=0.08) |
+|---|---|---|
+| 7 | `banks=10 catches=7 murders=4 shoves=6 hits=6 stings=9 fakeouts=0` · `round_end kind=clean t=59.42` · `placements=[1,0,3,2]` | `banks=10 catches=3 murders=2 shoves=4 hits=4 stings=8 fakeouts=0` · `round_end kind=clean t=51.98` · `placements=[1,0,2,3]` |
+| 11 | `banks=10 catches=10 murders=6 shoves=7 hits=7 stings=11 fakeouts=1` · `round_end kind=clean t=64.56` · `placements=[3,0,1,2]` (this was the doc's existing "Tally excerpts" receipt below) | `banks=10 catches=2 murders=2 shoves=3 hits=3 stings=8 fakeouts=0` · `round_end kind=clean t=54.17` · `placements=[3,0,2,1]` |
+| 42 | (not previously receipted verbatim in this doc; the Pacing section below cites its clean-out timing/TIE CEREMONY qualitatively) | `banks=10 catches=10 murders=6 shoves=8 hits=8 stings=12 fakeouts=1` · `round_end kind=clean t=69.41` · `placements=[2,3,1,0]` |
+
+All three seeds still complete cleanly (0 SCRIPT ERROR, valid
+`placements`/`points`/`currency_events`/`highlights`/`kill_events`, a
+`widowmaker` monument fires in the windowed screenshot run below). The
+**Pacing** section immediately below is the OLD (pre-tune) baseline
+narrative — its specific catch counts and clean-out timing window are now
+historical; the mechanism it describes (bots outpacing the escalation act
+without deliberate pacing) is unchanged, only the catch odds shifted per the
+table above.
+
+Windowed event screenshots re-verified with the new grace window (seed=5):
+`verify_out/widows_gaze_m3/` — `widows_gaze_catch.png` shows a shove-murder
+landing cleanly under "SHE WATCHES" (`gaze_t=0.13` at contact, i.e. after the
+0.08s grace, per the `WG_EVT` log line `shove p2 -> p1 gaze=WATCHING
+gaze_t=0.13`); all eight capture beats (shove/red/green/grab/bank/catch/
+murder/results) still land. Whole-project smoke (`--quitafter=300`) clean, 0
+SCRIPT ERROR.
+
 ## Pacing (3-seed bot soak receipts)
 
 Bots stride at 0.87x and take a 2.6-5.6s mourning rest after scoring (greedy
 pace-setter: 1.0-2.2s) — without this, four optimal bots strip all 10 relics by
-t=47 and the T-25 escalation act never plays. With it (seeds 7/11/42):
+t=47 and the T-25 escalation act never plays. With it (seeds 7/11/42), PRE
+v1.1 GAZE_GRACE tune:
 - clean-out at t=57.7-64.5 of the 75s clock (escalation fires at ~50s);
 - 7-10 catches, 3-6 shove-murders, 7-11 stings per round;
 - seed 11 shows the full fake-out chain resolving into its real sting;
 - seed 42 ends in a TIE CEREMONY (banks=11: the sudden-death relic).
 Humans move at full 5.0 m/s — a hustling human out-paces every bot.
+
+**Post v1.1 (GAZE_GRACE=0.08, see the tuning section above):** the same three
+seeds now clean-out at t=51.98-69.41 (escalation still ~t=50-50.1, unchanged
+— only catch odds shifted) with 2-10 catches, 2-6 shove-murders, 8-12 stings.
+Seed 42 still ends via `kind=clean` in this re-run (not the TIE CEREMONY
+path this time) — expected seed-stream sensitivity, not a regression; see
+the deliberate-change table above for exact per-seed old/new numbers.
 
 ## Commands run
 
@@ -47,7 +112,7 @@ godot --path . res://minigames/widows_gaze/widows_gaze.tscn -- `
 godot --headless --path . -- --quitafter=300
 ```
 
-## Tally excerpts (seed 11, shipping code, 0 SCRIPT ERRORs)
+## Tally excerpts (seed 11, PRE v1.1 GAZE_GRACE tune, 0 SCRIPT ERRORs)
 
 ```
 WG_EVT t=51.69 | escalate t=50.0
@@ -58,6 +123,18 @@ WG_TALLY seed=11 banks=10 catches=10 murders=6 shoves=7 hits=7 stings=11
 KILL_EVENTS n=10 [{"cause":"gazed","killer":1,"victim":0},
   {"cause":"gazed","killer":-1,"victim":0}, ...]
 ```
+
+Post v1.1 (GAZE_GRACE=0.08), the same seed:
+```
+WG_EVT t=51.70 | escalate t=50.0
+WG_EVT t=54.17 | round_end kind=clean
+WG_TALLY seed=11 banks=10 catches=2 murders=2 shoves=3 hits=3 stings=8
+  fakeouts=0 points={"0":5,"1":4,"2":5,"3":7} placements=[3, 0, 2, 1]
+```
+No fake-out fired in this particular re-run (fewer stings overall before the
+round cleaned out); fake-outs are still live (seed=42's post-tune run above
+shows `fakeouts=1`), this is per-seed variance from the same cascading-RNG
+sensitivity noted in the tuning section.
 
 Both catch flavors occur: `killer=-1` (the Widow took an over-runner) and
 `killer>=0` (a shove-murder, royalty paid); `KILL_EVENTS` carries

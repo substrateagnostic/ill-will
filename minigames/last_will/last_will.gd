@@ -63,6 +63,19 @@ const GUST_IMPULSE := 4.4
 const GUST_HIT_R := 1.8
 const GUST_RANGE := 17.0
 
+# playtest: "needs a winners curse — people in last place move a little
+# faster to catch up." A mild rubber-band: trailing racers get a
+# terrain_speed head start (curses still multiply on top of it, same as
+# every other terrain modifier) that scales with distance behind the
+# furthest-progressed racer (dead or alive — best_x is a permanent
+# high-water mark), capped well under what a leader's own full sprint
+# covers, so a close race is never decided by the bonus alone.
+const RUBBERBAND_MAX_BONUS := 0.18   # capped: a trailing racer tops out at 1.18x
+                                      # MOVE_SPEED, well short of "faster than a
+                                      # leader sprinting" (which is 1.0x, undiminished)
+const RUBBERBAND_FULL_GAP := 25.0    # meters behind the leader for the FULL bonus
+                                      # (~1/3 of a 66-72m course segment)
+
 const CURSE_DEFS := {
 	"scythe": {"title": "SUMMON THE SCYTHE", "desc": "A pendulum blade swings over this stretch until the estate settles.",
 		"kill_line": "%s'S SCYTHE REAPS %s"},
@@ -318,6 +331,9 @@ func _intro_then(cb: Callable) -> void:
 	spec["name"] = Dialog.text("intro.lastwill.name")
 	spec["goal"] = Dialog.text("intro.lastwill.goal")
 	spec["tips"] = Dialog.paras("intro.lastwill.tips")
+	# playtest: "needs a winners curse" — announce the catch-up rubber-band as
+	# a small STATIC legend line (doesn't rotate away like the tips do).
+	spec["legend"] = "THE WINNER'S CURSE: fall behind, run a little faster (capped — never faster than a leader sprinting)"
 	spec["seats"] = _human_seats()
 	card.present(spec)
 
@@ -638,10 +654,18 @@ func _tick_race(delta: float) -> void:
 					pawns[p]._die("void")
 					return
 
-	# reset terrain mods, then let the curses re-apply them
-	for pawn in pawns:
+	# reset terrain mods to the WINNER'S CURSE rubber-band baseline (not a flat
+	# 1.0 — see RUBBERBAND_* above), then let the curses re-apply on top of it,
+	# same as any other terrain modifier.
+	var _leader_x := 0.0
+	for pl in players:
+		_leader_x = maxf(_leader_x, float(pl.best_x))
+	for i in players.size():
+		var pawn: LWPawn = pawns[i]
 		if pawn.alive:
-			pawn.terrain_speed = 1.0
+			var gap := maxf(0.0, _leader_x - float(players[i].best_x))
+			var bonus := clampf(gap / RUBBERBAND_FULL_GAP, 0.0, 1.0) * RUBBERBAND_MAX_BONUS
+			pawn.terrain_speed = 1.0 + bonus
 			pawn.terrain_accel = 1.0
 	for cu in curses:
 		cu.tick(delta)

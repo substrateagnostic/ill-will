@@ -245,6 +245,98 @@ buffered A-press still connects on anything you were actually aiming at.
 7 physics ticks are enough for a human to answer a seen windup but never
 long enough to read as input lag. The 0.2s budget was never approached.
 
+## v1.3 — TUNING PASS: telegraphed sudden-death grace (playtest)
+
+Friend playtest note verbatim: *"Sudden death... comes on way too quickly,
+give the player like 5 seconds to realign."* Previously the 75%-of-round
+trigger fired `_start_sudden_death()` directly — pin rise, +8° tilt limit,
+1.6x gain, and the "SUDDEN DEATH / THE PIN RISES" banner all landed on the
+exact same frame the timer crossed 75%, with zero warning.
+
+**What changed** (`tilt.gd`): the 75% trigger now calls `_start_sd_telegraph()`
+instead of `_start_sudden_death()` directly. That arms a `SD_GRACE_TIME`
+(5.0s) countdown ticked by `_tick_sd_telegraph()`:
+- Every whole-second edge (5, 4, 3, 2, 1) shows a hot-orange "SUDDEN DEATH IN
+  N / REALIGN NOW" banner and fires the existing low-tilt klaxon cue
+  (`Sfx.play("invalid")`), plus a tiny screenshake — a telegraphed warning,
+  not a silent clock.
+- `FinalStretch.escalate()` (music_light -> music_tense + red vignette nudge)
+  now fires at the START of the telegraph instead of at physics-engage, so
+  the tension cue arrives alongside the countdown.
+- Only once the 5s grace fully elapses does `_start_sudden_death()` run —
+  same function as before, unchanged: pin rise, tilt-limit/gain increase,
+  the original red "SUDDEN DEATH / THE PIN RISES" banner, grudge sting, shake.
+- Safety nets: `_sd_telegraph_t` resets on `_start_round()` (no stale
+  countdown carrying into the next round) and inside `_start_sudden_death()`
+  itself (the short-`--roundtime` overtime fallback, which can call
+  `_start_sudden_death()` directly if the round clock runs out before a
+  telegraph completes, cleanly cancels any pending countdown so it can't
+  double-fire later — see the 2-player smoke receipt below).
+
+**Bug found + fixed during verification:** the first cut reused the general
+`_flash_banner()` helper for each per-second countdown update. That helper
+schedules its own one-shot auto-hide tween on every call; firing it every
+~1s with a ~1.05s duration meant each call's hide-tween landed ~0.05s after
+the *next* second's text update, blanking the banner almost immediately —
+the countdown was only readable for a ~50ms flicker per digit. Fixed with a
+dedicated `_show_sd_countdown()` that leaves `banner.visible` continuously
+true for the whole grace window (only punching the scale on each digit
+change); `_start_sudden_death()`'s own `_flash_banner()` call cleanly takes
+over with a fresh show+hide cycle once the grace empties. Confirmed by
+screenshot (see below) — the "IN 3" and "IN 1" digits both render solidly,
+not as a flicker.
+
+**Receipt — deliberate-change doctrine.** This tuning necessarily *moves* the
+in-round timestamp at which sudden-death PHYSICS engage (that's the entire
+point), which shifts everything downstream in a seeded bot soak (bots behave
+differently under the extra 5s of gentler physics). Old vs new, same command:
+```
+godot --headless --path . --fixed-fps 60 res://minigames/tilt/tilt.tscn -- \
+  --tiltbots --seed=7 --roundtime=30 --rounds=3 --quitafter=7400
+```
+| | OLD (pre-tune) | NEW (v1.3) |
+|---|---|---|
+| Round-1 75% trigger reached | `sudden_death` fires at t=23.9 | `sd_telegraph_start` fires at t=23.90 (same trigger point) |
+| Round-1 sudden-death PHYSICS engage | t=23.9 (instant) | `sudden_death` fires at t=28.90 (exactly +5.00s later) |
+| Round-1 event narrative | shove-kill royalty ~t=11.0, gull spawn + 3 guano hits, slide-death at 22.3°, sudden death 23.9, last-stand end | shove-clash-heavy round (v1.1 clash mechanic dominates early trades), sudden death 28.90, overtime at 31.4 (4 survivors), last_stand end t=39.9 scores RED=7/BLUE=3/GOLD=3/MINT=3 |
+| Full match (longer quitafter) | not previously receipted to completion in this doc | completes cleanly: `match_end` at t=127.60, valid `placements`/`points`/`currency_events`/`highlights`/`kill_events`, 0 SCRIPT ERROR |
+
+The **trigger point** (when the game first notices 75% of the round has
+elapsed) is unchanged to the hundredth of a second (t=23.90 both times) —
+only the moment physics actually harden moved, by exactly `SD_GRACE_TIME`
+(5.00s), confirming the telegraph adds pure lead-time rather than shifting
+when the countdown starts.
+
+**Edge case — short `--roundtime` (2-player smoke, `--players=2 --seed=3
+--roundtime=15 --rounds=1`):** with a 15s round, 75%+5s (16.25s) lands past
+the round's own 15s timeout. Verified the safety net handles this cleanly:
+telegraph arms at t=12.65, the round's own timeout fires the OVERTIME
+fallback at t=16.40 (which calls `_start_sudden_death()` directly since
+`sudden_death` was still false), and the safety reset inside
+`_start_sudden_death()` cancels the pending telegraph so it can't fire a
+second time later. Old behavior: sudden death was instant at t≈12.65,
+substantially earlier relative to the round timeout. Match still completes
+cleanly either way (`match_end` with valid placements/points, 0 errors) —
+this is a verification-convenience knob (very short custom round length),
+not real gameplay pacing (default round_time=60s gives the 5s grace 15s of
+headroom before the round's own horn).
+
+**Self-tests unaffected** (`--tilttest=idle` / `--tilttest=edge`): both gate
+on `_test_mode == ""` in the trigger condition (unchanged), so sudden death
+— telegraphed or not — never arms during these tests. Both still PASS,
+exit 0, identical to the pre-tune baseline (idle: 0.000° drift over 30s;
+edge: slid off at t=0.83s).
+
+**Screenshots** (`verify_out/tilt_tune_m3_final/`, seed=7 seeded bot soak,
+`--roundtime=30 --rounds=3`):
+- `tilt_sd_telegraph_countdown3.png` — "SUDDEN DEATH IN 3 / REALIGN NOW" in
+  hot orange, platter still calm (pre-physics), t≈26.7s.
+- `tilt_sd_telegraph_countdown1.png` — "SUDDEN DEATH IN 1 / REALIGN NOW",
+  the last digit before handoff, t=28.90.
+- `tilt_sd_physics_engaged.png` — the moment just after: "SUDDEN DEATH / THE
+  PIN RISES" (the original, unchanged banner), rim glowing hot orange —
+  physics have engaged, t≈28.98.
+
 ## Wishes (assets that would elevate it)
 
 - A real seagull model + flap animation (gull is primitives; reads fine at

@@ -60,6 +60,8 @@ const CLASH_WINDOW := 0.25       # both shoves pressed within this -> CLASH
 const CLASH_KB := 0.4            # clash knockback factor (vs full shove)
 const ROYALTY_WINDOW := 1.5      # s between shove contact and the fall
 const OVERTIME_TIME := 20.0      # tie at the horn: sudden-death overtime length
+const SD_GRACE_TIME := 5.0       # playtest: "comes on way too quickly" — telegraphed
+                                  # grace before sudden-death PHYSICS actually engage
 const GULL_KO_WINDOW := 2.0      # fall this soon after a guano slip = gull KO
 const GULL_ASSIST_WINDOW := 3.0  # shove this recent still pays on a gull KO
 const BANNER_FONT := preload("res://assets/fonts/LuckiestGuy-Regular.ttf")
@@ -92,6 +94,8 @@ var sudden_death := false
 var overtime := false
 var coin_timer := 0.0
 var klaxon_t := 0.0
+var _sd_telegraph_t := -1.0      # >=0 while the SD_GRACE_TIME countdown runs
+var _sd_telegraph_shown_sec := -1
 var _slip_gull := {}           # player -> gull owner of the last guano slip
 var _slip_t := {}              # player -> game_t of that slip
 
@@ -398,10 +402,16 @@ func _tick_play(delta: float) -> void:
 			klaxon_t = 0.9
 	else:
 		klaxon_t = 0.0
-	# sudden death
-	if phase == Phase.PLAY and not sudden_death and _test_mode == "" \
-			and round_t >= round_time * 0.75 and _standing_count() > 1:
-		_start_sudden_death()
+	# sudden death — a telegraphed SD_GRACE_TIME grace before physics engage
+	# (playtest: "comes on way too quickly, give the player like 5 seconds to
+	# realign"). The 75% trigger now arms a countdown instead of firing sudden
+	# death directly; _tick_sd_telegraph() calls _start_sudden_death() itself
+	# once the grace runs out.
+	if phase == Phase.PLAY and not sudden_death and _sd_telegraph_t < 0.0 \
+			and _test_mode == "" and round_t >= round_time * 0.75 and _standing_count() > 1:
+		_start_sd_telegraph()
+	if _sd_telegraph_t >= 0.0:
+		_tick_sd_telegraph(delta)
 	# timeout — a tie at the horn triggers overtime instead of a split (v1.2)
 	if phase == Phase.PLAY and round_t >= round_time:
 		if not overtime:
@@ -946,11 +956,60 @@ func _standing_count() -> int:
 			n += 1
 	return n
 
+## Arms the SD_GRACE_TIME telegraph (playtest: "give the player like 5 seconds
+## to realign" before sudden-death physics hit). Music/vignette escalate
+## immediately (the tension cue), but the pin/tilt-gain physics wait for
+## _tick_sd_telegraph() to count all the way down.
+func _start_sd_telegraph() -> void:
+	_sd_telegraph_t = SD_GRACE_TIME
+	_sd_telegraph_shown_sec = -1
+	if _stretch != null:
+		_stretch.escalate()   # FINAL STRETCH: game_light -> game_tense + nudge, early
+	_log("sd_telegraph_start grace=%.1f" % SD_GRACE_TIME)
+
+## Ticks the countdown while it's armed: a klaxon + updated banner on every
+## whole-second edge (5, 4, 3, 2, 1), then hands off to the real
+## _start_sudden_death() once the grace window empties.
+func _tick_sd_telegraph(delta: float) -> void:
+	_sd_telegraph_t -= delta
+	var secs := int(ceil(maxf(0.0, _sd_telegraph_t)))
+	if secs != _sd_telegraph_shown_sec:
+		_sd_telegraph_shown_sec = secs
+		if secs > 0:
+			_show_sd_countdown(secs)
+			Sfx.play("invalid", -3.0)   # klaxon (same cue as the low-tilt warning)
+			_shake = maxf(_shake, 0.08)
+	if _sd_telegraph_t <= 0.0:
+		_sd_telegraph_t = -1.0
+		_start_sudden_death()
+
+## Countdown banner, held continuously visible for the whole telegraph (NOT
+## _flash_banner's one-shot show-then-auto-hide: calling that every ~1s with a
+## ~1s duration races its own hide-tween against the NEXT second's update —
+## the previous call's hide-callback lands right after the new text appears
+## and blanks it almost immediately). This just punches the scale on each
+## digit change and leaves banner.visible untouched otherwise; the eventual
+## _start_sudden_death() -> _flash_banner() call cleanly takes over with its
+## own fresh show+hide cycle once the grace window empties.
+func _show_sd_countdown(secs: int) -> void:
+	var color := Color(1, 0.55, 0.15)
+	_banner_col = color.to_html(false)
+	banner.text = "SUDDEN DEATH IN %d\nREALIGN NOW" % secs
+	banner.add_theme_color_override("font_color", color)
+	banner.visible = true
+	banner.pivot_offset = banner.size / 2.0
+	banner.scale = Vector2(0.85, 0.85)
+	var pop := create_tween()
+	pop.tween_property(banner, "scale", Vector2.ONE, 0.15) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
 func _start_sudden_death() -> void:
 	sudden_death = true
+	_sd_telegraph_t = -1.0   # safety: the overtime fallback can call this directly
+	                          # (short --roundtime) while a telegraph is still mid-count
 	platter.set_sudden_death(true)
 	if _stretch != null:
-		_stretch.escalate()   # FINAL STRETCH: game_light -> game_tense + nudge
+		_stretch.escalate()   # FINAL STRETCH: game_light -> game_tense + nudge (no-op if already escalated)
 	_flash_banner("SUDDEN DEATH\nTHE PIN RISES", Color(1, 0.3, 0.2), 2.2)
 	Sfx.play("grudge")
 	_shake = maxf(_shake, 0.2)
@@ -980,6 +1039,8 @@ func _start_round() -> void:
 	_last_status = 0.0
 	sudden_death = false
 	overtime = false
+	_sd_telegraph_t = -1.0
+	_sd_telegraph_shown_sec = -1
 	coin_timer = COIN_INTERVAL
 	elim_order.clear()
 	_slip_gull.clear()
