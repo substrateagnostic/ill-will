@@ -114,6 +114,13 @@ func current_weights() -> Array[float]:
 	var in_crit := absf(p - crit_center) <= CRIT_HALF_WIDTH
 	return weight_kernel(_n_faces, p, CRIT_DECAY if in_crit else BIAS_DECAY)
 
+## True iff the LIVE needle currently sits inside this roll's crit band — the
+## aim heatmap reads this to sharpen its brightness contrast when a crit release
+## is in prospect. A pure read of current state (no rng, no mutation).
+func in_crit_band() -> bool:
+	var p := meter.p if meter != null else 0.5
+	return absf(p - crit_center) <= CRIT_HALF_WIDTH
+
 # ============================================================================
 # THE METER WIDGET (house look — parchment/gold family, matches pawn_putt.gd).
 # ============================================================================

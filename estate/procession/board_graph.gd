@@ -599,7 +599,9 @@ func _build_ground() -> void:
 	add_child(ground)
 
 ## Flagstone ribbons under every edge so each road reads as a walked path even
-## in the dark — faintly tinted by the destination's route colour.
+## in the dark. THE A-LOOK dims the route tint to near-subliminal — route
+## IDENTITY lives in THE DRIVE minimap; the world stays dark and moody, the
+## ribbon just a faint darker seam of a path underfoot.
 func _build_ribbons() -> void:
 	for n in nodes:
 		for nx in (n.next as Array):
@@ -612,7 +614,7 @@ func _build_ribbons() -> void:
 			var mat := StandardMaterial3D.new()
 			var rcol: Color = route_info(route_of(int(nx))).color if route_of(int(nx)) != "common" \
 				else Color(0.5, 0.5, 0.55)
-			mat.albedo_color = Color(0.16, 0.17, 0.205).lerp(rcol, 0.14)
+			mat.albedo_color = Color(0.105, 0.11, 0.13).lerp(rcol, 0.05)
 			mat.roughness = 0.95
 			seg.material_override = mat
 			add_child(seg)
@@ -627,9 +629,9 @@ func _build_stone(i: int, type: String) -> void:
 	var col: Color = S.color(type)
 	if not typed:
 		col = route_info(route_of(i)).color if route_of(i) != "common" else S.color(S.BLANK)
-	# Dark stone puck; colour identity in a lit emissive rim (bloom under
-	# MOONLIT). Path stones are smaller + dimmer so the TYPED stones carry the
-	# board's grammar and 60 stones don't shout at once.
+	# THE A-LOOK (doc 28 §0a de-neon, producer-approved mockup A). Dark stone puck
+	# — the footing you land on. Colour identity now lives in a FLAT ground
+	# surround inlaid in the lawn AROUND the stone, never an upright neon rim.
 	var s := MeshInstance3D.new()
 	var mesh := CylinderMesh.new()
 	mesh.top_radius = 0.86 if typed else 0.6
@@ -637,57 +639,143 @@ func _build_stone(i: int, type: String) -> void:
 	mesh.height = 0.18
 	s.mesh = mesh
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.11, 0.115, 0.14).lerp(col, 0.12)
+	mat.albedo_color = Color(0.11, 0.115, 0.14).lerp(col, 0.10)
 	mat.emission_enabled = true
 	mat.emission = col
-	mat.emission_energy_multiplier = 0.06
+	mat.emission_energy_multiplier = 0.05
 	mat.roughness = 0.92
 	s.material_override = mat
 	add_child(s)
 	s.global_position = pos
 	stone_nodes.append(s)
-	var rim := MeshInstance3D.new()
+	# GROUND SURROUND: the rim TorusMesh laid FLAT (no x-rotation — that rotation
+	# is exactly what stood the old rims up into "arches"). Space-type tint kept
+	# but SUBTLE + AGX-friendly: path stones are a near-neutral whisper, specials
+	# a touch stronger and carry a RING PATTERN so the type reads with ZERO
+	# English (the interim colour-blind read until the C-props lane lands).
+	var s_inner := 1.02 if typed else 0.72
+	var s_outer := 1.20 if typed else 0.86
+	var s_emit := 1.30 if typed else 0.14
+	_ground_ring(pos, col, s_inner, s_outer, s_emit)
+	if typed:
+		_inlay_pool(pos, col, s_inner - 0.06, 0.5)
+		_ring_pattern(pos, type, col, s_inner, s_outer)
+
+## A single flat emissive ground ring inlaid in the lawn (TorusMesh lies in XZ
+## by default — NEVER x-rotated, which is what made the old rims stand upright).
+func _ground_ring(pos: Vector3, col: Color, inner: float, outer: float, emit: float,
+		segments := 40) -> void:
+	var ring := MeshInstance3D.new()
 	var tm := TorusMesh.new()
-	tm.inner_radius = 0.74 if typed else 0.5
-	tm.outer_radius = 0.90 if typed else 0.62
-	tm.rings = 8
-	tm.ring_segments = 28
-	rim.mesh = tm
+	tm.inner_radius = inner
+	tm.outer_radius = outer
+	tm.rings = 6
+	tm.ring_segments = segments
+	ring.mesh = tm
 	var rmat := StandardMaterial3D.new()
-	rmat.albedo_color = col.darkened(0.2)
+	rmat.albedo_color = col.darkened(0.4)
 	rmat.emission_enabled = true
 	rmat.emission = col
-	rmat.emission_energy_multiplier = 2.6 if typed else 1.1
-	rmat.roughness = 0.5
-	rim.material_override = rmat
-	rim.rotation_degrees.x = 90.0
-	add_child(rim)
-	rim.global_position = pos + Vector3(0, 0.10, 0)
-	if not typed:
-		return
-	# Typed stones carry the engraved rune + the billboard identity tag (the
-	# colour-blind-safe read; never colour alone). Path stones stay quiet.
-	var rune := Label3D.new()
-	rune.text = S.icon(type)
-	rune.font_size = 120
-	rune.pixel_size = 0.0032
-	rune.rotation_degrees = Vector3(-90, 0, 0)
-	rune.modulate = col.lerp(Color.WHITE, 0.35)
-	rune.outline_size = 22
-	rune.outline_modulate = Color(0, 0, 0, 0.85)
-	rune.no_depth_test = false
-	rune.position = pos + Vector3(0, 0.115, 0)
-	add_child(rune)
-	var tag := Label3D.new()
-	tag.text = "%s  %s" % [S.icon(type), S.display_name(type)]
-	tag.font_size = 40
-	tag.pixel_size = 0.0056
-	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	tag.modulate = col.lerp(Color.WHITE, 0.15)
-	tag.outline_size = 12
-	tag.outline_modulate = Color(0, 0, 0, 0.92)
-	tag.position = pos + Vector3(0, 1.15, 0)
-	add_child(tag)
+	rmat.emission_energy_multiplier = emit
+	rmat.roughness = 0.6
+	ring.material_override = rmat
+	add_child(ring)
+	ring.global_position = pos + Vector3(0, 0.05, 0)
+
+## A soft round emissive pool inside a special's surround so it reads as a lit
+## inlay, not a bare hoop. Emission low — a glow field, never a lamp.
+func _inlay_pool(pos: Vector3, col: Color, radius: float, emit: float) -> void:
+	var d := MeshInstance3D.new()
+	var cm := CylinderMesh.new()
+	cm.top_radius = radius
+	cm.bottom_radius = radius
+	cm.height = 0.012
+	cm.radial_segments = 36
+	d.mesh = cm
+	var dmat := StandardMaterial3D.new()
+	dmat.emission_enabled = true
+	dmat.emission = col
+	dmat.emission_energy_multiplier = emit
+	dmat.albedo_color = col.darkened(0.6)
+	dmat.roughness = 0.7
+	d.material_override = dmat
+	add_child(d)
+	d.global_position = pos + Vector3(0, 0.035, 0)
+
+## RING PATTERN per special type — the colour-blind-safe read (ZERO-ENGLISH law,
+## doc 28 §0a) until the C-props lane gives each stone its own object. Cheap
+## accent geometry on the flat surround:
+##   offering = SOLID (clean ring)       · seance = DASHED (beaded ring)
+##   grave_goods = DOUBLE (twin ring)    · open_grave = NOTCHED (radial ticks)
+##   ferry_toll = GATED (two cross-bars) · crossroads = SPOKED
+##   cart / gate = SOLID (each already unmistakable by its hero prop + light).
+func _ring_pattern(pos: Vector3, type: String, col: Color, inner: float, outer: float) -> void:
+	var mid := (inner + outer) * 0.5
+	match type:
+		S.SEANCE:
+			_ring_dashes(pos, col, mid, 12)
+		S.GRAVE_GOODS:
+			_ground_ring(pos, col, inner - 0.26, outer - 0.26, 1.1, 32)
+		S.OPEN_GRAVE:
+			_ring_notches(pos, col, inner, outer, 6)
+		S.FERRY_TOLL:
+			_ring_gate_bars(pos, col, mid)
+		S.CROSSROADS:
+			_ring_spokes(pos, col, inner)
+		_:
+			pass   # offering / cart / gate: the clean solid ring
+
+func _accent_mat(col: Color, emit: float) -> StandardMaterial3D:
+	var m := StandardMaterial3D.new()
+	m.emission_enabled = true
+	m.emission = col
+	m.emission_energy_multiplier = emit
+	m.albedo_color = col.darkened(0.3)
+	m.roughness = 0.55
+	return m
+
+func _accent_box(pos: Vector3, size: Vector3, yaw: float, mat: StandardMaterial3D) -> void:
+	var b := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = size
+	b.mesh = bm
+	b.material_override = mat
+	add_child(b)
+	b.global_position = pos
+	b.rotation.y = yaw
+
+## DASHED: bright beads spaced evenly around the surround (séance).
+func _ring_dashes(pos: Vector3, col: Color, radius: float, count: int) -> void:
+	var mat := _accent_mat(col, 1.6)
+	for k in count:
+		var a := TAU * float(k) / float(count)
+		_accent_box(pos + Vector3(cos(a) * radius, 0.055, sin(a) * radius),
+			Vector3(0.15, 0.03, 0.10), -a, mat)
+
+## NOTCHED: radial tick bars crossing the ring (open grave).
+func _ring_notches(pos: Vector3, col: Color, inner: float, outer: float, count: int) -> void:
+	var mid := (inner + outer) * 0.5
+	var span := (outer - inner) + 0.20
+	var mat := _accent_mat(col, 1.8)
+	for k in count:
+		var a := TAU * float(k) / float(count) + 0.26
+		_accent_box(pos + Vector3(cos(a) * mid, 0.055, sin(a) * mid),
+			Vector3(0.09, 0.035, span), -a, mat)
+
+## GATED: two cross-bars straddling the surround — a toll gate laid flat (ferry).
+func _ring_gate_bars(pos: Vector3, col: Color, radius: float) -> void:
+	var mat := _accent_mat(col, 1.7)
+	for sgn in [-1.0, 1.0]:
+		_accent_box(pos + Vector3(0, 0.06, sgn * radius),
+			Vector3(0.72, 0.045, 0.12), 0.0, mat)
+
+## SPOKED: four short spokes reaching toward the centre — a crossroads.
+func _ring_spokes(pos: Vector3, col: Color, inner: float) -> void:
+	var mat := _accent_mat(col, 1.5)
+	for k in 4:
+		var a := TAU * float(k) / 4.0 + 0.79
+		_accent_box(pos + Vector3(cos(a) * inner * 0.5, 0.055, sin(a) * inner * 0.5),
+			Vector3(0.08, 0.035, inner * 0.7), -a, mat)
 
 ## Bind existing player monuments to OPEN GRAVE stones (deterministic by node
 ## order) so a rival landing there pays its owner — the cross-night orb kept.
@@ -885,16 +973,9 @@ func _build_lychgate() -> void:
 	_place_facing(_prop(ZF_LYCHGATE, FB_TOLLARCH, 4.4), start + Vector3(0, 0.06, 0), start + flow * 6.0)
 	_place_facing(_prop(GEN_HEARSE, FB_HEARSE, 2.1), start + Vector3(-3.0, 0.06, 1.2), start)
 	_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), start + Vector3(2.6, 0.06, 0.6))
-	var tag := Label3D.new()
-	tag.text = "THE LYCHGATE"
-	tag.font_size = 56
-	tag.pixel_size = 0.008
-	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	tag.modulate = Color(0.8, 0.85, 1.0)
-	tag.outline_size = 14
-	tag.outline_modulate = Color(0, 0, 0, 0.9)
-	tag.position = start + Vector3(0, 3.9, 0)
-	add_child(tag)
+	# A-LOOK / ZERO-ENGLISH: the covered lychgate arch + hearse + signpost ARE
+	# the read — no floating "THE LYCHGATE" caption. (The pawns start here; the
+	# name never needs to surface.)
 
 ## THE MANOR GATE — the finish: the ZF grand arch, warm light, the bell's home.
 func _build_manor_gate() -> void:
@@ -915,16 +996,9 @@ func _build_manor_gate() -> void:
 	lamp.shadow_enabled = false
 	lamp.position = gate + back * 1.0 + Vector3(0, 2.6, 0)
 	add_child(lamp)
-	var manor := Label3D.new()
-	manor.text = "THE MANOR GATE"
-	manor.font_size = 64
-	manor.pixel_size = 0.008
-	manor.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	manor.modulate = Color(1, 0.9, 0.5)
-	manor.outline_size = 14
-	manor.outline_modulate = Color(0, 0, 0, 0.9)
-	manor.position = gate + back * 1.6 + Vector3(0, 4.4, 0)
-	add_child(manor)
+	# A-LOOK / ZERO-ENGLISH: the grand arch + the one warm gold pool on the
+	# grounds ARE the beacon — no floating "THE MANOR GATE" caption. Its name
+	# surfaces only on ARRIVAL, via the travelling pawn's landing label.
 
 ## Sparse fixed perimeter dressing — deterministic hand-placed set, scaled to
 ## the A-to-B grounds. Never draws from any rng.
@@ -1114,18 +1188,22 @@ func advance_pawn_path(seat: int, path: Array) -> Tween:
 	return tw
 
 # --------------------------------------------------------------------------
-# AIM HEATMAP (P2, doc 28 §15 — the legibility flagship). While the active
-# seat's LAST BREATH needle sweeps, the reachable stones down their road glow
-# with the LIVE landing probability (brighter = likelier) + a percent tag, so
-# aiming at a number is a readable decision from the couch. Pure presentation:
-# a pooled marker set fed by procession each few frames; never draws rng,
-# never touches generate() (the topology receipt cannot move).
+# AIM HEATMAP (P2 → THE A-LOOK, doc 28 §0a/§15 — the legibility flagship, now
+# ZERO-ENGLISH). While the active seat's LAST BREATH needle sweeps, the
+# reachable stones down their road glow with the LIVE landing probability —
+# expressed as RING BRIGHTNESS, never a percent. The candidate ring SHARES the
+# stone's ground surround: type keeps the HUE, heat modulates only the
+# INTENSITY (likelier = brighter), breathing gently with the sweep. A crit-band
+# release in prospect sharpens the contrast (brightest brighten, dimmest dim).
+# Pure presentation: a pooled marker set fed by procession each few frames;
+# never draws rng, never touches generate() (the topology receipt cannot move).
 # --------------------------------------------------------------------------
-var _heat_markers: Array = []      # pooled {root, ring, ring_mat, pct} dicts
+var _heat_markers: Array = []      # pooled {root, ring, ring_mat} dicts
 
 ## entries: [{node, face, p, w}] — p = probability 0..1, w = p normalized to
 ## the max face (brightness). Duplicate nodes merge (walks clamp at the gate).
-func show_heatmap(entries: Array, seat_color: Color) -> void:
+## `crit` = the needle currently sits in this roll's crit band (sharpen).
+func show_heatmap(entries: Array, _seat_color: Color, crit := false) -> void:
 	var by_node := {}
 	for e in entries:
 		var d := e as Dictionary
@@ -1139,21 +1217,24 @@ func show_heatmap(entries: Array, seat_color: Color) -> void:
 	keys.sort()
 	while _heat_markers.size() < keys.size():
 		_heat_markers.append(_make_heat_marker())
-	var col := Color(1.0, 0.85, 0.42).lerp(seat_color, 0.35)
+	# A gentle shared pulse so the candidate rings breathe with the sweep.
+	var pulse := 0.86 + 0.14 * sin(float(Time.get_ticks_msec()) * 0.006)
+	var contrast := 2.1 if crit else 1.15
 	var k := 0
 	for n in keys:
 		var m: Dictionary = _heat_markers[k]
 		var w := clampf(float(by_node[n].w), 0.0, 1.0)
+		# CRIT sharpens: push each candidate's brightness away from the midpoint.
+		var wd := clampf(0.5 + (w - 0.5) * contrast, 0.0, 1.0)
+		# TYPE keeps the HUE (path stones read neutral); heat = INTENSITY only.
+		var hue: Color = S.color(type_at(int(n)))
 		var root := m.root as Node3D
 		root.visible = true
-		root.global_position = space_pos(int(n)) + Vector3(0, 0.14, 0)
+		root.global_position = space_pos(int(n)) + Vector3(0, 0.065, 0)
 		var mat := m.ring_mat as StandardMaterial3D
-		mat.emission = col
-		mat.albedo_color = Color(col.r, col.g, col.b, 0.25 + 0.55 * w)
-		mat.emission_energy_multiplier = 0.5 + 4.5 * w
-		var pct := m.pct as Label3D
-		pct.text = "%d%%" % int(round(100.0 * float(by_node[n].p)))
-		pct.modulate = Color(col.lerp(Color.WHITE, 0.4), 0.40 + 0.60 * w)
+		mat.emission = hue
+		mat.emission_energy_multiplier = (0.30 + 3.6 * wd) * pulse
+		mat.albedo_color = Color(hue.r, hue.g, hue.b, 0.22 + 0.5 * wd)
 		k += 1
 	for i in range(k, _heat_markers.size()):
 		(_heat_markers[i].root as Node3D).visible = false
@@ -1161,6 +1242,78 @@ func show_heatmap(entries: Array, seat_color: Color) -> void:
 func clear_heatmap() -> void:
 	for m in _heat_markers:
 		(m.root as Node3D).visible = false
+
+# --------------------------------------------------------------------------
+# CONTEXTUAL NAME LABELS (ZERO-ENGLISH law, doc 28 §0a). The board carries NO
+# always-on space-name text. A space's NAME surfaces only where a decision
+# needs it: the stone a travelling pawn will LAND on (show_landing_label,
+# driven by procession as the toy hops), and any special stone a walkabout
+# stroller comes within ~2 stones of (reveal_names_near, driven by the estate
+# hub). Crossroads names live in the 2D crossroads prompt. Path stones stay
+# nameless — a merciful administrative error needs no caption.
+# --------------------------------------------------------------------------
+var _landing_label: Label3D = null
+var _approach_labels := {}          # node_id -> Label3D (walkabout approach pool)
+
+func _name_label(font := 44, pixel := 0.0062) -> Label3D:
+	var l := Label3D.new()
+	l.font_size = font
+	l.pixel_size = pixel
+	l.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	l.outline_size = 12
+	l.outline_modulate = Color(0, 0, 0, 0.9)
+	l.no_depth_test = true
+	return l
+
+## The travelling pawn's destination names itself while the toy hops toward it
+## (the ONE label a normal turn shows). Path stones stay quiet. col tints the
+## text to the mover's seat colour.
+func show_landing_label(node_id: int, col: Color) -> void:
+	if node_id < 0 or node_id >= nodes.size():
+		return
+	if _landing_label == null:
+		_landing_label = _name_label()
+		add_child(_landing_label)
+	var t := type_at(node_id)
+	if t == S.BLANK:
+		_landing_label.visible = false
+		return
+	_landing_label.text = S.display_name(t)
+	_landing_label.modulate = col.lerp(Color.WHITE, 0.25)
+	_landing_label.position = space_pos(node_id) + Vector3(0, 1.15, 0)
+	_landing_label.visible = true
+
+func clear_landing_label() -> void:
+	if _landing_label != null:
+		_landing_label.visible = false
+
+## Walkabout approach-reveal: name every SPECIAL stone whose position is within
+## `radius` metres of `world_pos` (≈2 stones at the graph's ~2.2m spacing),
+## hide the rest. The estate walkabout hub calls this each frame with the
+## stroller's ground position; the board stays wordless until a character walks
+## up to a stone. Pooled + idempotent — safe to call every frame.
+func reveal_names_near(world_pos: Vector3, radius := 6.0) -> void:
+	for n in nodes:
+		var i := int(n.id)
+		var t := String(n.type)
+		if t == S.BLANK:
+			continue
+		var near := space_pos(i).distance_to(world_pos) <= radius
+		if near and not _approach_labels.has(i):
+			var l := _name_label(38, 0.0056)
+			l.text = S.display_name(t)
+			l.modulate = S.color(t).lerp(Color.WHITE, 0.2)
+			l.position = space_pos(i) + Vector3(0, 1.0, 0)
+			add_child(l)
+			_approach_labels[i] = l
+		elif not near and _approach_labels.has(i):
+			(_approach_labels[i] as Label3D).queue_free()
+			_approach_labels.erase(i)
+
+func clear_approach_names() -> void:
+	for i in _approach_labels.keys():
+		(_approach_labels[i] as Label3D).queue_free()
+	_approach_labels.clear()
 
 # --------------------------------------------------------------------------
 # WREATH OF DEBT markers (P2 cart item): an owner-coloured coin ring on the
@@ -1214,10 +1367,10 @@ func _make_heat_marker() -> Dictionary:
 	var root := Node3D.new()
 	var ring := MeshInstance3D.new()
 	var tm := TorusMesh.new()
-	tm.inner_radius = 0.98
-	tm.outer_radius = 1.18
+	tm.inner_radius = 1.04
+	tm.outer_radius = 1.26
 	tm.rings = 6
-	tm.ring_segments = 24
+	tm.ring_segments = 32
 	ring.mesh = tm
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -1227,21 +1380,12 @@ func _make_heat_marker() -> Dictionary:
 	mat.emission_energy_multiplier = 1.0
 	mat.albedo_color = Color(1.0, 0.85, 0.42, 0.4)
 	ring.material_override = mat
-	ring.rotation_degrees.x = 90.0
+	# FLAT — shares the stone's ground surround (no x-rotation). The BRIGHTNESS
+	# is the whole read now; there is no percent label. (ZERO-ENGLISH law.)
 	root.add_child(ring)
-	var pct := Label3D.new()
-	pct.name = "Pct"
-	pct.font_size = 64
-	pct.pixel_size = 0.0078
-	pct.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	pct.no_depth_test = true
-	pct.outline_size = 16
-	pct.outline_modulate = Color(0, 0, 0, 0.92)
-	pct.position = Vector3(0, 0.72, 0)
-	root.add_child(pct)
 	add_child(root)
 	root.visible = false
-	return {"root": root, "ring": ring, "ring_mat": mat, "pct": pct}
+	return {"root": root, "ring": ring, "ring_mat": mat}
 
 # --------------------------------------------------------------------------
 # PUTT TARGET PREVIEW (F29) — unchanged language, graph destinations

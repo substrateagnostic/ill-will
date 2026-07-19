@@ -40,7 +40,9 @@ godot --headless --path . -- --procession --boardgraphtest
 frozen output (verified byte-identical across runs; LAYOUT stream is seeded
 from board DATA, never the night seed, so this is night-independent —
 **re-verified unchanged after the P2 lane** (presentation-only marker pools)
-**and again after the P3 lane** (figurine pawns + ZF dressing + interludes:
+**and again after the P3 lane** (figurine pawns + ZF dressing + interludes)
+**and again after THE A-LOOK lane** (board de-neon: flat ground surrounds, ring
+patterns, brightness heatmap, ZERO-ENGLISH labels — all pure rendering:
 `checksum=b269c570` must never move, and did not)):
 
 ```
@@ -199,7 +201,83 @@ P2's shots (`p2_peddler_cart.png`, `p2_night_awards.png`,
 by the over-shoulder frame. P1a's board shots remain valid — topology
 unchanged.
 
+## 7a. THE A-LOOK — board de-neon presentation notes (this lane)
+
+Producer-approved mockup **option A** (THE GROUNDS BAR, doc 28 §0a — the
+ZERO-ENGLISH law made visible). PRESENTATION ONLY: every change is in
+`board_graph.gd` rendering + `procession.gd`/`last_breath.gd` HUD plumbing; the
+topology receipt (§2) and the match record (§4) were re-run and are unchanged.
+The key discovery from the mockup lane: the old "neon arches" were the stone-rim
+`TorusMesh` **rotated upright** (`rotation_degrees.x = 90`) — laid FLAT (no
+x-rotation) the same torus becomes a ground-surround ring inlaid in the lawn.
+
+What changed:
+
+1. **GROUND SURROUNDS.** Every stone's rim torus is now flat on the ground,
+   space-type tinted but SUBTLE and AGX-friendly (emission ≈1.3 typed / ≈0.14
+   path — was a 2.6 upright neon rim). Path stones get a near-neutral whisper;
+   specials a touch stronger + a soft inlay pool. All arch/neon verticals gone.
+2. **LABELS DIE.** The always-on floating space-name tags AND the engraved rune
+   glyphs are removed; so are the always-on "THE LYCHGATE" / "THE MANOR GATE"
+   captions (the hero arch + the one warm gold gate-glow carry those). A space's
+   NAME now surfaces ONLY: on the stone a travelling pawn will LAND on (the new
+   `board.show_landing_label()`, driven at `travel_cut`, cleared after the
+   reveal); at the crossroads prompt (the 2D picker, unchanged); and within ~2
+   stones of a walkabout stroller (`board.reveal_names_near(world_pos, radius)`
+   — a pooled per-frame API for the estate hub to drive; see "left for later").
+3. **HEATMAP = BRIGHTNESS.** The aim heatmap lost its `%` text entirely.
+   Probability is now ring **brightness/intensity** on the candidate stones
+   (likelier = brighter), gently pulsing with the sweep. TYPE keeps the HUE
+   (`S.color(type)`), heat modulates only INTENSITY — the candidate ring shares
+   the stone's ground surround (flat, concentric). A crit-band release in
+   prospect (`breath.in_crit_band()`) sharpens the contrast (brightest brighten,
+   dimmest dim). Reads at couch distance; zero numbers anywhere.
+4. **PATH RIBBON.** Route-tint on the world flagstones dimmed to near-subliminal
+   (albedo lerp 0.14 → 0.05, base darkened). Route IDENTITY lives in THE DRIVE
+   minimap (`board_minimap.gd`); the world stays dark and moody.
+5. **RING PATTERN per type** — the colour-blind-safe interim read until the
+   C-props lane gives each stone its own object (with text gone, type otherwise
+   reads by HUE alone). Cheap accent geometry on the flat surround:
+
+   | Type | Pattern | Read |
+   |---|---|---|
+   | `offering` | **SOLID** | clean full ring |
+   | `seance` | **DASHED** | bright beads spaced around the ring |
+   | `grave_goods` | **DOUBLE** | a second concentric inner ring |
+   | `open_grave` | **NOTCHED** | radial tick bars crossing the ring |
+   | `ferry_toll` | **GATED** | two cross-bars straddling the ring (toll arms) |
+   | `crossroads` | **SPOKED** | four short spokes toward the centre |
+   | `cart` / `gate` | **SOLID** | already unmistakable by hero prop + light |
+
+**Screenshots** (throwaway probe `tools/board_alook_shots.tscn`, windowed;
+committed under `estate/procession/shots/`):
+
+```
+godot --path . tools/board_alook_shots.tscn -- --outdir=verify_out/board_alook
+```
+
+- `alook_overview.png` — the de-neoned board from the overview home: flat inlaid
+  ground rings, no uprights, no floating text.
+- `alook_roll_heatmap.png` — roll phase, brightness heatmap live down the road,
+  NO percent anywhere.
+- `alook_ring_patterns.png` — a close pass: solid (offering) / dashed (séance) /
+  double (box) / notched (open grave) rings side by side.
+- `alook_crossroads.png` — a crossroads: the road picker + the in-world landing
+  label, the ONLY names visible.
+
+Out of scope (noted, not touched): the WREATH-OF-DEBT "DEBT" marker (an
+announced-sabotage visibility feature, Pro Rules) and the per-pawn player-name
+tags (player identity for a 4-up couch) stay — neither is a space-name label.
+
 ## 8. DELIBERATELY LEFT FOR LATER LANES
+
+- **Walkabout approach-reveal wiring (A-LOOK):** `board.reveal_names_near()` is
+  built + verified, but the estate walkabout hub (`estate.gd`) does not yet call
+  it each frame with the stroller's ground position. The board-side contract is
+  ready; the hub wire-up rides the next estate-grounds lane.
+- **C-props (next lane):** each special stone gets its own physical object so
+  type reads by silhouette, not hue + ring-pattern. The A-LOOK ring patterns are
+  the interim colour-blind read until then.
 
 - **Estate Stirs (doc 28 §4):** the topology-event pools + THE CRYPT; THE
   REAPER stands dormant on the grounds until that lane wakes him.
