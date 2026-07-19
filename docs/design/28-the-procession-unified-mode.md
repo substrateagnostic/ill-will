@@ -10,6 +10,21 @@ Estate Stirs major/minor split · Book of the Dead cosmetic-first.*
 
 ---
 
+## 0a. Design laws (producer, 2026-07-19)
+
+- **THE STANDALONE LAW:** every element — the board game and each individual
+  minigame — is built so it could legitimately grow into an interesting full
+  indie (if not AAA) game on its own. No filler minigames; no board that
+  only works as glue. If a piece couldn't carry its own store page someday,
+  fix it or cut it (see: Throne, Swap Meet).
+- **THE ZERO-ENGLISH LAW:** the board must read with no text and no English —
+  environment first, props over labels, brightness over percentages. Words
+  are the last resort, not the default. (Born from the night-7 playtest:
+  "the game should be intuitive even if the players don't speak English.")
+- **FINISH CONSISTENCY (pre-release):** no mix of painted-toy and
+  unpainted-3D-print looks across props; everything that can/should move
+  gets rigged (the unrigged gliding ravens are beloved but temporary).
+
 ## 0. Executive summary
 
 ILL WILL becomes ONE game: **THE PROCESSION** — a Mario-Party-class board
