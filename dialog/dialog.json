@@ -244,10 +244,10 @@
     "house_rules": {
       "lead": "You are new to the estate, so it will explain itself. Once.",
       "rules": [
-        "POINTS are the ladder. Place well in each game and the estate counts you among the worthy; place last and it counts you anyway.",
-        "♠ PENNIES is spite made spendable — it buys your bids at THE AUCTION and the trap tiles you seed into the lawn.",
-        "ROYALTIES are the house's kindest cruelty: the traps and curses you author pay YOU, every time they take somebody else.",
-        "THE TRAIL climbs to the manor. First to the summit inherits it; the rest inherit the memory of the climb.",
+        "THE PROCESSION walks from the lychgate to the Manor Gate by three roads. THE LAST BREATH decides how far you go; you decide toward what.",
+        "♠ PENNIES are spite made spendable — the games pay them, the Peddler's Cart takes them, and a rival's purse is never quite closed.",
+        "⚘ WREATHS decide the heir. Arrivals, victories, and the estate's announced awards mint them. Most wreaths inherits. There is no appeal.",
+        "THE FINAL BELL: the first pawn through the gate rings it, and everyone else receives exactly one more turn. The estate is fair like that. Once.",
         "Every night closes at THE READING, where the ledger is totted up aloud and no one, on principle, is flattered."
       ],
       "sig": "— The Executor"
@@ -419,7 +419,7 @@
     },
     "title": {
       "tagline": "a party nobody asked for",
-      "footer": "PLAY = tonight's rite — THE PROCESSION board, or classic auctioned minigame nights"
+      "footer": "PLAY = tonight's rite — THE PROCESSION: one wake, one board, one heir"
     },
     "play": {
       "header": "PLAY — how does the estate settle its debts tonight?",
