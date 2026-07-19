@@ -37,3 +37,14 @@ func _ready() -> void:
 		})
 	podium.stage_entries(entries)
 	print("PODIUM_PROBE staged=%d" % entries.size())
+	# M2 PODIUM EXIT: with --affordance, seat a human so _has_human() is true and
+	# raise the subtle "A · CONTINUE" prompt (device-aware glyph) — held for the
+	# screenshot. await_continue waits for A, so --shots grabs the frame + quits.
+	for arg in OS.get_cmdline_user_args():
+		if arg == "--affordance":
+			var pi := get_node_or_null(^"/root/PlayerInput")
+			if pi != null:
+				pi.assign(0, -1)
+				pi.set_bot(0, false)
+			podium.await_continue()
+			print("PODIUM_PROBE affordance shown")

@@ -179,6 +179,13 @@ func _ready() -> void:
 				_enter_lobby()
 				get_tree().create_timer(0.4).timeout.connect(func():
 					VerifyCapture.snap("lobbyrows")))
+		elif arg.begins_with("--m2shots="):
+			# M2 UI CONSISTENCY verification (windowed). Captures the restyled desks
+			# and a device-aware minigame. `--m2shots=kbm` also grabs the menus (they
+			# are device-independent); `--m2shots=pad` grabs only the game. Pair with
+			# --shots=<big> to arm VerifyCapture. Self-contained; quits.
+			var _m2dev := arg.trim_prefix("--m2shots=")
+			get_tree().create_timer(1.0).timeout.connect(func(): _m2_capture(_m2dev))
 		elif arg == "--wipeshot":
 			# NIT 6 proof: seat a human so the scene-swap iris is NOT skipped, then
 			# fire a wrapped transition. _wipe_swap() snaps "estate_wipe" at mid-cover.
@@ -1647,6 +1654,41 @@ func _focus_sweep_run() -> void:
 			desc = "%s '%s'" % [f.get_class(), (f.get("text") if f.get("text") != null else "")]
 		print("FOCUSSWEEP %-17s -> %s" % [s[0], desc])
 	print("FOCUSSWEEP done")
+	get_tree().quit()
+
+## M2 UI CONSISTENCY capture: seat two humans on the requested device type, shoot
+## the restyled PLAY/SETTINGS/WARDROBE desks (kbm pass only — they are device-
+## independent), then launch TILT and shoot its intro card (device glyphs) and its
+## always-on hint bar. Real-time timers so the paused SETTINGS beat still advances.
+func _m2_capture(dev: String) -> void:
+	var d0 := -1 if dev == "kbm" else 0
+	var d1 := -2 if dev == "kbm" else 1
+	PlayerInput.assign(0, d0); PlayerInput.set_bot(0, false)
+	PlayerInput.assign(1, d1); PlayerInput.set_bot(1, false)
+	PlayerInput.set_bot(2, true); PlayerInput.set_bot(3, true)
+	if dev == "kbm":
+		_build_play_panel()
+		await get_tree().create_timer(0.7).timeout
+		await VerifyCapture.snap("menu_play")                 # await: snap is async
+		PartySetup.toggle()                                   # open SETTINGS (pauses tree)
+		await get_tree().create_timer(0.8, true, false, true).timeout
+		await VerifyCapture.snap("menu_settings")
+		await get_tree().create_timer(0.2, true, false, true).timeout
+		PartySetup.toggle()                                   # close
+		await get_tree().create_timer(0.3).timeout
+		_build_wardrobe_panel()
+		await get_tree().create_timer(0.7).timeout
+		await VerifyCapture.snap("menu_wardrobe")
+		await get_tree().create_timer(0.3).timeout
+		_enter_title()
+		await get_tree().create_timer(0.4).timeout
+	exhibition = true
+	_launch_game("tilt")
+	await get_tree().create_timer(2.0).timeout
+	await VerifyCapture.snap("game_introcard_%s" % dev)      # device-aware glyphs
+	await get_tree().create_timer(13.0).timeout              # intro auto-starts (12s)
+	await VerifyCapture.snap("game_hintbar_%s" % dev)        # persistent, device-aware
+	await get_tree().create_timer(0.5).timeout
 	get_tree().quit()
 
 ## L1 bug 2 proof (--padreclaimtest): drive the real disconnect->reconnect on the
