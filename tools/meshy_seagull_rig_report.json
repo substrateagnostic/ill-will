@@ -1,0 +1,42 @@
+{
+    "generated_at": "2026-07-19T01:10:00.0000000-05:00",
+    "experiment": "lane ZR THE FINISH WAVE: seagull.glb rig feasibility test (doc 30 sec RIG CANDIDATES INVENTORY)",
+    "gen_dir": "assets/models/meshy/",
+    "endpoint": "POST /openapi/v1/rigging",
+    "models": [
+        {
+            "name": "seagull",
+            "source_glb": "assets/models/meshy/seagull.glb",
+            "attempts": [
+                {
+                    "height_meters": 0.6,
+                    "http_status": 422,
+                    "error": "Pose estimation failed, please provide a valid model URL",
+                    "rig_task_id": "",
+                    "credits_charged": 0
+                },
+                {
+                    "height_meters": 1.7,
+                    "http_status": 422,
+                    "error": "Pose estimation failed, please provide a valid model URL",
+                    "rig_task_id": "",
+                    "credits_charged": 0
+                }
+            ],
+            "rig_credits": 0,
+            "animations": [],
+            "planned_anim_if_rig_succeeded": {
+                "action_id": 326,
+                "action_name": "Jumping Jacks",
+                "rig_type": "style_02",
+                "reason_picked": "closest cyclic, symmetric two-limb up/down motion in the public catalog (680 entries, all humanoid rigType) to a wing flap -- confirmed via full-catalog keyword search (fly/flap/wing/bird/glide/soar/hover/flutter all came back empty or off-topic; e.g. 'Flying Fist Kick' is a martial kick, not a flap). Never reached: rig itself never produced a rig_task_id to animate against."
+            },
+            "verdict": "RIG FAILED (2/2 attempts, both HTTP 422 'Pose estimation failed'). Meshy's rigging docs state the endpoint supports only 'standard humanoid (bipedal) assets with clearly defined limbs' and explicitly rejects non-humanoid assets; the seagull's quadruped-ish/avian body plan (two legs + two folded wings, no arms) never produces the pose estimate the auto-rig needs, at either the in-game display height (0.6m) or the API's own human-default height (1.7m) -- confirms this is a body-plan rejection, not a scale/parameter issue. No task id was ever created (pre-flight validation, not a generation failure), so 0 credits were consumed on either attempt. KEEP the existing empty-wing-pivot version (minigames/tilt/seagull.gd TiltSeagull, core/ambient_life.gd Seagull) -- no code changes made. This closes the doc-30 feasibility caveat: auto-rig genuinely cannot rig this asset; the documented fallback (hand-split wing mesh, zero further Meshy spend) is the only remaining path if a real flap is wanted, and is out of scope for this API-only wave."
+        }
+    ],
+    "totals": {
+        "rig_credits": 0,
+        "anim_credits": 0,
+        "total_credits": 0
+    }
+}

@@ -1,0 +1,62 @@
+{
+    "generated_at":  "2026-07-19T00:56:53.3058630-05:00",
+    "experiment":  "THE FINISH WAVE (lane ZR): /retexture on the 6 PLASTIC-verdict flat assets",
+    "endpoint":  "POST /openapi/v1/retexture",
+    "items":  [
+                  {
+                      "id":  "grave_headstone_plain",
+                      "prompt":  "Weathered mournful grey stone headstone texture: fine crack lines, patches of pale green moss, subtle grime streaks, worn rounded edges. Flat toy-style painted look, low poly game asset, matte colors, no shiny highlights, Kenney/KayKit style.",
+                      "candidate_glb":  "assets/models/meshy/generated/grave_headstone_plain_retex_v1.glb",
+                      "task_id":  "019f78ec-b6c8-75ba-a349-601bd603266f",
+                      "status":  "ok",
+                      "consumed_credits":  10,
+                      "error":  ""
+                  },
+                  {
+                      "id":  "grave_small_obelisk",
+                      "prompt":  "Weathered aged grey stone obelisk texture: visible stone-block grain, subtle mottled shading, faint moss at the base, worn weathered surface. Flat toy-style painted look, low poly game asset, matte colors, no shiny highlights, Kenney/KayKit style.",
+                      "candidate_glb":  "assets/models/meshy/generated/grave_small_obelisk_retex_v1.glb",
+                      "task_id":  "019f78ed-b5a2-7610-9a51-b3887f0cc85d",
+                      "status":  "ok",
+                      "consumed_credits":  10,
+                      "error":  ""
+                  },
+                  {
+                      "id":  "board_grim_signpost",
+                      "prompt":  "Weathered aged wood signpost texture: visible wood grain, faded hand-painted lettering, worn splintered edges, subtle dirt and moss streaks. Flat toy-style painted look, low poly game asset, matte colors, no shiny highlights, Kenney/KayKit style.",
+                      "candidate_glb":  "assets/models/meshy/generated/board_grim_signpost_retex_v1.glb",
+                      "task_id":  "019f78ee-879b-71b3-8e30-cec133674398",
+                      "status":  "ok",
+                      "consumed_credits":  10,
+                      "error":  ""
+                  },
+                  {
+                      "id":  "estate_broken_angel",
+                      "prompt":  "Weathered mournful white marble statue texture: fine crack lines across the broken angel figure, patches of pale green moss, grey grime streaks, worn aged stone shading. Flat toy-style painted look, low poly game asset, matte colors, no shiny highlights, Kenney/KayKit style.",
+                      "candidate_glb":  "assets/models/meshy/generated/estate_broken_angel_retex_v1.glb",
+                      "task_id":  "019f78ef-3266-7fd2-9c26-478ba8bd2380",
+                      "status":  "ok",
+                      "consumed_credits":  10,
+                      "error":  ""
+                  },
+                  {
+                      "id":  "monument_obelisk_small",
+                      "prompt":  "Aged weathered grey stone obelisk texture with subtle shading and stone-block grain, faint weathering streaks, worn surface detail. Flat toy-style painted look, low poly game asset, matte colors, no shiny highlights, Kenney/KayKit style.",
+                      "candidate_glb":  "assets/models/meshy/generated/monument_obelisk_small_retex_v1.glb",
+                      "task_id":  "019f78f0-2cb0-7c8f-b4ae-436171913c7c",
+                      "status":  "ok",
+                      "consumed_credits":  10,
+                      "error":  ""
+                  },
+                  {
+                      "id":  "lychgate",
+                      "prompt":  "Aged oak timber gate texture: rich brown wood grain on beams and posts, patches of lichen and moss on the roof shakes, weathered stone footing texture, subtle age wear. Flat toy-style painted look, low poly game asset, matte colors, no shiny highlights, Kenney/KayKit style.",
+                      "candidate_glb":  "assets/models/meshy/generated/lychgate_retex_v1.glb",
+                      "task_id":  "019f78f1-3974-76c8-92c8-d9a287807a5a",
+                      "status":  "ok",
+                      "consumed_credits":  10,
+                      "error":  ""
+                  }
+              ],
+    "total_credits":  60
+}
