@@ -80,13 +80,29 @@ godot --headless --path . -- --procession --seed=7 --turncap=12 --autoplay=bots
 Any run that prints a `PROCESSION_TALLY` line is pre-P2. The same command
 today runs a full **3-night match** (match_nights defaults to 3).
 
-## 4. THE CANONICAL MATCH RECEIPT (P3, frozen)
+## 4. THE CANONICAL MATCH RECEIPT (DR — RETIRE THE DEED, frozen)
 
 ```
 godot --headless --path . -- --procession --seed=7 --turncap=12 --nights=3 --autoplay=bots
 ```
 
-**SUPERSEDED — the P2 match record** (sanctioned, this lane's brief): P3 adds
+**SUPERSEDED — the P3 deed-currency record** (sanctioned, DR lane / doc 29
+option A, producer-ruled): the ◆ Deed vestige is retired. The three will
+clauses now pay **+1 WREATH** to their stat leader — booked to the
+announced-award stream (doc 28 §6), so `wreath_src.award` and the finale sums
+stay honest — instead of a ◆ Deed nobody could win or spend with. The chip,
+the match receipt (`"deeds"` field gone), and the net mirror all drop ◆
+entirely, and THE HOUSE AWAKENS loses its undocumented `deeds==0 → +10pp
+dodge` nudge (a flat `0.45` now, no replacement hook). The eulogy's flavor
+"heir" is now the ACTUAL crowned heir (`_match_order()[0]`), never a ◆ pick
+that could name one heir seconds before a different one is crowned. Will
+payouts moving ◆→⚘ plus the flattened hazard shift the wreath totals, so the
+P3 record died with honor. Its final form, for the record: seed 7 → **HEIR
+GOLD, wreaths [36,41,56,43]**, deeds [2,1,1,2], board_firsts [1,0,2,0]. Any
+run that prints a `"deeds"` field, a `◆` on a chip/receipt, or the old wreath
+totals is pre-DR.
+
+**SUPERSEDED — the P2 match record** (sanctioned, prior lane's brief): P3 adds
 the INTERLUDE GROUNDS MINIGAME between nights (doc 28 §2 — two more settled
 games per 3-night match, EVENT-stream draws), so the P2 record died with
 honor. Its final form, for the record: seed 7 → **HEIR RED, wreaths
@@ -94,35 +110,42 @@ honor. Its final form, for the record: seed 7 → **HEIR RED, wreaths
 `"grudge":[70,71,98,81]`. Any run that prints a 3-night match with NO
 interlude settlements between nights is pre-P3.
 
-frozen result (P3 — verified deterministic ×3, the PROCESSION_NIGHT /
+frozen result (DR — verified deterministic ×3, the PROCESSION_NIGHT /
 PROCESSION_MATCH / PROCESSION_HEIR lines hash identically run to run; night 1
-is byte-identical to P2's night 1, since the first interlude lands only after
-its record prints):
+is byte-identical to the `--nights=1` single-night's night 1 (§5), since the
+first interlude lands only after its record prints):
 
 ```
-PROCESSION_NIGHT {"arrivals":[0,1,2],"awards":[["longest",0],["generous",-1],["bloodiest",2]],"bell_round":6,"grudge":[16,26,47,18],"letters":[false,false,false,false],"night":1,"rounds":7,"wreaths":[17,8,15,5]}
-PROCESSION_NIGHT {"arrivals":[2,3],"awards":[["generous",0],["uninvited",3],["longest",3]],"bell_round":5,"grudge":[18,56,44,63],"letters":[false,false,false,false],"night":2,"rounds":6,"wreaths":[26,16,30,26]}
-PROCESSION_NIGHT {"arrivals":[2,1],"awards":[["generous",2],["bloodiest",1],["uninvited",3]],"bell_round":5,"grudge":[17,86,57,78],"letters":[false,false,false,false],"night":3,"rounds":6,"wreaths":[35,33,51,36]}
-PROCESSION_MATCH {"board":"estate_procession","board_firsts":[1,0,2,0],"deeds":[2,1,1,2],"grudge":[17,86,57,78],"heir":2,"heir_name":"GOLD","heirs":[2],"mini_wins":[2,4,4,5],"moved":[73,82,83,82],"nights":3,"seed":7,"src":{"arrival":[14,15,25,9],"award":[8,4,8,12],"liquid":[1,8,5,7],"mini":[13,14,18,15]},"turn_cap":12,"wreaths":[36,41,56,43]}
-  seat 0 RED: ⚘36 (arr 14 + mini 13 + awd 8 + liq 1)  17¢  ◆2  moved=73
-  seat 1 BLUE: ⚘41 (arr 15 + mini 14 + awd 4 + liq 8)  86¢  ◆1  moved=82
-  seat 2 GOLD: ⚘56 (arr 25 + mini 18 + awd 8 + liq 5)  57¢  ◆1  moved=83  HEIR
-  seat 3 MINT: ⚘43 (arr 9 + mini 15 + awd 12 + liq 7)  78¢  ◆2  moved=82
+PROCESSION_NIGHT {"arrivals":[0,1,2],"awards":[["longest",0],["generous",-1],["bloodiest",2]],"bell_round":6,"grudge":[16,26,47,18],"letters":[false,false,false,false],"night":1,"rounds":7,"wreaths":[18,8,15,6]}
+PROCESSION_NIGHT {"arrivals":[2],"awards":[["generous",0],["uninvited",3],["longest",2]],"bell_round":4,"grudge":[30,52,58,32],"letters":[false,false,false,false],"night":2,"rounds":5,"wreaths":[27,15,35,21]}
+PROCESSION_NIGHT {"arrivals":[1,2],"awards":[["longest",2],["bloodiest",3],["mourned",3]],"bell_round":5,"grudge":[42,79,79,66],"letters":[false,false,false,false],"night":3,"rounds":6,"wreaths":[33,31,51,42]}
+PROCESSION_MATCH {"board":"estate_procession","board_firsts":[1,1,1,0],"grudge":[42,79,79,66],"heir":2,"heir_name":"GOLD","heirs":[2],"mini_wins":[2,2,5,5],"moved":[58,81,87,82],"nights":3,"seed":7,"src":{"arrival":[12,20,20,11],"award":[9,1,14,14],"liquid":[4,7,7,6],"mini":[12,10,17,17]},"turn_cap":12,"wreaths":[37,38,58,48]}
+  seat 0 RED: ⚘37 (arr 12 + mini 12 + awd 9 + liq 4)  42¢  moved=58
+  seat 1 BLUE: ⚘38 (arr 20 + mini 10 + awd 1 + liq 7)  79¢  moved=81
+  seat 2 GOLD: ⚘58 (arr 20 + mini 17 + awd 14 + liq 7)  79¢  moved=87  HEIR
+  seat 3 MINT: ⚘48 (arr 11 + mini 17 + awd 14 + liq 6)  66¢  moved=82
 PROCESSION_HEIR GOLD (seed 7, 3 nights)
 ```
+
+The `award` stream now carries the will-clause wreaths on top of the night
+awards (e.g. GOLD's `awd 14` and MINT's `awd 14` include their clause wins);
+there is no separate ◆ column anywhere.
 
 Seed-sweep secondaries (single-run records, same command with the seed swapped):
 
 ```
-PROCESSION_MATCH … "seed":1  → wreaths=[49,71,41,39]  heir BLUE  board_firsts=[0,3,0,0]
-PROCESSION_HEIR BLUE (seed 1, 3 nights)
-PROCESSION_MATCH … "seed":11 → wreaths=[30,36,69,59]  heir GOLD  board_firsts=[0,1,1,1]
+PROCESSION_MATCH … "seed":1  → wreaths=[55,53,74,34]  heir GOLD  board_firsts=[1,0,2,0]
+PROCESSION_HEIR GOLD (seed 1, 3 nights)
+PROCESSION_MATCH … "seed":11 → wreaths=[38,33,62,58]  heir GOLD  board_firsts=[0,1,0,2]
 PROCESSION_HEIR GOLD (seed 11, 3 nights)
 ```
 
+(Seed 1's heir flipped BLUE→GOLD under the DR sim shift — the retired hazard
+nudge and the ◆→⚘ will payouts re-decided a close match; expected, sanctioned.)
+
 Seed 11 remains the LETTERS witness: BLUE (4 wreaths after night 1, zero wins)
-publicly accepts the LETTERS OF ADMINISTRATION on nights 2 and 3
-(`"letters":[false,true,false,false]`) and closes at 36 wreaths — the dignity
+publicly accepts the LETTERS OF ADMINISTRATION on night 2
+(`"letters":[false,true,false,false]`) and closes at 33 wreaths — the dignity
 floor doing balance work, announced, never hidden.
 
 Interlude rules in the record: interlude 1 is drawn RANDOM from the night's
@@ -138,24 +161,32 @@ prints, so each PROCESSION_NIGHT line stays the board-night's own score.
 godot --headless --path . -- --procession --seed=7 --turncap=12 --nights=1 --autoplay=bots
 ```
 
-frozen result (verified deterministic ×3):
+frozen result (DR — verified deterministic ×3; the `"deeds"` field and the ◆
+per-seat column are gone, and the will clauses fold +1⚘ each into the `award`
+stream):
 
 ```
-PROCESSION_NIGHT {"arrivals":[0,1,2],"awards":[["longest",0],["generous",-1],["bloodiest",2]],"bell_round":6,"grudge":[16,26,47,18],"letters":[false,false,false,false],"night":1,"rounds":7,"wreaths":[17,8,15,5]}
-PROCESSION_MATCH {"board":"estate_procession","board_firsts":[1,0,0,0],"deeds":[1,0,0,1],"grudge":[16,26,47,18],"heir":2,"heir_name":"GOLD","heirs":[2],"mini_wins":[1,0,3,1],"moved":[31,27,31,30],"nights":1,"seed":7,"src":{"arrival":[8,5,3,1],"award":[4,0,4,0],"liquid":[1,2,4,1],"mini":[5,3,8,4]},"turn_cap":12,"wreaths":[18,10,19,6]}
-PROCESSION_HEIR GOLD (seed 7, 1 nights)
+PROCESSION_NIGHT {"arrivals":[0,1,2],"awards":[["longest",0],["generous",-1],["bloodiest",2]],"bell_round":6,"grudge":[16,26,47,18],"letters":[false,false,false,false],"night":1,"rounds":7,"wreaths":[18,8,15,6]}
+PROCESSION_MATCH {"board":"estate_procession","board_firsts":[1,0,0,0],"grudge":[16,26,47,18],"heir":0,"heir_name":"RED","heirs":[0],"mini_wins":[1,0,3,1],"moved":[31,29,31,30],"nights":1,"seed":7,"src":{"arrival":[8,5,3,1],"award":[5,0,4,1],"liquid":[1,2,4,1],"mini":[5,3,8,4]},"turn_cap":12,"wreaths":[19,10,19,7]}
+  seat 0 RED: ⚘19 (arr 8 + mini 5 + awd 5 + liq 1)  16¢  moved=31  HEIR
+  seat 1 BLUE: ⚘10 (arr 5 + mini 3 + awd 0 + liq 2)  26¢  moved=29
+  seat 2 GOLD: ⚘19 (arr 3 + mini 8 + awd 4 + liq 4)  47¢  moved=31
+  seat 3 MINT: ⚘7 (arr 1 + mini 4 + awd 1 + liq 1)  18¢  moved=30
+PROCESSION_HEIR RED (seed 7, 1 nights)
 ```
 
-Worth reading twice: RED rings the bell first but GOLD's three minigame wins +
-liquidation take the night by ONE wreath — end-of-game totals deciding, not
-race position (doc 28 §0, the "robbed" metric alive in a receipt).
+Worth reading twice: RED and GOLD both close at **19 wreaths** — dead level —
+and the crown breaks RED's way on the FIRST announced tie-break (most board
+firsts: RED rang the bell), never a coin flip (doc 28 §15). The published
+chain deciding a tie, alive in a receipt. (Pre-DR this was GOLD by one wreath;
+RED's clause win, +1⚘, pulled it level.)
 
 Turn-cap fallback (nobody crosses; DISTANCE RANKING pays the arrival wreaths —
 doc 28 §8 rule 4):
 
 ```
 godot --headless --path . -- --procession --seed=7 --turncap=4 --nights=1 --autoplay=bots
-PROCESSION_NIGHT {"arrivals":[],"awards":[["longest",0],["generous",-1],["bloodiest",2]],"bell_round":-1,…,"rounds":4,"wreaths":[16,8,13,4]}
+PROCESSION_NIGHT {"arrivals":[],"awards":[["longest",0],["generous",-1],["bloodiest",2]],"bell_round":-1,…,"rounds":4,"wreaths":[17,8,13,5]}
 PROCESSION_HEIR RED (seed 7, 1 nights)
 ```
 

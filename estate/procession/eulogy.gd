@@ -4,7 +4,7 @@ extends RefCounted
 ##
 ## A procedurally-authored closing monologue assembled from the night's REAL
 ## conduct: `procession.stats[]` (each seat's moved / graves / lost / duels /
-## shrines / deeds_bought / spent), the ending Deeds and Grudge, and the
+## shrines / deeds_bought / spent), the ending Wreaths and Grudge, and the
 ## EstateState chronicle. It names each mourner by what they ACTUALLY did — who
 ## grasped, who bled, who hoarded, who took from no one — surfaces one genuine
 ## kindness if one occurred, then undercuts it administratively. Mario Party
@@ -32,7 +32,7 @@ static var OPENER: Array:
 	get: return Dialog.paras("eulogy.opener")
 static var CLOSER: Array:
 	get: return Dialog.paras("eulogy.closer")
-static var L_HEIR: Array:              # [name, deeds_phrase]
+static var L_HEIR: Array:              # [name, wreaths_phrase]
 	get: return Dialog.paras("eulogy.heir")
 static var L_BETRAYED: Array:          # [name, lost]
 	get: return Dialog.paras("eulogy.betrayed")
@@ -52,8 +52,9 @@ static var L_WARM: Array:              # [name, graves_phrase]
 ## Build the eulogy — 6-9 lines, fully formatted. Returns
 ## {lines: Array[String], opener: int, closer: int} so the caller can persist
 ## the framing choices for the no-repeat guard.
-static func build(roster: Array, stats: Array, deeds: Array, grudge: Array,
-		prng: RandomNumberGenerator, last: Dictionary, chron: String = "") -> Dictionary:
+static func build(roster: Array, stats: Array, wreaths: Array, grudge: Array,
+		heir_seat: int, prng: RandomNumberGenerator, last: Dictionary,
+		chron: String = "") -> Dictionary:
 	var n: int = roster.size()
 	var lines: Array[String] = []
 
@@ -62,7 +63,10 @@ static func build(roster: Array, stats: Array, deeds: Array, grudge: Array,
 	lines.append(String(OPENER[op]))
 
 	# --- superlatives from the real night ---
-	var heir := _argmax_deeds(deeds, grudge)
+	# DR (doc 29 opt A): the eulogy heir is the ACTUAL crowned heir (wreaths
+	# leader, resolved through the real tie-break chain) — never a ◆ Deed pick
+	# that could name one heir seconds before a different one is crowned.
+	var heir := heir_seat
 	# The one genuine kindness: a seat that won no duel (took from no rival) AND
 	# actually suffered a loss (so it is restraint, not luck). Prefer the one who
 	# bled the most among them — the most-wronged pacifist.
@@ -75,16 +79,16 @@ static func build(roster: Array, stats: Array, deeds: Array, grudge: Array,
 
 	# --- one commendation per seat, keyed to its most salient deed. Each seat
 	# gets a DISTINCT descriptor (assigned greedily by salience) so no template
-	# family repeats within a single eulogy. Ordered by Deeds ascending so the
+	# family repeats within a single eulogy. Ordered by Wreaths ascending so the
 	# heir's line lands last. ---
 	var order: Array = []
 	for i in n:
 		order.append(i)
 	order.sort_custom(func(a: int, b: int) -> bool:
-		if int(deeds[a]) != int(deeds[b]):
-			return int(deeds[a]) < int(deeds[b])
+		if int(wreaths[a]) != int(wreaths[b]):
+			return int(wreaths[a]) < int(wreaths[b])
 		return a < b)
-	var heir_gets_line := int(deeds[heir]) > 0
+	var heir_gets_line := int(wreaths[heir]) > 0
 	var need: Array = []
 	for seat in order:
 		if int(seat) == kind:
@@ -98,7 +102,7 @@ static func build(roster: Array, stats: Array, deeds: Array, grudge: Array,
 			continue   # the warm line covers this seat, near the end
 		if int(seat) == heir and heir_gets_line:
 			var hname := String((roster[seat] as Dictionary).get("name", "SOMEONE"))
-			lines.append(String(_pick(L_HEIR, prng)) % [hname, _deeds_phrase(int(deeds[seat]))])
+			lines.append(String(_pick(L_HEIR, prng)) % [hname, _wreaths_phrase(int(wreaths[seat]))])
 		else:
 			lines.append(_format_desc(String(assigned.get(int(seat), "idle")),
 				int(seat), roster, stats, grudge, prng))
@@ -192,7 +196,10 @@ static func deliver(proc: Node, executor: Object) -> void:
 		var pool: Array = es.chronicle_lines(0)
 		if not pool.is_empty():
 			chron = String(pool[prng.randi_range(0, pool.size() - 1)])
-	var built := build(proc.roster, proc.stats, proc.deeds, proc.grudge, prng, last, chron)
+	# The eulogy's heir is the REAL crown: order[0] of the same tie-break chain
+	# _heir_crowned() reads seconds later, so the two can never disagree.
+	var heir_seat := int(proc._match_order()[0])
+	var built := build(proc.roster, proc.stats, proc.wreaths, proc.grudge, heir_seat, prng, last, chron)
 	var lines: Array = built["lines"]
 	_save_last({"opener": int(built["opener"]), "closer": int(built["closer"])})
 
@@ -214,14 +221,6 @@ static func deliver(proc: Node, executor: Object) -> void:
 		executor.reset_camera(proc._cam_home, executor.board.CENTER, 0.6)
 
 # ---- helpers -----------------------------------------------------------------
-static func _argmax_deeds(deeds: Array, grudge: Array) -> int:
-	var best := 0
-	for i in range(1, deeds.size()):
-		if int(deeds[i]) > int(deeds[best]) \
-				or (int(deeds[i]) == int(deeds[best]) and int(grudge[i]) > int(grudge[best])):
-			best = i
-	return best
-
 static func _pick(pool: Array, prng: RandomNumberGenerator) -> String:
 	return String(pool[prng.randi_range(0, pool.size() - 1)])
 
@@ -233,10 +232,10 @@ static func _pick_avoiding(size: int, avoid: int, prng: RandomNumberGenerator) -
 		idx = (idx + 1) % size
 	return idx
 
-static func _deeds_phrase(n: int) -> String:
+static func _wreaths_phrase(n: int) -> String:
 	if n <= 1:
-		return "a single Deed"
-	return "%d Deeds" % n
+		return "a single wreath"
+	return "%d wreaths" % n
 
 static func _graves_phrase(n: int) -> String:
 	if n <= 0:
