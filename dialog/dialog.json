@@ -7,7 +7,7 @@
     "screen by the Nintendo pager) or pools (one drawn at random). KEEP the",
     "placeholders ({name}, %s, %d) and their ORDER exactly — the game fills them in",
     "at the call site; dropping one will make that line render wrong. Symbols like",
-    "♠ (grudge) and ◆ (deed) are literal text. Loaded by core/dialog.gd (autoload",
+    "♠ (pennies) and ◆ (deed) are literal text. Loaded by core/dialog.gd (autoload",
     "Dialog); call Dialog.reload() after editing to see changes live."
   ],
   "executor": {
@@ -97,7 +97,7 @@
       "%s meets the Ferryman (−2♠). The crossing is short. The bill is not.",
       "The Ferryman takes his due from %s. He takes it from everyone.",
       "%s pays the toll. The Ferryman does not make change.",
-      "Two grudge to cross, and %s pays. The river keeps the receipts."
+      "Two pennies to cross, and %s pays. The river keeps the receipts."
     ],
     "crossroads_land": [
       "%s halts at the crossroads. The signpost offers three regrets to choose from.",
@@ -210,17 +210,17 @@
       "To %s, who leaves with %s and the room's resentment — an heir the estate can, at last, do business with."
     ],
     "betrayed": [
-      "We remember %s, who bled %d Grudge into other hands and called it Tuesday.",
-      "%s paid %d Grudge to graves and gates tonight, without recourse. The estate rounds the sincerity down.",
-      "%s gave %d Grudge to the ground and the tolls. Generosity is only ever involuntary here."
+      "We remember %s, who bled %d pennies into other hands and called it Tuesday.",
+      "%s paid %d pennies to graves and gates tonight, without recourse. The estate rounds the sincerity down.",
+      "%s gave %d pennies to the ground and the tolls. Generosity is only ever involuntary here."
     ],
     "bloody": [
       "%s settled matters %s tonight, quietly and for money. The estate approved the paperwork retroactively.",
       "To %s, who won %s and lost the room. The estate keeps the receipts."
     ],
     "hoarder": [
-      "%s ends the night %d Grudge richer and not one Deed the wiser. The estate admires a full purse and an empty claim.",
-      "%s hoarded %d Grudge and spent it on nothing. The manor respects the discipline; the will does not reward it."
+      "%s ends the night %d pennies richer and not one wreath the wiser. The estate admires a full purse and an empty claim.",
+      "%s hoarded %d pennies and spent it on nothing. The manor respects the discipline; the will does not reward it."
     ],
     "mourner": [
       "%s wept at %s tonight, expensively. Grief, the estate observes, is the one thing here that pays no dividend.",
@@ -245,7 +245,7 @@
       "lead": "You are new to the estate, so it will explain itself. Once.",
       "rules": [
         "POINTS are the ladder. Place well in each game and the estate counts you among the worthy; place last and it counts you anyway.",
-        "♠ GRUDGE is spite made spendable — it buys your bids at THE AUCTION and the trap tiles you seed into the lawn.",
+        "♠ PENNIES is spite made spendable — it buys your bids at THE AUCTION and the trap tiles you seed into the lawn.",
         "ROYALTIES are the house's kindest cruelty: the traps and curses you author pay YOU, every time they take somebody else.",
         "THE TRAIL climbs to the manor. First to the summit inherits it; the rest inherit the memory of the climb.",
         "Every night closes at THE READING, where the ledger is totted up aloud and no one, on principle, is flattered."
@@ -269,7 +269,7 @@
       "throne": "One throne, four claimants. Reigning scores. Decrees blast, guards defend, gravity votes last.",
       "lastwill": "A funeral procession race: first to the crypt inherits. Every death freezes the world while the deceased writes a curse into the road.",
       "widowsgaze": "Rob the wake. Creep the parlor for relics while the Widow weeps — FREEZE when she turns, or her gaze flings you back to the rope. A shove as the sting plays is a murder.",
-      "seance": "A co-op séance: guide the planchette to the spirit's word — but one of you was paid in grudge to make it fail without getting caught. The Executor is the medium.",
+      "seance": "A co-op séance: guide the planchette to the spirit's word — but one of you was paid in pennies to make it fail without getting caught. The Executor is the medium.",
       "understudy": "Everyone knows tonight's play but the understudy, who must bluff along. Rehearse, interrogate, vote — the scoring never stalemates.",
       "maskedball": "A crowd of identical masked dancers — four of them are you, and nobody is told which. Find yourself, dance like furniture, curtsy to the throne, and spend your one mark to unmask a human. Wrong guess: you flash.",
       "pallbearers": "The anthology's first TEAM race: 2v2, one coffin per pair. The coffin moves on the BLEND of both your sticks — sync to sprint, pull apart and the dead spill out. First pall to the crypt wins."
@@ -436,15 +436,15 @@
       "controls": "PAD A or KEYBOARD Space/Enter takes an open seat  ·  A again = READY  ·  KB+MOUSE joins by button (its A is the mouse)  ·  ESC = players & controls"
     },
     "auction": {
-      "header": "THE AUCTION — bid grudge; the estate takes nothing else",
+      "header": "THE AUCTION — bid pennies; the estate takes nothing else",
       "on_block": "on the block:  ",
       "no_bids": "no bids — cheapest seat chooses",
       "vendetta": "“An unsettled matter: %s hunted %s last night. The estate has opened a book on the reprisal (+3♠).”  — The Executor",
       "quips": [
         "The Executor opens the bidding. Spite is legal tender.",
         "The Executor reminds the room that generosity is not on the block.",
-        "The Executor accepts grudge, resentment, and exact change.",
-        "The Executor calls the lot. The reserve price is a grudge, and it always clears.",
+        "The Executor accepts pennies, resentment, and exact change.",
+        "The Executor calls the lot. The reserve price is a penny, and it always clears.",
         "The Executor notes, for the record, that the estate sells the evening and never gives it.",
         "The Executor opens the book. Bids are entered in spite and paid in kind."
       ]
@@ -507,7 +507,7 @@
       "longest_title": "THE LONGEST PROCESSION",
       "longest_desc": "walked the most stones tonight",
       "betrayed_title": "THE MOST BETRAYED",
-      "betrayed_desc": "bled the most Grudge to graves and tolls",
+      "betrayed_desc": "bled the most pennies to graves and tolls",
       "bloody_title": "THE BLOODIEST HAND",
       "bloody_desc": "won the most on the board — vendettas and claims",
       "card_header": "TONIGHT'S WILL CLAUSES",
