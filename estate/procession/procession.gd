@@ -106,7 +106,6 @@ var roster: Array = []
 var grudge: Array[int] = []         # PENNIES on screen (internal name kept — RC §3:
                                     # 14 minigame receipts reference "grudge")
 var wreaths: Array[int] = []        # THE victory currency (doc 28 §6) — persists all match
-var deeds: Array[int] = []          # will-clause trophies only (Codicil retired)
 var positions: Array[int] = []      # per seat: current GRAPH NODE id
 var moved_total: Array[int] = []
 var trail: Array = []               # per seat: Array[int] walked node history (slip-backs)
@@ -200,7 +199,7 @@ var _announce: Label
 var _announce_scrim: Control            # dark band behind the centre ceremony cards
 var _round_lbl: Label
 var _objective_lbl: Label               # top-right: the gate / FINAL BELL state
-var _chips: Array = []               # per seat: {badge, grudge_lbl, deeds_lbl}
+var _chips: Array = []               # per seat: {badge, grudge_lbl}
 var _cam_home: Vector3 = BoardGraph.OVERVIEW_POS   # 3/4 overview; lock-step with board_camera
 
 # Lower-third geometry (anchored bottom-centre; slides up on show). The band's
@@ -408,7 +407,7 @@ func _apply_longnames() -> void:
 
 func _init_arrays() -> void:
 	var n := roster.size()
-	grudge.resize(n); deeds.resize(n); positions.resize(n); moved_total.resize(n)
+	grudge.resize(n); positions.resize(n); moved_total.resize(n)
 	wreaths.resize(n)
 	mini_wins_match.resize(n)
 	board_firsts.resize(n)
@@ -444,7 +443,6 @@ func _init_arrays() -> void:
 	for i in n:
 		_epitaphs[i] = ""
 		grudge[i] = EstateState.STARTING_GRUDGE + 3   # a small float so turn 1 has stakes
-		deeds[i] = 0
 		positions[i] = 0                # node 0 = THE LYCHGATE
 		moved_total[i] = 0
 		trail.append([0])               # walked history (slip-backs retrace it)
@@ -755,7 +753,7 @@ func _pawn_src(seat: int) -> Vector3:
 		return (board.pawns[seat] as Node3D).global_position + Vector3(0, 1.15, 0)
 	return board.space_pos(positions[seat]) + Vector3(0, 1.0, 0) if board else Vector3.ZERO
 
-## A pennies (or deed/wreath) delta popup at the seat's pawn, arcing to its
+## A pennies (or wreath) delta popup at the seat's pawn, arcing to its
 ## chip. glyph carries the currency ("" = the penny glyph from the display
 ## seam); the sign + glyph mean it never reads as colour alone.
 func _pop_grudge(seat: int, amount: int, glyph := "") -> void:
@@ -814,11 +812,11 @@ func _refresh_hud() -> void:
 		var purse := "%d%s  %s%d" % [grudge[i], Spaces.PENNY_GLYPH,
 			Spaces.WREATH_GLYPH, wreaths[i]]
 		if bool(arrived[i]):
-			_chips[i].grudge.text = "%s  ◆%d  HOME #%d" % [
-				purse, deeds[i], arrival_order.find(i) + 1]
+			_chips[i].grudge.text = "%s  HOME #%d" % [
+				purse, arrival_order.find(i) + 1]
 		else:
-			_chips[i].grudge.text = "%s  ◆%d  %d⚑" % [
-				purse, deeds[i], board.dist_to_gate(positions[i]) if board else 0]
+			_chips[i].grudge.text = "%s  %d⚑" % [
+				purse, board.dist_to_gate(positions[i]) if board else 0]
 		if _chips[i].has("name"):
 			_chips[i].name.text = "#%d %s" % [standing.find(i) + 1, roster[i].name]
 			var route_l: Label = _chips[i].route
@@ -1029,8 +1027,8 @@ func _choose_clauses() -> void:
 	]
 
 # --------------------------------------------------------------------------
-# THE MATCH — 3 nights (doc 28 §2), then THE READING. Wreaths, pennies,
-# inventory and deeds persist across nights; the board resets between them.
+# THE MATCH — 3 nights (doc 28 §2), then THE READING. Wreaths, pennies and
+# inventory persist across nights; the board resets between them.
 # --------------------------------------------------------------------------
 func _run_match() -> void:
 	_phase = "intro"
@@ -1076,6 +1074,9 @@ func _run_night_cycles() -> void:
 # NIGHT OPEN — banner, the 3 announced awards, THE LETTERS (doc 28 §7/§8r5)
 # --------------------------------------------------------------------------
 const AWARD_WREATHS := 4
+## DR (doc 29 opt A): the three will clauses pay WREATHS now — ◆ Deeds retired.
+## One wreath per clause leader, booked to the announced-award stream.
+const WILL_WREATHS := 1
 ## The award pool (doc 28 §7 — majority luck/behaviour-weighted, measured
 ## design law). BLOODIEST HAND is the ONE skill award; at most one skill
 ## award may be drawn per night.
@@ -1307,8 +1308,8 @@ func _emit_night_record() -> void:
 	}
 	print("PROCESSION_NIGHT ", JSON.stringify(rec))
 
-## The interlude board reset (doc 28 §2): wreaths, pennies, inventory and
-## deeds persist; positions, arrivals, the bell, traps and the per-night stat
+## The interlude board reset (doc 28 §2): wreaths, pennies and inventory
+## persist; positions, arrivals, the bell, traps and the per-night stat
 ## races reset with the board.
 func _board_reset() -> void:
 	arrival_order.clear()
@@ -2518,7 +2519,7 @@ func _reveal_landing(seat: int) -> void:
 # F24 — REVEAL-CASCADE REACT BUTTONS. During a landing reveal the WAITING players
 # can tap to float an attributed laugh/jeer/wince over the victim's stone. Purely
 # cosmetic, rate-limited, couch-first (remote seats are guarded out cleanly until
-# a net path exists). No sim impact — it never touches grudge/deeds/rng.
+# a net path exists). No sim impact — it never touches grudge/wreaths/rng.
 # --------------------------------------------------------------------------
 ## The reveal hold, made reactive: same skippable wait as _beat, but each frame it
 ## also polls the waiting players' reaction buttons.
@@ -3356,7 +3357,7 @@ func _house_awakens() -> void:
 		safe[_event_rng.randi_range(0, board.node_count() - 1)] = true
 	var caught: Array[String] = []
 	for i in roster.size():
-		var reached := _event_rng.randf() < (0.45 + 0.1 * float(deeds[i] == 0))
+		var reached := _event_rng.randf() < 0.45
 		if bool(arrived[i]):
 			continue
 		if not reached and not safe.has(positions[i]):
@@ -3418,11 +3419,13 @@ func _will_reading() -> void:
 	for c in clauses:
 		var winner_seat := _stat_leader(String(c.stat))
 		if winner_seat >= 0:
-			deeds[winner_seat] += 1
-			stats[winner_seat].will_bonus = int(stats[winner_seat].get("will_bonus", 0)) + 1
-			_pop_grudge(winner_seat, 1, "◆")   # F10: the bonus Deed flies to the chip
+			# DR (doc 29 opt A): the clause pays a WREATH now, not a ◆ Deed —
+			# booked to the announced-award stream so the finale sums stay honest.
+			wreaths[winner_seat] += WILL_WREATHS
+			wreath_src[winner_seat].award += WILL_WREATHS
+			_pop_grudge(winner_seat, WILL_WREATHS, Spaces.WREATH_GLYPH)   # F10: the wreath flies to the chip
 			lines.append(Dialog.text("procession.will_reading.line") % [
-				c.title, roster[winner_seat].name, c.desc, deeds[winner_seat]])
+				c.title, roster[winner_seat].name, c.desc, wreaths[winner_seat]])
 		else:
 			lines.append(Dialog.text("procession.will_reading.unclaimed") % c.title)
 	# Clear the executor's opening line so it does not sit behind the card.
@@ -3558,18 +3561,18 @@ func _emit_tally() -> void:
 		"heirs": heirs.duplicate(), "heir": winner,
 		"heir_name": " & ".join(heir_names),
 		"wreaths": wreaths.duplicate(), "grudge": grudge.duplicate(),
-		"deeds": deeds.duplicate(), "src": src,
+		"src": src,
 		"board_firsts": board_firsts.duplicate(),
 		"mini_wins": mini_wins_match.duplicate(),
 		"moved": moved_total.duplicate(),
 	}
 	print("PROCESSION_MATCH ", JSON.stringify(tally))
 	for i in roster.size():
-		print("  seat %d %s: %s%d (arr %d + mini %d + awd %d + liq %d)  %d%s  ◆%d  moved=%d%s" % [
+		print("  seat %d %s: %s%d (arr %d + mini %d + awd %d + liq %d)  %d%s  moved=%d%s" % [
 			i, roster[i].name, Spaces.WREATH_GLYPH, wreaths[i],
 			int(wreath_src[i].arrival), int(wreath_src[i].mini),
 			int(wreath_src[i].award), int(wreath_src[i].liquid),
-			grudge[i], Spaces.PENNY_GLYPH, deeds[i], moved_total[i],
+			grudge[i], Spaces.PENNY_GLYPH, moved_total[i],
 			"  HEIR" if heirs.has(i) else ""])
 	print("PROCESSION_HEIR %s (seed %d, %d nights)" % [" & ".join(heir_names), seed_value, match_nights])
 	night_over.emit(tally)
@@ -3627,7 +3630,7 @@ func _net_state() -> Dictionary:
 		routes.append(board.route_of(positions[i]) if board else "common")
 	return {
 		"phase": _phase, "round": round_num,
-		"grudge": grudge.duplicate(), "deeds": deeds.duplicate(),
+		"grudge": grudge.duplicate(),
 		"positions": positions.duplicate(), "moved": moved_total.duplicate(),
 		"routes": routes, "arrived": arrived.duplicate(),
 		"arrival_order": arrival_order.duplicate(), "bell_round": bell_round,
@@ -3638,7 +3641,6 @@ func _net_apply(state: Dictionary) -> void:
 	_phase = String(state.get("phase", _phase))
 	round_num = int(state.get("round", round_num))
 	grudge.assign(state.get("grudge", grudge))
-	deeds.assign(state.get("deeds", deeds))
 	positions.assign(state.get("positions", positions))
 	moved_total.assign(state.get("moved", moved_total))
 	arrived = state.get("arrived", arrived)

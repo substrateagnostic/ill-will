@@ -7,7 +7,7 @@
     "screen by the Nintendo pager) or pools (one drawn at random). KEEP the",
     "placeholders ({name}, %s, %d) and their ORDER exactly — the game fills them in",
     "at the call site; dropping one will make that line render wrong. Symbols like",
-    "♠ (pennies) and ◆ (deed) are literal text. Loaded by core/dialog.gd (autoload",
+    "♠ (pennies) and ⚘ (wreath) are literal text. Loaded by core/dialog.gd (autoload",
     "Dialog); call Dialog.reload() after editing to see changes live."
   ],
   "executor": {
@@ -514,7 +514,7 @@
       "bloody_title": "THE BLOODIEST HAND",
       "bloody_desc": "won the most on the board — vendettas and claims",
       "card_header": "TONIGHT'S WILL CLAUSES",
-      "line": "◆ %s — +1 Deed to whoever %s"
+      "line": "⚘ %s — +1 Wreath to whoever %s"
     },
     "narration": {
       "pin": "%s spends a MOURNING PIN (+1 space)",
@@ -541,8 +541,8 @@
     },
     "will_reading": {
       "header": "THE READING OF THE WILL",
-      "line": "%s — %s (%s)  +1 Deed → ◆%d",
-      "unclaimed": "%s — unclaimed. The estate keeps the Deed."
+      "line": "%s — %s (%s)  +1 Wreath → ⚘%d",
+      "unclaimed": "%s — unclaimed. The estate keeps the wreath."
     },
     "house_awakens": {
       "header": "THE HOUSE AWAKENS",
@@ -550,7 +550,7 @@
       "slip_suffix": " slip back two stones."
     },
     "heir": {
-      "crown": "%s IS CROWNED HEIR\n◆%d DEEDS",
+      "crown": "%s IS CROWNED HEIR\n⚘%d WREATHS",
       "crown_gate": "%s IS CROWNED HEIR\nFIRST THROUGH THE MANOR GATE",
       "monument": "%s — HEIR OF THE PROCESSION (%d WREATHS)",
       "graffiti": "%s inherited the manor at the procession",
