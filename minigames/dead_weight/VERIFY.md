@@ -31,6 +31,12 @@ Screenshots (global harness `--shots` works; PNGs land in `verify_out/`):
 godot --path . minigames/dead_weight/dead_weight.tscn -- --dwbots --dwghosts=2 --seed=3 --shots=380,560,740 --outdir=verify_out/dw
 ```
 
+M4 MOVESET capture (windowed; stages BRACE / DASH / SUPER SMASH mid-charge,
+each a hard-to-catch live moment, then quits — see "M4 MOVESET" below):
+```
+godot --path . minigames/dead_weight/dead_weight.tscn -- --dwmovecap --outdir=verify_out/dwmove --seed=1
+```
+
 Balance sim (headless, 6x time_scale, prints tally, quits):
 ```
 godot --headless --path . minigames/dead_weight/dead_weight.tscn -- --dwbalance=20 --seed=1
@@ -38,7 +44,8 @@ godot --headless --path . minigames/dead_weight/dead_weight.tscn -- --dwbalance=
 
 CLI args (after `--`): `--dwbots`, `--dwghosts=N`, `--dwbalance=N`,
 `--dwrounds=N`, `--players=N`, `--seed=N`, `--dwoobtest` (off-map safe-spot
-evidence pin, below), plus global `--shots` / `--outdir` / `--quitafter`.
+evidence pin, below), `--dwmovecap` (M4 moveset screenshot capture, below),
+plus global `--shots` / `--outdir` / `--quitafter`.
 
 Off-map safe-spot repro (evidence pin; seat 0 pinned on the exploit spot 1s
 into round 1, so the before/after can be filmed — needs a windowed run and
@@ -111,6 +118,101 @@ Plus one flow bug caught by screenshots: an awaited 3s SceneTreeTimer for
 the between-rounds delay never resumed after a slow-mo beat (survivor then
 wandered off the lip on stale bot input). The delay is now tick-driven in
 `_physics_process` and survivors are halted when the round resolves.
+
+## M4 MOVESET — BRACE / DASH / SUPER SMASH (playtest-requested)
+
+Producer ruling on the friend's playtest note ("a brace and a dash for
+skilled maneuvers, maybe a super smash that takes a second or two to load
+up"): ADD the moveset with the telegraph + cooldown-ring mechanics
+`echo_chamber` uses (`docs/design/08-gamefeel-research.md`); the ghost
+furniture-fling stays EXACTLY as shipped — it's beloved and OP by design, and
+that's fine now that the living have better tools to counter it. Stays
+inside the house `move + A + B` verb budget — no third button anywhere in
+this anthology (`docs/design/16-jump-and-visibility.md` §0) — via tap/hold
+splits on A and B, plus a double-tap-MOVE gesture for DASH (the brief's own
+"or double-direction" alternative).
+
+### Moveset
+
+| Move | Trigger | Effect |
+|---|---|---|
+| SHOVE | A tap (unchanged) | as before |
+| **SUPER SMASH** | A hold ~1.7-1.9s total | grow/glow charge telegraph (Echo's exact overlay values), auto-fires a RADIAL shove (no facing gate) at ~2x SHOVE's range/knockback; 6.5s cooldown; **dropped if you're hit while charging** |
+| HOP | B tap (unchanged) | as before |
+| **BRACE** | B hold ≥0.15s | rooted, 70% knockback resistance while held; 2.2s stamina cap forces a release; briefly (0.3s) MORE vulnerable (135%) right after ANY release — no turtling forever |
+| **DASH** | quick double-tap a MOVE direction | 0.2s velocity burst at 10.5 m/s; 1.2s cooldown ring; no i-frames, no collision changes — dodge by outrunning, not by phasing through bodies |
+
+Constants: `minigames/dead_weight/fighter.gd` — `SMASH_ARM_T` 0.16,
+`SMASH_CHARGE_T` 1.7, `SMASH_CD` 6.5, `SMASH_RANGE` 2.6, `SMASH_BASE` 17.0,
+`SMASH_SCALE_PEAK` 1.24; `BRACE_THRESHOLD` 0.15, `BRACE_MAX_HOLD` 2.2,
+`BRACE_CD` 1.6, `BRACE_VULN_T` 0.3, `BRACE_KNOCK_FACTOR` 0.3,
+`BRACE_VULN_FACTOR` 1.35; `DASH_SPEED` 10.5, `DASH_TIME` 0.2, `DASH_CD` 1.2,
+`DASH_TAP_WINDOW` 0.32.
+
+### Cooldown rings (deliberate exception to doc 08's "≤2 rings" guard)
+
+SHOVE (outer) and HOP (inner) rings are unchanged. DASH earns a THIRD ring
+(one band further out, 0.665-0.74) — a considered exception: it's a
+frequent, spammable tool where missing cooldown feedback reads as "why
+didn't my dash fire." BRACE and SUPER SMASH deliberately do NOT get rings:
+BRACE's tell is the Blocking pose + the identity ring's own emission
+pulsing (Tilt's own "active-state, not cooldown" ring precedent, doc 08 §C);
+SUPER SMASH's tell is the charge glow itself, and holding A while smash is
+on cooldown always safely falls back to a normal tap SHOVE on release (see
+`_tick_a_button`), so there's no dead input a missing ring would need to
+explain. Total stays 3 rings — one per verb-family (A, B, MOVE), never 5.
+
+### Bot policy (seeded, deterministic)
+
+`dead_weight.gd:_bot_living()` drives brace/dash/smash the same way it
+already drove shove/hop: one-shot `want_*` triggers, gated by per-seat
+countdown timers (`_bot_smash_t` / `_bot_brace_t` / `_bot_dash_t`, same shape
+as the existing `_ghost_hold`) drawn from the shared seeded `rng` — so
+`--dwbalance` stays byte-reproducible for a given seed. SUPER SMASH commits
+when a target is in range and the long cooldown is clear; BRACE reacts to
+proximity + being near the void edge (DW's shove has no windup frames to
+read defensively, unlike Echo's parry); DASH fires to escape an incoming
+possessed prop or to close distance on a far target.
+
+### Balance receipt — MOVED (real sim change, producer-sanctioned)
+
+`godot --headless --path . minigames/dead_weight/dead_weight.tscn -- --dwbalance=20 --seed=N`
+
+```
+OLD (pre-M4, frozen in this file's history):
+  seed 1: LIVING WIN % = 65.0%   (living-shove=6 ghost-kill=7 void=7,   possessions=31 ghost_hits=71)
+  seed 7: LIVING WIN % = 70.0%   (living-shove=3 ghost-kill=6 void=11,  possessions=30 ghost_hits=53)
+
+NEW (post-M4, verified deterministic — reran each seed twice, byte-identical both times):
+  seed 1: LIVING WIN % = 65.0%   (living-shove=3 ghost-kill=7 void=10,  possessions=31 ghost_hits=48)
+  seed 7: LIVING WIN % = 80.0%   (living-shove=5 ghost-kill=4 void=11,  possessions=26 ghost_hits=49)
+```
+
+Seed 1 lands on the exact same 65.0% headline (the underlying mix shifted —
+fewer bot living-shoves, more void/accident falls — but the ratio happened
+to net out identically). Seed 7 moved from 70.0% to **80.0%, above the
+historical 55-75% target band**. Diagnosis: the void/accident share is
+UNCHANGED at 11/20 on both runs; the whole shift is `ghost-kill` 6->4 and
+`living-shove` 3->5 (both by exactly 2) — bots braced through, dashed clear
+of, or smashed away hits that used to land as ghost kills. That is the
+producer-sanctioned direction (give the living better tools so the ghost's
+OP furniture-fling stays fine to leave untouched) — no retune was applied
+here; this is a fresh baseline for a future tuning pass if 80% reads too
+high in real play, not a bug. Determinism: each seed reran headless twice,
+identical `LIVING WIN %`, tallies, and telemetry both times.
+
+### Screenshots (`docs/verify/dwmoveset-shots/`, via `--dwmovecap`)
+
+- `dead_weight_movecap_brace.png` — RED mid-BRACE: the coiled Blocking-style
+  stance, held (not a one-shot windup).
+- `dead_weight_movecap_dash.png` — RED mid-DASH: the fading color streak
+  (`on_dash_fired`) stretching behind the burst.
+- `dead_weight_movecap_smash_charge.png` — BLUE mid-SUPER-SMASH-charge: the
+  grow/glow telegraph (scaled up, bathed in Echo's red-hot overlay) clearly
+  built up partway through the ~1.7s charge. Staged on BLUE rather than RED
+  deliberately — the fixed red-hot overlay (house language, reused verbatim)
+  reads far more clearly against a cool identity color than against RED's
+  own hue.
 
 ## MUST (v1 scope) — all done
 

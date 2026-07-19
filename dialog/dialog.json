@@ -314,6 +314,9 @@
       "goal": "Sumo brawl in the attic. Shove rivals off — the fallen return as furniture-hurling ghosts.",
       "tips": [
         "Shove rivals over the edge; a HOP dodges a shove and repositions.",
+        "Hold SHOVE to charge a SUPER SMASH — a slow, telegraphed radial blast.",
+        "Hold HOP to BRACE: you resist knockback, but you're briefly exposed right after you let go.",
+        "Double-tap a direction to DASH — a quick burst to dodge or reposition.",
         "Fall off and you possess the furniture — hurl it at the living.",
         "Last body standing takes the round."
       ]
