@@ -6,6 +6,45 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🕯️ M5 — SÉANCE/UNDERSTUDY TELEGRAPH + ACCESSIBILITY (branch
+  `worktree-agent-a4d85ccfbaf0facc1`, not merged).** Two complaints, both
+  closed:
+  1. **"If you can see the arrows, you can see who's unfaithful"** — the
+     séance's spectral pull-arrows (prior pass) showed every sitter's TRUE
+     heading continuously; a saboteur's retarget pattern converged to
+     certainty well inside the 90s sitting. Fix: arrows now split PRESENCE
+     (always live — a hand's effort, harmless) from HEADING (gated to a
+     ~0.14s CATCH WINDOW right after each beat, the same instant the spirit
+     flame already brightens — reused verbatim, no new formula). Outside the
+     window the arrow holds its last-caught heading, frozen. Reading the
+     table now costs looking away from your own chant/steering — a glance
+     shows a stale snapshot, only a sustained watch builds a pattern. Doc:
+     `docs/verify/seance-telegraph-VERIFY.md`. Two other options considered
+     (surges-only, plain jitter/lag) and rejected — both wrote off in the
+     doc's own prior "one knob to turn" note; the beat-gate was the one that
+     didn't either overcorrect or fail to move the needle.
+  2. **"Voiceover for the colours, who should look/not look — ADA
+     compliance."** No VO pipeline, no new audio: each seat now gets a
+     distinct existing-bank MOTIF (not just a pitch-shifted click) — RED
+     bell_small, BLUE bell_toll, GOLD organ_stab, MINT raven, same mapping in
+     BOTH theater games, same pitch anchors as before. LOOK = the triple-tick
+     summons at that motif; a NEW "don't look" cue (`_play_standdown_tick`)
+     fires the same family, one note, pitched down, when a seat's private
+     window closes. Paired with `PlayerInput.rumble` on that seat's OWN pad
+     only, at both edges (already existed, was just unused here — no-ops
+     correctly for bots/remote/keyboard). Audited the shape-glyph rule
+     ("never colour alone") across both games' cast/casting overlays — every
+     colour cue already carries ● ▲ ■ ◆, nothing was missing. Doc:
+     `docs/verify/theater-motifs-VERIFY.md`.
+
+  **Receipts:** all presentation-only — séance tally seed 5/1 and understudy
+  tally seed 1/2/3 byte-identical to the frozen baselines; board topology
+  checksum b269c570 and the seed-7 3-night HEIR GOLD [36,41,56,43] match
+  both re-verified unmoved. Screenshots:
+  `docs/verify/shots/seance_telegraph_midround.png`,
+  `seance_motif_cast.png`, `understudy_reveal.png` (+ 3 other understudy
+  shots refreshed at this machine's window size, content unchanged).
+
 - **🔔🔔🔔🔔🔔🔔🔔 MORNING MENU #7 — THE SEVENTH WATCH (2026-07-18→19). The
   night the game became one game.**
 

@@ -16,12 +16,40 @@ extends Node3D
 ## idle. Style follows the room — an unshaded warm-glow wisp (no hard HUD
 ## lines), player-colored, with a billboard badge glyph so identity travels as
 ## shape+color, never color alone.
+##
+## TELEGRAPH GATE (producer ruling, 2026-07 — "if you can see the arrows, you
+## can see who's unfaithful; needs to be somewhere in the middle"): the arrows
+## above made the full pull-arrow read continuously — a saboteur retargets a
+## plausible-but-wrong letter roughly every 1-2.6s (`seance_bots.gd`), so
+## anyone watching one wisp for a few seconds, let alone the whole 90s sitting,
+## converged on certainty. PRESENCE (this sitter has a hand on the board, and
+## how hard — see `_shown`/length/opacity in `_apply`) stays live at all
+## times; the séance is a physical co-op task and a hand that visibly vanishes
+## would read as a bug, not a tell. HEADING is the actual secret-adjacent
+## information (which letter they're steering toward), so it is now gated to
+## the CATCH WINDOW: a `pulse` value (0..1) the caller derives from the exact
+## same candle-flare envelope that already brightens the spirit flame each
+## beat (`seance.gd`: `maxf(0.0, 1.0 - beat_time()*5.0)`). Heading only turns
+## toward the sitter's true pull while `pulse >= CATCH_THRESH` (~0.14s right
+## after each 0.85s beat fires — the same instant the whole room visibly
+## brightens, so there is a free, diegetic "look now" cue); between pulses the
+## arrow HOLDS its last-caught heading, frozen. A glance mid-beat shows a stale
+## snapshot, not the live truth; only a sitter who spends attention watching in
+## step with the séance's own heartbeat — instead of steering their own hand or
+## chanting on the same beat — samples enough true headings to build a pattern.
+## Suspicion stays legible over a sustained, costly watch; certainty from one
+## glance does not. (Presentation-only knob, per the prior pass's own note in
+## `docs/verify/seance-arrows-VERIFY.md` — no sim/wire change, no new state on
+## the network snapshot: `pulse` is derived locally, identically, by both the
+## host and the mirror from already-public beat timing.)
 
 const HEAD_LEN := 0.13
 const MIN_LEN := 0.17           # shortest visible wisp (a faint nudge still reads)
 const MAX_LEN := 0.66           # a full-strength yank
 const FADE_TIME := 0.4          # seconds to vanish after the hand stops
 const IDLE_EPS := 0.06          # pull under this = idle (matches the physics gate ~0.05)
+const CATCH_THRESH := 0.32      # pulse level above which a TRUE heading is caught
+const CATCH_LERP := 18.0        # heading catch-up rate DURING the catch window
 
 var index := 0
 var _color := Color.WHITE
@@ -84,15 +112,20 @@ func _wisp_mat() -> StandardMaterial3D:
 	m.emission_energy_multiplier = 1.0
 	return m
 
-## Feed the sitter's CURRENT pull (world vector; XZ used, magnitude 0..1).
+## Feed the sitter's CURRENT pull (world vector; XZ used, magnitude 0..1) and
+## the shared candle-pulse envelope (0..1; see the TELEGRAPH GATE note above).
 ## Visual only — never write anything the sim reads back.
-func drive(pull: Vector3, delta: float) -> void:
+func drive(pull: Vector3, delta: float, pulse: float) -> void:
 	var mag := clampf(Vector2(pull.x, pull.z).length(), 0.0, 1.0)
 	if mag > IDLE_EPS:
-		# aim at the heading; local +X was built to point down the shaft
-		rotation.y = atan2(-pull.z, pull.x)
-		# ease up fast so a hard yank reads immediately (wispy, not instant)
+		# PRESENCE: ease up fast so a hard yank's effort reads immediately,
+		# always — this half of the tell is never gated.
 		_shown = lerpf(_shown, mag, 1.0 - exp(-22.0 * delta))
+		# HEADING: only turns toward the true pull inside the catch window;
+		# outside it, rotation.y is left untouched (frozen at the last catch).
+		if pulse >= CATCH_THRESH:
+			var heading := atan2(-pull.z, pull.x)
+			rotation.y = lerp_angle(rotation.y, heading, 1.0 - exp(-CATCH_LERP * delta))
 	else:
 		# hand idle: linear fade to nothing over ~FADE_TIME, keeping the last
 		# heading so the wisp dissipates pointing where they let go

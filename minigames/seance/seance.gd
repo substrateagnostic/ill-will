@@ -111,6 +111,17 @@ const TAP_TICK_DB := -12.0
 # eyes shut. Presentation only, inert in tally.
 const SUMMONS_TICK_DB := -4.0
 const SUMMONS_GAP := 0.35          # seconds between the three summons ticks
+# per-COLOUR audio motif (producer ruling: "a voiceover for the colours, to
+# show who should look and not look" + ADA compliance). No VO pipeline and no
+# new assets, so identity rides a distinct existing-bank TIMBRE, not just a
+# pitch-shifted click: each seat's summons/stand-down now plays its OWN
+# instrument family (the gothic layer already in the bank) at the SAME
+# SEAT_TAP_PITCH anchor it always has — so the sound roll-call teaches a seat
+# is the exact sound it hears the rest of the night. SAME mapping in
+# minigames/understudy/understudy.gd so the two theater games share one house
+# language (a seat learns its ear-cue once, it works everywhere).
+const SEAT_MOTIF_KEY := ["bell_small", "bell_toll", "organ_stab", "raven"]
+const STANDDOWN_DB := -7.0          # the "don't look" half — quieter, one note, pitched down
 const ROLL_START := 1.6         # unmask drumroll window, in REVEAL seconds
 const ROLL_END := 3.2           # ...building into the unmask hit at t=3.2
 const ROLL_STEP := 0.12         # one planchette rattle every 0.12s
@@ -879,9 +890,14 @@ func _begin_cast() -> void:
 		_seq_add(t + 2.2, func():
 			_play_summons_tick(idx)
 			_cast_private_reveal(idx, foot))
-		# reveal hold +50% (2.6s -> 3.9s), then eyes back down
+		# reveal hold +50% (2.6s -> 3.9s), then eyes back down. The "don't look"
+		# half of the colour cue: this seat's own family, one low note, plus a
+		# rumble pulse ONLY on their own pad (PlayerInput.rumble no-ops for
+		# bots/remote/keyboard, so this is safe to call unconditionally).
 		_seq_add(t + 6.1, func():
-			_cast_card("EYES CLOSED", dim, "", "", Color.WHITE, ""))
+			_cast_card("EYES CLOSED", dim, "", "", Color.WHITE, "")
+			_play_standdown_tick(idx)
+			PlayerInput.rumble(idx, 0.12, 0.2, 0.12))
 		# >= 2.0s of silence before the next seat's summons (t+6.1 down -> t+8.1 up)
 		t += 8.1
 	_seq_add(t, func():
@@ -932,6 +948,11 @@ func _cast_private_reveal(idx: int, foot: String) -> void:
 	var nm: String = str(players[idx].name)
 	var col: Color = players[idx].color
 	var glyph := PlayerBadge.glyph(idx)
+	# The "look" half of the colour cue, felt: a rumble pulse on THIS seat's own
+	# pad the instant their private window opens. PlayerInput.rumble no-ops for
+	# bots/remote/keyboard (the remote seat's own client rumbles itself from
+	# _mir_private_cast below), so this is safe to call unconditionally.
+	PlayerInput.rumble(idx, 0.25, 0.55, 0.16)
 	var remote: bool = NetSession.is_host() and NetSession.is_seat_remote(idx)
 	if remote:
 		_cast_card(glyph + " " + nm, col, "summoned across the wire",
@@ -1051,7 +1072,7 @@ func _tick_seance(delta: float) -> void:
 	planchette.tick(delta)
 	_recent_travel = _recent_travel * exp(-delta / 0.6) + planchette.vel * delta
 	_tick_dwell(delta)
-	_update_arrows(delta)
+	_update_arrows(delta, pulse)
 
 	# focus
 	focus = clampf(focus - PASSIVE_DECAY * delta, 0.0, 100.0)
@@ -1076,12 +1097,16 @@ func _tick_seance(delta: float) -> void:
 
 ## Presentation only: point each sitter's spectral arrow the way they are
 ## currently dragging the planchette. Reads _pull (the same per-seat force the
-## physics already summed above) — never writes back into the sim.
-func _update_arrows(delta: float) -> void:
+## physics already summed above) — never writes back into the sim. `pulse` is
+## the SAME 0..1 candle-flare envelope that brightens the spirit flame each
+## beat (maxf(0, 1 - beat_time()*5)); the arrow uses it to gate how much of a
+## sitter's TRUE heading is visible right now — see the TELEGRAPH GATE note in
+## seance_arrow.gd (producer ruling: full-time arrows were too revealing).
+func _update_arrows(delta: float, pulse: float) -> void:
 	if _arrows.is_empty():
 		return
 	for i in _arrows.size():
-		_arrows[i].drive(_pull[i], delta)
+		_arrows[i].drive(_pull[i], delta, pulse)
 
 func _do_tap(p: int) -> void:
 	figures[p].flare()
@@ -1148,7 +1173,13 @@ func _bank_stream(key: String) -> AudioStream:
 	var bank: Dictionary = Sfx.BANK
 	if not bank.has(key) or (bank[key] as Array).is_empty():
 		return null
-	return load("res://assets/audio/%s.ogg" % str(bank[key][0]))
+	# gothic-layer motif samples ship as declicked .wav (see scripts/sfx.gd
+	# _load_sample); prefer that, fall back to .ogg for the legacy keys.
+	var sample := str(bank[key][0])
+	var wav := "res://assets/audio/%s.wav" % sample
+	if ResourceLoader.exists(wav):
+		return load(wav)
+	return load("res://assets/audio/%s.ogg" % sample)
 
 ## Play a bank sound at an exact pitch. Inert in tally (audio is muted evidence).
 func _play_pitched(key: String, pitch: float, volume_db: float) -> void:
@@ -1166,16 +1197,32 @@ func _play_pitched(key: String, pitch: float, volume_db: float) -> void:
 	p.volume_db = volume_db
 	p.play()
 
-## The turn summons (playtest fix). Plays a seat's OWN pitch — same mapping as
-## the chant tick, so the roll-call teaches the sound the sitting will use — but
-## louder, so a player with their eyes closed hears their colour called. Reads
-## only the seat index; no forces, no focus, no RNG. Inert in tally.
+## The turn summons (playtest fix). Plays a seat's OWN motif — the per-colour
+## instrument family (SEAT_MOTIF_KEY) at its own pitch anchor (SEAT_TAP_PITCH),
+## so the roll-call teaches the sound the sitting will use — louder than the
+## stand-down tick, so a player with their eyes closed hears "look now" called
+## unambiguously. Reads only the seat index; no forces, no focus, no RNG.
+## Inert in tally.
 func _play_summons_tick(seat: int) -> void:
 	if _tally:
 		return
 	var pitch: float = SEAT_TAP_PITCH[seat % SEAT_TAP_PITCH.size()]
-	_play_pitched("place", pitch, SUMMONS_TICK_DB)
-	print("SEANCE_SUMMONS p=%d %s pitch=%.2f" % [seat, players[seat].name, pitch])
+	var key: String = SEAT_MOTIF_KEY[seat % SEAT_MOTIF_KEY.size()]
+	_play_pitched(key, pitch, SUMMONS_TICK_DB)
+	print("SEANCE_SUMMONS p=%d %s pitch=%.2f motif=%s" % [seat, players[seat].name, pitch, key])
+
+## The "don't look" half of the colour cue (producer ruling: "show who should
+## look and not look"). Same seat family as the summons, but ONE note pitched
+## DOWN instead of the summons anchor — the ear that just learned "my family =
+## look" learns "my family, low = eyes down again." Fired once per private
+## window close; inert in tally.
+func _play_standdown_tick(seat: int) -> void:
+	if _tally:
+		return
+	var pitch: float = SEAT_TAP_PITCH[seat % SEAT_TAP_PITCH.size()] * 0.72
+	var key: String = SEAT_MOTIF_KEY[seat % SEAT_MOTIF_KEY.size()]
+	_play_pitched(key, pitch, STANDDOWN_DB)
+	print("SEANCE_STANDDOWN p=%d %s pitch=%.2f motif=%s" % [seat, players[seat].name, pitch, key])
 
 ## Seat-distinct chant tick. Pitch encodes WHO (seat), timing encodes on/off-beat,
 ## so a saboteur's arrhythmic taps land audibly out of pocket at their own tone.
@@ -2021,7 +2068,7 @@ func _mirror_tick(delta: float) -> void:
 		var pulse := maxf(0.0, 1.0 - bt * 5.0)
 		_spirit_flame_mat.emission_energy_multiplier = 2.0 + 3.0 * pulse
 		_spirit_light.light_energy = 1.6 + 1.1 * pulse
-		_update_arrows(delta)
+		_update_arrows(delta, pulse)
 		# MY chant press: stamped with the beat phase I can SEE (spec §4.3).
 		# The press itself still rides the input relay — the stamp only tells
 		# the host which side of the pulse MY screen was on when I tapped.
@@ -2162,7 +2209,8 @@ func _net_apply_private(data: Dictionary) -> void:
 
 ## The private cast window, run locally with the same offsets the couch uses:
 ## three summons ticks -> the name card at 1.2 s -> the CONTENT + fourth tick
-## at 2.2 s -> back to the public facts at 6.1 s (the hold expires).
+## at 2.2 s -> back to the public facts at 6.1 s (the hold expires — the
+## stand-down cue fires there too, matching the host's own t+6.1 offset).
 func _mir_private_cast(data: Dictionary) -> void:
 	var seat := int(data.get("seat", maxi(NetSession.my_seat(), 0)))
 	var nm := str(data.get("nm", "?"))
@@ -2185,9 +2233,14 @@ func _mir_private_cast(data: Dictionary) -> void:
 	tw2.tween_interval(1.0)
 	tw2.tween_callback(func():
 		_play_summons_tick(seat)
+		PlayerInput.rumble(seat, 0.25, 0.55, 0.16)   # LOOK, felt — my own pad only
 		_ui.cast_show(glyph + " " + nm, col, str(data.get("sub", "")),
 			str(data.get("card", "")), Color(str(data.get("cc", "fff"))), foot)
 		VerifyCapture.snap("mirror_cast"))
+	tw2.tween_interval(3.9)   # 1.2 + 1.0 + 3.9 = 6.1s from window start, matching the host
+	tw2.tween_callback(func():
+		_play_standdown_tick(seat)
+		PlayerInput.rumble(seat, 0.12, 0.2, 0.12))   # DON'T LOOK, felt
 
 # ================================================================ verify hooks
 func get_phase_name() -> String:
