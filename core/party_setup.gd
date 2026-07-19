@@ -349,7 +349,16 @@ func free_stray_root_nodes() -> int:
 		if autoloads.has(str(child.name)):
 			continue
 		print("ROOTSWEEP freeing stray: ", child.name)
-		child.queue_free()
+		# free() NOW, not queue_free(): quit_to_title calls this immediately before
+		# change_scene_to_file, and a deferred free leaves the stray alive THROUGH the
+		# estate reload. For a physics-heavy module (DEAD WEIGHT keeps 12 props with
+		# can_sleep=false + continuous_cd + contact_monitor) that means a whole tree of
+		# never-sleeping CCD Jolt bodies keeps simulating during the long reload frame
+		# (shader recompile), and the physics server tries to catch that delta up —
+		# the "quit takes a full minute" playtest report. Tearing the space down
+		# synchronously here (this is a UI callback, never inside a physics step, and
+		# the caller is never itself a stray) hands the reload a clean, empty world.
+		child.free()
 		freed += 1
 	return freed
 

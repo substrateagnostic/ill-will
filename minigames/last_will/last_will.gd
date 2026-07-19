@@ -793,10 +793,17 @@ func _update_camera(delta: float) -> void:
 	if racers == 0:
 		return
 	var spread := max_x - min_x
+	# ALWAYS FRAME EVERY LIVING MARCHER (playtest: a racer too far back dropped off
+	# the bottom of the screen — "you can no longer see yourself"). Center on the
+	# true midpoint and zoom to contain the whole spread. The old code jumped focus
+	# to `max_x - 13` past a 26u spread ("the front matters most") and capped zoom at
+	# 1.45 — together that pushed the trailing pawn out of frame. Midpoint focus keeps
+	# both ends equidistant; spread/20 lands them near the edge, +0.2 buys a cushion,
+	# and the raised cap (1.45 -> 3.4) zooms the camera out for a stretched-out field
+	# instead of clipping the straggler. The +2 forward nudge below keeps the leader's
+	# breathing room without ever abandoning last place.
 	var focus_x := (min_x + max_x) * 0.5
-	if spread > 26.0:
-		focus_x = max_x - 13.0    # the front of the procession matters most
-	var zoom_target := clampf(spread / 20.0, 1.0, 1.45)
+	var zoom_target := clampf(spread / 20.0 + 0.2, 1.0, 3.4)
 	_cam_zoom = lerpf(_cam_zoom, zoom_target, 1.0 - exp(-3.0 * delta))
 	var target := Vector3(focus_x + 2.0, 0.0, LWCourse.z_center(focus_x) * 0.6)
 	cam_rig.position = cam_rig.position.lerp(target, 1.0 - exp(-4.0 * delta))

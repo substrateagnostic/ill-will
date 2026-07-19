@@ -45,6 +45,7 @@ var _accent := GOLD
 var _finished := false
 
 var _pi: Node = null
+var _a_prev: Dictionary = {}         # seat -> last-frame A-down (our own rising edge)
 var _root: Control
 var _tip_label: Label
 var _ring: _ReadyRing
@@ -204,15 +205,26 @@ func _process(delta: float) -> void:
 			_tip_t = 0.0
 			_tip_i = (_tip_i + 1) % _tips.size()
 			_tip_label.text = "TIP:  " + str(_tips[_tip_i])
-	# poll ready presses (human seats only)
+	# poll ready presses (human seats only). We track our OWN rising edge off the
+	# LEVEL state (PlayerInput.is_down, hardware-direct) rather than the single-
+	# physics-tick just_pressed edge: a freshly-loaded heavy 3D scene (TILT — ocean
+	# + platter + 4 GLB pawns + MOONLIT env) stutters on shader compile the instant
+	# the card appears, and that one-tick window falls BETWEEN these render-frame
+	# _process calls, silently swallowing the very A-press the player makes first.
+	# A held-level edge survives any frame drop, so "PRESS A TO START" works even
+	# while the scene is still hitching. (just_pressed is the fallback if a future
+	# PlayerInput drops is_down.)
 	if _pi != null:
+		var has_level: bool = _pi.has_method("is_down")
 		for s in _seats:
 			var seat := int(s)
-			if not _readied.get(seat, false) and _pi.just_pressed(seat, "a"):
+			var a_down: bool = _pi.is_down(seat, "a") if has_level else _pi.just_pressed(seat, "a")
+			if not _readied.get(seat, false) and a_down and not bool(_a_prev.get(seat, a_down)):
 				_readied[seat] = true
 				if _pips.has(seat):
 					(_pips[seat] as PlayerBadge).dim = 1.0
 				Sfx.play("confirm", -3.0)
+			_a_prev[seat] = a_down
 	# ring fill = readied fraction OR the auto-timer's approach, whichever is fuller
 	var auto_frac := clampf(_elapsed / maxf(_auto_secs, 0.01), 0.0, 1.0)
 	var ready_frac := 0.0
