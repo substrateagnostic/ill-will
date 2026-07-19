@@ -6,6 +6,12 @@ stations THROUGH it. One continuous terrain for hub and board — carefully.
 Laws in force: GROUNDS BAR (near-AAA path craft, no flat ground, no visible
 tiling, integrated-GPU envelope), ZERO-ENGLISH, spacing ≥2 stone-widths.*
 
+*STATUS (ninth watch, 2026-07-19 overnight): **G1 LANDED** —
+`estate/procession/grounds.gd` + the station snap in `board_graph.generate()`;
+both frozen receipts re-verified byte-identical (VERIFY-BOARD §7b); test
+stretch + lands stills committed (`estate/procession/shots/g1_*.png`),
+producer review pending the morning. G2 (Meshy kits) next.*
+
 ## 1. The estate, as geography
 
 One terrain. South to north: you wake on the lawn, you walk the lands, you

@@ -300,6 +300,49 @@ Out of scope (noted, not touched): the WREATH-OF-DEBT "DEBT" marker (an
 announced-sabotage visibility feature, Pro Rules) and the per-pawn player-name
 tags (player identity for a 4-up couch) stay — neither is a space-name label.
 
+## 7b. THE GROUNDS G1 — the world-first inversion (doc 33, ninth watch)
+
+The land is authored FIRST now. `estate/procession/grounds.gd`
+(ProcessionGrounds) owns terrain (pure deterministic height function —
+hand-rolled value noise, NO FastNoiseLite Resource, engine-version-proof),
+authored path splines with real surfaces (flagstone approach / gravel garden /
+grass maze / dirt hollow / causeway+plank valley / cut-stone climb), shaped
+water (pond + brook, contour-clipped — never a plane edge), THE HEDGE MAZE
+(4x7 authored grid, true path = garden_a's spline, dead-end branches, THE
+CART COURT cell so the hearse hero parks clear of the walls), bridges (bone
+bridge hero + garden footbridge), the terrain-rim droop, and the manor
+silhouette on its rise (lit windows — the moving target visible from the
+lychgate). `board_graph.generate()` consumes
+`ProcessionGrounds.station_map()`: stations are arc-length-even, deck-aware,
+≥2 stone-widths apart; the bezier + BOARD geometry fields died.
+
+**RE-VERIFIED after the inversion, byte-identical, clean exit 0:** the §2
+topology receipt (`checksum=b269c570 BOARDGRAPH_OK` — positions were never
+hashed) and the §4 match receipt (seed 7 → HEIR GOLD, wreaths [37,38,58,48]
+×3). Proven twice over: the noise swap moved every station's height between
+runs and neither receipt moved — world positions feed presentation only.
+
+Furniture ground-snaps through `_gsnap` (shallows clamp — nothing drowns on
+the lakebed, nothing floats). Hop tweens scale arc/hang-time with station
+gaps. `OVERVIEW_POS` climbed to frame the ~3x world. `reveal_names_near`
+default radius 6→15 (≈2 stones at the new spacing).
+
+**Screenshots** (probe `tools/grounds_shots.tscn`, windowed):
+
+```
+godot --path . tools/grounds_shots.tscn -- --outdir=verify_out/g1_grounds
+```
+
+Committed under `estate/procession/shots/` as `g1_*.png`: the TEST STRETCH
+(maze overhead / corridor / mouth) + the lands (overview, boardwalk, bone
+bridge, merge climb, forecourt, brook bridge).
+
+Left for G2+: Meshy biome kits re-dress the same hedge wall lines / forest /
+bog (doc 33 §5 manifest, ~900cr), brook shimmer + reeds, fireflies, the
+windowed fps flyover probe (deferred until the heavy kits land — G1 is
+MultiMesh + one terrain draw + one water draw), walkabout reveal wire-up
+(unchanged contract), G3 hub migration.
+
 ## 8. DELIBERATELY LEFT FOR LATER LANES
 
 - **Walkabout approach-reveal wiring (A-LOOK):** `board.reveal_names_near()` is
