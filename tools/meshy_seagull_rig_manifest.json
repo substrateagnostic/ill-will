@@ -1,0 +1,9 @@
+[
+  {
+    "name": "seagull",
+    "height_meters": 0.6,
+    "anims": [
+      { "label": "flap", "action": 326, "action_name": "Jumping Jacks" }
+    ]
+  }
+]

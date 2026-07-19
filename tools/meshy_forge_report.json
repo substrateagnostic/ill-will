@@ -811,8 +811,91 @@
                     "resumed_skip":  0,
                     "total_credits_shipped_assets":  1710,
                     "total_credits_actual_spend":  2010,
-                    "procession_rigging_credits":  35
+                    "procession_rigging_credits":  35,
+                    "retexture_wave_credits":  60,
+                    "seagull_rig_feasibility_credits":  0,
+                    "total_credits_actual_spend_incl_finish_wave":  2070
                 },
+    "retexture_wave":  {
+                            "generated_at":  "2026-07-19",
+                            "lane":  "ZR THE FINISH WAVE",
+                            "source_doc":  "docs/design/30-asset-finish-audit.md wave 1",
+                            "endpoint":  "POST /openapi/v1/retexture",
+                            "ai_model":  "meshy-6",
+                            "enable_pbr":  false,
+                            "note":  "Text-driven retexture on EXISTING geometry (no re-forge) for the 6 PLASTIC-verdict flat assets. Original text-to-3d task ids were past Meshy's 3-day asset retention window, so each source GLB was re-uploaded as a base64 model_url. Every candidate was downloaded to <id>_retex_v1.glb alongside the original, judged via both the technical stddev pass (tools/finish_audit.gd) and a paired-comparison contact sheet (tools/asset_probe.tscn --only=<id>,<id>_retex_v1), then promoted (renamed over the original filename) only after visual confirmation -- zero re-attempts needed, 6/6 first-pass KEEP.",
+                            "items":  [
+                                          {
+                                              "id":  "grave_headstone_plain",
+                                              "task_id":  "019f78ec-b6c8-75ba-a349-601bd603266f",
+                                              "consumed_credits":  10,
+                                              "tex_stddev_before":  20.55,
+                                              "tex_stddev_after":  31.43,
+                                              "verdict":  "KEEP - crack lines + pale green moss patches now visible, matches its cracked sibling's read"
+                                          },
+                                          {
+                                              "id":  "grave_small_obelisk",
+                                              "task_id":  "019f78ed-b5a2-7610-9a51-b3887f0cc85d",
+                                              "consumed_credits":  10,
+                                              "tex_stddev_before":  6.94,
+                                              "tex_stddev_after":  24.61,
+                                              "verdict":  "KEEP - stone-block grain shading + moss at base added"
+                                          },
+                                          {
+                                              "id":  "board_grim_signpost",
+                                              "task_id":  "019f78ee-879b-71b3-8e30-cec133674398",
+                                              "consumed_credits":  10,
+                                              "tex_stddev_before":  4.87,
+                                              "tex_stddev_after":  28.66,
+                                              "verdict":  "KEEP - clear wood grain + legible painted arrow lettering, dramatic improvement (lowest-to-high stddev jump of the batch)"
+                                          },
+                                          {
+                                              "id":  "estate_broken_angel",
+                                              "task_id":  "019f78ef-3266-7fd2-9c26-478ba8bd2380",
+                                              "consumed_credits":  10,
+                                              "tex_stddev_before":  3.36,
+                                              "tex_stddev_after":  32.09,
+                                              "verdict":  "KEEP - marble veining/cracks, moss at the base, robe-fold shading; was the single flattest asset in the whole 66-asset audit (stddev 3.36), now the highest-stddev item in this batch"
+                                          },
+                                          {
+                                              "id":  "monument_obelisk_small",
+                                              "task_id":  "019f78f0-2cb0-7c8f-b4ae-436171913c7c",
+                                              "consumed_credits":  10,
+                                              "tex_stddev_before":  14.90,
+                                              "tex_stddev_after":  11.61,
+                                              "verdict":  "KEEP (judged on contact sheet, not stddev alone) - stddev dipped slightly (the flat-white original had some incidental corner-shadow contrast baked in) but the retexture adds real directional stone-panel shading and a visually distinct two-tone base with a mortar seam; reads as carved stone instead of painted plaster in the paired screenshot. The only one of the 6 where the numeric proxy and the visual verdict diverge -- visual pass overrides, per the audit's own doc-30 standard ('reads fine in context' is the bar, not raw variance)."
+                                          },
+                                          {
+                                              "id":  "lychgate",
+                                              "task_id":  "019f78f1-3974-76c8-92c8-d9a287807a5a",
+                                              "consumed_credits":  10,
+                                              "tex_stddev_before":  4.02,
+                                              "tex_stddev_after":  17.91,
+                                              "verdict":  "KEEP - HIGHEST PRIORITY (procession opening landmark). Rich brown timber grain on beams/posts, visible lichen/moss patches on the roof shakes, distinct grey stone footing texture. Was the 3rd-flattest asset in the whole audit; now clearly reads as an aged wooden lychgate instead of an unpainted plaster model."
+                                          }
+                                      ],
+                            "total_credits":  60,
+                            "re_attempts_used":  0,
+                            "screenshots":  {
+                                                "paired_before_after":  ["docs/verify/shots/asset_finish_retex_pair_signpost_angel.png", "docs/verify/shots/asset_finish_retex_pair_angel_headstone.png", "docs/verify/shots/asset_finish_retex_pair_obelisk_lychgate.png", "docs/verify/shots/asset_finish_retex_pair_lychgate_monument.png"],
+                                                "promoted_in_place":  "docs/verify/shots/asset_finish_retex_promoted_all6.png"
+                                            }
+                        },
+    "seagull_rig_feasibility_test":  {
+                                          "generated_at":  "2026-07-19",
+                                          "lane":  "ZR THE FINISH WAVE",
+                                          "source_doc":  "docs/design/30-asset-finish-audit.md RIG CANDIDATES INVENTORY (feasibility caveat)",
+                                          "endpoint":  "POST /openapi/v1/rigging",
+                                          "source_glb":  "assets/models/meshy/seagull.glb",
+                                          "attempts":  [
+                                                           { "height_meters": 0.6, "http_status": 422, "error": "Pose estimation failed, please provide a valid model URL", "credits_charged": 0 },
+                                                           { "height_meters": 1.7, "http_status": 422, "error": "Pose estimation failed, please provide a valid model URL", "credits_charged": 0 }
+                                                       ],
+                                          "planned_anim_if_rig_had_succeeded":  { "action_id": 326, "action_name": "Jumping Jacks", "rig_type": "style_02", "reason": "closest cyclic symmetric two-limb up/down motion in the full 680-entry public catalog to a wing flap -- catalog keyword search for fly/flap/wing/bird/glide/soar/hover/flutter returned nothing avian (confirms doc 30's finding: catalog is 671 style_02 + 9 other humanoid/biped rig types, zero avian presets). Never reached: no rig_task_id was ever created." },
+                                          "report_file":  "tools/meshy_seagull_rig_report.json",
+                                          "total_credits":  0,
+                                          "verdict":  "RIG FAILED, 2/2 attempts, both HTTP 422 'Pose estimation failed' -- a pre-flight content rejection (0 credits charged either time), not a transient or quality issue. Meshy's rigging docs confirm the endpoint supports only humanoid/bipedal shapes with clearly defined limbs and explicitly rejects non-humanoid assets; a seagull's body plan (two legs, two folded wings, no arms) never produces a pose estimate. Tried at both the in-game display height (0.6m) and the API's own human-default height (1.7m) to rule out a scale-driven rejection -- identical error both times, confirming this is a body-plan rejection. KEPT the existing empty-wing-pivot version in minigames/tilt/seagull.gd (TiltSeagull) and core/ambient_life.gd (Seagull class) -- zero code changes made, zero risk to the tilt/procession receipts. This closes the doc-30 feasibility caveat with a definitive answer: auto-rig cannot rig this asset; the documented fallback (hand-split wing mesh, zero further Meshy spend) is the only remaining path and is out of scope for an API-only wave."
+                                      },
     "retired_generations":  [
                                 {
                                     "id":  "award_nemesis",
@@ -885,7 +968,7 @@
                                     "consumed_credits":  30
                                 }
                             ],
-    "note":  "All 32 shipped assets generated on meshy-6 (lowpoly, tri, 8k polycount, PBR off). 4 ids regenerated once after contact-sheet review; retired v1 task ids above. Actual cumulative spend 1080 credits (32x30 shipped + 4x30 retired). | 2026-07-16 NPC-troupe/board-dressing batch: 10 props x30cr = 300cr, 0 failures, appended by the forge lane (the -Only run had clobbered this report down to 10 items; 32-item history restored from git and merged). | 2026-07-17 lane Z3 ARENA_HERO batch: 4 props forged, 150cr (4x30 + 1 leviathan re-roll). 3 KEEP (sea_drowned_colossus_hand, pit_bone_heap, pit_grasping_hands); sea_leviathan_fin REJECTED after 1 re-roll (v1 whole crested creature w/ head+legs; v2 spiky mass w/ stray bone) - neither reads as a mostly-submerged dorsal ridge; GLB not shipped, both task ids in retired_generations. | 2026-07-18 lane ZF THE PROCESSION rework wave (doc 28 sec4+10-11): 12 text-to-3d props forged on meshy-6 (8 PROCESSION_STATIC + 4 PROCESSION_NPC bases) = 360cr. npc_widow re-forged once (v1 blank white shroud retired) = +30cr. 4 NPCs auto-rigged (20cr) + 5 preset animations (15cr) = 35cr. Wave total 425cr. Verdicts: 11/12 first-pass KEEP; npc_widow REJECT-\u003ere-forge-\u003eKEEP (v2 caricatured but legible). Reaper anims: walk=Slow Orc Walk(id 119, style_02) + sweep=Reaping Swing(id 99, style_02); ferryman/gravedigger/widow: Idle(id 0). Rigged native heights (use for MeshyProp.instance_rigged native_height, NOT AABB which reads ~1/100): reaper 3.5m, ferryman 1.85m, gravedigger 1.7m, widow 1.6m. Scythe + skiff forged separately as statics for in-engine hand-parenting. Probe receipt: 17/17 GLBs load, all 5 rigged clips play (tools/asset_probe.gd --animate).",
+    "note":  "All 32 shipped assets generated on meshy-6 (lowpoly, tri, 8k polycount, PBR off). 4 ids regenerated once after contact-sheet review; retired v1 task ids above. Actual cumulative spend 1080 credits (32x30 shipped + 4x30 retired). | 2026-07-16 NPC-troupe/board-dressing batch: 10 props x30cr = 300cr, 0 failures, appended by the forge lane (the -Only run had clobbered this report down to 10 items; 32-item history restored from git and merged). | 2026-07-17 lane Z3 ARENA_HERO batch: 4 props forged, 150cr (4x30 + 1 leviathan re-roll). 3 KEEP (sea_drowned_colossus_hand, pit_bone_heap, pit_grasping_hands); sea_leviathan_fin REJECTED after 1 re-roll (v1 whole crested creature w/ head+legs; v2 spiky mass w/ stray bone) - neither reads as a mostly-submerged dorsal ridge; GLB not shipped, both task ids in retired_generations. | 2026-07-18 lane ZF THE PROCESSION rework wave (doc 28 sec4+10-11): 12 text-to-3d props forged on meshy-6 (8 PROCESSION_STATIC + 4 PROCESSION_NPC bases) = 360cr. npc_widow re-forged once (v1 blank white shroud retired) = +30cr. 4 NPCs auto-rigged (20cr) + 5 preset animations (15cr) = 35cr. Wave total 425cr. Verdicts: 11/12 first-pass KEEP; npc_widow REJECT-\u003ere-forge-\u003eKEEP (v2 caricatured but legible). Reaper anims: walk=Slow Orc Walk(id 119, style_02) + sweep=Reaping Swing(id 99, style_02); ferryman/gravedigger/widow: Idle(id 0). Rigged native heights (use for MeshyProp.instance_rigged native_height, NOT AABB which reads ~1/100): reaper 3.5m, ferryman 1.85m, gravedigger 1.7m, widow 1.6m. Scythe + skiff forged separately as statics for in-engine hand-parenting. Probe receipt: 17/17 GLBs load, all 5 rigged clips play (tools/asset_probe.gd --animate). | 2026-07-19 lane ZR THE FINISH WAVE (doc 30 wave 1+2): /retexture on the 6 PLASTIC-verdict flat assets = 60cr, 6/6 first-pass KEEP (see retexture_wave below), promoted over their original filenames (zero code changes, same GLB paths every consumer already used). Seagull /rigging feasibility test = 0cr, 2/2 attempts REJECTED by Meshy with HTTP 422 'Pose estimation failed' (non-humanoid body plan; see seagull_rig_feasibility_test below) -- kept the existing empty-wing-pivot version in TiltSeagull + AmbientLife.Seagull, no code touched. Wave total 60cr of 975cr approved balance; balance after = 915cr. Receipts unmoved: PROCESSION_HEIR GOLD wreaths [36,41,56,43] (--procession --seed=7 --turncap=12 --nights=3 --autoplay=bots), BOARDGRAPH checksum=b269c570 (--procession --boardgraphtest), tilt edge-slide PASS off at t=0.83s (--tilttest=edge --seed=1, sanity-checked though seagull.gd was never modified).",
     "procession_rigging":  [
                                {
                                    "name":  "npc_reaper",
