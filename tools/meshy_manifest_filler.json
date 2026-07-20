@@ -1,0 +1,44 @@
+[
+  {
+    "id": "ground_grass_tuft_a",
+    "category": "GROUND_COVER",
+    "prompt": "A small clump of meadow grass blades, a single grass tuft with a dozen tapered blades fanning outward and arching over at the tips, slightly uneven natural spread, medium green with lighter tips, low and compact, single distinct object",
+    "target_height_hint": 0.4
+  },
+  {
+    "id": "ground_grass_tuft_b",
+    "category": "GROUND_COVER",
+    "prompt": "A wider low tussock of wild grass, a shaggy rounded grass clump with blades drooping outward on all sides like an unkempt mop, a few taller seed stalks rising from the middle, muted green-olive tones, single distinct object",
+    "target_height_hint": 0.35
+  },
+  {
+    "id": "ground_wildflower_clump",
+    "category": "GROUND_COVER",
+    "prompt": "A small clump of wildflowers among grass blades, five thin stems topped with tiny simple five-petal flowers in white and pale violet, a few round leaves at the base, delicate and sparse, single distinct object",
+    "target_height_hint": 0.5
+  },
+  {
+    "id": "ground_fern",
+    "category": "GROUND_COVER",
+    "prompt": "A single woodland fern plant, six arching feathery fronds radiating from a central crown, each frond with many small leaflets, fronds drooping at the tips, deep forest green, single distinct object",
+    "target_height_hint": 0.55
+  },
+  {
+    "id": "ground_boulder_a",
+    "category": "GROUND_COVER",
+    "prompt": "A weathered granite field boulder, rounded with a few flat facets and a shallow cleft on one side, patches of moss on its upper surfaces, grey stone with subtle warm undertones, sits naturally half-settled into the ground, single distinct object",
+    "target_height_hint": 0.85
+  },
+  {
+    "id": "ground_boulder_b",
+    "category": "GROUND_COVER",
+    "prompt": "A tall angular standing stone boulder, an upright weathered rock with layered striations and a tilted top, lichen spots near the base, cool grey with faint blue-green mottling, single distinct object",
+    "target_height_hint": 1.4
+  },
+  {
+    "id": "estate_iron_fence_run",
+    "category": "GROUND_COVER",
+    "prompt": "A straight run of Victorian cast-iron estate fencing, five slender vertical pickets with spearhead finials between two horizontal rails, two sturdier end posts with small urn caps, slightly aged black iron with rust dusting at the joints, open see-through fence section, single distinct object",
+    "target_height_hint": 1.25
+  }
+]
