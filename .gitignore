@@ -5,3 +5,5 @@ build/
 verify_out/
 .claude/
 .env
+scratch_*.log
+verify_out/stirs_*/
