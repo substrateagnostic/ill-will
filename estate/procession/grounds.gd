@@ -36,13 +36,19 @@ const SEGS := {
 		"surf": [[0, 2, "flagstone"]],
 	},
 	"garden_a": {
+		# Guide points at (24.25, 19.9) and (37.75, -15.9) steer the spline
+		# square THROUGH the mouth and the far door — without them the
+		# catmull-rom cut the corner through the boundary hedge (producer
+		# catch, live jam night 2).
 		"pts": [Vector2(0, 24), Vector2(8, 22.5), Vector2(16, 20),
+			Vector2(24.25, 19.9),
 			Vector2(24.25, 15.25), Vector2(28.75, 15.25), Vector2(33.25, 15.25),
 			Vector2(33.25, 10.75), Vector2(33.25, 6.25), Vector2(28.75, 6.25),
 			Vector2(28.75, 1.75), Vector2(28.75, -2.75), Vector2(33.25, -2.75),
 			Vector2(37.75, -2.75), Vector2(37.75, -7.25), Vector2(37.75, -11.75),
-			Vector2(30, -14.5), Vector2(19, -15.5), Vector2(9, -16), Vector2(0, -16)],
-		"surf": [[0, 3, "gravel"], [3, 14, "grass"], [14, 18, "gravel"]],
+			Vector2(37.75, -15.9),
+			Vector2(29, -16.3), Vector2(19, -15.8), Vector2(9, -16), Vector2(0, -16)],
+		"surf": [[0, 4, "gravel"], [4, 15, "grass"], [15, 20, "gravel"]],
 	},
 	"garden_b": {
 		"pts": [Vector2(0, -16), Vector2(12, -18), Vector2(25, -20),
@@ -1048,9 +1054,11 @@ func _dress_garden() -> void:
 	# corridor (cell 0,3): a reward only the lost (and the overhead camera) see
 	_hero(KIT + "maze_center_statue.glb", 2.5,
 		snap(Vector3(24.25, 0, 1.75), -0.03), PI)
-	# living arches over the maze mouth and its far door
+	# living arches IN the wall line over the maze mouth and its far door
+	# (the mouth arch floated 2.25u south of the boundary on the first pass —
+	# it stands in the hedge line now)
 	_hero(KIT + "hedge_arch_gap.glb", 2.5,
-		snap(Vector3(MAZE_ORIGIN.x, 0, MAZE_ORIGIN.y + MAZE_CELL * 0.5 + 2.25), -0.1), 0.0)
+		snap(Vector3(MAZE_ORIGIN.x, 0, MAZE_ORIGIN.y + MAZE_CELL * 0.5), -0.1), 0.0)
 	_hero(KIT + "hedge_arch_gap.glb", 2.5,
 		snap(Vector3(_cell(3, 6).x, 0, _cell(3, 6).y - MAZE_CELL * 0.5), -0.1), 0.0)
 

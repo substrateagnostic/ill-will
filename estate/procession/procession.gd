@@ -153,6 +153,7 @@ var _capture := false            # windowed: pose beats + snap for screenshots
 var _vendettatest := false       # dev flag: force the board-drama presentation with bot data (screenshots)
 var _longnames := false          # dev flag (W9): worst-case long names to stress the text surfaces
 var _graphtest := false          # --boardgraphtest: print the topology receipt and quit
+var _walk := false               # --walk: dev walkabout on the grounds, no night
 var _parprobe := false           # --parprobe: run the legacy Par adapter once, print, quit
 # ---- the NAMED rng streams (header doctrine; LAYOUT lives in board_graph) ----
 var _roll_rng := RandomNumberGenerator.new()     # ROLL: band deals, bot aim, bot road picks
@@ -341,7 +342,33 @@ func _boot(config: Dictionary) -> void:
 	if _parprobe:
 		_parprobe_run()   # dev probe: the legacy Par adapter, alone, then quit
 		return
+	if _walk:
+		_enter_walk_mode()   # dev walkabout: the grounds, a body, no night
+		return
 	_run_match()
+
+## DEV WALKABOUT (`--walk`, producer request — review the procession's course
+## on foot without playing a night). Hides the match HUD, spawns a stroller
+## at the lychgate, and live-tests the A-LOOK approach-reveal contract.
+func _enter_walk_mode() -> void:
+	_phase = "walkabout"
+	if _ui != null:
+		_ui.visible = false
+	if breath != null and breath.meter != null:
+		breath.meter.visible = false
+	# the toys stay home — the review walk owns the road
+	for s in pawns_seatlist():
+		board.seat_pawn(s, 0)
+	var stroller := GroundsWalk.new()
+	add_child(stroller)
+	stroller.setup(board, String(CHAR_SCENES[0]), GameState.PLAYER_COLORS[0])
+	print("PROCESSION walkabout: stick/WASD walk, hold A trot, ESC to leave")
+
+func pawns_seatlist() -> Array:
+	var out: Array = []
+	for i in roster.size():
+		out.append(i)
+	return out
 
 ## Dev probe (`--parprobe`, never on a receipt): exercise the P3 legacy Par
 ## adapter end-to-end — real launch, real finish signal, validated placements
@@ -379,6 +406,8 @@ func _parse_cli() -> void:
 			_parprobe = true     # dev: run the legacy Par adapter once and quit
 		elif arg == "--slowsim":
 			_fast = false         # keep ceremonies at full length (for capture)
+		elif arg == "--walk":
+			_walk = true          # dev walkabout: stroll the grounds, no night
 		elif arg == "--vendettatest":
 			_vendettatest = true  # force the board-drama presentation with bot data (see _boot)
 		elif arg == "--longnames":
