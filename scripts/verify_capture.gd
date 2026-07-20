@@ -105,6 +105,13 @@ func snap(tag: String) -> void:
 	if not active:
 		return
 	await RenderingServer.frame_post_draw
+	# The camera this frame ACTUALLY rendered with — drivers can be posed and
+	# current yet not be the one on glass (the wrong-way-stills hunt).
+	var vc := get_viewport().get_camera_3d()
+	if vc != null:
+		print("VERIFY_SNAP_CAM tag=%s cam=%s pos=%s fwd=%s" % [tag,
+			str(vc.get_path()), str(vc.global_position),
+			str(-vc.global_transform.basis.z)])
 	var img := get_viewport().get_texture().get_image()
 	var path := "res://%s/snap_%s_%04d.png" % [out_dir, tag, frame]
 	img.save_png(path)

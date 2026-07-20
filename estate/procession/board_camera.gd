@@ -26,6 +26,9 @@ var board: ProcessionBoardGraph = null
 var fast := false
 
 var _driving := false                 # when false, procession poses the cam directly
+## Stills-lane forensics: every named shot logs itself + its caller, so a frame
+## that faces the wrong way can name the intruder instead of leaving a guess.
+var trace := false
 # A gentle 3/4 overview (a touch off the grounds' axis) instead of a dead-centre,
 # perfectly-symmetric head-on — reads more cinematic while still showing all
 # three roads. Home comes from the board (OVERVIEW_POS) so the director and
@@ -56,8 +59,19 @@ func activate() -> void:
 ## Release the camera so procession can pose it directly (capture hero shots,
 ## podium). The director stops writing to the cam until the next shot/activate.
 func hold() -> void:
+	_trace("hold")
 	_kill_tween()
 	_driving = false
+
+func _trace(shot: String) -> void:
+	if not trace:
+		return
+	var who := "?"
+	var st := get_stack()
+	if st.size() > 2:
+		who = "%s:%d" % [String(st[2]["function"]), int(st[2]["line"])]
+	print("CAMTRACE shot=%s caller=%s base=%s look=%s" % [shot, who,
+		str(_base_pos), str(_base_look)])
 
 func _process(delta: float) -> void:
 	if not _driving or not is_instance_valid(cam):
@@ -89,6 +103,7 @@ func _handheld_look() -> Vector3:
 ## ESTABLISH — a low, close pose at the LYCHGATE looking up the road north
 ## (pre-flyover start frame).
 func establish() -> void:
+	_trace("establish")
 	var lych := board.lychgate_pos()
 	_snap(lych + Vector3(0.0, 5.5, 9.0), lych + Vector3(0, 1.6, -14.0))
 
@@ -98,6 +113,7 @@ func establish() -> void:
 ## then a settle to the whole-board overview. Awaits the tour but breaks EARLY
 ## the instant any player taps (skip: a Callable -> bool). Instant under fast.
 func flyover(skip: Callable) -> void:
+	_trace("flyover")
 	activate()
 	if fast or not is_instance_valid(cam) or board == null:
 		_snap(_home_pos, _home_look)
@@ -139,6 +155,7 @@ func flyover(skip: Callable) -> void:
 
 ## WHOLE_BOARD — ease back to the raked overview (the objective read).
 func whole_board(dur := 0.6) -> void:
+	_trace("whole_board")
 	activate()
 	_ease_to(_home_pos, _home_look, dur)
 
@@ -146,6 +163,7 @@ func whole_board(dur := 0.6) -> void:
 ## four pawns hop at once, so the procession reads as a procession, not a static
 ## overhead diagram. A gentle lateral push in the direction of travel.
 func move_travel(dur := 0.9) -> void:
+	_trace("move_travel")
 	activate()
 	if fast:
 		_snap(_home_pos, _home_look)
@@ -170,6 +188,7 @@ func move_travel(dur := 0.9) -> void:
 ## "punch-in" (past the target, settle back) — the single most reliable camera-
 ## juice trick. `shot` is {pos, look} from board.reveal_shot(idx, type).
 func landing_push(shot: Dictionary) -> void:
+	_trace("landing_push")
 	activate()
 	var pos: Vector3 = shot.get("pos", _home_pos)
 	var look: Vector3 = shot.get("look", _home_look)
@@ -199,6 +218,7 @@ func landing_push(shot: Dictionary) -> void:
 ## cost stays inside the ≤5s roll-act budget.
 func over_shoulder(pawn_pos: Vector3, dir: Vector3, ease_in := false,
 		gate_clearance := false) -> void:
+	_trace("over_shoulder")
 	activate()
 	var d := dir
 	d.y = 0.0
@@ -225,6 +245,7 @@ func over_shoulder(pawn_pos: Vector3, dir: Vector3, ease_in := false,
 ## toward its stone; the landing push-in then does the close-up. A hard cut,
 ## never an ease — the release lands the frame.
 func travel_cut(shot: Dictionary) -> void:
+	_trace("travel_cut")
 	activate()
 	var pos: Vector3 = shot.get("pos", _home_pos)
 	var look: Vector3 = shot.get("look", _home_look)
@@ -234,6 +255,7 @@ func travel_cut(shot: Dictionary) -> void:
 ## TWO_SHOT (F3/F14) — frame two pawns facing off (vendetta), holding both in
 ## frame from a low outside angle on the midpoint.
 func two_shot(a: Vector3, b: Vector3) -> void:
+	_trace("two_shot")
 	activate()
 	var mid := (a + b) * 0.5
 	var span: float = maxf(3.0, a.distance_to(b))
@@ -250,6 +272,7 @@ func two_shot(a: Vector3, b: Vector3) -> void:
 ## BEACON_HERO (F17) — a hero low-angle push toward the Codicil so its gold glow
 ## flares into lens as the Deed is claimed.
 func beacon_hero(beacon_pos: Vector3, dur := 0.55) -> void:
+	_trace("beacon_hero")
 	activate()
 	var out := beacon_pos - board.CENTER
 	out.y = 0.0
@@ -269,6 +292,7 @@ func beacon_hero(beacon_pos: Vector3, dur := 0.55) -> void:
 ## STANDINGS (F4) — a slow truck across the ordered pawns, pulling up and back so
 ## the whole pecking order reads. `positions` are pawn world points, best-first.
 func standings(points: Array) -> void:
+	_trace("standings")
 	activate()
 	if points.is_empty():
 		whole_board(0.6)

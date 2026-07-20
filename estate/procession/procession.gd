@@ -547,6 +547,7 @@ func _build_world() -> void:
 	board_camera = BoardCamera.new()
 	add_child(board_camera)
 	board_camera.setup(cam, board, _fast)
+	board_camera.trace = _capture   # stills-lane forensics (CAMTRACE lines)
 
 	# THE LAST BREATH (P2): the sequential roll meter. It owns its own
 	# CanvasLayer (never occludable, RD §5), so it needs no HUD host.
@@ -1237,7 +1238,10 @@ func _stir_ceremony(id: String, info: Dictionary) -> void:
 	# yet not CURRENT (a teardown's clear_current promotion is a lottery —
 	# H-road rendered the gate camera while ours stood posed at the site).
 	# Assert it before every stir, same doctrine as _assert_module_camera.
+	# Second clause (the wrong-way stills): no foreign aimer may hold the
+	# rotation — the host's per-frame look-at outranked a driving director.
 	cam.current = true
+	executor.release_camera()
 	_reveal_seat = -1
 	_apply_reveal_badge(-1)   # the estate speaks — no seat wears this line
 	_announce_text("⚱ %s" % ProcessionStirs.title(id), STIR_COL, 30.0)
@@ -1270,8 +1274,10 @@ func _stir_ceremony(id: String, info: Dictionary) -> void:
 			await _fx_crow_court(info)
 	await _beat(0.7)
 	if _capture:
-		print("STIR_SNAP id=%s cam=%s current=%s" % [id,
-			str(board_camera.cam.global_position), str(board_camera.cam.current)])
+		print("STIR_SNAP id=%s cam=%s current=%s base=%s look=%s driving=%s" % [id,
+			str(board_camera.cam.global_position), str(board_camera.cam.current),
+			str(board_camera._base_pos), str(board_camera._base_look),
+			str(board_camera._driving)])
 		await _cap_snap("stir_%s" % id)
 	# The wide is the CHANGED BOARD, whole and wordless — the line already
 	# read over the site shot; nothing sits on the estate now.
@@ -1297,18 +1303,30 @@ func _stir_shot(id: String, info: Dictionary) -> Dictionary:
 			# a camera standing south always eats the manor skyline while the
 			# subject sinks under the Executor's band. Stand NORTH of the
 			# site, shoot south into the dark rim — the event pops.
-			if perp.z > 0.0:
+			# EXCEPTION — bone_bridge: the north perp stands the lens inside
+			# the valley watch-ruin; the east side looks WNW across the span
+			# (manor far off-axis) with the dark west rim behind.
+			if perp.z > 0.0 and id != "bone_bridge":
 				perp = -perp
-			var dist := 13.0 if id == "bone_bridge" else 10.0
-			var high := 5.0 if id == "bone_bridge" else 4.5
+			# bridge: the 1.8× risen ribs span wide — stand further out or the
+			# monument crops at frame edge. road: a lane reads from above, and
+			# the low arm put the garden well square between lens and lane.
+			var dist := 15.5 if id == "bone_bridge" else 10.0
+			var high := 5.5 if id == "bone_bridge" else 4.5
+			if id == "procession_road":
+				dist = 11.0
+				high = 7.0
 			return {"pos": site + perp * dist + Vector3(0, high, 0),
 				"look": site + Vector3(0, 1.0, 0)}
 		"hearse_moves":
+			# frame the DESTINATION from the north — the cart treks into frame
+			# and parks; the trek's start can stay off-screen. Aim between the
+			# park PAD and the new stone so both subjects hold the frame (the
+			# cart stops at its pad, never on the stone).
 			var to_p := board.space_pos(int(info.to))
-			# frame the DESTINATION pad from the north — the cart treks into
-			# frame and parks; the trek's start can stay off-screen.
-			return {"pos": to_p + Vector3(3.0, 4.5, -9.0),
-				"look": to_p + Vector3(0, 1.0, 0)}
+			var focus := (to_p + board.cart_park_pos(int(info.to))) * 0.5
+			return {"pos": focus + Vector3(3.0, 4.5, -9.0),
+				"look": focus + Vector3(0, 1.0, 0)}
 		"hungry_grave", "crow_court":
 			# The gameplay reveal arm faces the rise (fine with a pawn on the
 			# stone; empty ceremony stones lose to the manor skyline) — the
@@ -1317,9 +1335,14 @@ func _stir_shot(id: String, info: Dictionary) -> Dictionary:
 			return {"pos": np + Vector3(1.6, 4.0, -6.5),
 				"look": np + Vector3(0, 0.7, 0)}
 		"wake":
-			return board.reveal_shot(int((info.stones as Array)[1]), Spaces.BLANK)
+			# the reveal vocab framed from inside the hollow's canopy — the
+			# mourners take the same north-side stone arm as hungry/crow.
+			var wp := board.space_pos(int((info.stones as Array)[1]))
+			return {"pos": wp + Vector3(1.6, 4.0, -6.5),
+				"look": wp + Vector3(0, 0.7, 0)}
 		"flood":
-			return {"pos": site + Vector3(2.0, 5.0, -8.5),
+			# high enough to read the pooled water OVER the maze hedges
+			return {"pos": site + Vector3(2.0, 7.5, -10.5),
 				"look": site + Vector3(0, 0.5, 0)}
 	return {"pos": site + Vector3(8, 6, 8), "look": site}
 
@@ -1415,20 +1438,16 @@ func _fx_landslip(info: Dictionary) -> void:
 	var to_p := board.space_pos(int(info.to))
 	var rocks: Array = []
 	for k in 6:
-		var r := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		var s := 0.5 + 0.22 * float(k % 3)
-		bm.size = Vector3(s, s * 0.8, s * 0.9)
-		r.mesh = bm
-		var m := StandardMaterial3D.new()
-		m.albedo_color = Color(0.34, 0.33, 0.36)
-		m.roughness = 0.95
-		r.material_override = m
+		# The same field boulders the swells wear (not grey boxes) — the slide's
+		# debris must read as the ESTATE's stone. Modest tilt only: the prop is
+		# base-normalised, so a hard tip swings it under its own footing.
+		var r := MeshyProp.instance(
+			ProcessionGrounds.KIT + "ground_boulder_a.glb",
+			0.55 + 0.24 * float(k % 3))
 		board.add_child(r)
 		var t := (float(k) + 0.5) / 6.0
-		var start := from_p.lerp(to_p, t * 0.4) + Vector3(0, 3.2, 0)
-		r.global_position = start
-		r.rotation = Vector3(0.4 * k, 0.9 * k, 0.2 * k)
+		r.global_position = from_p.lerp(to_p, t * 0.4) + Vector3(0, 3.2, 0)
+		r.rotation = Vector3(0.22 * sin(k * 2.1), 0.9 * k, 0.22 * cos(k * 1.7))
 		rocks.append({"n": r, "t": t})
 	var tw := create_tween().set_parallel(true)
 	for rk in rocks:
@@ -1523,6 +1542,19 @@ func _fx_crow_court(info: Dictionary) -> void:
 		var c := board.spawn_crow(p + (spec.o as Vector3), bool(spec.fly))
 		if c != null:
 			_crow_fx.append(c)
+	# A cold rim from BEHIND the court (south — the ceremony camera stands
+	# north): black birds on a dark stone are invisible without an edge. It
+	# rides in _crow_fx, so the scatter carries the light off with the murder.
+	var rim := OmniLight3D.new()
+	rim.light_color = Color(0.75, 0.82, 1.0)
+	rim.light_energy = 0.0
+	rim.omni_range = 6.5
+	rim.shadow_enabled = false
+	board.add_child(rim)
+	rim.global_position = p + Vector3(0.6, 2.6, 2.4)
+	var tw := create_tween()
+	tw.tween_property(rim, "light_energy", 1.3, 0.6)
+	_crow_fx.append(rim)
 	await _beat(1.0)
 
 ## The court adjourns: the murder scatters skyward with its takings.

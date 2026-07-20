@@ -2992,3 +2992,31 @@ minisim, not the real per-game code these tunes touch.
 Screenshots throughout are per-game under `verify_out/` (gitignored) —
 paths listed in each touched game's own VERIFY.md alongside the receipt
 detail. Nine commits, one per item, `git log --oneline -9` on the branch.
+
+---
+
+## MENU #11 — THE ELEVENTH WATCH, FIRST HOUR (2026-07-20, late night)
+
+**The wrong-way stills are solved. It was the Executor.**
+His `frame_body()` set a per-frame "aim at my face" flag. Nothing ever cleared it.
+From the first omens read he re-aimed the camera EVERY FRAME of the match — ceremonies, reveals, wides, live couch play.
+Position stayed the director's. Rotation was his. Every debug print looked innocent.
+Fix: his aim now lives exactly as long as his own camera move, plus a hard release at every ceremony open.
+Proof at the grab itself: VERIFY_SNAP_CAM prints the render camera + true forward vector. It matches the director to 3 decimals now.
+Receipts: seed-7 md5 **da76f7c9** re-verified byte-identical. Checksum **b269c570** unmoved. Presentation-only surgery.
+
+**The whole ceremony library re-shot honest** — `shots/es_*.png`:
+- THE BONE BRIDGE finally reads whole: arch center-frame, deck stones threading the ribs, the Reaper watching from his bank. The old crop nit died with the east-side arm.
+- THE HEARSE — cart, peddler, golden new stone. Best frame in the set.
+- THE REAPER'S CUT — him from behind, scythe shouldered, at the stone he surfaced.
+- THE LANDSLIP — real moss-capped boulders now. The grey boxes are dead.
+- THE CROW COURT — three crows rim-lit on the amber stone. The light scatters with the murder.
+- THE FLOOD — the drowned court from above the hedges. RED wading.
+- THE OMENS — the card over the whole moonlit estate. The old frame was secretly cropped to the gate.
+
+**Free characterization, no charge:** the peddler keeps wandering into disaster frames — the landslip, the Reaper's cut.
+He reads as a groundskeeper who has seen everything. Keep or evict — your call.
+
+**Live-couch note that matters:** this bug was NOT capture-only.
+Every reveal close-up in every played match was silently re-aimed at the gate.
+Tonight is the first time the broadcast layer has been fully honest since the Executor got his body.

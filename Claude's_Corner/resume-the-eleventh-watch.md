@@ -57,27 +57,39 @@ review + small fixes only; the big rocks below want the fresh week.
   known, doc it before any online session) · classic-flow excision
   (landmine 6) · DW dash verdict (#63).
 
-**Polish nits banked (cheap, good first hour):** landslip scree should
-tumble real ground_boulder GLBs (BoxMesh placeholder now) · hearse arm
-could aim at cart_park_pos · crow rim-light · flood-water saturation
-check at overview · bridge deck stones vs scaled ribs alignment check.
+**Polish nits — DONE (eleventh watch, same hour as the fix):** landslip
+scree = real moss-capped ground_boulder GLBs (keeper still) · hearse arm
+aims between park pad and new stone (the library's best frame — cart,
+peddler, golden stone) · crow rim-light from behind the court, rides out
+with the scatter in _crow_fx · flood arm raised to read the pooled water
+over the maze hedges · bridge arm moved to the EAST side at dist 15.5
+(the flipped north perp stood the lens inside the valley watch-ruin —
+first honest frame proved it) · wake left the reveal vocab for the
+north-side stone arm (the hollow's canopy occluded the mourners). The
+whole es_* library re-shot + re-curated post-fix. The peddler keeps
+wandering into ceremony frames (landslip, reaper's cut) — accidental
+characterization, arguably a feature; flag to Alex.
 
-**⚠ OPEN MYSTERY — the ceremony still that faces the wrong way.** Some
-stir-site captures render a NORTH-facing frame (manor + gate + executor)
-while the debug prints prove board_camera.cam stood at the computed
-NORTH-side pos, look SOUTH at the site, `current=true`, and within
-handheld sway of the shot at snap time (STIR_SHOT/STIR_SNAP lines in
-scratch_cap_stirs_h/i logs; C-hearse + G-reaper matched their prints, H-
-road + I-hungry did not). VerifyCapture.snap reads the real viewport.
-Sequence: print → 3 process_frames → frame_post_draw grab. Suspects
-eliminated: hold()/activate, tween kill, wrong-node cam, cwd. Remaining:
-something flips the current camera inside those ~4 frames, or a second
-camera asserts between rounds only in some runs. Reproduce with
-`--stir=procession_road,hungry_grave` windowed and instrument
-get_viewport().get_camera_3d() AT the grab. The es_hungry_grave.png and
-es-road stills in shots/ are the wrong-way examples; live-play ceremonies
-may show the same cut — check on a real couch before calling it
-capture-only.
+**✓ MYSTERY SOLVED (eleventh watch, first hour) — the wrong-way stills.**
+The instrumentation plan worked exactly as filed: `VERIFY_SNAP_CAM` at the
+grab showed the true forward vector pointing at the MANOR GATE while pos +
+base + look + driving were all correct — position the director's, rotation
+somebody else's. The somebody: `executor_host.gd` — `frame_body()` /
+`reset_camera()` / `push_to()` set `_aiming = true` and NOTHING ever
+cleared it, so from the intro's omens read onward the host re-aimed the
+shared camera at his own face every frame, processing after the director
+and winning rotation. It wasn't capture-only: reveals, wides, the whole
+live broadcast sat under his thumb (the "matched" C/G stills were just a
+stale `_aim` that happened to coincide). Fix: the aim lives exactly as
+long as the host's own camera tween (generation-tokened release), plus
+`executor.release_camera()` in the ceremony camera assertion and a proper
+`board_camera.hold()` before the eulogy's host shot (which had never
+actually landed — the director kept rewriting its position). Forensics
+kept permanently: VERIFY_SNAP_CAM (grab-time camera+fwd, capture lane) and
+CAMTRACE (every director shot + caller, `board_camera.trace`). Frozen md5
+re-verified byte-identical post-fix. Ceremony library re-shot. THE CAMERA
+LAW now has three clauses: be CURRENT, be the only POSITION driver, and be
+the only AIMER.
 
 **House practice:** receipts at every gate; YOU review stills before
 merging; import pass after class_name/GLB adds then `git checkout --

@@ -175,11 +175,10 @@ func frame_body(dur := 0.8) -> void:
 	fwd = fwd.normalized() if fwd.length() > 0.01 else Vector3.FORWARD
 	var side := fwd.cross(Vector3.UP).normalized()
 	var pos := body.global_position + fwd * 3.9 + side * 1.6 + Vector3(0, 1.85, 0)
-	_aim = focus
-	_aiming = true
 	var tw := cam.create_tween()
 	tw.tween_property(cam, "global_position", pos, dur) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_aim_for(tw, focus)
 
 ## Windowed capture only (doc 24 verify): pose the idle body, then a staged
 ## reveal gesture, grabbing each via the procession's settled snap. Never headless.
@@ -292,6 +291,7 @@ func say_eulogy(text: String, color: Color, index: int) -> void:
 
 var _aim := Vector3.ZERO   # live look-at target, tracked every frame while set
 var _aiming := false
+var _aim_gen := 0          # generation token: an old tween's release can't clip a newer aim
 
 func _process(_delta: float) -> void:
 	# Keeping the aim in _process lets a position tween and the look direction
@@ -299,21 +299,36 @@ func _process(_delta: float) -> void:
 	if _aiming and is_instance_valid(cam):
 		cam.look_at(_aim, Vector3.UP)
 
+## The aim lives EXACTLY as long as the host's own camera move — released on the
+## tween's last frame. An immortal _aiming re-aimed every frame FOREVER after the
+## first frame_body(): the director's ceremonies stood posed at their sites while
+## the render looked at the gate (the wrong-way stills, eleventh watch).
+func _aim_for(tw: Tween, look_at: Vector3) -> void:
+	_aim = look_at
+	_aiming = true
+	_aim_gen += 1
+	var g := _aim_gen
+	tw.finished.connect(func() -> void:
+		if _aim_gen == g:
+			_aiming = false)
+
+## Hard release for a director who needs the frame NOW (ceremony openings).
+func release_camera() -> void:
+	_aiming = false
+
 ## THE DECIDING-MOMENT push toward a landing (reuses the FinalStretch language).
 func push_to(anchor: Vector3, look_at: Vector3) -> void:
 	if cam == null:
 		return
-	_aim = look_at
-	_aiming = true
 	var tw := cam.create_tween()
 	tw.tween_property(cam, "global_position", anchor, 0.5) \
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_aim_for(tw, look_at)
 
 func reset_camera(home_pos: Vector3, look_at: Vector3, dur := 0.5) -> void:
 	if cam == null:
 		return
-	_aim = look_at
-	_aiming = true
 	var tw := cam.create_tween()
 	tw.tween_property(cam, "global_position", home_pos, dur) \
 		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_aim_for(tw, look_at)

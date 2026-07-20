@@ -162,6 +162,25 @@ the canonical + sweeps. THE DRIVE re-fits its projection when the node count
 grows (board_minimap `_refit_if_grown` — the id-76 out-of-bounds die found
 and killed this freeze).
 
+**THE WRONG-WAY STILLS — solved (eleventh watch).** Tenth-watch ceremony
+captures could render facing the MANOR while the director provably stood
+posed at the site, `current=true`. Root cause: `executor_host.gd`'s
+`frame_body()`/`reset_camera()`/`push_to()` set an `_aiming` flag that
+nothing ever cleared — from the first omens read onward the host re-ran
+`cam.look_at(his face)` EVERY FRAME, outranking the driving director's
+rotation (position stayed the director's, which is why every print looked
+innocent). Fix: the host's aim now lives exactly as long as his own camera
+tween (generation-tokened release in `_aim_for`), plus
+`executor.release_camera()` in the stir ceremony's camera assertion and a
+`board_camera.hold()` before the eulogy's host framing. Forensics kept for
+good: `VERIFY_SNAP_CAM` prints the viewport camera + true forward vector AT
+the grab (verify_capture.snap, capture-only), and `CAMTRACE` logs every
+director shot + caller (`board_camera.trace`, armed under `_capture`).
+Post-fix the grab-time forward matches the driven look to 3 decimals on
+both formerly cursed events, and the frozen seed-7 md5 re-verified
+byte-identical (presentation-only surgery). The ceremony library was
+re-shot post-fix.
+
 ### 4-old. The DR-era record text (historical)
 
 ```

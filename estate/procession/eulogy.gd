@@ -206,6 +206,10 @@ static func deliver(proc: Node, executor: Object) -> void:
 	proc._hide_announce()
 	proc._reveal_seat = -1
 	if executor.has_body():
+		# The host's own framing owns the camera for the read — a driving
+		# director would rewrite the position every frame and keep the low
+		# three-quarter host shot from ever actually landing.
+		proc.board_camera.hold()
 		executor.frame_body(1.1)
 		await proc.get_tree().create_timer(0.7).timeout
 	var gold := Color(0.94, 0.86, 0.55)
