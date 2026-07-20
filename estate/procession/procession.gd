@@ -3322,6 +3322,19 @@ func _apply_tie_tiers(placements: Array, tiers: Array[int]) -> void:
 			tiers[m] = j
 		k = j + 1
 
+## The module OWNS the screen. With three cameras alive in one tree (the
+## estate hub's, this board's, and the module's own), Godot's clear_current
+## promotion is a lottery — it can hand the frame to the estate's parked
+## camera, framing a minigame from the forecourt sixty units away (Alex's
+## catch, G3 live session). Most module cameras never mark themselves
+## current (they relied on the single-camera fallback), so assert the
+## module's first camera explicitly; a module that builds its camera later
+## in its own flow will assert itself past this.
+func _assert_module_camera(module: Node) -> void:
+	var cams := module.find_children("*", "Camera3D", true, false)
+	if not cams.is_empty():
+		(cams[0] as Camera3D).make_current()
+
 ## The real module contract, reused from inside the board (spec §3). Under
 ## --autoplay the deterministic MINISIM stands in so the full night resolves
 ## fast and byte-identically; --realmini forces the live module. Results are
@@ -3341,6 +3354,7 @@ func _run_minigame(id: String) -> Array:
 	cam.current = false
 	_ui.visible = false
 	add_child(module)
+	_assert_module_camera(module)
 	_mini_done = false
 	_mini_out = []
 	_mini_results = {}
@@ -3396,6 +3410,7 @@ func _run_legacy_minigame(id: String, meta: Dictionary) -> Array:
 	_mini_results = {}
 	module.finished.connect(_on_mini_finished, CONNECT_ONE_SHOT)
 	get_tree().root.add_child(module)   # root placement — the legacy contract
+	_assert_module_camera(module)
 	while not _mini_done:
 		await get_tree().process_frame
 	if is_instance_valid(module):

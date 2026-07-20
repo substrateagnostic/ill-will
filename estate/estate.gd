@@ -137,6 +137,15 @@ var _standing_grudge_night := -1
 var hub_off := Vector3.ZERO
 var _world_board: ProcessionBoardGraph = null
 
+## The module OWNS the screen (same law as procession._assert_module_camera):
+## with several cameras alive in one tree, clear_current promotion is a
+## lottery — assert the launched module's first camera explicitly. Modules
+## that build a camera later in their own flow assert themselves past this.
+func _assert_module_camera(module: Node) -> void:
+	var cams := module.find_children("*", "Camera3D", true, false)
+	if not cams.is_empty():
+		(cams[0] as Camera3D).make_current()
+
 ## The forecourt anchor + the world under the lawn. Called FIRST in _ready —
 ## every later spawn is hub-relative.
 func _mount_world() -> void:
@@ -2232,6 +2241,7 @@ func _launch_game_swap(id: String, practice := false) -> void:
 		GameState.player_count = EstateState.players.size()
 		GameState.reset_match()
 		get_tree().root.add_child(_module)
+		_assert_module_camera(_module)
 		if _module.has_signal("finished"):
 			_module.finished.connect(_on_module_finished, CONNECT_ONE_SHOT)
 		# PAR ONLINE (doc 22 §7a): gamestate modules with _net_state ride the
@@ -2242,6 +2252,7 @@ func _launch_game_swap(id: String, practice := false) -> void:
 			_net_module_accum = 0.0
 	else:
 		add_child(_module)
+		_assert_module_camera(_module)
 		_module.finished.connect(_on_module_finished, CONNECT_ONE_SHOT)
 		var roster: Array = []
 		for pl in EstateState.players:
