@@ -1289,8 +1289,8 @@ func _stir_shot(id: String, info: Dictionary) -> Dictionary:
 			# site, shoot south into the dark rim — the event pops.
 			if perp.z > 0.0:
 				perp = -perp
-			var dist := 16.0 if id == "bone_bridge" else 10.0
-			var high := 6.0 if id == "bone_bridge" else 4.5
+			var dist := 13.0 if id == "bone_bridge" else 10.0
+			var high := 5.0 if id == "bone_bridge" else 4.5
 			return {"pos": site + perp * dist + Vector3(0, high, 0),
 				"look": site + Vector3(0, 1.0, 0)}
 		"hearse_moves":
@@ -1330,6 +1330,8 @@ const BRIDGE_RISE_Y := -1.35
 ## surface after them. (No rotation at rise time — the dormant piece was
 ## already squared onto its claim line, grounds.gd doctrine.)
 func _fx_bone_bridge(info: Dictionary) -> void:
+	_light_stir_site((info.get("site", Vector3.ZERO) as Vector3),
+		Color(0.72, 0.86, 0.80))
 	var ribs := board.grounds.bone_bridge() if board.grounds != null else null
 	if ribs != null:
 		var tw := create_tween()
@@ -1339,6 +1341,19 @@ func _fx_bone_bridge(info: Dictionary) -> void:
 		await tw.finished
 	for k in (info.stones as Array).size():
 		await _fx_stone_pop(int((info.stones as Array)[k]), 0.1)
+
+## A permanent cold lamp over a risen set piece — dark bone against dark
+## water is invisible from every review angle; a changed board must READ.
+func _light_stir_site(site: Vector3, col: Color) -> void:
+	var lamp := OmniLight3D.new()
+	lamp.light_color = col
+	lamp.light_energy = 0.0
+	lamp.omni_range = 11.0
+	lamp.shadow_enabled = false
+	board.add_child(lamp)
+	lamp.global_position = site + Vector3(0, 4.6, 0)
+	var tw := create_tween()
+	tw.tween_property(lamp, "light_energy", 1.05, 1.8)
 
 ## MAJOR 1 — the dormant sculpt wakes: he rises, glides to the corridor, the
 ## scythe sweeps its arc, and the carve stone surfaces where it fell. He
@@ -1406,6 +1421,8 @@ func _fx_landslip(info: Dictionary) -> void:
 ## MAJOR 4 — the ghost road lays itself stone by stone; one pale wisp walks
 ## it first, then leaves the living to argue over it.
 func _fx_procession_road(info: Dictionary) -> void:
+	_light_stir_site((info.get("site", Vector3.ZERO) as Vector3),
+		Color(0.72, 0.82, 0.95))
 	var ids := info.stones as Array
 	var wisp := OmniLight3D.new()
 	wisp.light_color = Color(0.75, 0.87, 1.0)
@@ -4153,6 +4170,13 @@ func _heir_crowned() -> void:
 	# 0.2s clock so receipts are unchanged (the snap above already fired).
 	if _fast:
 		await _beat(0.2)
+	elif _autoplay:
+		# Unattended slowsim capture: the crown holds its six seconds and
+		# folds. Podium._has_human() reads the DEVICE map (the keyboard still
+		# claims seat 0 in a CLI boot), so an --autoplay run must never gate
+		# on the couch — a stills chain hung at the victory screen for 12
+		# minutes before the producer noticed (tenth watch).
+		await _beat(6.0)
 	else:
 		await podium.await_continue(6.0)
 	if is_instance_valid(podium):

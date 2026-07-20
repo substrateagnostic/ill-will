@@ -1631,6 +1631,12 @@ func append_stir_chain(entry: int, exit_node: int, positions: Array,
 	for id in ids:
 		_build_stone(int(id), S.BLANK)
 		_dress_node(nodes[int(id)] as Dictionary)
+		# A Stirs-born road GLOWS like a special (zero-English: announced
+		# topology wears announced light) — plain-blank surrounds vanish
+		# against dark water at ceremony distance (bridge still, run E).
+		_stone_parent = stone_container(int(id))
+		_ground_ring(space_pos(int(id)), route_info(route_tag).color, 1.02, 1.20, 1.35)
+		_stone_parent = null
 	return ids
 
 ## Redirect a node's road entirely (THE LANDSLIP: the segment now empties
@@ -1710,7 +1716,7 @@ func spawn_crow(pos: Vector3, flying: bool) -> Node3D:
 	var path := ZF_CROW_FLAPPING if flying else ZF_CROW_PERCHED
 	if not ResourceLoader.exists(path):
 		return null
-	var c := _prop(path, path, 0.45 if flying else 0.35)
+	var c := _prop(path, path, 0.58 if flying else 0.46)
 	add_child(c)
 	c.global_position = pos if flying else _gsnap(pos, 0.05)
 	c.rotation.y = float(posmod(int(pos.x * 7.0 + pos.z * 3.0), 628)) * 0.01
