@@ -42,7 +42,14 @@ func configure(board: ProcessionBoardGraph, roster: Array) -> void:
 ## refreshes. Presentation only.
 func set_state(positions: Array) -> void:
 	_positions = positions
+	_refit_if_grown()
 	queue_redraw()
+
+## THE ESTATE STIRS can grow the board mid-match (bridge decks, carve
+## stones, the ghost road) — re-fit the drive when the node count moves.
+func _refit_if_grown() -> void:
+	if _board != null and _px.size() != _board.nodes.size():
+		_project()
 
 ## Fit the graph's x/z bounds into the panel. North (the MANOR GATE, −z) is
 ## the TOP of the inset — the race reads upward, like a drive should.
@@ -80,6 +87,7 @@ func _draw() -> void:
 		Color(0.90, 0.84, 0.66))
 	if _board == null or _px.is_empty():
 		return
+	_refit_if_grown()   # a redraw can land between a stir and the next sync
 	# Route ribbons — the branching roads, colour-keyed.
 	for e in _edges:
 		var col: Color = e.color

@@ -136,6 +136,17 @@ var nodes: Array = []              # [{id, type, route, pos, next:Array[int]}]
 var grave_monument := {}           # open-grave node id -> owner seat (toll payee)
 var pawns := {}                    # seat -> Node3D
 var stone_nodes: Array = []
+# ES: every stone's visuals live in one "Stone%d" container so THE ESTATE
+# STIRS can retype a stone cleanly (free + rebuild). Furniture placed while
+# dressing a node parents into the same container; loose landmarks (gates,
+# troupe, perimeter) keep parenting to self (_stone_parent stays null there).
+var _stone_parent: Node3D = null
+# ES: live prop refs the Stirs ceremonies animate (captured at placement).
+var cart_prop: Node3D = null
+var cart_lantern: Node3D = null
+var reaper_prop: Node3D = null
+var reaper_scythe: Node3D = null
+var _ferry_dressed := false
 
 # --------------------------------------------------------------------------
 # GENERATION — pure data -> graph. Static so --boardgraphtest can print the
@@ -562,7 +573,19 @@ func _gsnap(p: Vector3, dy := 0.0) -> Vector3:
 	g.y = maxf(g.y, ProcessionGrounds.WATER_Y - 0.12 + dy)
 	return g
 
+## The parent stone visuals + per-stone furniture land in: the node's own
+## container while one is open, else the graph root (loose landmarks).
+func _vp() -> Node3D:
+	return _stone_parent if _stone_parent != null else self
+
+func stone_container(i: int) -> Node3D:
+	return get_node_or_null("Stone%d" % i)
+
 func _build_stone(i: int, type: String) -> void:
+	var box := Node3D.new()
+	box.name = "Stone%d" % i
+	add_child(box)
+	_stone_parent = box
 	var pos := space_pos(i)
 	var typed := type != S.BLANK
 	var col: Color = S.color(type)
@@ -584,7 +607,7 @@ func _build_stone(i: int, type: String) -> void:
 	mat.emission_energy_multiplier = 0.05
 	mat.roughness = 0.92
 	s.material_override = mat
-	add_child(s)
+	_vp().add_child(s)
 	s.global_position = pos
 	stone_nodes.append(s)
 	# GROUND SURROUND: the rim TorusMesh laid FLAT (no x-rotation — that rotation
@@ -599,6 +622,7 @@ func _build_stone(i: int, type: String) -> void:
 	if typed:
 		_inlay_pool(pos, col, s_inner - 0.06, 0.5)
 		_ring_pattern(pos, type, col, s_inner, s_outer)
+	_stone_parent = null
 
 ## A single flat emissive ground ring inlaid in the lawn (TorusMesh lies in XZ
 ## by default — NEVER x-rotated, which is what made the old rims stand upright).
@@ -618,7 +642,7 @@ func _ground_ring(pos: Vector3, col: Color, inner: float, outer: float, emit: fl
 	rmat.emission_energy_multiplier = emit
 	rmat.roughness = 0.6
 	ring.material_override = rmat
-	add_child(ring)
+	_vp().add_child(ring)
 	ring.global_position = pos + Vector3(0, 0.05, 0)
 
 ## A soft round emissive pool inside a special's surround so it reads as a lit
@@ -638,7 +662,7 @@ func _inlay_pool(pos: Vector3, col: Color, radius: float, emit: float) -> void:
 	dmat.albedo_color = col.darkened(0.6)
 	dmat.roughness = 0.7
 	d.material_override = dmat
-	add_child(d)
+	_vp().add_child(d)
 	d.global_position = pos + Vector3(0, 0.035, 0)
 
 ## RING PATTERN per special type — the colour-blind-safe read (ZERO-ENGLISH law,
@@ -679,7 +703,7 @@ func _accent_box(pos: Vector3, size: Vector3, yaw: float, mat: StandardMaterial3
 	bm.size = size
 	b.mesh = bm
 	b.material_override = mat
-	add_child(b)
+	_vp().add_child(b)
 	b.global_position = pos
 	b.rotation.y = yaw
 
@@ -758,11 +782,11 @@ func _mark_grave_monument(node_id: int, color_html) -> void:
 # FURNITURE — swap-point catalogue on the graph
 # --------------------------------------------------------------------------
 func _place(node: Node3D, pos: Vector3) -> void:
-	add_child(node)
+	_vp().add_child(node)
 	node.global_position = pos
 
 func _place_facing(node: Node3D, pos: Vector3, target: Vector3) -> void:
-	add_child(node)
+	_vp().add_child(node)
 	node.look_at_from_position(pos, target, Vector3.UP)
 
 ## Outward from the walked line at node i: perpendicular to the local path
@@ -787,69 +811,86 @@ func _outward(i: int) -> Vector3:
 	return perp.normalized()
 
 func _build_furniture() -> void:
-	var ferry_dressed := false
+	_ferry_dressed = false
 	for n in nodes:
-		var i := int(n.id)
-		var type := String(n.type)
-		var here := space_pos(i)
-		var out := _outward(i)
-		match type:
-			S.OFFERING:
-				_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.4), _gsnap(here + out * 1.4))
-			S.OPEN_GRAVE:
-				_place(_prop(_grave_variant_for(i), FB_GRAVE, 1.7), _gsnap(here + out * 1.2))
-			S.GRAVE_GOODS:
-				# ZF: the grave-goods chest, scaled small — a coffer, not a crate.
-				_place(_prop(ZF_CHEST, FB_CRATE, 0.55), _gsnap(here + out * 1.3))
-				_place(_prop(FB_LANTERN, FB_LANTERN, 1.5), _gsnap(here + out * 1.35 + Vector3(0.7, 0, 0.2)))
-			S.SEANCE:
-				_place(_prop(GEN_PLANCHETTE, FB_LANTERN, 0.35), _gsnap(here + out * 1.25))
-			S.FERRY_TOLL:
-				# The toll arch straddles the walked line itself — on the boardwalk
-				# it stands ON the deck (station y), on the causeway likewise.
-				_place_facing(_prop(GEN_TOLLARCH, FB_TOLLARCH, 3.4), here + Vector3(0, 0.02, 0),
-					here + _flow_dir(i) * 4.0)
-				# ZF: THE FERRYMAN and his skiff hold the valley toll (first one only —
-				# one ferryman works this river; further tolls keep the bare arch).
-				if not ferry_dressed and route_of(i) == "valley":
-					ferry_dressed = true
-					var moor := here + out * 3.2
-					# the skiff FLOATS if its mooring lies over the water; else it
-					# sits beached on the mud
-					if ProcessionGrounds.under_water(moor.x, moor.z):
-						moor.y = ProcessionGrounds.WATER_Y + 0.04
-					else:
-						moor = _gsnap(moor, 0.02)
-					_place_facing(_prop(ZF_SKIFF, FB_CRATE, 0.8), moor, moor + _flow_dir(i) * 4.0)
-					_place_facing(_rigged_npc(ZF_FERRYMAN, 1.85, 1.85),
-						here + out * 1.8, here)
-			S.CART:
-				# ZF: the hearse-drawn Peddler's Cart replaces the ring-era hearse.
-				# Inside the hedge maze the generic outboard offset would park the
-				# hearse THROUGH a wall — it backs into THE CART COURT instead
-				# (the opened cell beside its station, doc 33 G1).
-				var cart_at := here + out * 2.0
-				if ProcessionGrounds.in_maze(cart_at.x, cart_at.z):
-					cart_at = Vector3(ProcessionGrounds.CART_COURT.x, 0, ProcessionGrounds.CART_COURT.y)
-				_place_facing(_prop(ZF_CART, FB_HEARSE, 2.4), _gsnap(cart_at), here)
-				_place(_prop(FB_LANTERN, FB_LANTERN, 1.5),
+		_dress_node(n as Dictionary)
+	_finish_furniture()
+
+## One node's furniture, parented into its stone container so THE ESTATE
+## STIRS can retype a stone cleanly (a rebuild re-dresses with the visuals).
+## skip_hero: the hearse relocation animates the EXISTING cart prop to the
+## new stone instead of spawning a second one.
+func _dress_node(n: Dictionary, skip_hero := false) -> void:
+	var i := int(n.id)
+	var type := String(n.type)
+	var here := space_pos(i)
+	var out := _outward(i)
+	_stone_parent = stone_container(i)
+	match type:
+		S.OFFERING:
+			_place(_prop(GEN_LAMPPOST, FB_LANTERN, 2.4), _gsnap(here + out * 1.4))
+		S.OPEN_GRAVE:
+			_place(_prop(_grave_variant_for(i), FB_GRAVE, 1.7), _gsnap(here + out * 1.2))
+		S.GRAVE_GOODS:
+			# ZF: the grave-goods chest, scaled small — a coffer, not a crate.
+			_place(_prop(ZF_CHEST, FB_CRATE, 0.55), _gsnap(here + out * 1.3))
+			_place(_prop(FB_LANTERN, FB_LANTERN, 1.5), _gsnap(here + out * 1.35 + Vector3(0.7, 0, 0.2)))
+		S.SEANCE:
+			_place(_prop(GEN_PLANCHETTE, FB_LANTERN, 0.35), _gsnap(here + out * 1.25))
+		S.FERRY_TOLL:
+			# The toll arch straddles the walked line itself — on the boardwalk
+			# it stands ON the deck (station y), on the causeway likewise.
+			_place_facing(_prop(GEN_TOLLARCH, FB_TOLLARCH, 3.4), here + Vector3(0, 0.02, 0),
+				here + _flow_dir(i) * 4.0)
+			# ZF: THE FERRYMAN and his skiff hold the valley toll (first one only —
+			# one ferryman works this river; further tolls keep the bare arch).
+			if not _ferry_dressed and route_of(i) == "valley":
+				_ferry_dressed = true
+				var moor := here + out * 3.2
+				# the skiff FLOATS if its mooring lies over the water; else it
+				# sits beached on the mud
+				if ProcessionGrounds.under_water(moor.x, moor.z):
+					moor.y = ProcessionGrounds.WATER_Y + 0.04
+				else:
+					moor = _gsnap(moor, 0.02)
+				_place_facing(_prop(ZF_SKIFF, FB_CRATE, 0.8), moor, moor + _flow_dir(i) * 4.0)
+				_place_facing(_rigged_npc(ZF_FERRYMAN, 1.85, 1.85),
+					here + out * 1.8, here)
+		S.CART:
+			# ZF: the hearse-drawn Peddler's Cart replaces the ring-era hearse.
+			# Inside the hedge maze the generic outboard offset would park the
+			# hearse THROUGH a wall — it backs into THE CART COURT instead
+			# (the opened cell beside its station, doc 33 G1).
+			var cart_at := here + out * 2.0
+			if ProcessionGrounds.in_maze(cart_at.x, cart_at.z):
+				cart_at = Vector3(ProcessionGrounds.CART_COURT.x, 0, ProcessionGrounds.CART_COURT.y)
+			if not skip_hero:
+				cart_prop = _prop(ZF_CART, FB_HEARSE, 2.4)
+				_place_facing(cart_prop, _gsnap(cart_at), here)
+				cart_lantern = _prop(FB_LANTERN, FB_LANTERN, 1.5)
+				_place(cart_lantern,
 					_gsnap(cart_at + (here - cart_at) * 0.35 + Vector3(0.4, 0, 0.3)))
-			S.CROSSROADS:
-				_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), _gsnap(here + out * 1.7))
-				# ZF: a checkpoint shrine marks each crossroads landmark, opposite the post.
-				_place(_prop(ZF_SHRINE, FB_LANTERN, 2.5), _gsnap(here - out * 1.9))
-		# Sparse route-biome dressing every 4th stone, outboard.
-		if type == S.BLANK and i % 4 == 1:
-			match route_of(i):
-				"garden":
-					_place(_prop(GEN_TOPIARY, FB_COLUMN, 2.2), _gsnap(here + out * 3.0, -0.04))
-				"hollow":
-					_place(_prop(GEN_DEADTREE, FB_COLUMN, 3.8), _gsnap(here + out * 3.2, -0.04))
-				"valley":
-					var vp := here + out * 3.1
-					if not ProcessionGrounds.under_water(vp.x, vp.z):
-						_place(_prop([GEN_WELL, GEN_ANGEL, GEN_WHEELBARROW][posmod(i, 3)],
-							FB_COLUMN, 2.2), _gsnap(vp, -0.04))
+		S.CROSSROADS:
+			_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), _gsnap(here + out * 1.7))
+			# ZF: a checkpoint shrine marks each crossroads landmark, opposite the post.
+			_place(_prop(ZF_SHRINE, FB_LANTERN, 2.5), _gsnap(here - out * 1.9))
+	# Sparse route-biome dressing every 4th stone, outboard.
+	if type == S.BLANK and i % 4 == 1:
+		match route_of(i):
+			"garden":
+				_place(_prop(GEN_TOPIARY, FB_COLUMN, 2.2), _gsnap(here + out * 3.0, -0.04))
+			"hollow":
+				_place(_prop(GEN_DEADTREE, FB_COLUMN, 3.8), _gsnap(here + out * 3.2, -0.04))
+			"valley":
+				var vp := here + out * 3.1
+				if not ProcessionGrounds.under_water(vp.x, vp.z):
+					_place(_prop([GEN_WELL, GEN_ANGEL, GEN_WHEELBARROW][posmod(i, 3)],
+						FB_COLUMN, 2.2), _gsnap(vp, -0.04))
+	_stone_parent = null
+
+## The loose landmarks — everything that belongs to the estate, not to one
+## stone (never retyped, so never re-dressed).
+func _finish_furniture() -> void:
 	# ZF: the merge landmark gets its own shrine — the roads reunite in prayer.
 	var mg := int((graph.landmarks as Dictionary).merge)
 	_place(_prop(ZF_SHRINE, FB_LANTERN, 2.5),
@@ -879,9 +920,11 @@ func _build_npc_troupe() -> void:
 	# THE REAPER — the standing sculpt, motionless at the graveyard's edge,
 	# facing across the valley toward the gate; his scythe planted beside him.
 	if ResourceLoader.exists(ZF_REAPER_BASE):
-		_place_facing(_prop(ZF_REAPER_BASE, FB_COLUMN, 4.1),
+		reaper_prop = _prop(ZF_REAPER_BASE, FB_COLUMN, 4.1)
+		_place_facing(reaper_prop,
 			_gsnap(REAPER_POST, -0.08), gate_pos() + Vector3(0, 0.0, 4.0))
-		_place(_prop(ZF_SCYTHE, FB_LANTERN, 3.6), _gsnap(REAPER_POST + Vector3(1.4, 0.0, 0.6)))
+		reaper_scythe = _prop(ZF_SCYTHE, FB_LANTERN, 3.6)
+		_place(reaper_scythe, _gsnap(REAPER_POST + Vector3(1.4, 0.0, 0.6)))
 		# Barely lit: one faint, sickly pool so the silhouette reads at distance —
 		# never a hero light. (Existing kit only; shadows off, tight range.)
 		var pall := OmniLight3D.new()
@@ -1528,3 +1571,147 @@ func _flow_at_gate() -> Vector3:
 	var v := gate_pos() - CENTER
 	v.y = 0.0
 	return v.normalized() if v.length() > 0.01 else Vector3.BACK
+
+# --------------------------------------------------------------------------
+# THE ESTATE STIRS — the runtime mutation API (doc 28 §4). The static
+# generate() product is NEVER touched (the topology checksum hashes that);
+# these mutate the LIVE graph mid-match, always announced, always ceremony-
+# framed by procession. Every mutation is deterministic given the STIRS
+# stream — the match receipts re-freeze with the feature (ES era).
+# --------------------------------------------------------------------------
+
+## Re-relax dist-to-gate over the mutated edge set (same algorithm as
+## generate()). Called after every edge/node mutation.
+func recompute_dist() -> void:
+	var gt := gate_id()
+	var dist: Array = graph.dist
+	dist.resize(nodes.size())
+	for i in dist.size():
+		dist[i] = 99999
+	dist[gt] = 0
+	var changed := true
+	while changed:
+		changed = false
+		for n in nodes:
+			var best: int = dist[int(n.id)]
+			for nx in (n.next as Array):
+				if dist[int(nx)] + 1 < best:
+					best = dist[int(nx)] + 1
+			if best < dist[int(n.id)]:
+				dist[int(n.id)] = best
+				changed = true
+
+## A Stirs-born road gets real route metadata so prompts, ribbons and blank-
+## stone tints read true (route_info falls back gracefully, but a named road
+## deserves its name).
+func register_route(tag: String, label: String, color: Color, blurb: String) -> void:
+	for r in (graph.routes as Array):
+		if String((r as Dictionary).tag) == tag:
+			return
+	(graph.routes as Array).append({"tag": tag, "label": label, "color": color,
+		"blurb": blurb, "half_a": 0, "half_b": 0})
+
+## Append a chain of new stones entry -> [positions...] -> exit. The original
+## road keeps next[0] (bots default to it; the new road is the announced
+## choice). Builds stone visuals + dressing immediately — ceremonies animate
+## the containers (scale pop) on top. Returns the new node ids.
+func append_stir_chain(entry: int, exit_node: int, positions: Array,
+		route_tag: String) -> Array:
+	var ids: Array = []
+	for p in positions:
+		var id := nodes.size()
+		nodes.append({"id": id, "type": S.BLANK, "route": route_tag,
+			"pos": p as Vector3, "next": []})
+		ids.append(id)
+	for k in ids.size():
+		nodes[int(ids[k])]["next"] = [int(ids[k + 1])] if k < ids.size() - 1 \
+			else [exit_node]
+	(nodes[entry]["next"] as Array).append(int(ids[0]))
+	recompute_dist()
+	for id in ids:
+		_build_stone(int(id), S.BLANK)
+		_dress_node(nodes[int(id)] as Dictionary)
+	return ids
+
+## Redirect a node's road entirely (THE LANDSLIP: the segment now empties
+## somewhere else). The stranded stones stay standing — scenery from here on.
+func replace_next(id: int, new_next: Array) -> void:
+	nodes[id]["next"] = new_next.duplicate()
+	recompute_dist()
+
+## Retype one stone in place: visuals + dressing rebuild from scratch.
+## dress=false lets THE HEARSE MOVES ON glide the existing cart prop over
+## instead of spawning a second one.
+func retype_stone(id: int, new_type: String, dress := true) -> void:
+	nodes[id]["type"] = new_type
+	var old := stone_container(id)
+	if old != null:
+		old.name = "StoneRetired%d" % id
+		old.queue_free()
+	_build_stone(id, new_type)
+	if dress:
+		_dress_node(nodes[id] as Dictionary)
+	else:
+		_dress_node(nodes[id] as Dictionary, true)
+
+## Nearest node to a ground point, filtered by route tag ("" = any) and an
+## optional max dist-to-gate bound (steer entries/exits forward, never back).
+func nearest_node(x: float, z: float, route_tag := "", max_dist := 99999) -> int:
+	var best := -1
+	var best_d := 1e18
+	for n in nodes:
+		if route_tag != "" and String(n.route) != route_tag:
+			continue
+		if dist_to_gate(int(n.id)) > max_dist:
+			continue
+		var p := n.pos as Vector3
+		var d := (p.x - x) * (p.x - x) + (p.z - z) * (p.z - z)
+		if d < best_d:
+			best_d = d
+			best = int(n.id)
+	return best
+
+## Lift the cart hero (and its lantern) out of the old cart stone's container
+## before a retype frees it — THE HEARSE MOVES ON treks the same prop across
+## the estate rather than conjuring a second one.
+func orphan_cart() -> void:
+	for p in [cart_prop, cart_lantern]:
+		var node := p as Node3D
+		if node != null and node.get_parent() != null and node.get_parent() != self:
+			var g := node.global_transform
+			node.get_parent().remove_child(node)
+			add_child(node)
+			node.global_transform = g
+
+## Where the cart parks beside a stone (the same outboard offset + maze
+## court rule _dress_node uses) — THE HEARSE MOVES ON treks to exactly here.
+func cart_park_pos(node_id: int) -> Vector3:
+	var here := space_pos(node_id)
+	var cart_at := here + _outward(node_id) * 2.0
+	if ProcessionGrounds.in_maze(cart_at.x, cart_at.z):
+		cart_at = Vector3(ProcessionGrounds.CART_COURT.x, 0, ProcessionGrounds.CART_COURT.y)
+	return _gsnap(cart_at)
+
+## THE WAKE's mourner crowd — the widow's sisters, idling greyer. Returns
+## null on a fresh checkout without the asset.
+func spawn_mourner(pos: Vector3, look_to: Vector3) -> Node3D:
+	if not ResourceLoader.exists(ZF_WIDOW):
+		return null
+	var m := _rigged_npc(ZF_WIDOW, 1.6, 1.52)
+	_place_facing(m, _gsnap(pos), Vector3(look_to.x, pos.y, look_to.z))
+	return m
+
+const ZF_CROW_PERCHED := GEN_DIR + "npc_crow_perched.glb"
+const ZF_CROW_FLAPPING := GEN_DIR + "npc_crow_flapping.glb"
+
+## CROW COURT's jurors: perched on the stone or treading air above it (both
+## static sculpts — the beloved unrigged ravens, doc 28 §0a finish note).
+func spawn_crow(pos: Vector3, flying: bool) -> Node3D:
+	var path := ZF_CROW_FLAPPING if flying else ZF_CROW_PERCHED
+	if not ResourceLoader.exists(path):
+		return null
+	var c := _prop(path, path, 0.45 if flying else 0.35)
+	add_child(c)
+	c.global_position = pos if flying else _gsnap(pos, 0.05)
+	c.rotation.y = float(posmod(int(pos.x * 7.0 + pos.z * 3.0), 628)) * 0.01
+	return c

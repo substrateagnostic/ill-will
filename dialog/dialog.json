@@ -669,6 +669,34 @@
     },
     "book": {
       "selfbet_ribbing": "%s wagered on %s. The estate admires confidence, if nothing else."
+    },
+    "stirs": {
+      "omen_intro": "The estate has read its own will. It objects.",
+      "omen_header": "THE OMENS",
+      "omen": {
+        "bone_bridge": "The bog is sewing bones. Expect a crossing.",
+        "reaper_shortcut": "The tall gardener is sharpening. Expect a door.",
+        "landslip": "The hill is tired of holding. Expect it down.",
+        "procession_road": "Dead men are pacing a new road. Mind their step.",
+        "flood": "The garden has been crying again. Bring boots.",
+        "hungry_grave": "One stone has not eaten. It will.",
+        "hearse_moves": "The peddler folds his awning. He follows the money.",
+        "wake": "Mourners are gathering where they are least useful.",
+        "crow_court": "The crows are convening. Dress accordingly."
+      },
+      "fire": {
+        "bone_bridge": "The bog keeps its promise. The bridge is bones. Walk it anyway.",
+        "reaper_shortcut": "He has opened a way between the woods and the water.\nHe did not say for whom.",
+        "landslip": "The hill lets go. The woods now end in the valley.\nFile no complaints.",
+        "procession_road": "A road walks itself into the grass.\nThe dead approve of shortcuts. They took the longest one.",
+        "flood": "GARDEN ROW IS CLOSED. Two turns.\nThe carts have boarded their windows.",
+        "hungry_grave": "A stone gives way. The grave beneath was patient.\nIt is patient no longer.",
+        "hearse_moves": "The Peddler's Cart moves on.\nCommerce, like grief, relocates.",
+        "wake": "A wake convenes on the road. Landing costs a toast.\nThe rumors are free.",
+        "crow_court": "The court is in session.\nFirst past the stone pays the fine."
+      },
+      "crow_strike": "The court finds %s guilty of passing (−3¢). Scattered, satisfied.",
+      "wake_toast": "%s toasts the departed (−2¢). The wake repays in rumors."
     }
   }
 }

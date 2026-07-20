@@ -80,50 +80,79 @@ godot --headless --path . -- --procession --seed=7 --turncap=12 --autoplay=bots
 Any run that prints a `PROCESSION_TALLY` line is pre-P2. The same command
 today runs a full **3-night match** (match_nights defaults to 3).
 
-## 4. THE CANONICAL MATCH RECEIPT (BD — THE BOOK OF THE DEAD, frozen)
+## 4. THE CANONICAL MATCH RECEIPT (ES — THE ESTATE STIRS, frozen)
 
 ```
 godot --headless --path . -- --procession --seed=7 --turncap=12 --nights=3 --autoplay=bots
 ```
 
-**SUPERSEDED — the DR record** (sanctioned, doc 32 producer-approved ordering
-change): THE BOOK OF THE DEAD moved the cycle's minigame draw to the START of
-the roll phase (announced on the round strip — informed bets) and added one
-seeded bot bet per bot seat per cycle. Both are EVENT-stream draws, so every
-EVENT consumer after the first roll phase re-decided — the DR wreath totals
-died with honor. DR's final form, for the record: seed 7 → **HEIR GOLD,
-wreaths [37,38,58,48]**; seed 1 GOLD [55,53,74,34]; seed 11 GOLD
-[38,33,62,58]. Any run printing those totals is pre-BD.
+**SUPERSEDED — the BD record** (sanctioned, doc 28 §4 build — tenth watch):
+THE ESTATE STIRS landed. Every game now draws 1 MAJOR + 1 MINOR topology
+event from the dedicated STIRS stream (announced as omens at the intro; the
+minor fires night 1 round 3, the major at night 2 open), and the mutations
+rewire the LIVE graph — so every walk after the first fire re-decided. The
+BD totals died with honor. BD's final form, for the record: seed 7 → **HEIR
+BLUE, wreaths [55,57,39,39]**, md5 d53a2c905f67ba94fd24cdcf03f9c58b; seed 1
+BLUE [60,70,39,39]; seed 11 RED [61,53,37,46]. Any run with no
+`PROCESSION_STIRS` line is pre-ES.
 
-frozen result (BD — verified deterministic ×3, the NIGHT/MATCH/HEIR line set
-hashes identically run to run, md5 d53a2c905f67ba94fd24cdcf03f9c58b):
+frozen result (ES — verified deterministic ×3, the NIGHT/MATCH/HEIR line set
+hashes identically run to run, md5 **da76f7c9d42a6568980ecb55fcaef3e9**).
+Seed 7 draws **LANDSLIP + CROW COURT**. The stream-separation witness:
+night 1 is BYTE-IDENTICAL to the BD record (wreaths [13,5,15,8], pennies
+[10,25,19,17]) even with the court convened — the crow stone went unpassed
+before the bell, and no STIRS draw can shift an EVENT/ROLL consumer. The
+match only diverges where the landslip rewires night 2's walks:
 
 ```
+PROCESSION_STIRS major=landslip minor=crow_court
+PROCESSION_STIR_FIRE night=1 round=3 kind=minor id=crow_court
 PROCESSION_NIGHT {"arrivals":[2],"awards":[["longest",2],["generous",-1],["bloodiest",0]],"bell_round":4,"grudge":[10,25,19,17],"letters":[false,false,false,false],"night":1,"rounds":5,"wreaths":[13,5,15,8]}
-PROCESSION_NIGHT {"arrivals":[0,2,1,3],"awards":[["generous",0],["uninvited",1],["bloodiest",1]],"bell_round":6,"grudge":[58,71,27,41],"letters":[false,false,false,false],"night":2,"rounds":6,"wreaths":[34,25,24,17]}
-PROCESSION_NIGHT {"arrivals":[1,0],"awards":[["mourned",1],["generous",2],["bloodiest",3]],"bell_round":5,"grudge":[90,88,57,70],"letters":[false,false,false,false],"night":3,"rounds":6,"wreaths":[46,49,34,32]}
-PROCESSION_MATCH {"board":"estate_procession","board_firsts":[1,1,1,0],"grudge":[90,88,57,70],"heir":1,"heir_name":"BLUE","heirs":[1],"mini_wins":[5,6,0,5],"moved":[86,75,83,81],"nights":3,"seed":7,"src":{"arrival":[22,16,16,9],"award":[10,13,9,6],"liquid":[9,8,5,7],"mini":[14,20,9,17]},"turn_cap":12,"wreaths":[55,57,39,39]}
-  seat 0 RED: ⚘55 (arr 22 + mini 14 + awd 10 + liq 9)  90¢  moved=86
-  seat 1 BLUE: ⚘57 (arr 16 + mini 20 + awd 13 + liq 8)  88¢  moved=75  HEIR
-  seat 2 GOLD: ⚘39 (arr 16 + mini 9 + awd 9 + liq 5)  57¢  moved=83
-  seat 3 MINT: ⚘39 (arr 9 + mini 17 + awd 6 + liq 7)  70¢  moved=81
-PROCESSION_HEIR BLUE (seed 7, 3 nights)
+PROCESSION_STIR_FIRE night=2 round=0 kind=major id=landslip
+PROCESSION_NIGHT {"arrivals":[1,2],"awards":[["generous",0],["uninvited",1],["bloodiest",1]],"bell_round":4,"grudge":[32,49,23,30],"letters":[false,false,false,false],"night":2,"rounds":5,"wreaths":[25,28,24,15]}
+PROCESSION_NIGHT {"arrivals":[0],"awards":[["generous",2],["longest",2],["uninvited",0]],"bell_round":5,"grudge":[60,76,45,55],"letters":[false,false,false,false],"night":3,"rounds":6,"wreaths":[48,34,42,27]}
+PROCESSION_MATCH {"board":"estate_procession","board_firsts":[1,1,1,0],"grudge":[60,76,45,55],"heir":0,"heir_name":"RED","heirs":[0],"mini_wins":[6,2,1,4],"moved":[81,65,81,74],"nights":3,"seed":7,"src":{"arrival":[20,13,21,9],"award":[13,8,14,3],"liquid":[6,7,4,5],"mini":[15,13,7,15]},"turn_cap":12,"wreaths":[54,41,46,32]}
+  seat 0 RED: ⚘54 (arr 20 + mini 15 + awd 13 + liq 6)  60¢  moved=81  HEIR
+  seat 1 BLUE: ⚘41 (arr 13 + mini 13 + awd 8 + liq 7)  76¢  moved=65
+  seat 2 GOLD: ⚘46 (arr 21 + mini 7 + awd 14 + liq 4)  45¢  moved=81
+  seat 3 MINT: ⚘32 (arr 9 + mini 15 + awd 3 + liq 5)  55¢  moved=74
+PROCESSION_HEIR RED (seed 7, 3 nights)
 ```
 
 Seed-sweep secondaries (single-run records, same command, seed swapped):
 
 ```
-PROCESSION_MATCH … "seed":1  → wreaths=[60,70,39,39]  heir BLUE  board_firsts=[0,3,0,0]
+PROCESSION_STIRS … "seed":1  → reaper_shortcut + hungry_grave
+PROCESSION_MATCH … "seed":1  → wreaths=[43,63,37,46]  heir BLUE  board_firsts=[0,2,0,1]
 PROCESSION_HEIR BLUE (seed 1, 3 nights)
-PROCESSION_MATCH … "seed":11 → wreaths=[61,53,37,46]  heir RED   board_firsts=[0,1,0,2]
-PROCESSION_HEIR RED (seed 11, 3 nights)
+PROCESSION_STIRS … "seed":11 → procession_road + flood
+PROCESSION_MATCH … "seed":11 → wreaths=[55,60,37,37]  heir BLUE  board_firsts=[0,2,1,0]
+PROCESSION_HEIR BLUE (seed 11, 3 nights)
 ```
 
-THE LETTERS witness MOVED with the shift (it did not die): in BOTH sweep
-seeds GOLD (seat 2) publicly accepts the LETTERS OF ADMINISTRATION on night 2
-(`"letters":[false,false,true,false]`) — seed 11's GOLD sits at 15 wreaths
-when the floor catches, and closes at 37. The dignity floor, still announced,
-still working.
+THE LETTERS witness MOVED again (it did not die): in BOTH sweep seeds GOLD
+(seat 2) still publicly accepts the LETTERS OF ADMINISTRATION on one night
+(`"letters":[false,false,true,false]`). The dignity floor, still announced,
+still working — through a landslip, a ghost road, and a flood.
+
+### 4-ES. Event coverage matrix (all exit 0, zero script errors)
+
+`--stir=major[,minor]` forces the draw for probes (never on the frozen
+receipts — those use the natural draw). Verified this freeze:
+
+| Probe | Events | Result |
+|---|---|---|
+| `--seed=7 --nights=1 --stir=bone_bridge,flood` | bridge chain + fork filter | exit 0, HEIR GOLD |
+| `--seed=7 --nights=1 --stir=reaper_shortcut,hungry_grave` | carve chain + retype | exit 0, HEIR GOLD |
+| `--seed=7 --nights=1 --stir=procession_road,hearse_moves` | ghost road + cart relocation | exit 0, HEIR GOLD |
+| `--seed=7 --nights=1 --stir=landslip,wake` | redirect + toast/séance overlay | exit 0, HEIR GOLD |
+| `--seed=7 --nights=3 --stir=bone_bridge,hearse_moves` | mutation persistence across night resets | exit 0, HEIR MINT |
+
+All four majors + all five minors exercised; single-night beats (minor r3,
+major r5) covered by the probes, multi-night beat (major at night-2 open) by
+the canonical + sweeps. THE DRIVE re-fits its projection when the node count
+grows (board_minimap `_refit_if_grown` — the id-76 out-of-bounds die found
+and killed this freeze).
 
 ### 4-old. The DR-era record text (historical)
 
@@ -199,11 +228,18 @@ never repeating interlude 1's pick — bots pick from the EVENT stream, a human
 doormat draws nothing (pure input). Settlements land AFTER the night record
 prints, so each PROCESSION_NIGHT line stays the board-night's own score.
 
-## 5. THE SINGLE-NIGHT RECEIPT (BD, frozen — `--nights=1`)
+## 5. THE SINGLE-NIGHT RECEIPT (BD, frozen — `--nights=1`; SURVIVED ES)
 
 ```
 godot --headless --path . -- --procession --seed=7 --turncap=12 --nights=1 --autoplay=bots
 ```
+
+**ES note (tenth watch):** this record survived THE ESTATE STIRS
+byte-identical — seed 7's crow court convened unpassed and the landslip
+fired at the top of the closing round without touching a walk. The run now
+prints three extra lines before/among these
+(`PROCESSION_STIRS major=landslip minor=crow_court`, fires at rounds 3 and
+5); the NIGHT/MATCH/HEIR lines below are unchanged.
 
 frozen result (BD — the roll-phase pre-draw + bot bets re-decided the night;
 the DR single-night [19,10,19,7] HEIR-RED-on-tiebreak record died with honor):
@@ -239,6 +275,7 @@ PROCESSION_HEIR GOLD (seed 7, 1 nights)
 | EVENT | `_event_rng` | seed×22695477+1 | séance slots, box draws, bot shop/item policy, minigame draw + minisim, award draws + visible tie-breaks, house-awakens |
 | VOICE | `_voice_rng` | seed×134775813+5 | Executor line picks incl. LETTERS readings (presentation — pool edits can't shift the tally) |
 | DRAMA | `_drama_prng` | seed×2246822519+3266489917 | interim lines, epitaphs (presentation, human-visible paths only) |
+| STIRS | `_stirs_rng` | seed×747796405+2891336453 | THE ESTATE STIRS: the per-game major+minor draw, then per-event site picks (hungry-grave stone 1 randi · hearse pad 1 · wake route+offset 2 · crow route+offset 2 · majors 0) |
 
 Humans draw NOTHING at a crossroads, an item prompt, or the cart (pure input),
 so a mixed table diverges from the soak only through their choices, as designed.
@@ -249,6 +286,15 @@ fires at ROLL-PHASE START (same one-randi draw, earlier slot), and each BOT
 seat places one weighted bet per cycle (`_bot_bet_target`, one randf). Human
 bets are pure input (the book control itself NEVER draws); the reveal, the
 laurel wisp, the ribbing line, and the album record are presentation.
+
+**ES addendum (doc 28 §4):** THE ESTATE STIRS draws live ONLY on the STIRS
+stream (proof in the §4 witness: night 1 stayed byte-identical to BD). The
+WAKE's landing overlay grants a séance spin — an EVENT draw at a NEW site,
+so a wake that gets landed on re-decides later EVENT consumers (sanctioned;
+part of the event's teeth). Bot fork choices keep the fixed ROLL draw shape
+(1 randf + optional 1 randi); the stirs-road preference (`_pref_pick`) is
+draw-free, and preview/aim/walk all share it so the heatmap cannot lie.
+Humans still draw NOTHING (fork prompts, wake toast, crow strike included).
 
 ## 7. SCREENSHOTS (windowed capture)
 

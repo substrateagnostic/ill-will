@@ -1257,6 +1257,7 @@ func _dress_bog() -> void:
 		# seated in the bypass channel's deep (t≈0.55 along the claim line)
 		var mid := BYPASS_A.lerp(BYPASS_B, 0.55)
 		var ribs := MeshyProp.instance(BONE_BRIDGE, 3.4)
+		ribs.name = "BoneBridgeRibs"   # the Stirs rise ceremony finds it by name
 		add_child(ribs)
 		# sunk to TIP depth — only the rib crowns break the surface, bones in
 		# the bog, never an arch silhouette (a dormant thing must not read as
@@ -1307,3 +1308,8 @@ func build_collision() -> void:
 	body.add_child(shape)
 	add_child(body)
 	body.position = Vector3((EXT_X.x + EXT_X.y) * 0.5, 0.0, (EXT_Z.x + EXT_Z.y) * 0.5)
+
+## THE ESTATE STIRS reaches for the dormant ribs at rise time (null on a
+## fresh checkout without the asset — the graph mutation fires regardless).
+func bone_bridge() -> Node3D:
+	return get_node_or_null("BoneBridgeRibs")

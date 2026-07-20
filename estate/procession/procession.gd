@@ -19,6 +19,9 @@ extends Node3D
 ##            minigame pick/minisim, award draws + tie-breaks, house-awakens.
 ##   VOICE/DRAMA — _voice_rng/_drama_prng: Executor line picks + board-drama
 ##            flourishes. Presentation only; can never shift the tally.
+##   STIRS  — _stirs_rng: THE ESTATE STIRS draws (event pools + their site
+##            picks, doc 28 §4). Its own stream so the estate's hand can
+##            never shift a séance, an item, or a roll — and vice versa.
 ##
 ## P2 (this lane): the roll is THE LAST BREATH meter — SEQUENTIAL, one seat at
 ## a time in wreath-standings order LEADER FIRST (doc 28 §8 law 1), d8 base,
@@ -160,6 +163,12 @@ var _roll_rng := RandomNumberGenerator.new()     # ROLL: band deals, bot aim, bo
 var _event_rng := RandomNumberGenerator.new()    # EVENT: séance, items, minigame pick, house
 var _voice_rng := RandomNumberGenerator.new()    # VOICE: Executor line picks (presentation)
 var _drama_prng := RandomNumberGenerator.new()   # DRAMA: interim lines + epitaph pick (presentation)
+var _stirs_rng := RandomNumberGenerator.new()    # STIRS: the estate's own hand (doc 28 §4)
+
+# ---- THE ESTATE STIRS (doc 28 §4) ----
+var stirs := ProcessionStirs.new()   # this game's drawn events + live minor state
+var _stir_force_major := ""          # --stir=major[,minor] dev override (probes/stills)
+var _stir_force_minor := ""
 var _epitaphs: Array = []        # per seat: epitaph String a duel winner hung ("" = none)
 var _epitaph_tags := {}          # seat -> Label3D (the persistent gravestone tag riding the pawn)
 var _stakes_ui: VendettaStakes = null   # sealed-stakes overlay (lazy; windowed only)
@@ -319,6 +328,9 @@ func _boot(config: Dictionary) -> void:
 	_event_rng.seed = seed_value * 22695477 + 1
 	_voice_rng.seed = seed_value * 134775813 + 5
 	_drama_prng.seed = seed_value * 2246822519 + 3266489917
+	# STIRS — its own named stream (doc 28 §15): the estate's own hand. No
+	# stirs draw can shift a séance, an item, or a roll — and vice versa.
+	_stirs_rng.seed = seed_value * 747796405 + 2891336453
 	roster = config.get("roster", []) if config.has("roster") else _default_roster()
 	if _longnames:
 		_apply_longnames()   # W9: stress the text surfaces with worst-case names
@@ -339,6 +351,10 @@ func _boot(config: Dictionary) -> void:
 	print("PROCESSION boot seed=%d board=%s turn_cap=%d nights=%d players=%d autoplay=%s minisim=%s" % [
 		seed_value, String(BoardGraph.BOARD.id), turn_cap, match_nights, roster.size(),
 		str(_autoplay), str(_minisim)])
+	# THE ESTATE STIRS (doc 28 §4): drawn per GAME, announced as omens at the
+	# intro, fired at fixed night beats. The draw is part of the match receipt.
+	stirs.draw(_stirs_rng, _stir_force_major, _stir_force_minor)
+	print("PROCESSION_STIRS major=%s minor=%s" % [stirs.major, stirs.minor])
 	if _parprobe:
 		_parprobe_run()   # dev probe: the legacy Par adapter, alone, then quit
 		return
@@ -412,6 +428,17 @@ func _parse_cli() -> void:
 			_vendettatest = true  # force the board-drama presentation with bot data (see _boot)
 		elif arg == "--longnames":
 			_longnames = true     # W9: force worst-case long names to stress the text surfaces
+		elif arg.begins_with("--stir="):
+			# Dev: force this game's Estate Stirs draw — "--stir=bone_bridge" or
+			# "--stir=landslip,flood" (major[,minor]). Unknown names fall back to
+			# the seeded draw. Frozen receipts use the natural draw.
+			var parts := arg.trim_prefix("--stir=").split(",")
+			for p in parts:
+				var s := String(p).strip_edges()
+				if s in ProcessionStirs.MAJORS:
+					_stir_force_major = s
+				elif s in ProcessionStirs.MINORS:
+					_stir_force_minor = s
 
 func _default_roster() -> Array:
 	var out: Array = []
@@ -1101,7 +1128,9 @@ func _run_night_cycles() -> void:
 	while true:
 		round_num += 1
 		_refresh_hud()
+		await _stir_beat()   # THE ESTATE STIRS — fixed-beat fires (doc 28 §4)
 		await _round()
+		_stir_tick()         # temporary minors burn down at each round's end
 		if _check_win():
 			break
 		# Once THE FINAL BELL has rung the night is closing — the stragglers get
@@ -1118,6 +1147,284 @@ func _run_night_cycles() -> void:
 				await _beat(2.0)
 				_hide_announce()
 			break
+
+# --------------------------------------------------------------------------
+# THE ESTATE STIRS — fixed-beat firing + ceremonies (doc 28 §4). The SIM
+# mutation always applies (headless-identical); only the ceremony is gated.
+# --------------------------------------------------------------------------
+const STIR_COL := Color(0.64, 0.86, 0.72)   # the estate's sickly announce green
+var _flood_fx: Array = []    # shallow-water discs over Garden Row (while flooded)
+var _wake_fx: Array = []     # the mourner crowd (while the wake stands)
+var _crow_fx: Array = []     # the court in session (until the robbery)
+
+## Fixed beats: MINOR at night 1, top of round 3. Single-night probes also
+## take the MAJOR at round 5 (multi-night games fire it at night 2 open).
+func _stir_beat() -> void:
+	if not stirs.minor_fired and night_index == 1 and round_num == 3:
+		await _fire_stir("minor", stirs.minor)
+	if not stirs.major_fired and match_nights == 1 and round_num == 5:
+		await _fire_stir("major", stirs.major)
+
+## Temporary minors burn down at each round's end; their dressing leaves
+## with them.
+func _stir_tick() -> void:
+	if stirs.flood_left > 0:
+		stirs.flood_left -= 1
+		if stirs.flood_left == 0:
+			_clear_stir_fx(_flood_fx)
+	if stirs.wake_left > 0:
+		stirs.wake_left -= 1
+		if stirs.wake_left == 0:
+			_clear_stir_fx(_wake_fx)
+
+func _clear_stir_fx(fx: Array) -> void:
+	for n in fx:
+		if is_instance_valid(n):
+			(n as Node).queue_free()
+	fx.clear()
+
+## Fire one drawn event: sim mutation first (always, deterministically),
+## then the full camera ceremony — or a silent settle under the soak.
+func _fire_stir(kind: String, id: String) -> void:
+	if kind == "minor":
+		stirs.minor_fired = true
+	else:
+		stirs.major_fired = true
+	var info: Dictionary = stirs.apply(id, board, _stirs_rng)
+	print("PROCESSION_STIR_FIRE night=%d round=%d kind=%s id=%s" % [
+		night_index, round_num, kind, id])
+	if _fast or not _drama_visible():
+		_stir_settle(id, info)
+		return
+	await _stir_ceremony(id, info)
+
+## The no-ceremony settle: props land where the mutation says, instantly.
+func _stir_settle(id: String, info: Dictionary) -> void:
+	match id:
+		"bone_bridge":
+			var ribs := board.grounds.bone_bridge() if board.grounds != null else null
+			if ribs != null:
+				ribs.global_position.y = ProcessionGrounds.WATER_Y + 0.55
+		"hearse_moves":
+			if board.cart_prop != null:
+				board.cart_prop.global_position = board.cart_park_pos(int(info.to))
+			if board.cart_lantern != null:
+				board.cart_lantern.global_position = \
+					board.cart_park_pos(int(info.to)) + Vector3(0.6, 0, 0.4)
+
+## The full ceremony: announce card + Executor line + camera to the site +
+## the event's own effect + the whole changed board, read wide.
+func _stir_ceremony(id: String, info: Dictionary) -> void:
+	var site := (info.get("site", Vector3.ZERO) as Vector3)
+	_announce_text("⚱ %s" % ProcessionStirs.title(id), STIR_COL, 6.0)
+	executor.say(Dialog.text("procession.stirs.fire.%s" % id), STIR_COL)
+	board_camera.beacon_hero(site + Vector3(0, 1.0, 0), 0.8)
+	await _beat(1.1)
+	match id:
+		"bone_bridge":
+			await _fx_bone_bridge(info)
+		"reaper_shortcut":
+			await _fx_reaper_shortcut(info)
+		"landslip":
+			await _fx_landslip(info)
+		"procession_road":
+			await _fx_procession_road(info)
+		"flood":
+			await _fx_flood()
+		"hungry_grave":
+			await _fx_stone_pop(info.get("node", -1))
+		"hearse_moves":
+			await _fx_hearse_moves(info)
+		"wake":
+			await _fx_wake(info)
+		"crow_court":
+			await _fx_crow_court(info)
+	await _beat(0.7)
+	board_camera.whole_board(0.9)
+	await _beat(1.4)
+	_hide_announce()
+
+## A freshly-born stone pops from the ground (container scale 0 → 1).
+func _fx_stone_pop(node_id: int, delay := 0.0) -> void:
+	var box := board.stone_container(node_id)
+	if box == null:
+		return
+	box.scale = Vector3(0.001, 0.001, 0.001)
+	var tw := create_tween()
+	if delay > 0.0:
+		tw.tween_interval(delay)
+	tw.tween_property(box, "scale", Vector3.ONE, 0.45) \
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	await tw.finished
+
+## MAJOR 2 — the ribs rise IN PLACE from the bog's deep; the deck stones
+## surface after them. (No rotation at rise time — the dormant piece was
+## already squared onto its claim line, grounds.gd doctrine.)
+func _fx_bone_bridge(info: Dictionary) -> void:
+	var ribs := board.grounds.bone_bridge() if board.grounds != null else null
+	if ribs != null:
+		var tw := create_tween()
+		tw.tween_property(ribs, "global_position:y",
+			ProcessionGrounds.WATER_Y + 0.55, 2.4) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		await tw.finished
+	for k in (info.stones as Array).size():
+		await _fx_stone_pop(int((info.stones as Array)[k]), 0.1)
+
+## MAJOR 1 — the dormant sculpt wakes: he rises, glides to the corridor, the
+## scythe sweeps its arc, and the carve stone surfaces where it fell. He
+## keeps his new post at the cut's edge — watching what he opened.
+func _fx_reaper_shortcut(info: Dictionary) -> void:
+	var site := (info.get("site", Vector3.ZERO) as Vector3)
+	if board.reaper_prop != null:
+		var stand := site + Vector3(2.6, 0, 2.2)
+		var tw := create_tween()
+		tw.tween_property(board.reaper_prop, "global_position:y",
+			board.reaper_prop.global_position.y + 0.7, 0.7) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.tween_property(board.reaper_prop, "global_position",
+			stand + Vector3(0, 0.7, 0), 2.2).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(board.reaper_prop, "global_position:y",
+			stand.y + 0.05, 0.5).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		await tw.finished
+		if board.reaper_scythe != null:
+			var sc := board.reaper_scythe
+			sc.global_position = stand + Vector3(-0.6, 0.4, -0.4)
+			var arc := create_tween()
+			arc.tween_property(sc, "rotation:y", sc.rotation.y + PI * 1.4, 0.55) \
+				.set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+			await arc.finished
+	for k in (info.stones as Array).size():
+		await _fx_stone_pop(int((info.stones as Array)[k]))
+
+## MAJOR 3 — the hillside gives way: boulders tumble the slip band and stay
+## as the slide's debris; the redirect itself is pure graph.
+func _fx_landslip(info: Dictionary) -> void:
+	var from_p := board.space_pos(int(info.from))
+	var to_p := board.space_pos(int(info.to))
+	var rocks: Array = []
+	for k in 6:
+		var r := MeshInstance3D.new()
+		var bm := BoxMesh.new()
+		var s := 0.5 + 0.22 * float(k % 3)
+		bm.size = Vector3(s, s * 0.8, s * 0.9)
+		r.mesh = bm
+		var m := StandardMaterial3D.new()
+		m.albedo_color = Color(0.34, 0.33, 0.36)
+		m.roughness = 0.95
+		r.material_override = m
+		board.add_child(r)
+		var t := (float(k) + 0.5) / 6.0
+		var start := from_p.lerp(to_p, t * 0.4) + Vector3(0, 3.2, 0)
+		r.global_position = start
+		r.rotation = Vector3(0.4 * k, 0.9 * k, 0.2 * k)
+		rocks.append({"n": r, "t": t})
+	var tw := create_tween().set_parallel(true)
+	for rk in rocks:
+		var rest := from_p.lerp(to_p, 0.25 + 0.6 * float(rk.t))
+		rest = ProcessionGrounds.snap(rest, 0.1)
+		tw.tween_property(rk.n, "global_position", rest, 1.1 + 0.4 * float(rk.t)) \
+			.set_trans(Tween.TRANS_BOUNCE).set_ease(Tween.EASE_OUT)
+	await tw.finished
+
+## MAJOR 4 — the ghost road lays itself stone by stone; one pale wisp walks
+## it first, then leaves the living to argue over it.
+func _fx_procession_road(info: Dictionary) -> void:
+	var ids := info.stones as Array
+	var wisp := OmniLight3D.new()
+	wisp.light_color = Color(0.75, 0.87, 1.0)
+	wisp.light_energy = 1.6
+	wisp.omni_range = 6.0
+	wisp.shadow_enabled = false
+	board.add_child(wisp)
+	wisp.global_position = board.space_pos(int(info.entry)) + Vector3(0, 1.6, 0)
+	for k in ids.size():
+		var tw := create_tween()
+		tw.tween_property(wisp, "global_position",
+			board.space_pos(int(ids[k])) + Vector3(0, 1.6, 0), 0.5) \
+			.set_trans(Tween.TRANS_SINE)
+		await _fx_stone_pop(int(ids[k]))
+	var out := create_tween()
+	out.tween_property(wisp, "light_energy", 0.0, 0.8)
+	out.tween_callback(wisp.queue_free)
+
+## MINOR 1 — Garden Row closes: shallow floodwater pools over every garden
+## stone for 2 rounds (fork options drop the road; stones still resolve).
+func _fx_flood() -> void:
+	for n in board.nodes:
+		if String(n.route) != "garden":
+			continue
+		var disc := MeshInstance3D.new()
+		var cm := CylinderMesh.new()
+		cm.top_radius = 1.7
+		cm.bottom_radius = 1.7
+		cm.height = 0.02
+		cm.radial_segments = 24
+		disc.mesh = cm
+		var m := StandardMaterial3D.new()
+		m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		m.albedo_color = Color(0.30, 0.48, 0.62, 0.55)
+		m.metallic = 0.4
+		m.roughness = 0.15
+		m.emission_enabled = true
+		m.emission = Color(0.2, 0.4, 0.55)
+		m.emission_energy_multiplier = 0.3
+		disc.material_override = m
+		board.add_child(disc)
+		disc.global_position = (n.pos as Vector3) + Vector3(0, 0.09, 0)
+		_flood_fx.append(disc)
+	await _beat(1.0)
+
+## MINOR 3 — the hearse treks to its new pad, lantern trailing.
+func _fx_hearse_moves(info: Dictionary) -> void:
+	var park := board.cart_park_pos(int(info.to))
+	if board.cart_prop != null:
+		var mid := (board.cart_prop.global_position + park) * 0.5 + Vector3(0, 0.8, 0)
+		var tw := create_tween()
+		tw.tween_property(board.cart_prop, "global_position", mid, 1.3) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+		tw.tween_property(board.cart_prop, "global_position", park, 1.3) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		await tw.finished
+	if board.cart_lantern != null:
+		board.cart_lantern.global_position = park + Vector3(0.6, 0, 0.4)
+	await _fx_stone_pop(int(info.to))
+
+## MINOR 4 — the mourners crowd their three stones (2 per stone, idling).
+func _fx_wake(info: Dictionary) -> void:
+	for sid in (info.stones as Array):
+		var p := board.space_pos(int(sid))
+		for k in 2:
+			var side := 1.0 if k == 0 else -1.0
+			var m := board.spawn_mourner(p + Vector3(side * 1.3, 0, 0.7 * side), p)
+			if m != null:
+				_wake_fx.append(m)
+	await _beat(1.0)
+
+## MINOR 5 — the court convenes: two perched, one aloft, all patient.
+func _fx_crow_court(info: Dictionary) -> void:
+	var p := board.space_pos(int(info.node))
+	for spec in [{"o": Vector3(0.8, 0.1, 0.5), "fly": false},
+			{"o": Vector3(-0.7, 0.1, -0.4), "fly": false},
+			{"o": Vector3(0.2, 2.2, -0.9), "fly": true}]:
+		var c := board.spawn_crow(p + (spec.o as Vector3), bool(spec.fly))
+		if c != null:
+			_crow_fx.append(c)
+	await _beat(1.0)
+
+## The court adjourns: the murder scatters skyward with its takings.
+func _scatter_crows() -> void:
+	for c in _crow_fx:
+		if not is_instance_valid(c):
+			continue
+		var n := c as Node3D
+		var tw := create_tween()
+		tw.tween_property(n, "global_position",
+			n.global_position + Vector3(_drama_prng.randf_range(-4, 4), 9.0,
+				_drama_prng.randf_range(-4, 4)),
+			1.1).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+		tw.tween_callback(n.queue_free)
+	_crow_fx.clear()
 
 # --------------------------------------------------------------------------
 # NIGHT OPEN — banner, the 3 announced awards, THE LETTERS (doc 28 §7/§8r5)
@@ -1161,6 +1468,10 @@ func _night_open() -> void:
 	_draw_night_awards()
 	await _announce_awards()
 	await _letters_offer()
+	# THE MAJOR fires as night 2 opens (fixed beat): the board is different
+	# from here on, and it stays different for every night that follows.
+	if night_index == 2 and not stirs.major_fired:
+		await _fire_stir("major", stirs.major)
 
 ## Draw 3 of 5 at night start (EVENT stream, without replacement). At most one
 ## SKILL award may be drawn — with BLOODIEST HAND the pool's only skill entry
@@ -1545,6 +1856,22 @@ func _intro() -> void:
 		VerifyCapture.snap("will_clause")
 	await _beat(3.0)
 	_hide_announce()
+	# --- THE OMENS (doc 28 §4): the Executor reads this game's drawn Estate
+	# Stirs — poetic line per event, plain names on the card. Announced at
+	# game start, fired at their beats; nothing hidden decides. ---
+	if not _fast:
+		executor.say(Dialog.text("procession.stirs.omen_intro"), STIR_COL)
+		await _beat(1.6)
+		var omen_lines: Array[String] = []
+		for ev in [stirs.major, stirs.minor]:
+			omen_lines.append("⚱ %s — %s" % [ProcessionStirs.title(ev),
+				Dialog.text("procession.stirs.omen.%s" % ev)])
+		_announce_text(Dialog.text("procession.stirs.omen_header") + "\n\n"
+			+ "\n".join(omen_lines), STIR_COL)
+		if _capture:
+			await _cap_snap("stirs_omens")
+		await _beat(3.2)
+		_hide_announce()
 	executor.clear_banner()
 
 ## Any human tap (A or B) breaks the opening flyover — the director polls this
@@ -1723,6 +2050,7 @@ func _take_turn(seat: int) -> void:
 	if not path.is_empty():
 		if walked > 0:
 			_pay_passthrough_tolls(seat, path)
+			_crow_court_strike(seat, path)
 		# P3: on release, CUT to the landing area — the figurine hops through frame
 		# toward its stone (doc 28 §9: the camera frames the DECISION, not the walk).
 		var land := int(path.back())
@@ -2433,26 +2761,75 @@ func _resolve_walk(seat: int, steps: int) -> Array:
 ## seeded 25% wildcard so four bots never railroad. Humans get the A/B/C
 ## prompt (no rng). Capture poses the prompt once with the bot's data.
 func _choose_branch(seat: int, fork_id: int) -> int:
-	var options: Array = board.branch_options(fork_id)
+	var options := _fork_options(fork_id)
 	var is_human := not bool(roster[seat].bot) and not _is_remote_seat(seat)
 	if is_human and _drama_visible():
-		return await _prompt_branch(seat, options)
+		return await _prompt_branch_mapped(seat, fork_id, options)
 	# bot strategy — ROLL stream, fixed draw shape (1 float + optional 1 int)
-	var pref := _route_pref(seat)
 	var pick := -1
 	if _roll_rng.randf() < 0.25:
 		pick = _roll_rng.randi_range(0, options.size() - 1)
 	else:
-		for k in options.size():
-			if String((options[k] as Dictionary).route) == pref:
-				pick = k
-				break
-		if pick < 0:
-			pick = 0
+		pick = _pref_pick(seat, options)
 	if _capture and not _prompt_demoed:
 		_prompt_demoed = true
 		await _demo_prompt(seat, options)
+	return _branch_index_of(fork_id, options, pick)
+
+## The options a fork offers RIGHT NOW. THE FLOOD (doc 28 §4 minor 1) closes
+## Garden Row: the fork simply stops offering it while the water stands
+## (never below one option).
+func _fork_options(fork_id: int) -> Array:
+	var options: Array = board.branch_options(fork_id)
+	if stirs.flood_left > 0 and options.size() > 1:
+		var open: Array = options.filter(
+			func(o: Dictionary) -> bool: return String(o.route) != "garden")
+		if not open.is_empty():
+			options = open
+	return options
+
+## The seat's NO-RNG pick among fork options (shared by bot strategy sans
+## wildcard, the F29 preview walk, and bot aim — the three must agree or the
+## heatmap lies): the pref road wins, unless a Stirs-born road (bridge,
+## carve, ghost road — never a pref tag) is STRICTLY shorter. The estate's
+## gifts get taken. A flooded-out pref falls to the shortest way home.
+func _pref_pick(seat: int, options: Array) -> int:
+	var pref := _route_pref(seat)
+	var pick := -1
+	var stir_pick := -1
+	for k in options.size():
+		var o := options[k] as Dictionary
+		var tag := String(o.route)
+		if tag == pref and (pick < 0
+				or int(o.left) < int((options[pick] as Dictionary).left)):
+			pick = k
+		elif tag not in ["garden", "hollow", "valley", "common"] \
+				and (stir_pick < 0
+				or int(o.left) < int((options[stir_pick] as Dictionary).left)):
+			stir_pick = k
+	if stir_pick >= 0 and (pick < 0
+			or int((options[stir_pick] as Dictionary).left) < int((options[pick] as Dictionary).left)):
+		pick = stir_pick
+	if pick < 0:
+		pick = 0
+		for k in options.size():
+			if int((options[k] as Dictionary).left) < int((options[pick] as Dictionary).left):
+				pick = k
 	return pick
+
+## Map a pick among (possibly filtered) options back to the node's real
+## next[] index — _resolve_walk steps by that.
+func _branch_index_of(fork_id: int, options: Array, pick: int) -> int:
+	var target := int((options[clampi(pick, 0, options.size() - 1)] as Dictionary).node)
+	var nxt := board.next_of(fork_id)
+	for k in nxt.size():
+		if int(nxt[k]) == target:
+			return k
+	return 0
+
+func _prompt_branch_mapped(seat: int, fork_id: int, options: Array) -> int:
+	var pick := await _prompt_branch(seat, options)
+	return _branch_index_of(fork_id, options, pick)
 
 ## The seat's PREFERRED road by standing (no rng — shared by bot strategy,
 ## the F29 preview walk, and the human prompt's default focus order).
@@ -2501,17 +2878,16 @@ func _demo_prompt(seat: int, options: Array) -> void:
 ## any fork. Pure read — no rng, no await, no mutation.
 func _preview_dest(seat: int, n: int) -> int:
 	var cur := positions[seat]
-	var pref := _route_pref(seat)
 	for _k in n:
 		var nxt := board.next_of(cur)
 		if nxt.is_empty():
 			break
 		var step := int(nxt[0])
 		if nxt.size() > 1:
-			for opt in board.branch_options(cur):
-				if String((opt as Dictionary).route) == pref:
-					step = int((opt as Dictionary).node)
-					break
+			# The same no-rng chooser the bot walk uses — preview, aim and
+			# the real fork must agree or the heatmap lies (doc 28 §15).
+			var options := _fork_options(cur)
+			step = int((options[_pref_pick(seat, options)] as Dictionary).node)
 		cur = step
 	return cur
 
@@ -2539,6 +2915,33 @@ func _pay_passthrough_tolls(seat: int, path: Array) -> void:
 				_flash_line(Dialog.text("procession.narration.ferry_pass") % roster[seat].name,
 					roster[seat].color, seat)
 
+## CROW COURT (doc 28 §4 minor 5): the first pawn to pass or land on the
+## court's stone is robbed of 3 pennies — then the murder scatters, paid.
+## Veil-negatable like any hazard (the item is the insurance it claims).
+func _crow_court_strike(seat: int, path: Array) -> void:
+	if stirs.crow_stone < 0 or stirs.crow_done or not path.has(stirs.crow_stone):
+		return
+	stirs.crow_done = true
+	var stone := stirs.crow_stone
+	stirs.crow_stone = -1
+	if _veil_negates(seat):
+		if not _fast:
+			_flash_line(Dialog.text("procession.items.veil") % roster[seat].name,
+				roster[seat].color, seat)
+			_scatter_crows()
+		return
+	var pay := mini(3, grudge[seat])
+	if pay > 0:
+		grudge[seat] -= pay
+		stats[seat].lost += pay
+		stats[seat].hazards += 1
+		_pop_at(board.space_pos(stone) + Vector3(0, 1.2, 0), seat, -pay,
+			roster[seat].color)
+	if not _fast:
+		_flash_line(Dialog.text("procession.stirs.crow_strike") % roster[seat].name,
+			roster[seat].color, seat)
+		_scatter_crows()
+
 func _reveal_landing(seat: int) -> void:
 	var idx := positions[seat]
 	# The affected player's badge rides the lower-third for this landing's line.
@@ -2565,6 +2968,19 @@ func _reveal_landing(seat: int) -> void:
 			Spaces.CROSSROADS: executor.say(Executor.pick(Executor.CROSSROADS_LAND, _voice_rng, [name]), col)
 			Spaces.VENDETTA: await _resolve_vendetta(seat, name, col)
 			_: executor.say(Executor.pick(Executor.BLANK, _voice_rng, [name]), col)
+	# THE WAKE (doc 28 §4 minor 4), layered over the stone's own resolve:
+	# landing among the mourners costs a toast (−2) but pays a wreath rumor —
+	# a séance-style spin. Not a hazard: no veil, no hazard stat.
+	if stirs.wake_left > 0 and stirs.wake_stones.has(idx) \
+			and not _arrived_this_round.has(seat):
+		var toast := mini(2, grudge[seat])
+		if toast > 0:
+			grudge[seat] -= toast
+			stats[seat].lost += toast
+			_pop_grudge(seat, -toast)
+		if not _fast:
+			_flash_line(Dialog.text("procession.stirs.wake_toast") % name, col, seat)
+		await _resolve_seance(seat, name, col)
 	_refresh_hud()
 	_push_net()
 	if _capture:
