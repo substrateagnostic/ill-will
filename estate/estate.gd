@@ -543,6 +543,14 @@ func _enter_procession() -> void:
 	banner.visible = false
 	phase_panel.visible = false
 	$UI/TopBar.visible = false
+	# G3 photobomb law, applied to the one launch that never had it: the hub
+	# AND the estate's copy of the world hide while the procession runs its
+	# own — two identical worlds in one space z-fight and the match "plays in
+	# the background" (Alex's catch, first live PLAY on the new forecourt).
+	$Grounds.visible = false
+	$Grounds.process_mode = Node.PROCESS_MODE_DISABLED
+	$GraffitiWall.visible = false
+	$Plinths.visible = false
 	_fill_empty_seats_with_bots()
 	PlayerInput.save_setup()
 	var proc: Node = load("res://estate/procession/procession.tscn").instantiate()
@@ -561,6 +569,10 @@ func _enter_procession() -> void:
 		_net_mirror_id = ""
 		if is_instance_valid(proc):
 			proc.queue_free()
+		$Grounds.visible = true
+		$Grounds.process_mode = Node.PROCESS_MODE_INHERIT
+		$GraffitiWall.visible = true
+		$Plinths.visible = true
 		cam.current = true
 		_enter_title(), CONNECT_ONE_SHOT)
 	# P3: the PLAY-panel dials feed the real match config (deed_goal retired
@@ -1428,7 +1440,8 @@ const STROLL_SPOTS := [
 	{"name": "THE FAMILY ALBUM", "pos": Vector3(-6.6, 0, 2.2), "r": 2.4, "act": "album"},
 	# P3: the walk-up ready-up — stand at the gate, press A, the match begins
 	# (live only once the seats are settled; in the lobby it opens the panel).
-	{"name": "THE LYCHGATE", "pos": Vector3(0.0, 0, -8.4), "r": 2.6, "act": "procession"},
+	# G3: the zone stands at the REAL lychgate arch now (hub-local -13z).
+	{"name": "THE LYCHGATE", "pos": Vector3(0.0, 0, -13.0), "r": 2.8, "act": "procession"},
 ]
 var _strolling := false
 
@@ -1472,7 +1485,8 @@ func _poll_stroll() -> void:
 		if PlayerInput.is_bot(i) or NetSession.is_seat_remote(i) or i >= walkers.size() or not is_instance_valid(walkers[i]):
 			continue
 		for spot in STROLL_SPOTS:
-			var d: float = walkers[i].global_position.distance_to(spot.pos)
+			# G3: spot positions are hub-local; walkers live in world space
+			var d: float = walkers[i].global_position.distance_to(hub_off + (spot.pos as Vector3))
 			if d <= float(spot.r):
 				near_spot = spot
 				near_player = i
@@ -1590,7 +1604,8 @@ func _process(delta: float) -> void:
 	# G3: strollers stay on the estate (the heightmap ends at the rim), and
 	# special stones whisper their names to the lead walker — the A-LOOK
 	# approach-reveal, wired to the real hub at last (pooled, per-frame safe).
-	if not walkers.is_empty():
+	# Parked entirely while a module owns the screen (the hub is hidden).
+	if phase != Phase.GAME and not walkers.is_empty():
 		for w in walkers:
 			if not is_instance_valid(w):
 				continue
