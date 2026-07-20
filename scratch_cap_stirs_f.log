@@ -1,0 +1,294 @@
+Godot Engine v4.6.2.stable.official.71f334935 - https://godotengine.org
+Vulkan 1.4.303 - Forward+ - Using Device #0: NVIDIA - NVIDIA GeForce RTX 4050 Laptop GPU
+
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:531)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _mount_world (res://estate/estate.gd:182)
+       [5] _ready (res://estate/estate.gd:192)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:533)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _mount_world (res://estate/estate.gd:182)
+       [5] _ready (res://estate/estate.gd:192)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:531)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _mount_world (res://estate/estate.gd:182)
+       [5] _ready (res://estate/estate.gd:192)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:531)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _mount_world (res://estate/estate.gd:182)
+       [5] _ready (res://estate/estate.gd:192)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:531)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _mount_world (res://estate/estate.gd:182)
+       [5] _ready (res://estate/estate.gd:192)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:535)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _mount_world (res://estate/estate.gd:182)
+       [5] _ready (res://estate/estate.gd:192)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:535)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _mount_world (res://estate/estate.gd:182)
+       [5] _ready (res://estate/estate.gd:192)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _causeway (res://estate/procession/grounds.gd:626)
+       [2] _build_path (res://estate/procession/grounds.gd:537)
+       [3] build_all (res://estate/procession/grounds.gd:379)
+       [4] build (res://estate/procession/board_graph.gd:554)
+       [5] _mount_world (res://estate/estate.gd:182)
+       [6] _ready (res://estate/estate.gd:192)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _causeway (res://estate/procession/grounds.gd:626)
+       [2] _build_path (res://estate/procession/grounds.gd:537)
+       [3] build_all (res://estate/procession/grounds.gd:379)
+       [4] build (res://estate/procession/board_graph.gd:554)
+       [5] _mount_world (res://estate/estate.gd:182)
+       [6] _ready (res://estate/estate.gd:192)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _causeway (res://estate/procession/grounds.gd:626)
+       [2] _build_path (res://estate/procession/grounds.gd:537)
+       [3] build_all (res://estate/procession/grounds.gd:379)
+       [4] build (res://estate/procession/board_graph.gd:554)
+       [5] _mount_world (res://estate/estate.gd:182)
+       [6] _ready (res://estate/estate.gd:192)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _causeway (res://estate/procession/grounds.gd:626)
+       [2] _build_path (res://estate/procession/grounds.gd:537)
+       [3] build_all (res://estate/procession/grounds.gd:379)
+       [4] build (res://estate/procession/board_graph.gd:554)
+       [5] _mount_world (res://estate/estate.gd:182)
+       [6] _ready (res://estate/estate.gd:192)
+AMBIENT_RIGGED groundskeeper <- res://assets/models/meshy/generated/npc_groundskeeper_idle.glb
+AMBIENT_RIGGED mourner <- ["res://assets/models/meshy/generated/npc_mourner_elderly_idle.glb"]
+AMBIENT_RIGGED mourner <- ["res://assets/models/meshy/generated/npc_mourner_hooded_bow.glb", "res://assets/models/meshy/generated/npc_mourner_hooded_idle.glb"]
+PROCESSION_BOOT swapped main scene -> res://estate/procession/procession.tscn
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:531)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _build_world (res://estate/procession/procession.gd:536)
+       [5] _boot (res://estate/procession/procession.gd:343)
+       [6] _autostart (res://estate/procession/procession.gd:298)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:533)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _build_world (res://estate/procession/procession.gd:536)
+       [5] _boot (res://estate/procession/procession.gd:343)
+       [6] _autostart (res://estate/procession/procession.gd:298)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:531)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _build_world (res://estate/procession/procession.gd:536)
+       [5] _boot (res://estate/procession/procession.gd:343)
+       [6] _autostart (res://estate/procession/procession.gd:298)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:531)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _build_world (res://estate/procession/procession.gd:536)
+       [5] _boot (res://estate/procession/procession.gd:343)
+       [6] _autostart (res://estate/procession/procession.gd:298)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:531)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _build_world (res://estate/procession/procession.gd:536)
+       [5] _boot (res://estate/procession/procession.gd:343)
+       [6] _autostart (res://estate/procession/procession.gd:298)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:535)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _build_world (res://estate/procession/procession.gd:536)
+       [5] _boot (res://estate/procession/procession.gd:343)
+       [6] _autostart (res://estate/procession/procession.gd:298)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _build_path (res://estate/procession/grounds.gd:535)
+       [2] build_all (res://estate/procession/grounds.gd:379)
+       [3] build (res://estate/procession/board_graph.gd:554)
+       [4] _build_world (res://estate/procession/procession.gd:536)
+       [5] _boot (res://estate/procession/procession.gd:343)
+       [6] _autostart (res://estate/procession/procession.gd:298)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _causeway (res://estate/procession/grounds.gd:626)
+       [2] _build_path (res://estate/procession/grounds.gd:537)
+       [3] build_all (res://estate/procession/grounds.gd:379)
+       [4] build (res://estate/procession/board_graph.gd:554)
+       [5] _build_world (res://estate/procession/procession.gd:536)
+       [6] _boot (res://estate/procession/procession.gd:343)
+       [7] _autostart (res://estate/procession/procession.gd:298)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _causeway (res://estate/procession/grounds.gd:626)
+       [2] _build_path (res://estate/procession/grounds.gd:537)
+       [3] build_all (res://estate/procession/grounds.gd:379)
+       [4] build (res://estate/procession/board_graph.gd:554)
+       [5] _build_world (res://estate/procession/procession.gd:536)
+       [6] _boot (res://estate/procession/procession.gd:343)
+       [7] _autostart (res://estate/procession/procession.gd:298)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _causeway (res://estate/procession/grounds.gd:626)
+       [2] _build_path (res://estate/procession/grounds.gd:537)
+       [3] build_all (res://estate/procession/grounds.gd:379)
+       [4] build (res://estate/procession/board_graph.gd:554)
+       [5] _build_world (res://estate/procession/procession.gd:536)
+       [6] _boot (res://estate/procession/procession.gd:343)
+       [7] _autostart (res://estate/procession/procession.gd:298)
+ERROR: Condition "primitive != Mesh::PRIMITIVE_TRIANGLES" is true.
+   at: generate_normals (scene/resources/surface_tool.cpp:1187)
+   GDScript backtrace (most recent call first):
+       [0] _ribbon (res://estate/procession/grounds.gd:572)
+       [1] _causeway (res://estate/procession/grounds.gd:626)
+       [2] _build_path (res://estate/procession/grounds.gd:537)
+       [3] build_all (res://estate/procession/grounds.gd:379)
+       [4] build (res://estate/procession/board_graph.gd:554)
+       [5] _build_world (res://estate/procession/procession.gd:536)
+       [6] _boot (res://estate/procession/procession.gd:343)
+       [7] _autostart (res://estate/procession/procession.gd:298)
+PROCESSION boot seed=7 board=estate_procession turn_cap=5 nights=1 players=4 autoplay=true minisim=true
+PROCESSION_STIRS major=landslip minor=flood
+VERIFY_SNAP res://verify_out/stirs_f/snap_flyover_0243.png
+SHOWCASE board_wide cam=(0.0, 82.0, 92.0)
+VERIFY_SNAP res://verify_out/stirs_f/snap_board_wide_0246.png
+SHOWCASE grave_detail cam=(-16.6875, 2.873231, 23.95538)
+VERIFY_SNAP res://verify_out/stirs_f/snap_grave_detail_0249.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_figurine_pawns_0252.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_lychgate_dressed_0255.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_manor_gate_dressed_0258.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reaper_dormant_0261.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_exec_idle_0299.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_exec_gesture_0344.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_will_clause_0440.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_stirs_omens_0716.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_night_awards_1004.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_crossroads_prompt_1290.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_1490.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reactions_1520.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_1764.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_2072.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_drive_minimap_2245.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_2331.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_roulette_2492.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_overshoulder_heatmap_3194.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_standings_drive_3214.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_3408.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_seance_wheel_3654.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_3811.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_4030.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_figurines_midmatch_4283.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_4361.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_roulette_4520.png
+PROCESSION_STIR_FIRE night=1 round=3 kind=minor id=flood site=(33.1,-2.8)
+STIR_SHOT id=flood pos=(35.1029, 5.432898, -11.25472) look=(33.1029, 0.932898, -2.754722)
+STIR_SNAP id=flood cam=(35.10363, 5.409464, -11.29471)
+VERIFY_SNAP res://verify_out/stirs_f/snap_stir_flood_5346.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_stir_flood_wide_5426.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_5653.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_5864.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_6166.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_6440.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_roulette_6597.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_7664.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_7880.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_8219.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_8472.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_roulette_8630.png
+PROCESSION_STIR_FIRE night=1 round=5 kind=major id=landslip from=19 to=34 site=(-18.4,-4.3)
+STIR_SHOT id=landslip pos=(-9.280447, 4.582412, -8.478914) look=(-18.3605, 1.082412, -4.334672)
+STIR_SNAP id=landslip cam=(-9.234973, 4.592352, -8.506042)
+VERIFY_SNAP res://verify_out/stirs_f/snap_stir_landslip_9525.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_stir_landslip_wide_9605.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_9816.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_10087.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_10356.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_final_bell_10470.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_reveal_10725.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_will_reading_11306.png
+VERIFY_SNAP res://verify_out/stirs_f/snap_peddler_cart_11899.png
+PROCESSION_NIGHT {"arrivals":[2],"awards":[["longest",0],["generous",-1],["bloodiest",0]],"bell_round":5,"grudge":[25,21,25,19],"letters":[false,false,false,false],"night":1,"rounds":5,"wreaths":[18,6,12,9]}
+VERIFY_SNAP res://verify_out/stirs_f/snap_reading_totals_12594.png
+EULOGY 01 | Sit. The reading is brief, the verdicts briefer, and the estate has never once been kept waiting.
+EULOGY 02 | BLUE gave 2 pennies to the ground and the tolls. Generosity is only ever involuntary here.
+VERIFY_SNAP res://verify_out/stirs_f/snap_eulogy_13028.png
+EULOGY 03 | GOLD hoarded 25 pennies and spent it on nothing. The manor respects the discipline; the will does not reward it.
+EULOGY 04 | We commend RED, who bought 20 wreaths with other people's grief and now owns a house that owns them back.
+EULOGY 05 | And MINT — who took from no one all night, and wept at two graves besides — was in the estate's estimation, almost kind.  How unusual.
+EULOGY 06 | The estate adds, for the record: GOLD has been paid in blood money before. The ledger rounds up.
+EULOGY 07 | The estate closes the ledger. Nothing is forgiven, but everything is filed, which the estate finds nearly the same.

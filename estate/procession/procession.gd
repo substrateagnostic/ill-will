@@ -1232,6 +1232,11 @@ func _stir_settle(id: String, info: Dictionary) -> void:
 ## (First cut kept the card up through the effect; the Reaper carved his
 ## corridor entirely behind it. The card announces; it does not direct.)
 func _stir_ceremony(id: String, info: Dictionary) -> void:
+	# THE CAMERA LAW, ceremony edition: the director's camera may be DRIVEN
+	# yet not CURRENT (a teardown's clear_current promotion is a lottery —
+	# H-road rendered the gate camera while ours stood posed at the site).
+	# Assert it before every stir, same doctrine as _assert_module_camera.
+	cam.current = true
 	_reveal_seat = -1
 	_apply_reveal_badge(-1)   # the estate speaks — no seat wears this line
 	_announce_text("⚱ %s" % ProcessionStirs.title(id), STIR_COL, 30.0)
@@ -1264,8 +1269,12 @@ func _stir_ceremony(id: String, info: Dictionary) -> void:
 			await _fx_crow_court(info)
 	await _beat(0.7)
 	if _capture:
-		print("STIR_SNAP id=%s cam=%s" % [id, str(board_camera.cam.global_position)])
+		print("STIR_SNAP id=%s cam=%s current=%s" % [id,
+			str(board_camera.cam.global_position), str(board_camera.cam.current)])
 		await _cap_snap("stir_%s" % id)
+	# The wide is the CHANGED BOARD, whole and wordless — the line already
+	# read over the site shot; nothing sits on the estate now.
+	executor.clear_banner()
 	board_camera.whole_board(0.9)
 	await _beat(1.4)
 	if _capture:
@@ -1300,7 +1309,12 @@ func _stir_shot(id: String, info: Dictionary) -> Dictionary:
 			return {"pos": to_p + Vector3(3.0, 4.5, -9.0),
 				"look": to_p + Vector3(0, 1.0, 0)}
 		"hungry_grave", "crow_court":
-			return board.reveal_shot(int(info.node), board.type_at(int(info.node)))
+			# The gameplay reveal arm faces the rise (fine with a pawn on the
+			# stone; empty ceremony stones lose to the manor skyline) — the
+			# stir version obeys the north-side law like the set pieces.
+			var np := board.space_pos(int(info.node))
+			return {"pos": np + Vector3(1.6, 4.0, -6.5),
+				"look": np + Vector3(0, 0.7, 0)}
 		"wake":
 			return board.reveal_shot(int((info.stones as Array)[1]), Spaces.BLANK)
 		"flood":
