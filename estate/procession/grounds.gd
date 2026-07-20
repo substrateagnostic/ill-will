@@ -47,7 +47,7 @@ const SEGS := {
 			Vector2(28.75, 1.75), Vector2(28.75, -2.75), Vector2(33.25, -2.75),
 			Vector2(37.75, -2.75), Vector2(37.75, -7.25), Vector2(37.75, -11.75),
 			Vector2(37.75, -15.9),
-			Vector2(29, -14.2), Vector2(19, -12.4), Vector2(9, -13.4), Vector2(0, -16)],
+			Vector2(30, -16.2), Vector2(21, -15.0), Vector2(12, -12.8), Vector2(0, -16)],
 		"surf": [[0, 4, "gravel"], [4, 15, "grass"], [15, 20, "gravel"]],
 	},
 	"garden_b": {
@@ -184,6 +184,11 @@ static func height(x: float, z: float) -> float:
 	var ldx := (x + 30.0) / 8.0
 	var ldz := (z + 30.0) / 7.0
 	h += -2.3 * exp(-(ldx * ldx + ldz * ldz))
+	# the bypass channel — the deep the dormant bone bridge lies in (and will
+	# someday span): guaranteed open water along the doc-33 claim line
+	var cdx := (x + 39.0) / 5.0
+	var cdz := (z + 13.0) / 6.5
+	h += -1.5 * exp(-(cdx * cdx + cdz * cdz))
 	# the brook cut
 	var bd := _brook_dist(x, z)
 	h += -1.15 * exp(-(bd * bd) / (2.1 * 2.1))
@@ -465,12 +470,12 @@ func _build_water() -> void:
 	mi.name = "Water"
 	mi.mesh = st.commit()
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.024, 0.043, 0.050)
-	mat.metallic = 0.35
-	mat.roughness = 0.14
+	mat.albedo_color = Color(0.034, 0.060, 0.068)
+	mat.metallic = 0.45
+	mat.roughness = 0.10
 	mat.emission_enabled = true
-	mat.emission = Color(0.05, 0.11, 0.12)
-	mat.emission_energy_multiplier = 0.42
+	mat.emission = Color(0.055, 0.125, 0.135)
+	mat.emission_energy_multiplier = 0.85
 	mi.material_override = mat
 	add_child(mi)
 
@@ -1249,21 +1254,27 @@ func _dress_bog() -> void:
 	# the bone bridge lies SUNKEN on its claim line, top ribs breaking the
 	# water — the estate's most visible omen. It rises in the Stirs lane.
 	if ResourceLoader.exists(BONE_BRIDGE):
-		var mid := (BYPASS_A + BYPASS_B) * 0.5
+		# seated in the bypass channel's deep (t≈0.55 along the claim line)
+		var mid := BYPASS_A.lerp(BYPASS_B, 0.55)
 		var ribs := MeshyProp.instance(BONE_BRIDGE, 3.4)
 		add_child(ribs)
-		# sunk so only the arch's crest breaks the surface (~0.8u of rib) —
-		# an omen you can read from the causeway, never a thing you walk
-		ribs.global_position = Vector3(mid.x, WATER_Y - 2.55, mid.y)
-		ribs.look_at(Vector3(BYPASS_B.x, WATER_Y - 2.55, BYPASS_B.y), Vector3.UP)
+		# sunk to TIP depth — only the rib crowns break the surface, bones in
+		# the bog, never an arch silhouette (a dormant thing must not read as
+		# a bridge from ANY review angle until its night comes)
+		ribs.global_position = Vector3(mid.x, WATER_Y - 2.95, mid.y)
+		ribs.look_at(Vector3(BYPASS_B.x, WATER_Y - 2.95, BYPASS_B.y), Vector3.UP)
+		# the GLB's span runs across its local Z — square it onto the claim
+		# line so the ribs already point bank-to-bank (it RISES IN PLACE when
+		# the Estate Stirs; no rotation at rise time, just the lift + ramps)
+		ribs.rotate_y(PI * 0.5)
 	# THE FORK MEDIAN (producer, live jam 2 — the anti-X read): physical
 	# separation between fork2's arrival and departure strands. Garden side:
 	# a low clipped hedge border; bog side: one more drowned fence run.
 	var low_hedge := _kit_sources(KIT + "hedge_wall_straight.glb", Vector3(0.8, 0.95, 5.4))
 	if not low_hedge.is_empty():
 		var pl3: Array = []
-		for hx: float in [9.0, 14.5, 20.0, 25.5]:
-			var hz := -15.3 - (hx - 9.0) * 0.09
+		for hx: float in [9.0, 14.5, 20.0]:
+			var hz := -15.9 - (hx - 9.0) * 0.12
 			pl3.append(Transform3D(Basis(Vector3.UP, PI * 0.53),
 				snap(Vector3(hx, 0, hz), -0.10)))
 		_kit_multimesh(low_hedge, pl3)
