@@ -62,6 +62,23 @@ tumble real ground_boulder GLBs (BoxMesh placeholder now) · hearse arm
 could aim at cart_park_pos · crow rim-light · flood-water saturation
 check at overview · bridge deck stones vs scaled ribs alignment check.
 
+**⚠ OPEN MYSTERY — the ceremony still that faces the wrong way.** Some
+stir-site captures render a NORTH-facing frame (manor + gate + executor)
+while the debug prints prove board_camera.cam stood at the computed
+NORTH-side pos, look SOUTH at the site, `current=true`, and within
+handheld sway of the shot at snap time (STIR_SHOT/STIR_SNAP lines in
+scratch_cap_stirs_h/i logs; C-hearse + G-reaper matched their prints, H-
+road + I-hungry did not). VerifyCapture.snap reads the real viewport.
+Sequence: print → 3 process_frames → frame_post_draw grab. Suspects
+eliminated: hold()/activate, tween kill, wrong-node cam, cwd. Remaining:
+something flips the current camera inside those ~4 frames, or a second
+camera asserts between rounds only in some runs. Reproduce with
+`--stir=procession_road,hungry_grave` windowed and instrument
+get_viewport().get_camera_3d() AT the grab. The es_hungry_grave.png and
+es-road stills in shots/ are the wrong-way examples; live-play ceremonies
+may show the same cut — check on a real couch before calling it
+capture-only.
+
 **House practice:** receipts at every gate; YOU review stills before
 merging; import pass after class_name/GLB adds then `git checkout --
 '*.import'` (commit NEW .import files); `--` separator before user args

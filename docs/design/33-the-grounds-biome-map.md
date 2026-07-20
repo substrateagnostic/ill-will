@@ -10,7 +10,14 @@ tiling, integrated-GPU envelope), ZERO-ENGLISH, spacing ≥2 stone-widths.*
 claims — every §5b reservation now has its live event (crypt descent still
 waiting on the crypt lane). The bone bridge rises in place; the cart treks
 between its pads; the carve, slip band and ghost-road lane fire on their
-reserved ground.*
+reserved ground. SAME NIGHT: the ROLLING ESTATE + THE LIVING LAWN landed
+(authored swells masked off the water table and forecourt; grass DRIFTS
+with bare dark soil between — never a carpet; bog stays mud; moonlit
+albedo grading on the filler kit; cast-iron fence median). Draw-call
+receipt re-based: w6 forecourt 1510 accepted under the gently-push tilde
+(the lawn's ~60-call cost on the one see-everything framing); all other
+framings ≤1435. Receipts byte-identical through the terrain (station xz
+never moves — only y conforms).*
 
 *STATUS (ninth watch + live evening, 2026-07-19): **G1 + G2 + G3 CORE ALL LANDED** —
 `estate/procession/grounds.gd` + the station snap in `board_graph.generate()`

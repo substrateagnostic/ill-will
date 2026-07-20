@@ -6,6 +6,25 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🌾 MENU #10b — THE DEEP NIGHT (2026-07-20, after you went down): THE
+  LIVING LAWN + THE CEREMONY LIBRARY.** The overnight lane landed the same
+  night: ROLLING ESTATE terrain (authored swells + meadow rise + bog
+  ridge; receipts BYTE-IDENTICAL through the hills — xz never moves) ·
+  living lawn (grass drifts with dark soil between — first pass carpeted
+  the estate, art-directed down; bog stays mud; moonlit albedo grading;
+  fork median wears your CAST-IRON FENCE now) · filler wave 7/7 first-try
+  210cr (balance ≈6925; 33/33 across waves) · all NINE stir ceremonies
+  shot + iterated (the composition laws are in the Corner letter — the
+  short version: stand north, shoot south, assert the camera, light the
+  bones). **Draw-call receipt: w6 forecourt 1510 (the one framing over
+  the ~1500 tilde — accepted under your gently-push clause; all others
+  ≤1435).** Estate hub smoke over the new land: clean, saves untouched.
+  **YOUR EYE:** `estate/procession/shots/gc_living_estate_overview.png`
+  (the money shot), `es_*.png` (all nine ceremonies + omens card).
+  Bridge nit honest: the risen ribs grow 1.8× now but the ceremony still
+  crops them at frame-edge — one --stir re-shoot away if you want it
+  perfect; the leviathan-in-the-corner read has its own charm.
+
 - **⚱ MENU #10 — THE TENTH WATCH (2026-07-20): THE ESTATE STIRS. All nine
   topology events live.** Doc 28 §4 built end-to-end: dedicated STIRS rng
   stream · 1 MAJOR + 1 MINOR drawn per game · Executor reads OMENS at the

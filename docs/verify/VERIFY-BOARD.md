@@ -106,9 +106,9 @@ match only diverges where the landslip rewires night 2's walks:
 
 ```
 PROCESSION_STIRS major=landslip minor=crow_court
-PROCESSION_STIR_FIRE night=1 round=3 kind=minor id=crow_court node=…
+PROCESSION_STIR_FIRE night=1 round=3 kind=minor id=crow_court node=60 site=(-4.7,-37.5)
 PROCESSION_NIGHT {"arrivals":[2],"awards":[["longest",2],["generous",-1],["bloodiest",0]],"bell_round":4,"grudge":[10,25,19,17],"letters":[false,false,false,false],"night":1,"rounds":5,"wreaths":[13,5,15,8]}
-PROCESSION_STIR_FIRE night=2 round=0 kind=major id=landslip from=… to=…
+PROCESSION_STIR_FIRE night=2 round=0 kind=major id=landslip from=19 to=34 site=(-18.4,-4.3)
 PROCESSION_NIGHT {"arrivals":[1,2],"awards":[["generous",0],["uninvited",1],["bloodiest",1]],"bell_round":4,"grudge":[32,49,23,30],"letters":[false,false,false,false],"night":2,"rounds":5,"wreaths":[25,28,24,15]}
 PROCESSION_NIGHT {"arrivals":[0],"awards":[["generous",2],["longest",2],["uninvited",0]],"bell_round":5,"grudge":[60,76,45,55],"letters":[false,false,false,false],"night":3,"rounds":6,"wreaths":[48,34,42,27]}
 PROCESSION_MATCH {"board":"estate_procession","board_firsts":[1,1,1,0],"grudge":[60,76,45,55],"heir":0,"heir_name":"RED","heirs":[0],"mini_wins":[6,2,1,4],"moved":[81,65,81,74],"nights":3,"seed":7,"src":{"arrival":[20,13,21,9],"award":[13,8,14,3],"liquid":[6,7,4,5],"mini":[15,13,7,15]},"turn_cap":12,"wreaths":[54,41,46,32]}
@@ -123,12 +123,20 @@ Seed-sweep secondaries (single-run records, same command, seed swapped):
 
 ```
 PROCESSION_STIRS … "seed":1  → reaper_shortcut + hungry_grave
+  fires: hungry_grave node=13 site=(18.3,-14.2) · reaper_shortcut entry=19 exit=33 stones=[76] site=(-22.0,-3.4)
 PROCESSION_MATCH … "seed":1  → wreaths=[43,63,37,46]  heir BLUE  board_firsts=[0,2,0,1]
 PROCESSION_HEIR BLUE (seed 1, 3 nights)
 PROCESSION_STIRS … "seed":11 → procession_road + flood
+  fires: flood site=(33.1,-2.8) · procession_road entry=63 exit=43 stones=[76,77,78,79] site=(12.1,-21.9)
 PROCESSION_MATCH … "seed":11 → wreaths=[55,60,37,37]  heir BLUE  board_firsts=[0,2,1,0]
 PROCESSION_HEIR BLUE (seed 11, 3 nights)
 ```
+
+The fire lines carry ground truth (entry/exit/stone ids + site) — a
+receipt proves WHERE the estate moved. The whole line set above was
+re-verified ×3 AFTER the rolling-estate terrain + living-lawn scatter
+landed: byte-identical (station xz never moves; only y conforms), the
+strongest positions-proof yet.
 
 THE LETTERS witness MOVED again (it did not die): in BOTH sweep seeds GOLD
 (seat 2) still publicly accepts the LETTERS OF ADMINISTRATION on one night
