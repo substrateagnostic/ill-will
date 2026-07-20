@@ -3020,3 +3020,6 @@ He reads as a groundskeeper who has seen everything. Keep or evict — your call
 **Live-couch note that matters:** this bug was NOT capture-only.
 Every reveal close-up in every played match was silently re-aimed at the gate.
 Tonight is the first time the broadcast layer has been fully honest since the Executor got his body.
+
+**Bonus, found at the door on the way out:** the eulogy host shot — the Executor, tray in glove, the four toys at his feet — had NEVER rendered as designed. The director always kept the camera home; his stolen aim faked it from a distance.
+Tonight it lands. First honest render curated at `shots/eulogy_host.png`. Worth a look.
