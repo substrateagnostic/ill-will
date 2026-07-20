@@ -122,6 +122,23 @@ Balance after ZR ≈ 890 → **recommend topping up to ~2000cr** before G2 so
 the wave runs uninterrupted (pull-immediately doctrine as always). Existing
 heroes (gates, cart, shrine, bridges, NPCs, ~57-item catalog) all reused.
 
+## 5b. SPACE CLAIMS — the moving pieces reserve their ground (producer,
+## live jam 2: place the claims BEFORE G3 so nothing collides later)
+
+Every Estate Stirs piece (doc 28 §4) that will ever occupy ground has its
+space reserved NOW. G3's hub migration and all dressing lanes route around
+these; nothing permanent may be built on a claim.
+
+| Piece | Claim | Dormant state (already placed) |
+|---|---|---|
+| THE BONE BRIDGE (major 2) | bypass line (-43,-5)→(-33,-24.5) across the pond's deep + 2 future bypass stations at its ends | SUNKEN at the line's middle, only the arch crest above water — the visible omen (grounds.gd BYPASS_A/B) |
+| THE REAPER'S SHORTCUT (major 1) | a carve corridor hollow↔valley between (-16,3) and (-24,0), AND the crypt descent at the rise's west flank around (-10,-52) | THE REAPER at his post (-43,-33); the crypt door in the flank |
+| THE CRYPT (fourth route) | underground — surface claim is only its door + a future stair pocket ~6u in front of it | crypt door placed, shut |
+| THE LANDSLIP (major 3) | the hollow↔valley slope band z∈[0,8], x∈[-26,-14] (same corridor family as the shortcut carve) | none — fires as terrain drama |
+| THE PROCESSION ROAD (major 4) | a straight lane fountain court (31,-29) → bog east shore (-14,-18); keep its direct line free of permanent props | none — the ghost road builds itself |
+| THE HEARSE MOVES ON (minor 3) | cart anchor pads: garden CART COURT (33.25,1.75) ✓ · hollow clearing (-13,6) · valley causeway end (-13,-15) | cart at the garden court |
+| Flood / Hungry Grave / Wake / Crow Court (minors) | on-stone events — no ground claim | — |
+
 ## 6. Perf envelope (the "gently push" clause)
 
 Integrated-GPU targets: draw calls < ~1500 via MultiMesh for repeated kit

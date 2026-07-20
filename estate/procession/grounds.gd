@@ -47,7 +47,7 @@ const SEGS := {
 			Vector2(28.75, 1.75), Vector2(28.75, -2.75), Vector2(33.25, -2.75),
 			Vector2(37.75, -2.75), Vector2(37.75, -7.25), Vector2(37.75, -11.75),
 			Vector2(37.75, -15.9),
-			Vector2(29, -16.3), Vector2(19, -15.8), Vector2(9, -16), Vector2(0, -16)],
+			Vector2(29, -14.2), Vector2(19, -12.4), Vector2(9, -13.4), Vector2(0, -16)],
 		"surf": [[0, 4, "gravel"], [4, 15, "grass"], [15, 20, "gravel"]],
 	},
 	"garden_b": {
@@ -68,16 +68,22 @@ const SEGS := {
 		"surf": [[0, 6, "dirt"]],
 	},
 	"valley_a": {
+		# the tail arcs to enter the crossroads from its NORTH face — the
+		# fork's grammar (producer, live jam 2): arrivals from the north,
+		# departures from the south, so the junction never reads as an X
 		"pts": [Vector2(0, 24), Vector2(-12, 22), Vector2(-24, 20),
 			Vector2(-33, 15), Vector2(-38, 7), Vector2(-40, -2),
-			Vector2(-36, -9), Vector2(-24, -14), Vector2(-12, -16), Vector2(0, -16)],
+			Vector2(-36, -9), Vector2(-24, -13.5), Vector2(-11, -14), Vector2(0, -16)],
 		"surf": [[0, 3, "causeway"], [3, 6, "plank"], [6, 9, "causeway"]],
 	},
 	"valley_b": {
+		# the lobe crossing is BOARDWALK — the bone bridge is not a road
+		# piece: it is the dormant Estate Stirs bypass (doc 28 §4 major 2),
+		# sunken in the pond until its night comes
 		"pts": [Vector2(0, -16), Vector2(-12, -19), Vector2(-24, -22),
 			Vector2(-31, -26), Vector2(-30, -33), Vector2(-24, -37),
 			Vector2(-16, -40), Vector2(-8, -42), Vector2(0, -42)],
-		"surf": [[0, 3, "causeway"], [3, 4, "bridge"], [4, 8, "causeway"]],
+		"surf": [[0, 3, "causeway"], [3, 4, "plank"], [4, 8, "causeway"]],
 	},
 	"homestretch": {
 		"pts": [Vector2(0, -42), Vector2(0, -50), Vector2(0, -58)],
@@ -660,10 +666,18 @@ func _boardwalk(tag: String, pts: Array) -> void:
 	_commit_mm(mm, xforms, 0.9)
 	_commit_mm(post_mm, posts, 0.95)
 
-## A bridge span: the BONE BRIDGE hero over the valley's dark arm; a humble
-## stone footbridge over the garden brook. The deck math (path_y) is the
-## truth — the model dresses it.
+## A bridge span: a humble stone footbridge over the garden brook. The deck
+## math (path_y) is the truth — the model dresses it. (The BONE BRIDGE is
+## NOT a road piece — see THE DORMANT BYPASS in _dress_bog.)
 const BONE_BRIDGE := "res://assets/models/meshy/generated/bone_bridge.glb"
+
+## THE BONE BRIDGE's bypass line (doc 28 §4 MAJOR 2, SPACE CLAIM — doc 33
+## §7): when the Estate Stirs, it RISES here and Weeping Valley gains a
+## shortcut across the deep, valley_a's boardwalk to valley_b's south
+## approach, skipping the western horseshoe AND fork2. Until that night it
+## lies SUNKEN, ribs breaking the surface — a visible omen, never a road.
+const BYPASS_A := Vector2(-43.0, -5.0)
+const BYPASS_B := Vector2(-33.0, -24.5)
 
 func _bridge(tag: String, pts: Array) -> void:
 	var a: Vector2 = pts[0].p
@@ -672,13 +686,6 @@ func _bridge(tag: String, pts: Array) -> void:
 	var span := a.distance_to(b)
 	var mid_t: float = pts[pts.size() / 2].t01
 	var deck_mid := path_y(tag, mid_t, mid)
-	if tag == "valley_b" and ResourceLoader.exists(BONE_BRIDGE):
-		var bridge := MeshyProp.instance(BONE_BRIDGE, span * 0.46)
-		add_child(bridge)
-		bridge.global_position = Vector3(mid.x, deck_mid - 1.6, mid.y)
-		var to := Vector3(b.x, deck_mid - 1.6, b.y)
-		bridge.look_at(to, Vector3.UP)
-		return
 	# G2: the forged stone footbridge hero spans the garden brook
 	if tag == "garden_b" and ResourceLoader.exists(KIT + "garden_footbridge.glb"):
 		var fb := MeshyProp.instance(KIT + "garden_footbridge.glb", 1.7)
@@ -1129,8 +1136,12 @@ func _forest_try(srcs: Array, canopy: Array, buckets: Array, woods_segs: Array,
 	var jx := x + 3.0 * (_h01(x, z, 101) - 0.5)
 	var jz := z + 3.0 * (_h01(x, z, 103) - 0.5)
 	var p := Vector2(jx, jz)
+	# the woods stay east of the bog basin — no oaks wading the shore
+	# (producer's bypass sightline from the causeway stays clear)
+	if jx < -19.0:
+		return false
 	var d_woods := _path_dist(p, woods_segs)
-	if d_woods < 3.2 or d_woods > 12.5:
+	if d_woods < 3.2 or d_woods > 11.0:
 		return false
 	if _path_dist(p, ALL_SEGS) < 3.2 or _keep_dist(p) < 3.8:
 		return false
@@ -1234,3 +1245,26 @@ func _dress_bog() -> void:
 	_hero(KIT + "bog_fence_sunken.glb", 1.0, snap(Vector3(-17.5, 0, -24.5), -0.14), -0.8)
 	_hero(KIT + "bog_gallows_tree.glb", 5.0, snap(Vector3(-45.5, 0, 11.0), -0.06), PI * 0.6)
 	_hero(KIT + "valley_watch_ruin.glb", 3.5, snap(Vector3(-49.0, 0, -20.0), -0.15), PI * 0.25)
+	# THE DORMANT BYPASS (doc 28 §4 MAJOR 2, producer ruling live jam 2):
+	# the bone bridge lies SUNKEN on its claim line, top ribs breaking the
+	# water — the estate's most visible omen. It rises in the Stirs lane.
+	if ResourceLoader.exists(BONE_BRIDGE):
+		var mid := (BYPASS_A + BYPASS_B) * 0.5
+		var ribs := MeshyProp.instance(BONE_BRIDGE, 3.4)
+		add_child(ribs)
+		# sunk so only the arch's crest breaks the surface (~0.8u of rib) —
+		# an omen you can read from the causeway, never a thing you walk
+		ribs.global_position = Vector3(mid.x, WATER_Y - 2.55, mid.y)
+		ribs.look_at(Vector3(BYPASS_B.x, WATER_Y - 2.55, BYPASS_B.y), Vector3.UP)
+	# THE FORK MEDIAN (producer, live jam 2 — the anti-X read): physical
+	# separation between fork2's arrival and departure strands. Garden side:
+	# a low clipped hedge border; bog side: one more drowned fence run.
+	var low_hedge := _kit_sources(KIT + "hedge_wall_straight.glb", Vector3(0.8, 0.95, 5.4))
+	if not low_hedge.is_empty():
+		var pl3: Array = []
+		for hx: float in [9.0, 14.5, 20.0, 25.5]:
+			var hz := -15.3 - (hx - 9.0) * 0.09
+			pl3.append(Transform3D(Basis(Vector3.UP, PI * 0.53),
+				snap(Vector3(hx, 0, hz), -0.10)))
+		_kit_multimesh(low_hedge, pl3)
+	_hero(KIT + "bog_fence_sunken.glb", 1.0, snap(Vector3(-15.0, 0, -16.6), -0.12), PI * 0.53)
