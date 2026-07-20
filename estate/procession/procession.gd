@@ -1219,6 +1219,7 @@ func _stir_settle(id: String, info: Dictionary) -> void:
 			var ribs := board.grounds.bone_bridge() if board.grounds != null else null
 			if ribs != null:
 				ribs.global_position.y = ProcessionGrounds.WATER_Y + BRIDGE_RISE_Y
+				ribs.scale *= 1.8
 		"hearse_moves":
 			if board.cart_prop != null:
 				board.cart_prop.global_position = board.cart_park_pos(int(info.to))
@@ -1348,9 +1349,14 @@ func _fx_bone_bridge(info: Dictionary) -> void:
 		Color(0.72, 0.86, 0.80))
 	var ribs := board.grounds.bone_bridge() if board.grounds != null else null
 	if ribs != null:
+		# The bog gives up MORE bone than it swallowed: the ribs grow as
+		# they rise — height-normalized GLB spans ~9u of a 22u claim line;
+		# the risen monument must read like the omen promised.
 		var tw := create_tween()
 		tw.tween_property(ribs, "global_position:y",
 			ProcessionGrounds.WATER_Y + BRIDGE_RISE_Y, 2.4) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		tw.parallel().tween_property(ribs, "scale", ribs.scale * 1.8, 2.4) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		await tw.finished
 	for k in (info.stones as Array).size():

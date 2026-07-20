@@ -117,8 +117,12 @@ func _apply_bone_bridge(board: ProcessionBoardGraph) -> Dictionary:
 	board.register_route("bridge", "THE BONE BRIDGE", Color("d9d2bc"),
 		"THE BOG'S OWN SHORTCUT · IT REMEMBERS BEING WALKED")
 	var ids := board.append_stir_chain(int(ends[0]), int(ends[1]), deck, "bridge")
+	# The SITE is the ribs' own stand (the claim-line mid where the dormant
+	# piece lies) — the ceremony lamp and camera centre on the monument,
+	# not on the abstract graph midpoint beside it.
+	var rib_mid := a.lerp(b, 0.55)
 	return {"event": "bone_bridge", "entry": ends[0], "exit": ends[1],
-		"stones": ids, "site": (pa + pb) * 0.5}
+		"stones": ids, "site": Vector3(rib_mid.x, deck_y, rib_mid.y)}
 
 ## MAJOR 1 — the scythe carves the hollow↔valley passage on its claim
 ## corridor. One carve stone midway. (The crypt descent waits for its lane.)

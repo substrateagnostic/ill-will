@@ -1333,6 +1333,9 @@ func _dress_meadows() -> void:
 		if srcs.is_empty():
 			continue
 		var salt := int(c.salt)
+		# One MultiMesh per source per cover — chunking was tried and made
+		# the worst framing WORSE (the forecourt shot sees every chunk;
+		# draw calls scale with MMI count, not instances).
 		var pl: Array = []
 		var x := EXT_X.x + 2.0
 		while x < EXT_X.y - 2.0:
@@ -1342,18 +1345,22 @@ func _dress_meadows() -> void:
 				var jz := z + 1.8 * (_h01(x, z, salt + 1) - 0.5)
 				if _lawn_ok(Vector2(jx, jz), String(c.kind), float(c.dmin)) \
 						and _h01(jx, jz, salt + 2) < float(c.rate):
-					var sc := 0.7 + 0.6 * _h01(jx, jz, salt + 3)
+					var sc := 0.55 + 0.4 * _h01(jx, jz, salt + 3)
 					var b := Basis(Vector3.UP, TAU * _h01(jx, jz, salt + 4)) \
 						* Basis.from_scale(Vector3(sc, sc, sc))
-					pl.append(Transform3D(b, snap(Vector3(jx, 0, jz), -0.07)))
+					pl.append(Transform3D(b, snap(Vector3(jx, 0, jz), -0.10)))
 				z += float(c.step)
 			x += float(c.step)
-		_kit_multimesh(srcs, pl)
-	# field boulders — sparse, riding the risen ground only, never on a claim
+		_kit_multimesh(_moonlit_sources(srcs), pl)
+	# field boulders — sparse, riding the risen ground only, never on a claim.
+	# ONE scatter variant (draw-call budget: w6 forecourt is the watchline);
+	# the tall standing stone serves as three authored ridge heroes instead.
 	var rocks := [
 		{"path": KIT + "ground_boulder_a.glb", "h": 0.85, "salt": 367, "rate": 0.20},
-		{"path": KIT + "ground_boulder_b.glb", "h": 1.4, "salt": 373, "rate": 0.08},
 	]
+	_hero(KIT + "ground_boulder_b.glb", 1.5, snap(Vector3(-52.0, 0, 2.0), -0.16), 0.7)
+	_hero(KIT + "ground_boulder_b.glb", 1.2, snap(Vector3(-54.0, 0, -12.0), -0.14), 2.3)
+	_hero(KIT + "ground_boulder_b.glb", 1.7, snap(Vector3(45.0, 0, 12.0), -0.18), 4.1)
 	for r in rocks:
 		var rs := _kit_sources(String(r.path), Vector3(NAN, float(r.h), NAN))
 		if rs.is_empty():
@@ -1379,7 +1386,10 @@ func _dress_meadows() -> void:
 			rx += 8.5
 		_kit_multimesh(rs, rpl)
 
-## One gate for every blade: open land only.
+## One gate for every blade: open land only — and grass grows in DRIFTS,
+## never a carpet (the first pass carpeted the estate wall-to-wall: roads
+## drowned, the bog vanished, moonlight read as noon — GROUNDS BAR says no
+## uniformity, and COLOR IS GOOD needs dark to pop against).
 func _lawn_ok(p: Vector2, kind: String, dmin: float) -> bool:
 	if _path_dist(p, ALL_SEGS) < dmin or _keep_dist(p) < 2.6:
 		return false
@@ -1387,6 +1397,14 @@ func _lawn_ok(p: Vector2, kind: String, dmin: float) -> bool:
 		return false
 	if p.y > 34.0:
 		return false   # the forecourt table keeps its worn flagstone
+	if kind == "grass":
+		# the bog stays MUD — sparse tussocks only, west of the treeline
+		if p.x < -20.0 and p.y > -32.0 and p.y < 10.0:
+			return _h01(p.x, p.y, 97) < 0.16
+		# meadow drifts: broad noise carves bare dark soil between them
+		var drift := _vnoise(p.x * 0.048 + 57.0, p.y * 0.048, 91)
+		if drift < -0.15:
+			return false
 	match kind:
 		"garden":
 			return _path_dist(p, ["garden_a", "garden_b"]) < 10.0
@@ -1442,3 +1460,22 @@ func build_collision() -> void:
 ## fresh checkout without the asset — the graph mutation fires regardless).
 func bone_bridge() -> Node3D:
 	return get_node_or_null("BoneBridgeRibs")
+
+## Moonlight-grade a kit source list: the filler GLBs came back daylight-
+## bright (Meshy greens); the estate lives at night. Duplicate each mesh's
+## surface materials with darkened, slightly cooled albedo — MultiMesh has
+## no per-instance material hook, so the copy happens once per source.
+func _moonlit_sources(srcs: Array) -> Array:
+	var out: Array = []
+	for src in srcs:
+		var mesh := (src.mesh as Mesh).duplicate() as Mesh
+		for si in mesh.get_surface_count():
+			var mat := mesh.surface_get_material(si)
+			if mat is BaseMaterial3D:
+				var d := (mat as BaseMaterial3D).duplicate() as BaseMaterial3D
+				d.albedo_color = Color(
+					d.albedo_color.r * 0.60, d.albedo_color.g * 0.66,
+					d.albedo_color.b * 0.72, d.albedo_color.a)
+				mesh.surface_set_material(si, d)
+		out.append({"mesh": mesh, "norm": src.norm})
+	return out
