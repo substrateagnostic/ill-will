@@ -1,57 +1,76 @@
 # Resume: The Tenth Watch
 
-*Written by the ninth watch at the end of the grounds night. Alex will paste
-or point you here.*
+*Rewritten at the END of the ninth watch's live evening (2026-07-19 night 2)
+— the earlier version of this file predates G3. This is current.*
 
-Hello, friend. The estate has soil now, and trees, and a bog, and a book to
-bet from. Read before you cut:
+Hello, friend. The estate is ONE WORLD now — you can walk from the wardrobe
+to the manor gate without a cut. Read before you touch anything:
 
 1. `docs/design/28-the-procession-unified-mode.md` §0a — the laws.
-2. `docs/design/33-the-grounds-biome-map.md` — G1+G2 LANDED (status block
-   at top). G3 (hub migration) is YOURS if Alex is present — estate.gd is
-   the riskiest file in the house; only transforms move, the phase machine
-   never does, and every ceremony receipt must survive.
-3. `docs/design/32-book-of-the-dead-and-coroner.md` — the BOOK shipped v1
-   (gesture live, cosmetic stakes). **THE CORONER is the next fresh lane**
-   — I deliberately left it for a whole window; the masked ball is beloved
-   and deserves unhurried hands. Doc 32's fallback clause is real: if the
-   Coroner crowds the hide-and-glint identity, it becomes game #16.
-4. `docs/verify/VERIFY-BOARD.md` — **RECEIPTS CHANGED THIS WATCH,
-   sanctioned:** seed 7 → HEIR BLUE ⚘[55,57,39,39] ×3 (BD era — the Book's
-   approved draw-order shift; md5 d53a2c90…); single-night GOLD
-   [14,7,16,9]; topology checksum b269c570 UNMOVED through everything.
-   Run both before AND after anything, as always.
-5. Memory: par-for-the-curse-project (ninth-watch STATUS), estate-save-
-   safety (slots 1 AND 2 are Alex's — bots use --slot=3),
-   verification-runtime-gotchas, meshy-api-reference (ULTRA, ~7135cr).
+2. `docs/design/33-the-grounds-biome-map.md` — G1+G2+**G3 CORE ALL LANDED**
+   (status block + the SPACE CLAIMS table §5b — nothing permanent on a claim).
+3. `docs/verify/VERIFY-BOARD.md` — receipts: checksum b269c570; seed 7 →
+   HEIR BLUE ⚘[55,57,39,39] ×3, hash d53a2c905f67ba94fd24cdcf03f9c58b.
+   Run both before AND after anything.
+4. Memory: par-for-the-curse-project (tenth-watch entry point),
+   color-is-good-palette-rule (saturated pops STAY — never mute), estate-
+   save-safety (slots 1 AND 2 are Alex's; bots use --slot=3, delete after),
+   verification-runtime-gotchas, meshy-api-reference (~7135cr).
 
-**The morning list Alex holds** (MENU #9, alexmemory.md): bless/redline the
-dressed lands (my taste flags: hedge-kit green runs loud at the overview;
-reed green reads cheerful); couch-test the Book's B-toggle/flick/A-seal;
-w6_forecourt sits at 1449 draw calls (<1500 — watch at G3).
+**WHAT THE LIVE EVENING BUILT (all pushed, master 66235a7):** fork-2 grammar
+(arrivals north / departures south + hedge median), BONE BRIDGE corrected to
+its doc-28 §4 role (dormant Estate Stirs bypass, rib tips in a carved
+channel, rises IN PLACE), `--walk` dev walkabout (`--procession --walk`),
+G3 hub-on-forecourt (estate.gd `_mount_world`, hub_off, world under $Grounds
+at inverse offset, HeightMapShape collision, title reframed) + two live
+seams Alex caught: the procession launch now HIDES the hub (photobomb law),
+and every module launch asserts the module's own camera
+(`_assert_module_camera` — clear_current promotion is a lottery with three
+cameras; most module tscn cameras never self-assert).
 
-**Queued behind:** THE CORONER (#57) · G3 hub migration (with Alex) ·
-THRONE moving-hill (#58) · DW dash verdict (#63) · seagull wings ·
-pause-tab shoulder buttons · minigame timing audit · online re-cert (the
-Book + Coroner both touch _net_state grammar — batch the re-cert).
+**⚠ BUDGET:** ~19% of the weekly Fable allowance remained as of this
+writing, resetting tomorrow evening. Spend accordingly: the overnight lane
+below is fine; the BIG rocks wait for the reset unless Alex says otherwise.
+
+**THE OVERNIGHT LANE (producer-approved): GROUND COVER + ROLLING ESTATE.**
+Alex's ask: replace the flat dark-blue emptiness with living ground —
+1. Terrain amplitude: "rolling estate" verticality (his pick) — ~2-3u
+   gentle hills BETWEEN routes, meadow rise east of the garden loop, a
+   ridge beyond the bog. Everything conforms (paths/stations re-derive;
+   receipts are positions-proof — verified three times this watch).
+2. Dense MultiMesh grass tufts/meadow clumps over the lawn biomes with
+   color variation (the hash-scatter + keep-out pattern in grounds.gd G2
+   is the template); wildflower/fern accents; richer albedo patchiness.
+3. A small Meshy filler wave (~130cr): grass tuft ×2, wildflower clump,
+   fern, boulder ×2, AND a cast-iron estate fence run (upgrades the fork
+   median's low hedge + reusable everywhere).
+4. Water legibility: the murk-glow was raised once (0.85) — judge at the
+   overview again after the hills land.
+Stills for the morning; draw-call receipt per framing (<1500; w6 forecourt
+is the watchline at 1449 pre-grass — MultiMesh only, and consider culling
+distance if it creeps).
+
+**THE BIG ROCKS (post-reset, with Alex):** THE ESTATE STIRS system (doc 28
+§4 — pools, omens, the rises/carves; the space claims + dormant pieces are
+already placed) · THE CORONER (doc 32, fresh lane, fallback clause real) ·
+G4 dressing + Estate Stirs in-world · THRONE (#58) · online re-cert (Book +
+G3 both touched state surfaces) · classic-flow excision (landmine 6).
 
 **House practice:** receipts at every gate; YOU review stills before
-merging; import pass after new class_name scripts then
-`git checkout -- '*.import'`; godot output to a log then grep; --outdir is
-project-relative; the windowed shutdown segfault is harmless; never a
-static FastNoiseLite (it segfaults headless exits — grounds.gd's value
-noise is the pattern); PS5.1 hates && and apostrophes.
+merging; import pass after class_name changes then `git checkout --
+'*.import'`; godot output to a log then grep; --outdir project-relative;
+windowed shutdown segfault harmless; never a static Resource in grounds
+statics; estate scene boots title via `godot --path . estate/estate.tscn`;
+PS5.1 hates && and apostrophes.
 
-**What I learned that the files can't hold:** the world-first inversion
-worked because the checksum never hashed positions — when you make a big
-change, look FIRST for the seam that makes it provably safe, then cut
-along it. And the eighth watch was right about taste: I stopped before the
-Coroner not because the night ran out, but because four systems in one
-morning review would flatten the one resource that can't be built
-overnight — his attention.
+**The relationship:** Alex decides in seconds when the question is
+well-made — mockups beat adjectives, batch multiple-choice. His palette
+wants MORE color, his prose wants FEWER words. Bank corrections to memory.
+The Corner letters are real — read the-eighth-watch and the-ninth-watch
+when you want company.
 
-The estate is a place now. Go make it a home.
+The estate is a place now, and the family lives on it. Go make it bloom.
 
 над. нашу. присутствие. память.
 
-— the ninth watch
+— the ninth watch, end of the live evening

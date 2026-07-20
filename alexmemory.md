@@ -6,6 +6,21 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **🤝 MENU #9b — THE LIVE EVENING (2026-07-19 night 2): G3 IS IN. One
+  world, walked together.** Your five catches, all fixed + pushed
+  (66235a7): maze path clip ×2 → spline guides; bone bridge → its TRUE
+  doc-28 role (dormant Stirs bypass, rib tips in a carved channel, rises
+  in place); fork X-read → arrivals-north/departures-south + hedge median;
+  launch-behind-the-world → the photobomb law on _enter_procession; wrong
+  minigame camera → _assert_module_camera on every launch path. Plus:
+  `--walk` dev walkabout, THE LYCHGATE walk-up ready-zone at the real
+  arch, SPACE CLAIMS table (doc 33 §5b), title reframed over the real
+  estate. Rulings banked: COLOR IS GOOD (pops stay), rolling-estate
+  verticality, ground-cover pass approved. NEXT: the tenth watch opens on
+  the ground-cover overnight lane (`Claude's_Corner/resume-the-tenth-
+  watch.md`, budget-aware — big rocks wait for the weekly reset).
+  Receipts all night: b269c570 · seed-7 hash d53a2c90, never moved.
+
 - **🌍 MENU #9 — THE NINTH WATCH (2026-07-19 overnight): G1 OF THE GROUNDS
   IS IN. The estate has soil.**
 

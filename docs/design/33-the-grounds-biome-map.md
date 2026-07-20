@@ -6,7 +6,7 @@ stations THROUGH it. One continuous terrain for hub and board — carefully.
 Laws in force: GROUNDS BAR (near-AAA path craft, no flat ground, no visible
 tiling, integrated-GPU envelope), ZERO-ENGLISH, spacing ≥2 stone-widths.*
 
-*STATUS (ninth watch, 2026-07-19 overnight): **G1 + G2 BOTH LANDED** —
+*STATUS (ninth watch + live evening, 2026-07-19): **G1 + G2 + G3 CORE ALL LANDED** —
 `estate/procession/grounds.gd` + the station snap in `board_graph.generate()`
 (G1), then the 26-piece Meshy grounds kit (26/26 first-try, 780cr) dressing
 all three lands (G2): living hedge maze, true forest, grown bog, garden
