@@ -1,0 +1,50 @@
+{
+    "generated_at":  "2026-07-20T17:14:58.6715914-05:00",
+    "experiment":  "executor idle candidate wave (S-curve fix: calmer presets on the same rig)",
+    "rig_task_id":  "019f8197-3d96-7bd2-8f4d-263976f080b2",
+    "rig_reused":  false,
+    "rig_credits":  5,
+    "candidates":  [
+                       {
+                           "action_id":  243,
+                           "name":  "Idle 3",
+                           "task_id":  "019f8198-19cf-7bfa-889a-351d123cee0d",
+                           "status":  "SUCCEEDED",
+                           "glb":  "assets/models/meshy/executor_butler_idle_c243.glb",
+                           "credits":  3
+                       },
+                       {
+                           "action_id":  245,
+                           "name":  "Idle 5",
+                           "task_id":  "019f8198-1d06-72d9-ba3a-b9c83a965bfc",
+                           "status":  "SUCCEEDED",
+                           "glb":  "assets/models/meshy/executor_butler_idle_c245.glb",
+                           "credits":  3
+                       },
+                       {
+                           "action_id":  249,
+                           "name":  "Idle 9",
+                           "task_id":  "019f8198-1ea6-7bfb-8352-c213e82598f9",
+                           "status":  "SUCCEEDED",
+                           "glb":  "assets/models/meshy/executor_butler_idle_c249.glb",
+                           "credits":  3
+                       },
+                       {
+                           "action_id":  253,
+                           "name":  "Idle 13",
+                           "task_id":  "019f8198-2076-7627-8906-ba9724dd4150",
+                           "status":  "SUCCEEDED",
+                           "glb":  "assets/models/meshy/executor_butler_idle_c253.glb",
+                           "credits":  3
+                       },
+                       {
+                           "action_id":  47,
+                           "name":  "Listening Gesture",
+                           "task_id":  "019f8198-223f-7bfc-960a-f6ba41786d6b",
+                           "status":  "SUCCEEDED",
+                           "glb":  "assets/models/meshy/executor_butler_idle_c47.glb",
+                           "credits":  3
+                       }
+                   ],
+    "total_credits":  20
+}

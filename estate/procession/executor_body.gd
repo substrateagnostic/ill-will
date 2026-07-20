@@ -32,6 +32,12 @@ const EXECUTOR_GLB := "res://assets/models/meshy/executor_butler.glb"
 # Rigged exports must NOT be AABB-sized (mesh AABB reads ~1/100) — native
 # height comes from the rig request (tools/meshy_rig_trial_report.json).
 const EXECUTOR_GLB_RIGGED := "res://assets/models/meshy/executor_butler_idle.glb"
+## ELEVENTH-WATCH VERDICT (verify_out/exec_lineup receipt): the S-curve on the
+## couch is the preset Idle ANIMATION (action_id 0) — a hip-swagger that reads
+## as scoliosis through auto-rig weights on the long coat. The generation and
+## even the bind pose stand straight. Benched until a calmer action lands
+## (re-animation reuses the saved rig_task_id, ~3cr — meshy_rig_trial_report).
+const USE_RIGGED := false
 const RIGGED_NATIVE_HEIGHT := 1.9
 const FIGURE_HEIGHT := 2.55
 # The GLB's modelled front may not be +Z; nudge this (radians) if he faces away.
@@ -73,7 +79,7 @@ func _ready() -> void:
 	_pivot = Node3D.new()
 	_pivot.name = "Pivot"
 	add_child(_pivot)
-	_rigged = ResourceLoader.exists(EXECUTOR_GLB_RIGGED)
+	_rigged = USE_RIGGED and ResourceLoader.exists(EXECUTOR_GLB_RIGGED)
 	if _rigged:
 		_figure = MeshyProp.instance_rigged(EXECUTOR_GLB_RIGGED,
 				RIGGED_NATIVE_HEIGHT, FIGURE_HEIGHT, rad_to_deg(FIGURE_YAW_OFFSET))

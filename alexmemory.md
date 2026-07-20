@@ -3023,3 +3023,14 @@ Tonight is the first time the broadcast layer has been fully honest since the Ex
 
 **Bonus, found at the door on the way out:** the eulogy host shot — the Executor, tray in glove, the four toys at his feet — had NEVER rendered as designed. The director always kept the camera home; his stolen aim faked it from a distance.
 Tonight it lands. First honest render curated at `shots/eulogy_host.png`. Worth a look.
+
+**THE SCOLIOSIS VERDICT (your question, answered with a lineup):**
+`shots/exec_lineup_gen_vs_rig.png` — left to right: the generation, the rig at rest, the rig playing its preset Idle.
+The generation stands straight. The rig at rest stands straight. The CLIP swaggers his hips into the S.
+Not the gen. Not the rig. The animation.
+So the rigged idle is benched (`USE_RIGGED=false`, executor_body.gd) — he ships static + puppet breath, spine straight, verified in-world at his gate.
+Then I auditioned five calmer catalog clips on a fresh rig (the old rig task had purged; 20cr, 5/5 first-try — the zero-retry streak holds at 38/38).
+ALL FIVE fail the same way — `shots/exec_idle_audition_fail.png` — any preset that lifts the right hand drives the TRAY through his face.
+The tray is modeled into his glove. No retargeted clip can respect a held prop. That is the whole disease.
+The real path (G4 lane, ~25cr): regenerate him WITHOUT the tray, rig that, pick a calm clip, attach the tray to a hand bone as a separate prop.
+The failed candidates are parked at `verify_out/exec_candidates/` if you ever want to watch him vamp like Dracula. It is very funny.

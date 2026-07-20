@@ -51,7 +51,13 @@ review + small fixes only; the big rocks below want the fresh week.
 - **G4 dressing + Estate Stirs in-world drama** (the scythe REALLY carving
   a hedge, landslip terrain deformation, rigged reaper swing — the
   presentation fantasy layer; v1 ceremonies are serviceable, the marquee
-  moments deserve heroes).
+  moments deserve heroes). INCLUDES the rigged-Executor path: the
+  eleventh-watch audition (20cr receipt, meshy_exec_idle_wave_report)
+  proved every preset clip drives the modeled-in-hand TRAY through his
+  face — regen the butler TRAY-LESS, rig that, pick a calm clip, attach
+  the tray to a hand bone (BoneAttachment3D). Until then he ships static
+  + puppet breath (USE_RIGGED=false in executor_body.gd) — straight-spined,
+  verified. Failed candidates parked at verify_out/exec_candidates/.
 - **THRONE** (#58) · **online re-cert** (Book + G3 + ES all touched state
   surfaces; net snapshot does NOT yet mirror stirs mutations to guests —
   known, doc it before any online session) · classic-flow excision
