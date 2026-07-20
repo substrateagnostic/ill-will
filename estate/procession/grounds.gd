@@ -192,6 +192,25 @@ static func height(x: float, z: float) -> float:
 	# the brook cut
 	var bd := _brook_dist(x, z)
 	h += -1.15 * exp(-(bd * bd) / (2.1 * 2.1))
+	# THE ROLLING ESTATE (tenth watch, producer pick): broad meadow swells
+	# between the routes. Masked hard off the water table (basin/lobe/channel
+	# keep their levels, the brook keeps its cut) and off the forecourt table
+	# (the hub's furniture was surveyed against flat ground). Paths conform —
+	# stations re-derive their y from here; xz never moves, so no receipt can.
+	var swell := 1.05 + 0.95 * _vnoise(x * 0.021 + 91.0, z * 0.021, 71)
+	var wet := exp(-(bdx * bdx + bdz * bdz)) + exp(-(ldx * ldx + ldz * ldz)) \
+		+ exp(-(cdx * cdx + cdz * cdz))
+	swell *= clampf(1.0 - 1.6 * wet, 0.0, 1.0) * _ss((bd - 2.2) / 3.2) \
+		* (1.0 - _ss((z - 26.0) / 8.0))
+	h += swell
+	# the authored swells: a meadow rise east of the garden loop, a long low
+	# ridge beyond the bog — the estate rolls toward its dark edges
+	var mdx := (x - 45.0) / 10.0
+	var mdz := (z - 6.0) / 16.0
+	h += 2.2 * exp(-(mdx * mdx + mdz * mdz))
+	var rdx := (x + 53.0) / 6.5
+	var rdz := (z + 6.0) / 18.0
+	h += 2.6 * exp(-(rdx * rdx + rdz * rdz))
 	# the parterre level — hedges want tended ground (blend, never a slab)
 	var flat := _maze_mask(x, z)
 	h = lerpf(h, h * 0.30 + 0.25, flat)
@@ -365,6 +384,7 @@ func build_all(keep_out: Array = []) -> void:
 	_dress_garden()
 	_dress_forest()
 	_dress_bog()
+	_dress_meadows()
 
 ## Sculpted heightmesh with per-vertex biome colour — one draw call. Colour
 ## carries the land's identity (mossy lawn, wood loam, bog murk, worn climb);
@@ -1271,15 +1291,124 @@ func _dress_bog() -> void:
 	# THE FORK MEDIAN (producer, live jam 2 — the anti-X read): physical
 	# separation between fork2's arrival and departure strands. Garden side:
 	# a low clipped hedge border; bog side: one more drowned fence run.
-	var low_hedge := _kit_sources(KIT + "hedge_wall_straight.glb", Vector3(0.8, 0.95, 5.4))
-	if not low_hedge.is_empty():
+	# tenth watch: the median wears cast iron now (the filler wave's estate
+	# fence run) — the clipped-hedge stand-in stays as the fresh-checkout
+	# fallback until the GLB exists.
+	var median := _kit_sources(KIT + "estate_iron_fence_run.glb", Vector3(0.4, 1.2, 5.4))
+	var msink := -0.06
+	if median.is_empty():
+		median = _kit_sources(KIT + "hedge_wall_straight.glb", Vector3(0.8, 0.95, 5.4))
+		msink = -0.10
+	if not median.is_empty():
 		var pl3: Array = []
 		for hx: float in [9.0, 14.5, 20.0]:
 			var hz := -15.9 - (hx - 9.0) * 0.12
 			pl3.append(Transform3D(Basis(Vector3.UP, PI * 0.53),
-				snap(Vector3(hx, 0, hz), -0.10)))
-		_kit_multimesh(low_hedge, pl3)
+				snap(Vector3(hx, 0, hz), msink)))
+		_kit_multimesh(median, pl3)
 	_hero(KIT + "bog_fence_sunken.glb", 1.0, snap(Vector3(-15.0, 0, -16.6), -0.12), PI * 0.53)
+
+
+# ---- THE LIVING LAWN (tenth watch — ground cover + the rolling estate) ----
+
+## Dense hash-scattered meadow cover over every open lawn: grass tufts as the
+## base coat everywhere, wildflowers drifting off the garden walks, ferns in
+## the hollow's shade, field boulders riding the new swells. All MultiMesh —
+## the whole living lawn costs ~a dozen draw calls. Keep-outs: path aprons
+## (tighter than trees — grass may hug a road), the maze block, the water,
+## the station keep-outs, and (boulders only) every Estate Stirs claim.
+func _dress_meadows() -> void:
+	var covers := [
+		{"path": KIT + "ground_grass_tuft_a.glb", "h": 0.42, "salt": 311,
+			"rate": 0.85, "step": 2.1, "dmin": 1.6, "kind": "grass"},
+		{"path": KIT + "ground_grass_tuft_b.glb", "h": 0.36, "salt": 331,
+			"rate": 0.80, "step": 2.3, "dmin": 1.6, "kind": "grass"},
+		{"path": KIT + "ground_wildflower_clump.glb", "h": 0.5, "salt": 347,
+			"rate": 0.30, "step": 3.1, "dmin": 2.0, "kind": "garden"},
+		{"path": KIT + "ground_fern.glb", "h": 0.55, "salt": 353,
+			"rate": 0.35, "step": 3.3, "dmin": 2.2, "kind": "hollow"},
+	]
+	for c in covers:
+		var srcs := _kit_sources(String(c.path), Vector3(NAN, float(c.h), NAN))
+		if srcs.is_empty():
+			continue
+		var salt := int(c.salt)
+		var pl: Array = []
+		var x := EXT_X.x + 2.0
+		while x < EXT_X.y - 2.0:
+			var z := EXT_Z.x + 2.0
+			while z < EXT_Z.y - 2.0:
+				var jx := x + 1.8 * (_h01(x, z, salt) - 0.5)
+				var jz := z + 1.8 * (_h01(x, z, salt + 1) - 0.5)
+				if _lawn_ok(Vector2(jx, jz), String(c.kind), float(c.dmin)) \
+						and _h01(jx, jz, salt + 2) < float(c.rate):
+					var sc := 0.7 + 0.6 * _h01(jx, jz, salt + 3)
+					var b := Basis(Vector3.UP, TAU * _h01(jx, jz, salt + 4)) \
+						* Basis.from_scale(Vector3(sc, sc, sc))
+					pl.append(Transform3D(b, snap(Vector3(jx, 0, jz), -0.07)))
+				z += float(c.step)
+			x += float(c.step)
+		_kit_multimesh(srcs, pl)
+	# field boulders — sparse, riding the risen ground only, never on a claim
+	var rocks := [
+		{"path": KIT + "ground_boulder_a.glb", "h": 0.85, "salt": 367, "rate": 0.20},
+		{"path": KIT + "ground_boulder_b.glb", "h": 1.4, "salt": 373, "rate": 0.08},
+	]
+	for r in rocks:
+		var rs := _kit_sources(String(r.path), Vector3(NAN, float(r.h), NAN))
+		if rs.is_empty():
+			continue
+		var rsalt := int(r.salt)
+		var rpl: Array = []
+		var rx := EXT_X.x + 4.0
+		while rx < EXT_X.y - 4.0:
+			var rz := EXT_Z.x + 4.0
+			while rz < EXT_Z.y - 4.0:
+				var jx := rx + 3.5 * (_h01(rx, rz, rsalt) - 0.5)
+				var jz := rz + 3.5 * (_h01(rx, rz, rsalt + 1) - 0.5)
+				var p := Vector2(jx, jz)
+				if height(jx, jz) > 1.35 and _path_dist(p, ALL_SEGS) > 4.5 \
+						and _keep_dist(p) > 4.5 and _claim_dist(p) > 4.5 \
+						and _maze_mask(jx, jz) < 0.05 and jz < 30.0 \
+						and _h01(jx, jz, rsalt + 2) < float(r.rate):
+					var sc := 0.75 + 0.7 * _h01(jx, jz, rsalt + 3)
+					var b := Basis(Vector3.UP, TAU * _h01(jx, jz, rsalt + 4)) \
+						* Basis.from_scale(Vector3(sc, sc, sc))
+					rpl.append(Transform3D(b, snap(Vector3(jx, 0, jz), -0.14)))
+				rz += 8.5
+			rx += 8.5
+		_kit_multimesh(rs, rpl)
+
+## One gate for every blade: open land only.
+func _lawn_ok(p: Vector2, kind: String, dmin: float) -> bool:
+	if _path_dist(p, ALL_SEGS) < dmin or _keep_dist(p) < 2.6:
+		return false
+	if height(p.x, p.y) < WATER_Y + 0.25 or _maze_mask(p.x, p.y) > 0.1:
+		return false
+	if p.y > 34.0:
+		return false   # the forecourt table keeps its worn flagstone
+	match kind:
+		"garden":
+			return _path_dist(p, ["garden_a", "garden_b"]) < 10.0
+		"hollow":
+			return p.x > -19.0 and _path_dist(p, ["hollow_a", "hollow_b"]) < 8.0
+	return true
+
+## Distance to the nearest Estate Stirs ground claim (doc 33 §5b) — the
+## boulder pass keeps off them; grass may grow anywhere (a ghost road
+## breaking through meadow is the point).
+func _claim_dist(p: Vector2) -> float:
+	# the procession-road lane (a segment) + the point claims
+	var a := Vector2(31.0, -29.0)
+	var b := Vector2(-14.0, -18.0)
+	var ab := b - a
+	var t := clampf((p - a).dot(ab) / ab.length_squared(), 0.0, 1.0)
+	var best := p.distance_to(a + ab * t)
+	for q: Vector2 in [Vector2(-16.0, 3.0), Vector2(-24.0, 0.0),
+			Vector2(-13.0, 6.0), Vector2(-13.0, -15.0), Vector2(-20.0, 4.0),
+			Vector2(-10.0, -52.0)]:
+		best = minf(best, p.distance_to(q))
+	return best
 
 # --------------------------------------------------------------------------
 # G3 — THE PHYSICS FLOOR (estate hub only). The walkabout's CharacterBody

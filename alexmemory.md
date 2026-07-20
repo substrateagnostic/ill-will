@@ -6,6 +6,26 @@ section is always current. Skim top-down; nothing below the fold is urgent.*
 
 ## NEEDS YOU (current)
 
+- **⚱ MENU #10 — THE TENTH WATCH (2026-07-20): THE ESTATE STIRS. All nine
+  topology events live.** Doc 28 §4 built end-to-end: dedicated STIRS rng
+  stream · 1 MAJOR + 1 MINOR drawn per game · Executor reads OMENS at the
+  intro · minor fires night 1 round 3, major at night-2 open · majors
+  permanently rewire the live graph (bridge chain, carve, redirect, ghost
+  road), minors burn down or strike once. Bots take a Stirs road when it's
+  strictly shorter; preview/aim/real-walk share one chooser so the heatmap
+  can't lie. Crypt DEFERRED per your ruling. **RECEIPTS (ES era):**
+  b269c570 unmoved · seed 7 → HEIR RED ⚘[54,41,46,32], md5 da76f7c9 ×3 ·
+  night 1 BYTE-IDENTICAL to BD (stream-separation proven on the receipt) ·
+  single-night record SURVIVED byte-identical · all 9 events force-fired
+  exit 0 (`--stir=` matrix in VERIFY-BOARD §4-ES).
+  **YOUR EYE, WHEN YOU CAN — the new Executor prose** (dialog/dialog.json
+  → procession.stirs; your domain, red-pen freely): omens like "The bog is
+  sewing bones. Expect a crossing." / "The tall gardener is sharpening.
+  Expect a door." / "One stone has not eaten. It will." — and fire lines
+  like "The hill lets go. The woods now end in the valley. File no
+  complaints." / "Commerce, like grief, relocates." Also stills in
+  `estate/procession/shots/stir_*.png` once the capture wave lands.
+
 - **🤝 MENU #9b — THE LIVE EVENING (2026-07-19 night 2): G3 IS IN. One
   world, walked together.** Your five catches, all fixed + pushed
   (66235a7): maze path clip ×2 → spline guides; bone bridge → its TRUE

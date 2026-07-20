@@ -1191,9 +1191,23 @@ func _fire_stir(kind: String, id: String) -> void:
 	else:
 		stirs.major_fired = true
 	var info: Dictionary = stirs.apply(id, board, _stirs_rng)
-	print("PROCESSION_STIR_FIRE night=%d round=%d kind=%s id=%s" % [
-		night_index, round_num, kind, id])
-	if _fast or not _drama_visible():
+	# The fire line carries the event's ground truth — entry/exit/stone ids
+	# and the site — so a receipt can prove WHERE the estate moved, not just
+	# that it did. Fixed key order (deterministic).
+	var extras := ""
+	for k in ["entry", "exit", "from", "to", "node"]:
+		if info.has(k):
+			extras += " %s=%s" % [k, str(info[k])]
+	if info.has("stones"):
+		extras += " stones=%s" % JSON.stringify(info.stones)
+	if info.has("site"):
+		var sv := info.site as Vector3
+		extras += " site=(%.1f,%.1f)" % [sv.x, sv.z]
+	print("PROCESSION_STIR_FIRE night=%d round=%d kind=%s id=%s%s" % [
+		night_index, round_num, kind, id, extras])
+	# Ceremony for anyone watching: a live table, or a windowed capture posing
+	# the verification stills with bot data. The soak settles silently.
+	if _fast or not (_drama_visible() or _capture):
 		_stir_settle(id, info)
 		return
 	await _stir_ceremony(id, info)
@@ -1204,7 +1218,7 @@ func _stir_settle(id: String, info: Dictionary) -> void:
 		"bone_bridge":
 			var ribs := board.grounds.bone_bridge() if board.grounds != null else null
 			if ribs != null:
-				ribs.global_position.y = ProcessionGrounds.WATER_Y + 0.55
+				ribs.global_position.y = ProcessionGrounds.WATER_Y + BRIDGE_RISE_Y
 		"hearse_moves":
 			if board.cart_prop != null:
 				board.cart_prop.global_position = board.cart_park_pos(int(info.to))
@@ -1212,14 +1226,23 @@ func _stir_settle(id: String, info: Dictionary) -> void:
 				board.cart_lantern.global_position = \
 					board.cart_park_pos(int(info.to)) + Vector3(0.6, 0, 0.4)
 
-## The full ceremony: announce card + Executor line + camera to the site +
-## the event's own effect + the whole changed board, read wide.
+## The full ceremony: the announce card reads over the site shot, then GETS
+## OUT OF THE WAY — the effect plays on a clean frame with only the
+## Executor's line standing, then the whole changed board reads wide.
+## (First cut kept the card up through the effect; the Reaper carved his
+## corridor entirely behind it. The card announces; it does not direct.)
 func _stir_ceremony(id: String, info: Dictionary) -> void:
-	var site := (info.get("site", Vector3.ZERO) as Vector3)
-	_announce_text("⚱ %s" % ProcessionStirs.title(id), STIR_COL, 6.0)
+	_reveal_seat = -1
+	_apply_reveal_badge(-1)   # the estate speaks — no seat wears this line
+	_announce_text("⚱ %s" % ProcessionStirs.title(id), STIR_COL, 30.0)
 	executor.say(Dialog.text("procession.stirs.fire.%s" % id), STIR_COL)
-	board_camera.beacon_hero(site + Vector3(0, 1.0, 0), 0.8)
-	await _beat(1.1)
+	var shot := _stir_shot(id, info)
+	board_camera.landing_push(shot)
+	if _capture:   # framing debug for the stills lane only — never headless
+		print("STIR_SHOT id=%s pos=%s look=%s" % [id, str(shot.pos), str(shot.look)])
+	await _beat(1.7)
+	_hide_announce()
+	await _beat(0.3)
 	match id:
 		"bone_bridge":
 			await _fx_bone_bridge(info)
@@ -1240,9 +1263,50 @@ func _stir_ceremony(id: String, info: Dictionary) -> void:
 		"crow_court":
 			await _fx_crow_court(info)
 	await _beat(0.7)
+	if _capture:
+		print("STIR_SNAP id=%s cam=%s" % [id, str(board_camera.cam.global_position)])
+		await _cap_snap("stir_%s" % id)
 	board_camera.whole_board(0.9)
 	await _beat(1.4)
-	_hide_announce()
+	if _capture:
+		await _cap_snap("stir_%s_wide" % id)
+
+## The site framing per event — set pieces get a SIDE-ON shot (never down
+## the line: a risen arch swallows an on-axis camera), stone events reuse
+## the type-aware reveal vocabulary.
+func _stir_shot(id: String, info: Dictionary) -> Dictionary:
+	var site := (info.get("site", Vector3.ZERO) as Vector3)
+	match id:
+		"bone_bridge", "reaper_shortcut", "landslip", "procession_road":
+			var a := board.space_pos(int(info.get("entry", info.get("from", 0))))
+			var b := board.space_pos(int(info.get("exit", info.get("to", 0))))
+			var perp := (b - a).normalized().cross(Vector3.UP)
+			if perp.length() < 0.01:
+				perp = Vector3.BACK
+			# THE NORTH-SIDE LAW (b2 stills): the estate climbs northward, so
+			# a camera standing south always eats the manor skyline while the
+			# subject sinks under the Executor's band. Stand NORTH of the
+			# site, shoot south into the dark rim — the event pops.
+			if perp.z > 0.0:
+				perp = -perp
+			var dist := 16.0 if id == "bone_bridge" else 10.0
+			var high := 6.0 if id == "bone_bridge" else 4.5
+			return {"pos": site + perp * dist + Vector3(0, high, 0),
+				"look": site + Vector3(0, 1.0, 0)}
+		"hearse_moves":
+			var to_p := board.space_pos(int(info.to))
+			# frame the DESTINATION pad from the north — the cart treks into
+			# frame and parks; the trek's start can stay off-screen.
+			return {"pos": to_p + Vector3(3.0, 4.5, -9.0),
+				"look": to_p + Vector3(0, 1.0, 0)}
+		"hungry_grave", "crow_court":
+			return board.reveal_shot(int(info.node), board.type_at(int(info.node)))
+		"wake":
+			return board.reveal_shot(int((info.stones as Array)[1]), Spaces.BLANK)
+		"flood":
+			return {"pos": site + Vector3(2.0, 5.0, -8.5),
+				"look": site + Vector3(0, 0.5, 0)}
+	return {"pos": site + Vector3(8, 6, 8), "look": site}
 
 ## A freshly-born stone pops from the ground (container scale 0 → 1).
 func _fx_stone_pop(node_id: int, delay := 0.0) -> void:
@@ -1257,6 +1321,11 @@ func _fx_stone_pop(node_id: int, delay := 0.0) -> void:
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	await tw.finished
 
+## The risen ribs keep their legs in the water (base 1.35 under the surface)
+## so the arch reads as a drowned thing standing up, never bones hovering —
+## and the deck stones thread BETWEEN the rib arcs, not on top of them.
+const BRIDGE_RISE_Y := -1.35
+
 ## MAJOR 2 — the ribs rise IN PLACE from the bog's deep; the deck stones
 ## surface after them. (No rotation at rise time — the dormant piece was
 ## already squared onto its claim line, grounds.gd doctrine.)
@@ -1265,7 +1334,7 @@ func _fx_bone_bridge(info: Dictionary) -> void:
 	if ribs != null:
 		var tw := create_tween()
 		tw.tween_property(ribs, "global_position:y",
-			ProcessionGrounds.WATER_Y + 0.55, 2.4) \
+			ProcessionGrounds.WATER_Y + BRIDGE_RISE_Y, 2.4) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 		await tw.finished
 	for k in (info.stones as Array).size():
@@ -1278,6 +1347,13 @@ func _fx_reaper_shortcut(info: Dictionary) -> void:
 	var site := (info.get("site", Vector3.ZERO) as Vector3)
 	if board.reaper_prop != null:
 		var stand := site + Vector3(2.6, 0, 2.2)
+		# his pall travels with him — an unlit reaper is an invisible one
+		var pall := board.get_node_or_null("ReaperPall") as Node3D
+		if pall != null:
+			var ptw := create_tween()
+			ptw.tween_property(pall, "global_position",
+				stand + Vector3(0.6, 3.2, 0.6), 2.6).set_trans(Tween.TRANS_SINE)
+			ptw.parallel().tween_property(pall, "light_energy", 1.15, 2.6)
 		var tw := create_tween()
 		tw.tween_property(board.reaper_prop, "global_position:y",
 			board.reaper_prop.global_position.y + 0.7, 0.7) \

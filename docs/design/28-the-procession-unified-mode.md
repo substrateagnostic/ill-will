@@ -134,6 +134,15 @@ DRIVE gets route-colored ribbons.
 
 ## 4. THE ESTATE STIRS (topology events)
 
+*STATUS (tenth watch, 2026-07-20): **LIVE** — all 4 majors + all 5 minors
+built (`estate/procession/estate_stirs.gd` + graph mutation API). Dedicated
+STIRS rng stream; 1 major + 1 minor drawn per game; omens read at the intro;
+minor fires N1r3, major at night-2 open (single-night: r3/r5). Bots take a
+Stirs road when it is strictly shorter. THE CRYPT deferred to its own lane
+(producer ruling — shortcut v1 carves hollow↔valley only). ES receipts:
+VERIFY-BOARD §4 (checksum b269c570 unmoved; night-1 stream-separation
+witness; single-night record survived byte-identical).*
+
 Drawn per GAME from two pools (producer call, 2026-07-18), **announced by
 the Executor** at game start as omens ("tonight, the bog is hungry"), fired
 at fixed night beats with full camera moments (board_camera money-shot

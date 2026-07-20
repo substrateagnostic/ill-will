@@ -106,9 +106,9 @@ match only diverges where the landslip rewires night 2's walks:
 
 ```
 PROCESSION_STIRS major=landslip minor=crow_court
-PROCESSION_STIR_FIRE night=1 round=3 kind=minor id=crow_court
+PROCESSION_STIR_FIRE night=1 round=3 kind=minor id=crow_court node=…
 PROCESSION_NIGHT {"arrivals":[2],"awards":[["longest",2],["generous",-1],["bloodiest",0]],"bell_round":4,"grudge":[10,25,19,17],"letters":[false,false,false,false],"night":1,"rounds":5,"wreaths":[13,5,15,8]}
-PROCESSION_STIR_FIRE night=2 round=0 kind=major id=landslip
+PROCESSION_STIR_FIRE night=2 round=0 kind=major id=landslip from=… to=…
 PROCESSION_NIGHT {"arrivals":[1,2],"awards":[["generous",0],["uninvited",1],["bloodiest",1]],"bell_round":4,"grudge":[32,49,23,30],"letters":[false,false,false,false],"night":2,"rounds":5,"wreaths":[25,28,24,15]}
 PROCESSION_NIGHT {"arrivals":[0],"awards":[["generous",2],["longest",2],["uninvited",0]],"bell_round":5,"grudge":[60,76,45,55],"letters":[false,false,false,false],"night":3,"rounds":6,"wreaths":[48,34,42,27]}
 PROCESSION_MATCH {"board":"estate_procession","board_firsts":[1,1,1,0],"grudge":[60,76,45,55],"heir":0,"heir_name":"RED","heirs":[0],"mini_wins":[6,2,1,4],"moved":[81,65,81,74],"nights":3,"seed":7,"src":{"arrival":[20,13,21,9],"award":[13,8,14,3],"liquid":[6,7,4,5],"mini":[15,13,7,15]},"turn_cap":12,"wreaths":[54,41,46,32]}

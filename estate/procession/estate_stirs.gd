@@ -82,7 +82,8 @@ func apply(id: String, board: ProcessionBoardGraph,
 			return _apply_procession_road(board)
 		"flood":
 			flood_left = 2
-			return {"event": id}
+			# The ceremony frames the road that closes, not the glade.
+			return {"event": id, "site": board.route_mid_pos("garden")}
 		"hungry_grave":
 			return _apply_hungry_grave(board, rng)
 		"hearse_moves":

@@ -6,6 +6,12 @@ stations THROUGH it. One continuous terrain for hub and board — carefully.
 Laws in force: GROUNDS BAR (near-AAA path craft, no flat ground, no visible
 tiling, integrated-GPU envelope), ZERO-ENGLISH, spacing ≥2 stone-widths.*
 
+*STATUS ADDENDUM (tenth watch, 2026-07-20): THE ESTATE STIRS moved onto its
+claims — every §5b reservation now has its live event (crypt descent still
+waiting on the crypt lane). The bone bridge rises in place; the cart treks
+between its pads; the carve, slip band and ghost-road lane fire on their
+reserved ground.*
+
 *STATUS (ninth watch + live evening, 2026-07-19): **G1 + G2 + G3 CORE ALL LANDED** —
 `estate/procession/grounds.gd` + the station snap in `board_graph.generate()`
 (G1), then the 26-piece Meshy grounds kit (26/26 first-try, 780cr) dressing
