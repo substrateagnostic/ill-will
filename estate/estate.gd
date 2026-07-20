@@ -128,12 +128,59 @@ var _standing_grudge_night := -1
 @onready var plinths: Node3D = $Plinths
 @onready var wall_text: Label3D = $GraffitiWall/Lines
 
+# ---- G3 (doc 33): THE HUB LIVES ON THE FORECOURT. One offset carries the
+# whole hub cluster onto the procession grounds' forecourt table; the WORLD
+# (terrain + the full board) mounts under $Grounds with the inverse offset so
+# the module-launch hide/show law (the photobomb rule, ~line 1245) governs
+# everything with zero new toggle sites. The estate.gd phase machine is
+# untouched — only transforms moved.
+var hub_off := Vector3.ZERO
+var _world_board: ProcessionBoardGraph = null
+
+## The forecourt anchor + the world under the lawn. Called FIRST in _ready —
+## every later spawn is hub-relative.
+func _mount_world() -> void:
+	hub_off = Vector3(0.0, ProcessionGrounds.height(0.0, 51.0) + 0.03, 51.0)
+	# retire the diorama backdrop — the REAL manor stands on its rise now
+	for dead in ["Lawn", "Hill", "HillMound", "Castle", "ManorGate", "Path"]:
+		if $Grounds.has_node(dead):
+			$Grounds.get_node(dead).queue_free()
+	$Grounds.position = hub_off
+	$GraffitiWall.position += hub_off
+	$Plinths.position += hub_off
+	cam.position += hub_off
+	# the diorama's dreamy DOF was tuned for a 12u lawn; the view is an
+	# ESTATE now — push the far blur out so the manor reads through the haze
+	if cam.attributes is CameraAttributesPractical:
+		var at := cam.attributes as CameraAttributesPractical
+		at.dof_blur_far_distance = 55.0
+		at.dof_blur_far_transition = 40.0
+	var world := Node3D.new()
+	world.name = "EstateWorld"
+	$Grounds.add_child(world)
+	world.position = -hub_off   # cancels the hub offset: the world stays put
+	var board := ProcessionBoardGraph.new()
+	world.add_child(board)
+	var ros: Array = []
+	for i in EstateState.players.size():
+		ros.append({"index": i, "name": String(EstateState.players[i].name),
+			"color": EstateState.players[i].color,
+			"char_scene": ["res://assets/models/kaykit/Barbarian.glb",
+				"res://assets/models/kaykit/Knight.glb",
+				"res://assets/models/kaykit/Mage.glb",
+				"res://assets/models/kaykit/Rogue.glb"][i % 4],
+			"device": -1, "bot": true})
+	board.build(ros, EstateState.monuments)
+	board.grounds.build_collision()
+	_world_board = board
+
 func _ready() -> void:
 	# Defense-in-depth vs zombie games (Andrew round 2): modules/podiums live at
 	# the TREE ROOT during play; on ANY path that reboots the estate scene, a
 	# survivor there is a stale game stacking under this boot. Sweep first.
 	PartySetup.free_stray_root_nodes()
 	Engine.time_scale = 1.0
+	_mount_world()   # G3: the forecourt anchor + the estate below the lawn
 	# M2: dress the shared estate-desk panel in the house stationery (ink + gold
 	# hairline) instead of the old grey theme panel, so every desk built into it
 	# matches the title door.
@@ -205,7 +252,7 @@ func _ready() -> void:
 				_enter_lobby()
 				_enter_stroll()
 				if not walkers.is_empty():
-					walkers[0].global_position = Vector3(6.4, 0.1, -4.2)
+					walkers[0].global_position = hub_off + Vector3(6.4, 0.1, -4.2)
 				get_tree().create_timer(1.0).timeout.connect(func():
 					VerifyCapture.snap("stroll_prompt")
 					get_tree().create_timer(0.6).timeout.connect(func():
@@ -294,7 +341,7 @@ func _ready() -> void:
 				_enter_lobby()
 				_enter_stroll()
 				if not walkers.is_empty():
-					walkers[0].global_position = Vector3(-6.6, 0.1, 2.2)
+					walkers[0].global_position = hub_off + Vector3(-6.6, 0.1, 2.2)
 				get_tree().create_timer(1.0).timeout.connect(func():
 					VerifyCapture.snap("album_hotspot")
 					get_tree().create_timer(0.6).timeout.connect(func():
@@ -1232,7 +1279,7 @@ func _spawn_walkers() -> void:
 	for i in EstateState.players.size():
 		var w := EstateWalker.new()
 		$Grounds/Walkers.add_child(w)
-		w.global_position = Vector3(-1.5 + i * 1.0, 0.1, 1.0)
+		w.global_position = hub_off + Vector3(-1.5 + i * 1.0, 0.1, 1.0)
 		w.setup(CHAR_SCENES[i], EstateState.players[i].color, i)
 		Cosmetics.apply_to_character(w, i)
 		walkers.append(w)
@@ -1250,7 +1297,7 @@ func _spawn_executor() -> void:
 	if ResourceLoader.exists(THEATER_GLB):
 		var th := MeshyProp.instance(THEATER_GLB, 3.2, 205.0)
 		$Grounds.add_child(th)
-		th.global_position = Vector3(6.4, 0.0, -5.6)
+		th.global_position = hub_off + Vector3(6.4, 0.0, -5.6)
 		var ttag := Label3D.new()
 		ttag.text = "THE THEATER"
 		ttag.font_size = 44
@@ -1270,7 +1317,7 @@ func _spawn_executor() -> void:
 	else:
 		ex = MeshyProp.instance(EXECUTOR_GLB, 1.9, 25.0)
 	$Grounds.add_child(ex)
-	ex.global_position = Vector3(2.6, 0.0, -3.4)
+	ex.global_position = hub_off + Vector3(2.6, 0.0, -3.4)
 	var tag := Label3D.new()
 	tag.text = "THE EXECUTOR"
 	tag.font_size = 40
@@ -1293,7 +1340,7 @@ func _refresh_album_wall() -> void:
 	_album_wall.slot = EstateState.current_slot
 	$Grounds.add_child(_album_wall)
 	# A quiet corner of the grounds, angled toward the lawn.
-	_album_wall.global_position = Vector3(-6.6, 1.7, 2.2)
+	_album_wall.global_position = hub_off + Vector3(-6.6, 1.7, 2.2)
 	_album_wall.rotation.y = deg_to_rad(22)
 
 ## One Saki-voiced line for the lobby, drawn from the ledger's memory.
@@ -1347,7 +1394,7 @@ func _spawn_toys() -> void:
 		b.linear_damp = 0.6
 		b.angular_damp = 0.4
 		$Grounds/Toys.add_child(b)
-		b.global_position = Vector3(-2.0 + i * 2.0, 0.4, -1.5)
+		b.global_position = hub_off + Vector3(-2.0 + i * 2.0, 0.4, -1.5)
 
 func _unhandled_input(event: InputEvent) -> void:
 	if phase == Phase.GAME or _module != null or _ready_gate_active or _house_rules_active or NetSession.is_client():
@@ -1540,6 +1587,19 @@ func _process(delta: float) -> void:
 		return
 	if NetSession.is_host():
 		_net_host_broadcast(delta)
+	# G3: strollers stay on the estate (the heightmap ends at the rim), and
+	# special stones whisper their names to the lead walker — the A-LOOK
+	# approach-reveal, wired to the real hub at last (pooled, per-frame safe).
+	if not walkers.is_empty():
+		for w in walkers:
+			if not is_instance_valid(w):
+				continue
+			w.global_position.x = clampf(w.global_position.x,
+				ProcessionGrounds.EXT_X.x + 4.0, ProcessionGrounds.EXT_X.y - 4.0)
+			w.global_position.z = clampf(w.global_position.z,
+				ProcessionGrounds.EXT_Z.x + 4.0, ProcessionGrounds.EXT_Z.y - 4.0)
+		if _world_board != null and is_instance_valid(walkers[0]):
+			_world_board.reveal_names_near(walkers[0].global_position)
 	if _ready_gate_active:
 		_poll_ready_gate(delta)
 	if _house_rules_active:
@@ -1850,13 +1910,13 @@ func _prompt_next_tile() -> void:
 		_place_tile(p, spot)
 
 func _place_tile(p: int, pos: Vector3) -> void:
-	if Vector2(pos.x, pos.z + 4.0).length() > 11.0:
+	if Vector2(pos.x - hub_off.x, pos.z - hub_off.z + 4.0).length() > 11.0:
 		Sfx.play("invalid")
 		return
 	_tile_buyers.pop_front()
 	var tile := TrapTile.new()
 	$Grounds.add_child(tile)
-	tile.global_position = Vector3(pos.x, 0.0, pos.z)
+	tile.global_position = Vector3(pos.x, ProcessionGrounds.height(pos.x, pos.z) + 0.02, pos.z)
 	tile.setup(p, EstateState.players[p].color)
 	tile.tripped.connect(_on_tile_tripped)
 	Sfx.play("place")
@@ -3075,7 +3135,7 @@ func _on_net_probe_first_input(seat: int) -> void:
 ## so couch and relay traces share an origin (bot wander history differs).
 func _np_anchor_walker() -> void:
 	if walkers.size() > 1 and is_instance_valid(walkers[1]):
-		walkers[1].global_position = Vector3(0.0, 0.1, -2.5)
+		walkers[1].global_position = hub_off + Vector3(0.0, 0.1, -2.5)
 		walkers[1].velocity = Vector3.ZERO
 		walkers[1].walk_target = Vector3.INF
 		print("NETPROBE anchor seat1 (0.0,0.1,-2.5)")
@@ -3313,14 +3373,14 @@ func _ambient_test_run() -> void:
 	# (wandering bot) walkers south so the flock reads clear of the graveyard.
 	for w in walkers:
 		if is_instance_valid(w):
-			w.global_position = Vector3(-1.5 + w.player_idx * 1.0, 0.1, 1.4)
+			w.global_position = hub_off + Vector3(-1.5 + w.player_idx * 1.0, 0.1, 1.4)
 	if al != null and al.has_method("debug_show_gossip"):
 		al.debug_show_gossip()
 	await get_tree().create_timer(0.4).timeout
 	await _ambient_snap("gallery")
 	# THE GALLERY (silenced) — a walker leans into the flock; heads snap forward
 	if not walkers.is_empty():
-		walkers[0].global_position = Vector3(-7.2, 0.1, -4.6)
+		walkers[0].global_position = hub_off + Vector3(-7.2, 0.1, -4.6)
 	await get_tree().create_timer(0.9).timeout
 	await _ambient_snap("gallery_silent")
 	# THE GROUNDSKEEPER (mid-stare) — a walker jumps at Old Rake's pile; the
@@ -3330,7 +3390,7 @@ func _ambient_test_run() -> void:
 	var al2: Node = get_tree().get_first_node_in_group("ambient_life")
 	for w in walkers:
 		if is_instance_valid(w) and w.player_idx != 0:
-			w.global_position = Vector3(7.5 + w.player_idx * 0.8, 0.1, -1.0)
+			w.global_position = hub_off + Vector3(7.5 + w.player_idx * 0.8, 0.1, -1.0)
 	if not walkers.is_empty():
 		walkers[0].global_position = Vector3(-2.2, 0.1, 2.05)
 		walkers[0].velocity = Vector3(0, 6, 0)

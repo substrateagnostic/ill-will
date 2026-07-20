@@ -1279,3 +1279,31 @@ func _dress_bog() -> void:
 				snap(Vector3(hx, 0, hz), -0.10)))
 		_kit_multimesh(low_hedge, pl3)
 	_hero(KIT + "bog_fence_sunken.glb", 1.0, snap(Vector3(-15.0, 0, -16.6), -0.12), PI * 0.53)
+
+# --------------------------------------------------------------------------
+# G3 — THE PHYSICS FLOOR (estate hub only). The walkabout's CharacterBody
+# walkers need ground to stand on; board mode's pawns never touch physics,
+# so only estate.gd calls this. One HeightMapShape sampled at 1u from the
+# SAME height() the stations read — the land the toys play on and the land
+# the family walks are provably the same land.
+# --------------------------------------------------------------------------
+func build_collision() -> void:
+	var w := int(EXT_X.y - EXT_X.x) + 1
+	var d := int(EXT_Z.y - EXT_Z.x) + 1
+	var data := PackedFloat32Array()
+	data.resize(w * d)
+	for iz in d:
+		for ix in w:
+			data[iz * w + ix] = height(EXT_X.x + float(ix), EXT_Z.x + float(iz))
+	var hm := HeightMapShape3D.new()
+	hm.map_width = w
+	hm.map_depth = d
+	hm.map_data = data
+	var shape := CollisionShape3D.new()
+	shape.shape = hm
+	var body := StaticBody3D.new()
+	body.name = "GroundsCollision"
+	body.collision_layer = 1
+	body.add_child(shape)
+	add_child(body)
+	body.position = Vector3((EXT_X.x + EXT_X.y) * 0.5, 0.0, (EXT_Z.x + EXT_Z.y) * 0.5)

@@ -254,11 +254,13 @@ func _compose_title() -> void:
 		if not _title_cam_saved:
 			_title_cam = (cam as Camera3D).transform
 			_title_cam_saved = true
-		# D1: a modest reframe — pulled in and aimed a touch higher so the moonlit
-		# manor gate is the hero behind PLAY (the candy market stall is dressed out
-		# of the title shot in _hide_ground_tags). Transform-only, saved/restored.
-		(cam as Camera3D).global_position = Vector3(0.0, 4.9, 8.4)
-		(cam as Camera3D).look_at(Vector3(0.0, 2.95, -11.8), Vector3.UP)
+		# D1: a modest reframe — pulled in and aimed a touch higher so the manor
+		# is the hero behind PLAY. G3: the hub lives on the forecourt now — the
+		# frame rides the estate's hub offset, looking north over the lychgate at
+		# the REAL grounds falling away to the manor's lit windows.
+		var off: Vector3 = est.hub_off if "hub_off" in est else Vector3.ZERO
+		(cam as Camera3D).global_position = off + Vector3(0.0, 5.4, 9.4)
+		(cam as Camera3D).look_at(off + Vector3(0.0, 1.6, -14.0), Vector3.UP)
 	# --- hide the grounds' dev billboards (THE EXECUTOR / THE THEATER etc.) so
 	# the title reads as a composed shot, not the working grounds ---
 	_hide_ground_tags(est)
