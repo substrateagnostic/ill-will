@@ -1,0 +1,20 @@
+{
+    "generated_at":  "2026-07-20T23:22:52.0549290-05:00",
+    "experiment":  "remesh trial: uniform topology before rig, cure for candy-wrapper waist ballooning",
+    "input_glb":  "assets/models/meshy/generated/executor_butler_v2.glb",
+    "input_task_id_tried":  "019f82ab-8ae7-70b9-8468-fbc47e9a30df",
+    "remesh_input_mode":  "input_task_id",
+    "topology":  "quad",
+    "target_polycount":  30000,
+    "remesh_task_id":  "019f82e7-e100-72ba-b444-33c11afd6df6",
+    "remesh_credits":  5,
+    "remesh_glb":  "assets/models/meshy/generated/executor_butler_v3r.glb",
+    "height_meters":  1.9,
+    "rig_task_id":  "019f82e8-7685-72c7-bce2-ae6f629066ef",
+    "rig_credits":  5,
+    "action_id":  243,
+    "anim_task_id":  "019f82e9-247e-79f8-baf2-14b311f3ba69",
+    "anim_credits":  3,
+    "output_glb":  "assets/models/meshy/generated/executor_butler_v3r_idle_c243.glb",
+    "total_credits":  13
+}
