@@ -33,6 +33,12 @@ The direction (producer-decided):
 
 Below: that ruling made precise (**[LAW]**) or a proposal (**[PROPOSED]**).
 
+*RATIFIED 2026-07-20: every [PROPOSED] clause received the producer's blanket
+yes with director concurrence, EXCEPT §3's budget numbers, amended by the
+director (the forecourt already renders 1513 draws with no PIP — the old
+combined ceiling was stillborn; frame-time is now the binding constraint).
+One footnote added to §1. [PROPOSED] tags below are retained as provenance.*
+
 ## 1. Player-owned time vs director-owned time
 
 **[LAW: the split. PROPOSED: the enumerations.]**
@@ -59,9 +65,11 @@ Enumerated:
   money-shot vocabulary (doc 28 §4).
 - **[LAW]** Vendettas / GRUDGE MATCH — the two-shot duel (doc 24 F14).
 - **[LAW]** FINAL BELL and arrivals — crossing the Manor Gate (doc 28 §8).
-- **[PROPOSED]** the opening flyover/establish, the will-reading eulogy, night
-  awards, the minigame roulette + GET READY. Ceremonies by nature; fold them
-  under the director unless Alex wants any of them player-skippable.
+- **[PROPOSED — ratified]** the opening flyover/establish, the will-reading
+  eulogy, night awards, the minigame roulette + GET READY. Ceremonies by
+  nature; folded under the director. *Footnote (director): these keep the
+  house all-press-A skip (`_all_press_skip`) — director-owned never means
+  unskippable; it means the player's ORBIT yields, not their agency.*
 
 The rule that decides disputes: **if the player could strategize during it, it
 is player-owned. If it is a story the whole table must watch, it is the
@@ -130,10 +138,15 @@ measure it:
 - Scene: **the w6 forecourt framing** — the Manor Gate forecourt, the densest
   single view the board renders.
 - Condition: **PIP live** — the second render active, following a seat.
-- Metrics: **draw calls** and **frame time**, main + PIP combined.
-- Budget: **< 1500 draw calls** combined, within the **integrated-GPU frame
-  budget** (doc 28 §0a grounds bar — 60 fps ≈ 16.6 ms/frame, "gently push the
-  no-real-GPU-needed spec without pushing it").
+- Metrics: **draw calls** and **frame time**, main + PIP measured separately
+  and combined.
+- Budget (AMENDED at ratification, 2026-07-20 — the forecourt's standing
+  record is **1513 draws with no PIP**, so a 1500-combined ceiling was
+  stillborn): **FRAME TIME is the binding constraint** — ≤ 16.6 ms on the
+  iGPU reference with PIP live. Draw calls are the diagnostic, split-capped:
+  main view stays at its standing record (±noise), the PIP adds **≤ 300**.
+  If frame time holds but PIP draws exceed the cap, cull harder anyway — the
+  cap is the canary for a PIP that renders estate it should never see.
 
 If PIP blows the budget on the forecourt, the fixes in priority order: harder
 far cull → lower PIP res → cap the PIP to the acting seat's figurine + one
