@@ -43,6 +43,7 @@ static func instance_rigged(path: String, native_height: float,
 		model.scale = Vector3(s, s, s)
 	wrap.add_child(model)
 	_degloss_rigged_materials(model)
+	_strip_deviant_scale_tracks(model)
 	if animate:
 		var anim: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
 		if anim != null and anim.get_animation_list().size() > 0:
@@ -81,6 +82,54 @@ static func _degloss_rigged_materials(model: Node3D) -> void:
 			fixed.metallic = 0.0
 			fixed.roughness = 0.8
 			mi.set_surface_override_material(s, fixed)
+
+## RIG DISEASE FIX (tools/anim_track_probe.gd audit, night 8): the bind-vs-
+## animating rig_audit stills showed the ANIMATING twin of several rigged
+## NPCs with a ballooned/stretched midsection (and, for
+## npc_mourner_elderly_idle.glb specifically, a cane that bends like rubber)
+## next to a normal-looking bind-pose twin. Hypothesis was a Meshy preset
+## clip carrying bone SCALE tracks that retarget badly onto these stylized
+## bodies. Probed every rigged GLB's AnimationPlayer tracks directly
+## (tools/anim_track_probe.gd): the 10 human-body candidates from the
+## ballooning report carry ZERO scale tracks (POSITION_3D/ROTATION_3D only —
+## that particular hypothesis was wrong for them; their apparent
+## "ballooning" is a separate skin-weight/rotation-arc effect, not scale, and
+## is NOT fixed by this). But npc_mourner_elderly_idle.glb — the ORIGINAL
+## elderly-mourner rig, the one still holding the cane prop — DOES carry one:
+## a single-key TYPE_SCALE_3D track on Skeleton3D:Hips baked to
+## (1.1765, 1.1765, 1.1765). A single key holds that value for the whole
+## clip, so it's not an animated wobble — it's a constant ~18% enlargement
+## that is invisible on an un-animated (bind pose) instance (rest transform,
+## no track evaluated) and only applies once the AnimationPlayer is playing,
+## which is exactly the bind-vs-animating discrepancy the audit caught, and
+## plausibly what stretches the cane (skinned across the now-larger hip
+## region and the hand/ground reference it's held against). Stripping any
+## SCALE_3D track that deviates from 1.0 by more than 2% is a no-op for
+## every other rigged GLB (none of them have one) and removes this one static
+## mis-scale for the elderly rig — safe to apply unconditionally, here, to
+## every rigged GLB this helper ever instances.
+const _SCALE_TRACK_DEVIATION_THRESHOLD := 0.02  # 2%
+
+static func _strip_deviant_scale_tracks(model: Node3D) -> void:
+	var anim_player: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
+	if anim_player == null:
+		return
+	for anim_name in anim_player.get_animation_list():
+		var anim: Animation = anim_player.get_animation(anim_name)
+		# walk backwards: remove_track shifts every later index down by one
+		for ti in range(anim.get_track_count() - 1, -1, -1):
+			if anim.track_get_type(ti) != Animation.TYPE_SCALE_3D:
+				continue
+			var deviates := false
+			for ki in anim.track_get_key_count(ti):
+				var v: Vector3 = anim.track_get_key_value(ti, ki)
+				if absf(v.x - 1.0) > _SCALE_TRACK_DEVIATION_THRESHOLD \
+						or absf(v.y - 1.0) > _SCALE_TRACK_DEVIATION_THRESHOLD \
+						or absf(v.z - 1.0) > _SCALE_TRACK_DEVIATION_THRESHOLD:
+					deviates = true
+					break
+			if deviates:
+				anim.remove_track(ti)
 
 static func instance(path: String, target_height: float,
 		yaw_deg := 0.0, base_at_zero := true, center_xz := true) -> Node3D:

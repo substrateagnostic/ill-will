@@ -169,4 +169,20 @@ by construction.**
    alone as the smallest proof?
    (a) full SHIP-FIRST subset · (b) fork-only first, cart + item-arm next.
 
+## 7. RULINGS (Alex, 2026-07-20 — this section closes §6)
+
+**1(d)** standings-chip plan card on the couch, richer online · **2(a)**
+invalidated fork silently discards, re-prompt at your turn · **3(a)**
+unaffordable pre-buy cancels · **4(c)** shoulder button opens the plan
+tray · **5(a)** pre-commit stays ON through the FINAL BELL · **6(a)** full
+SHIP-FIRST subset.
+
+**The governing condition (producer, verbatim intent): pre-commit is NEVER
+required, and falls back gracefully to default behavior if someone isn't
+paying attention or steps away.** A seat that banks nothing is prompted at
+its turn exactly as today. Note the through-line of 2(a)+3(a): the system
+never acts on a player's behalf beyond what they explicitly banked — quiet
+discard, normal prompt, no surprises. That is now design law for this
+feature.
+
 над. нашу. присутствие. память.
