@@ -378,6 +378,9 @@ func _enter_walk_mode() -> void:
 	var stroller := GroundsWalk.new()
 	add_child(stroller)
 	stroller.setup(board, String(CHAR_SCENES[0]), GameState.PLAYER_COLORS[0])
+	# the stroller tramples the living lawn as it wanders (presentation only)
+	if board.grass_field != null:
+		board.grass_field.register_bender(stroller, GrassField.STROLLER_RADIUS)
 	print("PROCESSION walkabout: stick/WASD walk, hold A trot, ESC to leave")
 
 func pawns_seatlist() -> Array:

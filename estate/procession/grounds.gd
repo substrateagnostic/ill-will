@@ -371,6 +371,11 @@ const GRID := 1.4                         # terrain vertex pitch
 ## scatter never crowds a stone a pawn must land on.
 var _keep_out: Array = []
 
+## The LIVING LAWN's grass ShaderMaterials (meadow / bog / seed-heads). The
+## board's GrassField reads this after build_all() to feed every-frame trample
+## benders into the shaders. Presentation only — nothing here is sim state.
+var grass_materials: Array[ShaderMaterial] = []
+
 func build_all(keep_out: Array = []) -> void:
 	_keep_out = keep_out
 	_build_terrain()
@@ -442,8 +447,18 @@ func _ground_color(x: float, z: float) -> Color:
 	c = c.lerp(bog, clampf(exp(-(bdx * bdx + bdz * bdz)) * 1.7, 0.0, 1.0))
 	c = c.lerp(worn, _ss((-z - 42.0) / 12.0))
 	c = c.lerp(worn, _ss((z - 33.0) / 7.0) * 0.7)  # forecourt wear
-	# mud ring where the land dips toward standing water
 	var h := height(x, z)
+	# LIVING LAWN read from the board camera: where the meadow grass drifts
+	# thick, lift the soil toward a richer lawn green so the overhead money shot
+	# reads TURF, not dirt. The blades carry the near read; this vertex tint
+	# (zero draw calls) carries the far read. Gated to the open lawn band — off
+	# the bog, the worn climb, the forecourt and below the waterline; it tracks
+	# the SAME drift noise the grass blades gate on, so tint and blades agree.
+	if x > -19.0 and z > -40.0 and z < 33.0 and h > WATER_Y + 0.6:
+		var gdr := _vnoise(x * 0.048 + 57.0, z * 0.048, 91)
+		var lush := clampf((gdr + 0.15) / 0.75, 0.0, 1.0)
+		c = c.lerp(Color(0.118, 0.156, 0.086), lush * 0.60)
+	# mud ring where the land dips toward standing water
 	if h < WATER_Y + 0.9:
 		c = c.lerp(Color(0.062, 0.055, 0.044), clampf((WATER_Y + 0.9 - h) / 0.9, 0.0, 1.0))
 	# the mottle — the lawn is never one green
@@ -1318,11 +1333,11 @@ func _dress_bog() -> void:
 ## (tighter than trees — grass may hug a road), the maze block, the water,
 ## the station keep-outs, and (boulders only) every Estate Stirs claim.
 func _dress_meadows() -> void:
+	# THE LIVING LAWN's turf is now shader-grass (procedural fanned blade-tufts
+	# on ONE MultiMesh per biome), not the old Meshy tuft-clump scatter — see
+	# _dress_grass(). Wildflowers, ferns and boulders stay Meshy.
+	_dress_grass()
 	var covers := [
-		{"path": KIT + "ground_grass_tuft_a.glb", "h": 0.42, "salt": 311,
-			"rate": 0.85, "step": 2.1, "dmin": 1.6, "kind": "grass"},
-		{"path": KIT + "ground_grass_tuft_b.glb", "h": 0.36, "salt": 331,
-			"rate": 0.80, "step": 2.3, "dmin": 1.6, "kind": "grass"},
 		{"path": KIT + "ground_wildflower_clump.glb", "h": 0.5, "salt": 347,
 			"rate": 0.30, "step": 3.1, "dmin": 2.0, "kind": "garden"},
 		{"path": KIT + "ground_fern.glb", "h": 0.55, "salt": 353,
@@ -1385,6 +1400,250 @@ func _dress_meadows() -> void:
 				rz += 8.5
 			rx += 8.5
 		_kit_multimesh(rs, rpl)
+
+# ---- SHADER GRASS (the approved LIVING LAWN, integrated) ------------------
+# The turf. ONE MultiMesh of procedural fanned blade-tufts per biome (meadow
+# lush, bog short/olive/wet), each carried by grass_blades.gdshader — the shader
+# authors the moonlit gradient, layered wind, up to 8 world trample benders and
+# a distance fade, so nothing here needs _moonlit_sources. Placement is PURE:
+# the SAME _h01 hash-noise and _lawn_ok gates the Meshy scatter used, so
+# generate() stays deterministic (doc 33). Only the tuft MESH uses a fixed-seed
+# RNG — built once, off the topology, exactly as the proto proved.
+const GRASS_SHADER := "res://estate/procession/grass_blades.gdshader"
+const GRASS_STEP := 0.9            # tuft grid pitch (draw calls don't scale with count)
+const GRASS_DMIN := 1.6            # path apron the old grass covers used — kept exactly
+const MEADOW_BLADES := 9
+const BOG_BLADES := 6
+# The board camera sits far above the land, so the proto's tight 26→42m fade
+# erased every blade from the money shot. Push it WAY out: blades read full at
+# walk/mid range and only soften past 50m, gone by 180m — the ground-colour
+# lush-lift (in _ground_color) carries the turf read from directly overhead.
+const GRASS_FADE_START := 52.0
+const GRASS_FADE_END := 180.0
+
+func _dress_grass() -> void:
+	grass_materials.clear()
+	var meadow_pl: Array[Transform3D] = []
+	var meadow_cd: Array[Color] = []
+	var bog_pl: Array[Transform3D] = []
+	var bog_cd: Array[Color] = []
+	var seed_pl: Array[Transform3D] = []
+	var salt := 311
+	var x := EXT_X.x + 2.0
+	while x < EXT_X.y - 2.0:
+		var z := EXT_Z.x + 2.0
+		while z < EXT_Z.y - 2.0:
+			var jx := x + GRASS_STEP * 0.85 * (_h01(x, z, salt) - 0.5)
+			var jz := z + GRASS_STEP * 0.85 * (_h01(x, z, salt + 1) - 0.5)
+			var p := Vector2(jx, jz)
+			# reuse the scatter's gate EXACTLY (drift mask, bog split at x<-20,
+			# forecourt/maze/water/keep-outs) — grass lives only where it did.
+			if not _lawn_ok(p, "grass", GRASS_DMIN):
+				z += GRASS_STEP
+				continue
+			var is_bog := p.x < -20.0 and p.y > -32.0 and p.y < 10.0
+			# PATCHY density clumping over the drift mask: instead of uniform
+			# turf, tufts thicken in clump centres and thin toward bare soil. The
+			# broad drift (same call _lawn_ok gates on) sets the drift envelope; a
+			# finer clump noise carves density within it.
+			var drift := _vnoise(jx * 0.048 + 57.0, jz * 0.048, 91)   # -1..1 (matches _lawn_ok)
+			var clump := _vnoise(jx * 0.17 + 5.0, jz * 0.17, 129)     # -1..1 finer
+			var driftN := _ss((drift + 0.28) / 0.44)
+			var clumpN := clump * 0.5 + 0.5
+			var dens := clampf(driftN * clumpN * 1.25, 0.0, 1.0) if is_bog \
+				else clampf(driftN * (0.70 + 0.5 * clumpN), 0.0, 1.0)
+			var rate := (0.90 if is_bog else 0.99) * dens
+			if _h01(jx, jz, salt + 2) >= rate:
+				z += GRASS_STEP
+				continue
+			var sc := (0.86 + 0.30 * _h01(jx, jz, salt + 3)) * (0.82 if is_bog else 1.0)
+			var yaw := TAU * _h01(jx, jz, salt + 4)
+			var basis := Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(sc, sc, sc))
+			var xf := Transform3D(basis, snap(Vector3(jx, 0, jz), -0.04))
+			# per-tuft custom data (deterministic-hashed): .r height delta about
+			# 1.0, .g signed hue jitter, .b wind-phase offset, .a patch density.
+			var hdelta := (_h01(jx, jz, salt + 5) - 0.55) * 0.42        # ~ -0.23..+0.19
+			var hue := (_h01(jx, jz, salt + 6) - 0.5) * 0.9             # signed
+			var phase := _h01(jx, jz, salt + 7)
+			var cd := Color(hdelta, hue, phase, dens)
+			if is_bog:
+				bog_pl.append(xf)
+				bog_cd.append(cd)
+			else:
+				meadow_pl.append(xf)
+				meadow_cd.append(cd)
+				# a FEW sparse taller seed-head stalks, only in thick meadow
+				if dens > 0.55 and _h01(jx, jz, salt + 8) < 0.03:
+					seed_pl.append(Transform3D(
+						Basis(Vector3.UP, yaw) * Basis.from_scale(Vector3(sc, sc, sc)),
+						snap(Vector3(jx, 0, jz), -0.02)))
+			z += GRASS_STEP
+		x += GRASS_STEP
+	_emit_grass("GrassMeadow", _make_tuft_mesh(MEADOW_BLADES, 0.50, false),
+		meadow_pl, meadow_cd, false)
+	_emit_grass("GrassBog", _make_tuft_mesh(BOG_BLADES, 0.34, true),
+		bog_pl, bog_cd, true)
+	_emit_seedheads(seed_pl)
+
+## Commit one biome's tuft field: a MultiMesh (with per-tuft custom data) + one
+## ShaderMaterial(grass_blades). Bog blades run shorter/olive/wetter via params.
+func _emit_grass(nm: String, mesh: ArrayMesh, placements: Array[Transform3D],
+		customs: Array[Color], is_bog: bool) -> void:
+	if placements.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = mesh
+	mm.instance_count = placements.size()
+	for i in placements.size():
+		mm.set_instance_transform(i, placements[i])
+		mm.set_instance_custom_data(i, customs[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = nm
+	mmi.multimesh = mm
+	var mat := ShaderMaterial.new()
+	mat.shader = load(GRASS_SHADER)
+	mat.set_shader_parameter("fade_start", GRASS_FADE_START)
+	mat.set_shader_parameter("fade_end", GRASS_FADE_END)
+	if is_bog:
+		mat.set_shader_parameter("root_color", Color(0.045, 0.058, 0.036))
+		mat.set_shader_parameter("tip_color", Color(0.110, 0.190, 0.090))
+		mat.set_shader_parameter("dry_tip", Color(0.150, 0.180, 0.080))
+		mat.set_shader_parameter("wind_strength", 0.07)
+	mmi.material_override = mat
+	add_child(mmi)
+	grass_materials.append(mat)
+	var tpt := (MEADOW_BLADES if not is_bog else BOG_BLADES) * 4 * 2
+	print("GRASS_MM %s tufts=%d blades/tuft=%d total_tris=%d" %
+		[nm, placements.size(), (BOG_BLADES if is_bog else MEADOW_BLADES),
+		placements.size() * tpt])
+
+## The sparse seed-head stalks — a taller bare stem with a fuzzy head, on their
+## own MultiMesh + a strawier material. Same shader (they sway + fade with the
+## field). Custom data left neutral (0) so they stand full height.
+func _emit_seedheads(placements: Array[Transform3D]) -> void:
+	if placements.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = _make_seedhead_mesh()
+	mm.instance_count = placements.size()
+	for i in placements.size():
+		mm.set_instance_transform(i, placements[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "GrassSeedHeads"
+	mmi.multimesh = mm
+	var mat := ShaderMaterial.new()
+	mat.shader = load(GRASS_SHADER)
+	mat.set_shader_parameter("fade_start", GRASS_FADE_START)
+	mat.set_shader_parameter("fade_end", GRASS_FADE_END)
+	mat.set_shader_parameter("tip_color", Color(0.245, 0.400, 0.150))
+	mat.set_shader_parameter("dry_tip", Color(0.360, 0.400, 0.150))
+	mat.set_shader_parameter("wind_strength", 0.15)   # tall stems catch more wind
+	mmi.material_override = mat
+	add_child(mmi)
+	grass_materials.append(mat)
+	print("GRASS_MM GrassSeedHeads stalks=%d" % placements.size())
+
+## One fanned tuft: n blades at varied yaw / lean / height, each a 4-segment
+## strip tapering to a point (pure geometry — no alpha). UV.y = height frac;
+## COLOR.r = per-blade phase random; COLOR.g = per-blade hue jitter. Blades run
+## ~12% NARROWER than the proto so close framings read crisp, not fat.
+func _make_tuft_mesh(n: int, base_h: float, wetness: bool) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 4242 + (100 if wetness else 0) + n * 7
+	var segs := 4
+	for bi in range(n):
+		var yaw := rng.randf() * TAU
+		var side := Vector2(-sin(yaw), cos(yaw))
+		var lean_ang := yaw + rng.randf_range(-0.8, 0.8)
+		var lean := Vector2(cos(lean_ang), sin(lean_ang))
+		var tall := 1.22 if bi == 0 else 1.0          # one hero blade per tuft
+		var h := base_h * rng.randf_range(0.78, 1.10) * tall
+		var w := rng.randf_range(0.0175, 0.0280) * (0.85 if wetness else 1.0)
+		var lean_amt := (rng.randf_range(0.12, 0.28) + (0.10 if wetness else 0.0)) * h
+		var root := Vector2(rng.randf_range(-0.27, 0.27), rng.randf_range(-0.27, 0.27))
+		var col := Color(rng.randf(), rng.randf(), 0.0)
+		var fnrm := Vector3(cos(yaw), 0.35, sin(yaw)).normalized()
+		for j in range(segs):
+			var rows := [j, j + 1]
+			var p: Array[Vector3] = []
+			var u: Array[Vector2] = []
+			for side_i in [-1.0, 1.0]:
+				for rj in rows:
+					var hf := float(rj) / float(segs)
+					var wprof := 1.0 if hf < 0.55 else (1.0 - (hf - 0.55) / 0.45)
+					var wj := w * clampf(wprof, 0.0, 1.0)
+					var bow := pow(hf, 1.4)
+					var cx := root.x + lean.x * lean_amt * bow
+					var cz := root.y + lean.y * lean_amt * bow
+					var yy := h * (hf - 0.10 * bow)
+					p.append(Vector3(cx + side.x * wj * side_i, yy, cz + side.y * wj * side_i))
+					u.append(Vector2(0.5 + 0.5 * side_i, hf))
+			_grass_tri(st, col, fnrm, p[0], u[0], p[2], u[2], p[1], u[1])
+			_grass_tri(st, col, fnrm, p[1], u[1], p[2], u[2], p[3], u[3])
+	return st.commit()
+
+## One tall bare stalk topped by a small fuzzy seed head (a few crossed micro-
+## blades). Pure geometry; rides the same grass shader.
+func _make_seedhead_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 9001
+	var stalks := 3
+	for si in range(stalks):
+		var yaw := rng.randf() * TAU
+		var side := Vector2(-sin(yaw), cos(yaw))
+		var lean_ang := yaw + rng.randf_range(-0.5, 0.5)
+		var lean := Vector2(cos(lean_ang), sin(lean_ang))
+		var h := rng.randf_range(0.72, 0.95)          # ~1.8x a meadow blade
+		var w := 0.012
+		var root := Vector2(rng.randf_range(-0.10, 0.10), rng.randf_range(-0.10, 0.10))
+		var col := Color(rng.randf(), 0.85, 0.0)      # high hue = strawy head
+		var fnrm := Vector3(cos(yaw), 0.4, sin(yaw)).normalized()
+		# the stem: a thin 4-seg strip to 0.82h, tapering slightly
+		var segs := 4
+		var stem_top := 0.82
+		for j in range(segs):
+			var rows := [j, j + 1]
+			var p: Array[Vector3] = []
+			var u: Array[Vector2] = []
+			for side_i in [-1.0, 1.0]:
+				for rj in rows:
+					var t := float(rj) / float(segs)
+					var hf := t * stem_top
+					var bow := pow(hf, 1.4)
+					var wj := w * (1.0 - 0.4 * t)
+					var cx := root.x + lean.x * 0.18 * bow
+					var cz := root.y + lean.y * 0.18 * bow
+					p.append(Vector3(cx + side.x * wj * side_i, h * hf, cz + side.y * wj * side_i))
+					u.append(Vector2(0.5 + 0.5 * side_i, hf))
+			_grass_tri(st, col, fnrm, p[0], u[0], p[2], u[2], p[1], u[1])
+			_grass_tri(st, col, fnrm, p[1], u[1], p[2], u[2], p[3], u[3])
+		# the head: a small spray of short micro-blades bursting from stem_top
+		var hx := root.x + lean.x * 0.18
+		var hz := root.y + lean.y * 0.18
+		var hbase := Vector3(hx, h * stem_top, hz)
+		for k in range(6):
+			var a := TAU * float(k) / 6.0 + yaw
+			var dirv := Vector3(cos(a) * 0.045, 0.05, sin(a) * 0.045)
+			var tip := hbase + dirv + Vector3(0, 0.06, 0)
+			var sidev := Vector3(-sin(a), 0, cos(a)) * 0.010
+			_grass_tri(st, col, fnrm,
+				hbase - sidev, Vector2(0.0, stem_top),
+				hbase + sidev, Vector2(1.0, stem_top),
+				tip, Vector2(0.5, 1.0))
+	return st.commit()
+
+func _grass_tri(st: SurfaceTool, col: Color, nrm: Vector3,
+		a: Vector3, ua: Vector2, b: Vector3, ub: Vector2, c: Vector3, uc: Vector2) -> void:
+	st.set_normal(nrm); st.set_color(col); st.set_uv(ua); st.add_vertex(a)
+	st.set_normal(nrm); st.set_color(col); st.set_uv(ub); st.add_vertex(b)
+	st.set_normal(nrm); st.set_color(col); st.set_uv(uc); st.add_vertex(c)
 
 ## One gate for every blade: open land only — and grass grows in DRIFTS,
 ## never a carpet (the first pass carpeted the estate wall-to-wall: roads

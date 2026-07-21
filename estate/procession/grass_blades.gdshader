@@ -37,8 +37,15 @@ uniform float fade_end = 42.0;
 
 varying float v_hf;        // height fraction root(0)->tip(1)
 varying float v_hue;       // per-blade hue jitter 0..1
+varying float v_hue2;      // per-TUFT hue jitter, signed (INSTANCE_CUSTOM.g; 0=neutral)
 varying float v_bend;      // trample amount 0..1 at this vertex
 varying vec3  v_wroot;     // instance root world pos (per-tuft constant)
+
+// ---- per-TUFT jitter (MultiMesh INSTANCE_CUSTOM, deterministic-hashed on the
+// CPU so the field never tiles: .r = height delta around 1.0, .g = signed hue
+// jitter, .b = wind phase offset, .a = patch density). All channels default to
+// 0 when a caller supplies no custom data, and every use below is NEUTRAL at 0
+// — so meshes driven without custom data (the proto) render exactly as before.
 
 float hash12(vec2 p){
 	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -53,6 +60,14 @@ void vertex() {
 	v_hue = COLOR.g;                 // per-blade hue jitter baked in mesh
 	v_wroot = MODEL_MATRIX[3].xyz;   // per-instance constant (tuft origin)
 
+	// per-TUFT height jitter (decoupled from the instance's uniform width scale,
+	// so tufts differ in HEIGHT without fattening): scale the blade in local Y
+	// before anything else reads it.
+	vec4 tuft = INSTANCE_CUSTOM;
+	v_hue2 = tuft.g;
+	VERTEX.y *= (1.0 + tuft.r);
+	float tuft_phase = tuft.b * 6.2831;   // desync neighbouring tufts' sway
+
 	vec3 wpos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 
 	// bend authority grows toward the tip (root stays planted)
@@ -60,7 +75,7 @@ void vertex() {
 
 	// ---- WIND: two sines + a slow spatial gust envelope, world-space offset
 	float t = TIME * wind_speed;
-	float phase = dot(wpos.xz, vec2(0.35, 0.27)) + blade_rand * 6.2831;
+	float phase = dot(wpos.xz, vec2(0.35, 0.27)) + blade_rand * 6.2831 + tuft_phase;
 	float gust = 0.6 + 0.4 * sin(dot(wpos.xz, vec2(gust_scale, gust_scale * 0.8)) - t * 0.5);
 	float sway = (sin(phase + t) + 0.5 * sin(phase * 2.3 + t * 1.7)) * wind_strength * gust;
 	vec2 wd = normalize(wind_dir);
@@ -104,8 +119,13 @@ void vertex() {
 void fragment() {
 	float hf = v_hf;
 	vec3 col = mix(root_color, tip_color, smoothstep(0.0, 1.0, hf));
-	// some blades run strawy/warm toward the tip (life, not uniform astroturf)
-	col = mix(col, dry_tip, v_hue * hf * 0.45);
+	// some blades run strawy/warm toward the tip (life, not uniform astroturf);
+	// per-TUFT hue jitter (v_hue2, signed) biases the whole clump warmer/cooler
+	// so no two clumps read the same green. Both terms are 0-neutral.
+	float dryk = clamp(v_hue * 0.45 + v_hue2 * 0.5, 0.0, 1.0);
+	col = mix(col, dry_tip, dryk * hf);
+	col.r *= 1.0 + v_hue2 * 0.14;
+	col.b *= 1.0 - v_hue2 * 0.12;
 	// per-tuft tint drift so no two clumps match (fights tiling)
 	float td = hash12(floor(v_wroot.xz * 1.7)) - 0.5;
 	col *= 1.0 + td * tuft_drift;

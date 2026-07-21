@@ -538,6 +538,7 @@ func grave_owner(node_id: int) -> int:
 # BUILD — the world from the graph
 # --------------------------------------------------------------------------
 var grounds: ProcessionGrounds = null
+var grass_field: GrassField = null   # presentation-only trample driver (per-frame)
 
 func build(players: Array, monuments: Array) -> void:
 	graph = generate()
@@ -562,6 +563,13 @@ func build(players: Array, monuments: Array) -> void:
 		add_child(pawn)
 		pawns[int(pl.index)] = pawn
 		seat_pawn(int(pl.index), 0)
+	# THE LIVING LAWN trample driver: reads pawn/cart positions each frame and
+	# writes the grass shaders' benders (presentation only — never sim, never
+	# rng). Idles in headless, so the receipt soak can't feel it.
+	grass_field = GrassField.new()
+	grass_field.name = "GrassField"
+	add_child(grass_field)
+	grass_field.setup(self, grounds.grass_materials)
 
 ## Ground-snap: keep a placement's xz, let the LAND decide its y (+dy skirt
 ## sink). Every piece of furniture goes through here — nothing floats over a
