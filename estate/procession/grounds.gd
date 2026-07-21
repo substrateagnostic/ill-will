@@ -23,6 +23,7 @@ extends Node3D
 const WATER_Y := -1.55             # the Weeping Valley's standing water
 const BROOK_Y := -0.45             # the garden brook's surface
 const PLANK_Y := -1.05             # boardwalk deck over the bog water
+const WATER_DEPTH_NORM := 2.4      # depth (m) that reads as full murk in water.gdshader
 const TERRAIN_SEED := 33771       # doc 33's own stream — never the night seed
 
 # --------------------------------------------------------------------------
@@ -458,6 +459,20 @@ func _ground_color(x: float, z: float) -> Color:
 		var gdr := _vnoise(x * 0.048 + 57.0, z * 0.048, 91)
 		var lush := clampf((gdr + 0.15) / 0.75, 0.0, 1.0)
 		c = c.lerp(Color(0.118, 0.156, 0.086), lush * 0.60)
+	# THE HOLLOW FLOOR (biome fill 2): under the canopy the ground reads MOSSY,
+	# broken by leaf-litter patches — not bare loam. Keyed to the woods column
+	# (peaks at x=-8, same band the trees fill) and above the waterline, so the
+	# bog rim and open meadow keep their own reads. Two drift noises: moss green
+	# where the damp gathers, dry litter-brown where it thins. Zero draw calls —
+	# the far read the deadfall + brambles carry the near read.
+	var woods_w := clampf(1.0 - absf(x + 8.0) / 13.0, 0.0, 1.0)
+	if woods_w > 0.02 and h > WATER_Y + 0.5 and z > -40.0 and z < 30.0:
+		# _vnoise is signed (-1..1); remap to 0..1 for these coverage masks
+		var moss := _vnoise(x * 0.070 + 13.0, z * 0.070, 61) * 0.5 + 0.5
+		var litter := _vnoise(x * 0.115 + 70.0, z * 0.115, 67) * 0.5 + 0.5
+		# broad damp moss over most of the floor, dry leaf-litter in sparser patches
+		c = c.lerp(Color(0.070, 0.104, 0.052), smoothstep(0.15, 0.85, moss) * woods_w * 0.58)
+		c = c.lerp(Color(0.101, 0.083, 0.056), smoothstep(0.60, 0.92, litter) * woods_w * 0.45)
 	# mud ring where the land dips toward standing water
 	if h < WATER_Y + 0.9:
 		c = c.lerp(Color(0.062, 0.055, 0.044), clampf((WATER_Y + 0.9 - h) / 0.9, 0.0, 1.0))
@@ -468,8 +483,13 @@ func _ground_color(x: float, z: float) -> Color:
 
 ## The valley's standing water + the brook — SHAPED to the land: quads are
 ## emitted only where the ground actually lies below the waterline, so the
-## shore is the terrain's own contour, never a plane's edge. Dark murk with a
-## faint self-glow (a bog at night is its own lamp), one material, one mesh.
+## shore is the terrain's own contour, never a plane's edge. ONE mesh, ONE
+## material: water.gdshader does the whole read (animated ripple normals,
+## fresnel moon-glint, depth-tinted murk, soft shore blend). Per-vertex COLOR.r
+## carries the baked, normalised terrain depth so the shader tints shallow rims
+## wetter/lighter and deep centres dark with zero texture cost.
+const WATER_SHADER := "res://estate/procession/water.gdshader"
+
 func _build_water() -> void:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -489,12 +509,18 @@ func _build_water() -> void:
 						if height(float(cx), float(cz)) < lvl + 0.06:
 							below = true
 				if below:
-					st.add_vertex(Vector3(x, lvl, z))
-					st.add_vertex(Vector3(x, lvl, z + step))
-					st.add_vertex(Vector3(x + step, lvl, z))
-					st.add_vertex(Vector3(x + step, lvl, z))
-					st.add_vertex(Vector3(x, lvl, z + step))
-					st.add_vertex(Vector3(x + step, lvl, z + step))
+					# bake normalised depth (waterline - land) into COLOR.r per
+					# corner — the shader's whole murk/alpha ramp reads off this
+					var c00 := _water_depth_col(x, z, lvl)
+					var c01 := _water_depth_col(x, z + step, lvl)
+					var c10 := _water_depth_col(x + step, z, lvl)
+					var c11 := _water_depth_col(x + step, z + step, lvl)
+					st.set_color(c00); st.add_vertex(Vector3(x, lvl, z))
+					st.set_color(c01); st.add_vertex(Vector3(x, lvl, z + step))
+					st.set_color(c10); st.add_vertex(Vector3(x + step, lvl, z))
+					st.set_color(c10); st.add_vertex(Vector3(x + step, lvl, z))
+					st.set_color(c01); st.add_vertex(Vector3(x, lvl, z + step))
+					st.set_color(c11); st.add_vertex(Vector3(x + step, lvl, z + step))
 					count += 1
 			z += step
 		x += step
@@ -504,15 +530,14 @@ func _build_water() -> void:
 	var mi := MeshInstance3D.new()
 	mi.name = "Water"
 	mi.mesh = st.commit()
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.034, 0.060, 0.068)
-	mat.metallic = 0.45
-	mat.roughness = 0.10
-	mat.emission_enabled = true
-	mat.emission = Color(0.055, 0.125, 0.135)
-	mat.emission_energy_multiplier = 0.85
+	var mat := ShaderMaterial.new()
+	mat.shader = load(WATER_SHADER)
 	mi.material_override = mat
 	add_child(mi)
+
+## COLOR.r = normalised water depth at (x,z) for the water shader's murk ramp.
+func _water_depth_col(x: float, z: float, lvl: float) -> Color:
+	return Color(clampf((lvl - height(x, z)) / WATER_DEPTH_NORM, 0.0, 1.0), 0.0, 0.0)
 
 ## Waterline at a point: the valley pond in its basin bounds, the brook along
 ## its cut. NAN = dry land.
@@ -1138,12 +1163,19 @@ func _dress_forest() -> void:
 		x += 3.4
 	for ti in canopy.size():
 		_kit_multimesh(srcs[ti], buckets[ti])
-	# undergrowth along the dirt track's edges
+	# DEADFALL (biome fill 2): the floor litters the WHOLE hollow interior now,
+	# not just the track hem — fallen logs, stumps, root tangles and mushroom
+	# rings between the trunks, so the woods read as a lived-in forest. Denser
+	# grid, wider drift; deadfall_log is the hero of the producer's ask. Every
+	# piece rides the same MultiMesh (draw calls flat — only instance count
+	# grows). Gates: east of the bog treeline (jx>-19), off all paths, off the
+	# station keep-outs AND the Estate Stirs claims (doc 33 §5b — nothing
+	# permanent on a claim), out of the crossroads glades, above the waterline.
 	var under := [
+		{"path": KIT + "forest_deadfall_log.glb", "h": 0.8, "salt": 139, "rate": 0.42},
 		{"path": KIT + "forest_stump.glb", "h": 0.7, "salt": 131, "rate": 0.30},
-		{"path": KIT + "forest_root_tangle.glb", "h": 0.9, "salt": 137, "rate": 0.35},
-		{"path": KIT + "forest_deadfall_log.glb", "h": 0.8, "salt": 139, "rate": 0.30},
-		{"path": KIT + "forest_mushroom_cluster.glb", "h": 0.5, "salt": 149, "rate": 0.45},
+		{"path": KIT + "forest_root_tangle.glb", "h": 0.9, "salt": 137, "rate": 0.32},
+		{"path": KIT + "forest_mushroom_cluster.glb", "h": 0.5, "salt": 149, "rate": 0.30},
 	]
 	for u in under:
 		var us := _kit_sources(String(u.path), Vector3(NAN, float(u.h), NAN))
@@ -1155,19 +1187,30 @@ func _dress_forest() -> void:
 			var uz := -32.0
 			while uz < 28.0:
 				var salt := int(u.salt)
-				var jx := ux + 2.2 * (_h01(ux, uz, salt) - 0.5)
-				var jz := uz + 2.2 * (_h01(ux, uz, salt + 1) - 0.5)
+				var jx := ux + 2.8 * (_h01(ux, uz, salt) - 0.5)
+				var jz := uz + 2.8 * (_h01(ux, uz, salt + 1) - 0.5)
 				var p := Vector2(jx, jz)
+				if jx < -19.0:
+					uz += 3.2
+					continue
+				# interior fill (d up to 10) only in the woods' south/mid (jz<16),
+				# which the forest-floor framings see; north of that (toward the
+				# forecourt watchline) revert to the old track-edge band (d<5.5) so
+				# the w6 draw-call budget holds.
 				var d := _path_dist(p, woods_segs)
-				if d > 2.2 and d < 5.5 and _keep_dist(p) > 3.2 \
+				var d_max := 10.0 if jz < 16.0 else 5.5
+				if d > 2.0 and d < d_max and _path_dist(p, ALL_SEGS) > 2.0 \
+						and _keep_dist(p) > 3.0 and _claim_dist(p) > 3.0 \
 						and height(jx, jz) > WATER_Y + 0.3 \
+						and _maze_mask(jx, jz) < 0.1 \
+						and p.distance_to(FORK1_XZ) > 6.5 and p.distance_to(FORK2_XZ) > 6.5 \
 						and _h01(jx, jz, salt + 2) < float(u.rate):
 					var sc2 := 0.8 + 0.4 * _h01(jx, jz, salt + 3)
 					var b2 := Basis(Vector3.UP, TAU * _h01(jx, jz, salt + 4)) \
 						* Basis.from_scale(Vector3(sc2, sc2, sc2))
 					pl.append(Transform3D(b2, snap(Vector3(jx, 0, jz), -0.05)))
-				uz += 4.6
-			ux += 4.6
+				uz += 3.2
+			ux += 3.2
 		_kit_multimesh(us, pl)
 
 ## One forest canopy candidate — returns true if a tree was placed.
@@ -1420,6 +1463,13 @@ const BOG_BLADES := 6
 # lush-lift (in _ground_color) carries the turf read from directly overhead.
 const GRASS_FADE_START := 52.0
 const GRASS_FADE_END := 180.0
+# BRAMBLES (biome fill 2): a thornier, darker, taller variant of the tuft mesh —
+# arching canes with spur thorns — scattered SPARSE through the hollow woods so
+# the forest has bushes/brambles, not just grass. Same grass_blades shader (wind,
+# trample, fade), retuned dark + stiff. ONE extra MultiMesh (draw calls +1).
+const BRAMBLE_CANES := 8
+const BRAMBLE_STEP := 3.4
+const BRAMBLE_H := 1.18
 
 func _dress_grass() -> void:
 	grass_materials.clear()
@@ -1484,6 +1534,115 @@ func _dress_grass() -> void:
 	_emit_grass("GrassBog", _make_tuft_mesh(BOG_BLADES, 0.34, true),
 		bog_pl, bog_cd, true)
 	_emit_seedheads(seed_pl)
+	_dress_brambles()
+
+## SPARSE brambles through the hollow woods — the forest's bushes. PURE gate
+## (same _h01 hash-noise family as every scatter): hollow only, off the bog,
+## off paths/claims/keep-outs, out of the crossroads glades, above the waterline.
+func _dress_brambles() -> void:
+	var pl: Array[Transform3D] = []
+	var salt := 411
+	var x := -22.0
+	while x < 4.0:
+		var z := -34.0
+		while z < 28.0:
+			var jx := x + BRAMBLE_STEP * 0.7 * (_h01(x, z, salt) - 0.5)
+			var jz := z + BRAMBLE_STEP * 0.7 * (_h01(x, z, salt + 1) - 0.5)
+			var p := Vector2(jx, jz)
+			# jz < 15 keeps brambles in the woods interior/south — off the forecourt
+			# sightline (the draw-call watchline) and out of the fork1 glade
+			if jx > -19.0 and jx < 4.0 and jz < 15.0 \
+					and _path_dist(p, ["hollow_a", "hollow_b"]) < 9.0 \
+					and _path_dist(p, ALL_SEGS) > 2.2 \
+					and _keep_dist(p) > 3.0 and _claim_dist(p) > 3.0 \
+					and height(jx, jz) > WATER_Y + 0.4 and _maze_mask(jx, jz) < 0.1 \
+					and p.distance_to(FORK1_XZ) > 6.5 and p.distance_to(FORK2_XZ) > 6.5 \
+					and _h01(jx, jz, salt + 2) < 0.46:
+				var sc := 0.85 + 0.40 * _h01(jx, jz, salt + 3)
+				var yaw := TAU * _h01(jx, jz, salt + 4)
+				pl.append(Transform3D(Basis(Vector3.UP, yaw)
+					* Basis.from_scale(Vector3(sc, sc, sc)), snap(Vector3(jx, 0, jz), -0.03)))
+			z += BRAMBLE_STEP
+		x += BRAMBLE_STEP
+	_emit_brambles(pl)
+
+## Commit the bramble field: one MultiMesh + a dark/stiff grass_blades material.
+## Custom data carries only a per-clump wind-phase (.b) so neighbours desync;
+## the rest is neutral (no height jitter, no hue bias) so canes read uniform-dark.
+func _emit_brambles(placements: Array[Transform3D]) -> void:
+	if placements.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = true
+	mm.mesh = _make_bramble_mesh(BRAMBLE_CANES, BRAMBLE_H)
+	mm.instance_count = placements.size()
+	for i in placements.size():
+		mm.set_instance_transform(i, placements[i])
+		var o := placements[i].origin
+		mm.set_instance_custom_data(i, Color(0.0, 0.0, _h01(o.x, o.z, 419), 0.0))
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = "Brambles"
+	mmi.multimesh = mm
+	var mat := ShaderMaterial.new()
+	mat.shader = load(GRASS_SHADER)
+	mat.set_shader_parameter("fade_start", GRASS_FADE_START)
+	mat.set_shader_parameter("fade_end", GRASS_FADE_END)
+	mat.set_shader_parameter("root_color", Color(0.040, 0.048, 0.032))  # dark woody base
+	mat.set_shader_parameter("tip_color", Color(0.088, 0.106, 0.066))   # muted olive (NOT grass-green)
+	mat.set_shader_parameter("dry_tip", Color(0.195, 0.112, 0.072))     # dry red-brown thorn tips
+	mat.set_shader_parameter("moon_gain", 0.05)
+	mat.set_shader_parameter("wind_strength", 0.05)                     # brambles are stiff
+	mmi.material_override = mat
+	add_child(mmi)
+	grass_materials.append(mat)
+	print("GRASS_MM Brambles clumps=%d canes/clump=%d" % [placements.size(), BRAMBLE_CANES])
+
+## One bramble clump: n arching canes (rise-then-curl-over), thicker than a grass
+## blade, tapering, with small triangular THORN spurs. Pure geometry; rides the
+## grass shader (UV.y = height frac; COLOR.r = wind-phase random; COLOR.g = hue).
+func _make_bramble_mesh(n: int, base_h: float) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 7777 + n * 13
+	var segs := 5
+	for bi in range(n):
+		var yaw := rng.randf() * TAU
+		var side := Vector2(-sin(yaw), cos(yaw))
+		var lean_ang := yaw + rng.randf_range(-0.5, 0.5)
+		var lean := Vector2(cos(lean_ang), sin(lean_ang))
+		var h := base_h * rng.randf_range(0.80, 1.15)
+		var w := rng.randf_range(0.040, 0.062)              # canes, not blades
+		var reach := rng.randf_range(0.55, 0.90) * h        # arches WIDE OUT and over
+		var root := Vector2(rng.randf_range(-0.20, 0.20), rng.randf_range(-0.20, 0.20))
+		var col := Color(rng.randf(), rng.randf_range(0.55, 1.0), 0.0)  # high hue = dry
+		var fnrm := Vector3(cos(yaw), 0.4, sin(yaw)).normalized()
+		var pts: Array[Vector3] = []
+		for j in range(segs + 1):
+			var hf := float(j) / float(segs)
+			var arch := sin(hf * 2.35)                       # peak ~hf .67, droops after
+			var cx := root.x + lean.x * reach * pow(hf, 1.2)
+			var cz := root.y + lean.y * reach * pow(hf, 1.2)
+			pts.append(Vector3(cx, h * arch, cz))
+		for j in range(segs):
+			var hf0 := float(j) / float(segs)
+			var hf1 := float(j + 1) / float(segs)
+			var s0 := Vector3(side.x, 0, side.y) * (w * clampf(1.0 - hf0 * 0.7, 0.15, 1.0))
+			var s1 := Vector3(side.x, 0, side.y) * (w * clampf(1.0 - hf1 * 0.7, 0.15, 1.0))
+			_grass_tri(st, col, fnrm, pts[j] - s0, Vector2(0.0, hf0),
+				pts[j] + s0, Vector2(1.0, hf0), pts[j + 1] - s1, Vector2(0.0, hf1))
+			_grass_tri(st, col, fnrm, pts[j] + s0, Vector2(1.0, hf0),
+				pts[j + 1] + s1, Vector2(1.0, hf1), pts[j + 1] - s1, Vector2(0.0, hf1))
+		# thorn spurs at two heights, alternating sides
+		for tk in [1, 3]:
+			var hf := float(tk) / float(segs)
+			var od := (Vector3(side.x, 0.3, side.y) if tk == 1 else Vector3(-side.x, 0.3, -side.y)).normalized()
+			var tip := pts[tk] + od * (w * 3.4)
+			var spur := Vector3(lean.x, 0, lean.y) * (w * 0.9)
+			_grass_tri(st, col, fnrm, pts[tk] - spur, Vector2(0.0, hf),
+				pts[tk] + spur, Vector2(1.0, hf), tip, Vector2(0.5, hf))
+	return st.commit()
 
 ## Commit one biome's tuft field: a MultiMesh (with per-tuft custom data) + one
 ## ShaderMaterial(grass_blades). Bog blades run shorter/olive/wetter via params.
