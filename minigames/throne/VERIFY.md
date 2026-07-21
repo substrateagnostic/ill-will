@@ -261,3 +261,112 @@ directly.
   "card" click per second) and a **regal fanfare** for coronations.
 - Torch **flame particle** assets (Kenney particles) for the pillar sconces
   instead of the emissive sphere + flicker.
+
+---
+
+# ADDENDUM — THE ESTATE STIRS: the moving hill (2026-07-21)
+
+Producer ruling (Alex, 2026-07-20): THE THRONE becomes a **Halo-KOTH moving
+hill**. On a telegraphed cadence the dais itself HEAVES to a new site in the
+hall — "the estate objects to being sat upon" (doc 28 §0a Estate Stirs). A
+seated king is **BUCKED OFF** by the move (not a kill, no kingslayer — the
+ESTATE reset the board); everyone scrambles to where the throne is GOING. All of
+KEEP is intact: court powers, GRIP, throne-seconds scoring, crisis double-pay,
+overtime (adapted to the moving dais), and the ≤55% fairness discipline.
+
+## The beat (what was built)
+
+- **5 sites reuse the arena's own geometry** (`HILL_SITES`): HOME centre + four
+  cardinal spots (FRONT down the runner, BACK under the stained-glass window,
+  LEFT, RIGHT). Cardinal offsets (2.6–2.7) keep the r=3 bottom step clear of the
+  6 m walls and the ±3.7 corner pillars.
+- **Cadence: 5 relocations / 100 s round** (in the 3–5 target). `HILL_DWELL`
+  18 s settled dwell, tightening to `HILL_DWELL_CRISIS` 11 s in the last-30 s
+  succession crisis (the estate stirs harder). No relocation starts without
+  `HILL_MIN_TAIL` 4 s of play left, and **none during overtime** (the court
+  settles it on a fixed hill, so a clean 3 s reign stays achievable).
+- **ZERO-ENGLISH pre-telegraph** (`HILL_TELEGRAPH` 2.6 s): the next site blooms a
+  pulsing amber ground-ring + a building rumble + `creak`/`thunder_far`. No text,
+  no camera roll (doc 28 §0a).
+- **Migration is a drama beat** (`HILL_MIGRATE` 1.1 s): the dais leaps on a
+  smoothstep arc (`HILL_ARC` 1.4 — a visible heave) with `chain`/`whoosh_big` on takeoff, a
+  `thud_coffin`/`crush` slam + dust burst + screenshake on landing. Cheap tween
+  theater, no new assets — reuses the existing dais + a code-built ring + dust.
+
+## Why BUCK-OFF (design choice, documented per brief)
+
+The king can't move while seated, so at relocation they MUST be freed. **Bucking**
+(release + a soft toss AWAY from the destination, `BUCK_FORCE` 9.5, upward-biased)
+is the faithful KOTH analog: the ex-king loses their positional head start and
+re-contests the new hill like everyone else. It is *not* a kill — no kingslayer
+credit, no grip damage, no currency/monument event — so the kingslaying economy
+is untouched; the estate simply resets the board. It's the biggest scramble AND
+the most on-flavor read ("the estate throws the tyrant off"), and because it caps
+reigns on the cadence it **tightens** the fairness distribution rather than
+threatening it. The alternative (king rides the throne to the new site) preserves
+the incumbent's advantage, blunts the scramble, and is less on-flavor — rejected.
+
+## MANDATORY BALANCE PROBE — 4 bots, 5 seeds, real gameplay (FX + slow-mo) — PASS
+
+`--thronebalance --seed=1..5`, full 100 s match each (MATCH_TIME is 100 s post
+Andrew's playtest). `no bot may exceed 55% of total throne time`.
+
+| seed | RED | BLUE | GOLD | MINT | max share | relocations | overtime |
+|-----:|----:|-----:|-----:|-----:|----------:|------------:|:---------|
+| 1 | 21.7% | 22.8% | 26.8% | **28.7%** | **28.7%** | 5 | cap +30s |
+| 2 | 27.1% | 23.5% | 21.9% | **27.6%** | **27.6%** | 5 | cap +30s |
+| 3 | 24.6% | 25.9% | 19.7% | **29.9%** | **29.9%** | 5 | cap +30s |
+| 4 | **28.7%** | 23.5% | 21.9% | 25.9% | **28.7%** | 5 | none |
+| 5 | 23.3% | 24.6% | 25.9% | **26.2%** | **26.2%** | 5 | none |
+
+**Worst single-bot share across all 5 seeds = 29.9% (seed 3, MINT) << 55% cap.
+All 5 seeds PASS.** Shares are *tighter* than the pre-stir game (was 15.9–31.1%;
+now 19.7–29.9%) — the relocation cadence distributes the throne more evenly.
+Dethronings stay high and spread (8–21 per bot per match); every seed does
+exactly 5 relocations.
+
+Reproduce:
+```
+for s in 1 2 3 4 5; do godot --headless --path . minigames/throne/throne.tscn -- --thronebalance --seed=$s; done
+```
+
+## New receipt lines (grep these)
+
+```
+THRONE_STIR t=18.0 telegraph site=0->2 king=BLUE          # pre-telegraph opens
+THRONE_STIR_BUCK t=20.6 estate bucked BLUE (reign 2.5s)   # king thrown off (no kill)
+THRONE_STIR t=20.6 migrate from=0 to=2                    # the leap begins
+THRONE_STIR t=21.7 settle site=2 pos=(0.0,-2.6) count=1   # slam-down, new hill live
+THRONE_STIR_COUNT seed=3 relocations=5 final_site=2       # printed by the balance probe
+```
+
+## Root-cause fix during this pass (native crash — found + fixed)
+
+The first probe pass crashed intermittently (silent Windows access-violation, no
+GDScript error, log truncated mid-match) — but ONLY once the dais was off-centre.
+**Root cause: the moving dais step colliders.** The dais steps were
+`StaticBody3D`s; teleporting a static collider through the challengers'
+`RigidBody3D`s each migration frame faults the physics server (position-dependent,
+hence intermittent). **Fix: the dais steps are now VISUAL-ONLY** (no collider),
+exactly like the throne model already was. This is safe because the collision was
+never load-bearing — the king is hard-pinned to the seat, shoves flatten Y
+(`royal.gd:32`), coronation is proximity-based, and the flung crown now tumbles on
+the floor. After the fix, an isolated **6/6 clean seed-3 diagnostic** (the worst
+pre-fix seed) and a 5-seed first-try re-run confirm zero crashes. Floor and arena
+walls keep their colliders untouched.
+
+## Online mirror
+
+`_net_state()` gains `hphase`/`hnext`/`hcount` + continuous `hx/hy/hz` dais
+position; `_net_apply()` → `_mir_apply_hill()` moves the client dais to the host's
+transform and fires the telegraph-glow / leap-whoosh / slam-thud juice off phase +
+count deltas (latest-state-wins, packet-loss-safe). A relocation mirrors a
+`VerifyCapture.snap("mirror_stir")`.
+
+## Windowed still capture
+
+`--stircap` (windowed, all-bots) stages one full relocation and films it:
+`throne_stir_1_telegraph`, `_2_buck_leap`, `_3_migrate_mid`, `_4_settle`,
+`_5_new_reign` → `--outdir`. It parks/freezes the three challengers during setup
+(so the ESTATE, not a rival, is what unseats the king), then wakes them at the
+leap so the scramble to the new hill is real.
