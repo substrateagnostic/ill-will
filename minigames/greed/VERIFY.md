@@ -258,6 +258,115 @@ ceremony now firing on `stinger_win`.
 
 ---
 
+## v1.2 — CURE: no personality banks zero (playtest: "Greed inc — AI really suck")
+
+v1.1 (above) softened the pure-mugger case but its own note admitted it wasn't
+fully cured: *"some passive bot personality combos can still bank ZERO the
+whole match."* A from-scratch soak (fresh worktree, `greed_bots.gd` +
+`greed.gd` + this file, no prior context) reproduced it and found **three**
+distinct, independent root causes — only one of which is the "pure mugger"
+case v1.1 named. All three are in `greed_bots.gd`; `greed.gd` untouched.
+
+### Root causes
+
+1. **Idling.** A bot with `mugger[] <= 0.6` (needs a fat pot before it'll even
+   chase) AND a high `grab_threshold` (near the 11-32 max) can go an entire
+   match never chasing (the pot rarely gets that fat — other, greedier bots
+   keep resetting it to 5 first) and never grabbing (its own threshold never
+   comes up before someone else takes it). It just camps in `_guard()`
+   forever — the general form of the v1.1 "pure mugger" case.
+2. **Active but outmatched.** A bot that grabs/chases readily can *still* end
+   at 0: a randomly-seeded personality that rolls a high `mugger[]` camps the
+   pot the same as everyone else waiting for it to become grabbable, so it's
+   already adjacent the instant ANYONE grabs, landing a tackle in ~0.5s, every
+   time, with no cooldown of its own. The victim never gets far enough away to
+   have a chance, no matter how eager it is — this is a *different* bot (the
+   dominant mugger) denying a *different* victim than case 1, and no
+   threshold tweak fixes it because the victim isn't holding out for
+   anything — it's trying constantly and losing constantly.
+3. **Carrier stuck.** Unrelated to personality: the carrier's own steering is
+   just "move straight at my chute," no real pathfinding, so it can wedge into
+   a crate/wall corner and never resolve — seed 6's status log showed
+   `carrier=2` unchanged for 20+ straight seconds, holding a pot too cheap
+   (`pot=3`) for anyone to bother contesting, starving a *third* player of any
+   further chances while the round just ran out the clock.
+
+### The fix
+
+- **`drought_t`** (per player, seconds since their points last increased at
+  all — bank, floor coin, royalty, anything) is the load-bearing signal for
+  cases 1 and 2. Earlier attempts used a bespoke idle timer (`guard_t`,
+  mirroring `chase_frustration`'s existing "reset only on genuine progress"
+  shape) but every plausible reset point had a false positive — the pot
+  flickering LOOSE for under a second after a distant, unrelated drop, or
+  `out["grab"]=true` firing every tick a bot is merely in range and holding
+  (the controller still needs `GRAB_TIME`=0.6s of continuous hold before
+  `_do_grab()` ever fires) — both reset the idle clock on a mere *attempt*,
+  not a success, whack-a-mole style: fixing the false-reset that zeroed seed 4
+  promptly let seed 1 zero out a different way, which once fixed let seed 7
+  zero out yet another way. `drought_t` sidesteps the whole class of bug: it
+  doesn't care what the bot was attempting, only whether points actually went
+  up, which is the one thing every false positive had in common — none of
+  them do. Past `DROUGHT_EAGER_LIMIT` (15s) a bot goes **eager**: chase-worthy
+  pot floor drops to 4 and grab threshold effectively drops to 9, same
+  mechanism v1.1's frustrated-chaser case already used, just triggered by a
+  bulletproof signal instead of a fragile one.
+- **`MERCY_DROUGHT`** (20s): once self-help via eager still isn't enough, a
+  player who's gone this long with NOTHING gets a break from non-droughted
+  rivals' active chases — this is what actually cures case 2, since eager
+  alone can't out-position a mugger who's already standing on the pot. Two
+  droughted players still fight each other normally; this only mutes a rival
+  who's doing fine from dogpiling one who's doing badly.
+- **`CARRY_STUCK_LIMIT`** (2.0s): if a carrier's distance-to-chute hasn't
+  meaningfully shrunk in this long, the direct line is jammed — swing the
+  heading off-axis (a fixed per-player angle, deterministic, not dithering)
+  and take a free/cheap dash to help punch through, curing case 3.
+
+All three are additive to v1.1's mechanisms (`chase_frustration`/
+`FRUSTRATION_LIMIT`, the >=7/>=4 worth-it split) and don't change them.
+`--greedtest=intercept` is a separate kinematic simulation that never touches
+`GreedBots.decide()` — confirmed byte-identical after every iteration of this
+fix (seed 1 rate=0.80, seed 4 rate=0.68, seed 9 rate=0.72, seed 13 rate=0.72,
+all PASS, matching the v1.1 baseline exactly).
+
+### Receipt — 12 seeds, headless, `--greedbots --seed=N --rounds=1 --roundtime=45`
+
+Pass bar: no player ends at 0 points. Personality spread bar: scores stay
+visibly uneven (a timid/unlucky bot banks less, never flatlines to parity).
+
+| seed | RED | BLUE | GOLD | MINT | min |
+|---|---|---|---|---|---|
+| 1  | 16 | 2  | 12 | 9  | 2 |
+| 2  | 11 | 13 | 8  | 11 | 8 |
+| 3  | 8  | 4  | 11 | 12 | 4 |
+| 4  | 9  | 3  | 26 | 3  | 3 |
+| 5  | 11 | 3  | 10 | 7  | 3 |
+| 6  | 10 | 4  | 12 | 9  | 4 |
+| 7  | 16 | 5  | 16 | 2  | 2 |
+| 8  | 4  | 17 | 7  | 6  | 4 |
+| 9  | 8  | 7  | 4  | 18 | 4 |
+| 10 | 5  | 2  | 7  | 30 | 2 |
+| 11 | 20 | 10 | 3  | 10 | 3 |
+| 12 | 21 | 2  | 3  | 15 | 2 |
+
+Zero bots at 0 across all 12 seeds (2.4x the 5-seed bar); every seed still
+shows a clear spread (min 2-9, max 8-30) — nobody flatlines to sameness, and
+the forced personalities (RED = heavy mugger/high threshold, BLUE = low
+threshold/low mugger "eager grabber") still read as distinct archetypes,
+they just no longer have a floor of exactly zero. Board receipts unaffected
+(`greed.gd` untouched): `run_receipts.ps1 -Quick` 2/2 PASS before and after.
+
+**Before this pass** (same command, same seeds, pre-fix `greed_bots.gd`), for
+reference — seeds 1/3/4 each had a player end at exactly 0:
+
+| seed | RED | BLUE | GOLD | MINT |
+|---|---|---|---|---|
+| 1 | 9  | 0 | 28 | 4  |
+| 2 | 9  | 7 | 22 | 1  |
+| 3 | 7  | 0 | 12 | 14 |
+| 4 | 10 | 0 | 19 | 8  |
+| 5 | 9  | 7 | 11 | 6  |
+
 ## Known issues / notes
 
 - **Bot grab/drop grieflock (fixed).** Early bot tuning made every bot camp the
@@ -265,11 +374,11 @@ ceremony now firing on `stinger_win`.
   zero banks. Fixed with: 0.5s post-grab grace immunity; muggers only engage pots
   worth >=7 (small pots are let through to bank and reset the cycle); guard bots
   loiter on their own side rather than swarming dead-centre.
-- **Pure-mugger bots can score 0 (SOFTENED — see v1.1 tuning section below).**
-  A bot seeded as a heavy mugger with a high grab threshold may still hunt all
-  match without ever banking a huge pot outright, but it no longer sits at a
-  literal 0: it engages thinner pots and, if a chase keeps whiffing, gives up
-  and grabs directly instead of hunting forever for nothing.
+- **Pure-mugger bots can score 0 (FIXED — see v1.2 CURE section above).** v1.1
+  softened this; v1.2 found two more independent zero-bank causes beyond the
+  named "pure mugger" case (an active-but-outmatched victim, and an unrelated
+  carrier-pathing stuck bug) and closed all three. 12-seed soak: no player
+  ends a match at 0 points.
 - **Standalone without `--greedbots`** drives only the shared/unassigned seats
   (device -3/-99) as bots, matching the house pattern (Tilt). Keyboard-half seats
   (-1/-2) idle until a human plays. Pass `--greedbots` for a fully self-playing demo.
