@@ -131,6 +131,19 @@ const ZF_WIDOW := GEN_DIR + "npc_widow_idle_c243.glb"              # native 1.6m
 const ZF_MOURNER_HOODED := GEN_DIR + "npc_mourner_hooded_idle_c243.glb"  # native 1.75m
 const ZF_REAPER_BASE := GEN_DIR + "npc_reaper.glb"           # the standing sculpt — dormant
 const ZF_SCYTHE := GEN_DIR + "reaper_scythe.glb"             # forged separately (hand-parent later)
+# G4 (#81): the Reaper's one active beat — a RIGGED clip standing in for the
+# static sculpt at the shortcut's carve swing only (rig audit: CLEAN, unused;
+# robes hold under arms-down doctrine). Native height per the rig report
+# (tools/meshy_rig_wave_procession_report.json); target height matches the
+# static sculpt's placed 4.1m (_build_npc_troupe) so no scale pop at swap.
+# ZF_REAPER_WALK stays benched (path kept for the record, not instanced) —
+# see procession.gd _fx_reaper_shortcut's doc block for why: the ceremony
+# camera never tracks the traveler, and the "Slow Orc Walk" preset's own
+# hunched pose reads as a lunge, not a glide. The static sculpt keeps gliding.
+const ZF_REAPER_WALK := GEN_DIR + "npc_reaper_walk.glb"      # benched — see above
+const ZF_REAPER_SWEEP := GEN_DIR + "npc_reaper_sweep.glb"    # rigged — hero swing pose
+const REAPER_RIG_NATIVE_H := 3.5
+const REAPER_RIG_TARGET_H := 4.1
 ## THE REAPER's dormant post — the far graveyard edge beyond Weeping Valley,
 ## outside every route, barely lit. He activates in a future Estate Stirs
 ## lane; tonight he is just... present. (G1: pushed out with the world; y is
@@ -959,7 +972,7 @@ func _build_npc_troupe() -> void:
 	# THE REAPER — the standing sculpt, motionless at the graveyard's edge,
 	# facing across the valley toward the gate; his scythe planted beside him.
 	if ResourceLoader.exists(ZF_REAPER_BASE):
-		reaper_prop = _prop(ZF_REAPER_BASE, FB_COLUMN, 4.1)
+		reaper_prop = _prop(ZF_REAPER_BASE, FB_COLUMN, REAPER_RIG_TARGET_H)
 		_place_facing(reaper_prop,
 			_gsnap(REAPER_POST, -0.08), gate_pos() + Vector3(0, 0.0, 4.0))
 		reaper_scythe = _prop(ZF_SCYTHE, FB_LANTERN, 3.6)
