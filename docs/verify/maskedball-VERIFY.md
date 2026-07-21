@@ -206,3 +206,29 @@ CLI user args: `--mbbots`, `--seed=N`, `--players=N` (2–4), `--mbtally`,
 - Suggested director wiring (post-merge, not in this lane):
   - MODULES: `"maskedball": {"name": "MASKED BALL", "scene": "res://minigames/masked_ball/masked_ball.tscn", "mode": "contract", "theater": true},`
   - HOWTO: `"maskedball": {"goal": "A crowd of identical masked dancers — four of them are you, and nobody is told which. Find yourself, dance like furniture, curtsy to the throne for points, and spend your one mark to unmask a human. Wrong guess: you flash.", "a": "CURTSY (scores in the circle)", "b": "UNMASK (one mark)"},`
+
+## THE CORONER (doc 32 redesign — twelfth watch, 2026-07-21)
+
+The approved round-structure redesign, implemented by the codex lane and
+finished/verified in-house after the job stalled pre-verification. Four
+75s rounds, the letter-opener rotates through every seat (soak proves
+unique=4), three hidden guests run icon errands (CLOCK / PUNCH / WEST)
+among bot dancers for penny income, one close-range accusation per round:
+CORRECT ends the round early and places the Coroner first; WRONG ("red
+wax") places them fourth with zero income; silence takes third. New HUD
+mb_errand_hud.gd; bots play both roles; _net_state/_net_apply extended.
+
+Soak (headless, bots, receipts below are seed 1 verbatim):
+```
+godot --headless --path . res://minigames/masked_ball/masked_ball.tscn -- --mbtally --seed=N
+godot --headless --path . res://minigames/masked_ball/masked_ball.tscn -- --mbtally --seed=1 --players=2
+```
+- Seeds 1-3: zero script errors; rounds resolve CORRECT/WRONG/buzzer.
+- MBC_SOAK_COMPLETE rounds=4 coroners=[2, 3, 0, 1] unique=4 correct=2 wrong=2 unused=0 duration_each=[66.1, 75.0, 75.0, 62.4]
+- MBC_TALLY placements=[1, 2, 0, 3] totals=RED=5/♠24 BLUE=9/♠25 GOLD=7/♠23 MINT=3/♠23
+- 2-player: scales to 2 rounds, clean; MBC_TALLY placements=[1, 0].
+- Board untouched: run_receipts.ps1 -Quick 2/2 PASS with this code live.
+
+Timing note for the systemic pass (#84): full match ≈ 4×62-75s ≈ 4-5 min
+(was ~168s) — per-round in the 60-120s band, whole-match length is a
+producer call once the timing audit lands.

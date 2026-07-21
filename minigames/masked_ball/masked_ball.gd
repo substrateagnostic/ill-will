@@ -1,4 +1,9 @@
 extends Minigame
+## CURRENT RULESET — THE CORONER (approved doc 32): four 75-second rounds,
+## one rotating public letter-opener, three hidden guests running icon errands,
+## and one close-range accusation. The long historical comment below documents
+## the hidden-in-plain-sight foundation this redesign preserves; its old scoring
+## paragraph is superseded by the Coroner round state implemented below.
 ## MASKED BALL — the Theater's third social-deduction act. The stage floods
 ## with a crowd of IDENTICAL masked dancers; four of them are the players,
 ## and nobody is told which. You discover yourself by moving (your dancer
@@ -89,7 +94,8 @@ extends Minigame
 ## the couch's only "secret" is the correlation between your hidden stick
 ## and your own mask's glints, which no packet can name.
 
-enum Phase { WAITING, INTRO, WALTZ, REVEAL, DONE }
+enum Phase { WAITING, INTRO, WALTZ, ROUND_END, REVEAL, DONE }
+enum Errand { CLOCK, PUNCH, WEST }
 
 const DANCER_CHAR := "res://assets/models/kaykit/Rogue.glb"
 
@@ -98,7 +104,8 @@ const DANCE_SPEED := 1.35          # EVERYBODY moves at crowd pace
 const MOVE_TH := 0.5               # stick past this = glide
 const FEATHER_LO := 0.15           # feather band lower edge (private pulse)
 const GLINT_CD := 1.4
-const WALTZ_TIME := 150.0
+const ROUND_TIME := 75.0
+const WALTZ_TIME := ROUND_TIME       # retained public bot/query name
 const SNAP_WALTZ_TIME := 90.0
 const INTRO_TIME := 3.2
 const CURTSY_TIME := 1.15
@@ -108,6 +115,11 @@ const PIP_PTS := 2
 const UNMASK_PTS := 6
 const WASTE_PTS := -3
 const SURVIVE_PTS := 4
+const ROUND_COUNT := 4
+const PUNCH_LINGER := 3.0
+const WEST_WALTZ := 3.6
+const ERRAND_PENNIES := 1
+const ROUND_PLACE_POINTS := [3, 2, 1, 0]
 const MARK_REACH := 1.7
 const FLASH_TIME := 1.8
 const ROYALTY_UNMASK := 2
@@ -118,6 +130,12 @@ const AX := 7.6                    # ballroom ellipse half extents
 const AZ := 5.0
 const ZONE_C := Vector3(0, 0, -3.55)
 const ZONE_R := 2.1
+const CLOCK_C := Vector3(5.2, 0, -2.6)
+const CLOCK_R := 1.38
+const PUNCH_C := Vector3(5.2, 0, 2.6)
+const PUNCH_R := 1.48
+const WEST_C := Vector3(-5.45, 0, -0.2)
+const WEST_R := 2.15
 const GHOST_SPEED := 1.9
 const GUST_CD := 3.5
 const GUST_R := 2.2
@@ -133,9 +151,8 @@ const WALTZ_BEAT := 0.62
 const GAME_INTRO := {
 	"accent": Color(0.92, 0.82, 1.0),
 	"controls": [
-		{"action": "move", "label": "DRIFT (crowd speed)"},
-		{"action": "a", "label": "CURTSY (scores in the circle)"},
-		{"action": "b", "label": "UNMASK (one mark)"},
+		{"action": "move", "label": "DRIFT"},
+		{"action": "a", "label": "BOW / ACCUSE"},
 	],
 }
 
@@ -157,6 +174,22 @@ var _waltz_e := 0.0
 var _waltz_len := WALTZ_TIME
 var _intro_t := 0.0
 var _corpse_fade: Dictionary = {}   # body -> waltz time to fade
+
+# THE CORONER round state. Hidden guest identity remains body-indexed; only
+# [_coroner_seat, _body_of[_coroner_seat]] is deliberately public.
+var _round_index := 0
+var _round_total := ROUND_COUNT
+var _coroner_order: Array = []
+var _coroner_seat := -1
+var _accusation_used := false
+var _accusation_result := ""
+var _accused_body := -1
+var _round_order: Array = []
+var _round_receipts: Array = []
+var _round_end_t := 0.0
+var _round_end_cause := ""
+var _errand_hud: MBErrandHUD = null
+var _last_hud_sig := ""
 
 # meta / results
 var _currency: Array = []
@@ -201,6 +234,11 @@ var _net_wst: Array = []            # [accuser_seat, accuser_body]
 var _net_led: Array = []            # [text, color_html] as rows are read out
 var _net_gust: Array = [0, 0, 0, 0] # per-seat ghost-gust counters (dead = revealed)
 var _net_champ: Array = [-1, -1]    # [seat, body] once the ball is taken
+var _net_round := 0                  # round generation; mirror resets pawns on edge
+var _net_coroner: Array = [-1, -1]   # PUBLIC [seat, body]
+var _net_accuse: Array = [0, -1, -1] # 0 unused / 1 correct / 2 wrong / 3 abstained
+var _mir_round := -1
+var _mir_coroner: Array = [-1, -1]
 var _ban_col := "ffffff"            # last banner/sub colors (ride the wire)
 var _sub_col := "ffffff"
 # --mbnetdemo host beat + client injector state
@@ -289,7 +327,7 @@ func _default_config() -> Dictionary:
 			"device": dev,
 			"bot": _all_bots or PlayerInput.standalone_bot_default(i) or dev == -3 or dev == -99,
 		})
-	return {"roster": r, "rounds": 1, "rng_seed": _cli_seed, "practice": false}
+	return {"roster": r, "rounds": ROUND_COUNT, "rng_seed": _cli_seed, "practice": false}
 
 func begin(config: Dictionary) -> void:
 	if _started:
@@ -299,7 +337,7 @@ func begin(config: Dictionary) -> void:
 	rng.seed = int(config.get("rng_seed", 1))
 	crowd_rng.seed = int(config.get("rng_seed", 1)) ^ 0xC0DA
 	_practice = bool(config.get("practice", false))
-	_waltz_len = SNAP_WALTZ_TIME if (_snaps or _netdemo) else WALTZ_TIME
+	_waltz_len = ROUND_TIME
 	roster = config.get("roster", [])
 	players.clear()
 	for i in roster.size():
@@ -321,7 +359,24 @@ func begin(config: Dictionary) -> void:
 			"gust_cd": 0.0,
 			"glint_cd": 0.0,
 			"ghost_node": null,
+			"round_income": 0,
+			"total_income": 0,
+			"errands": [],
+			"errand_pos": 0,
+			"errand_progress": 0.0,
+			"pending_clock": false,
+			"last_income_t": 999.0,
+			"round_place": 0,
+			"round_places": [],
 		})
+	_round_total = players.size() if players.size() != 4 else ROUND_COUNT
+	_coroner_order = range(players.size())
+	for k in range(_coroner_order.size() - 1, 0, -1):
+		var j := rng.randi_range(0, k)
+		var tmp = _coroner_order[k]
+		_coroner_order[k] = _coroner_order[j]
+		_coroner_order[j] = tmp
+	_setup_errand_hud()
 	if _mirror:
 		# RENDER MIRROR (spec §4.3): no deal, no bots, no sim. The client's
 		# rng_seed is 0 by the estate's mirror contract, and we never touch it:
@@ -340,9 +395,10 @@ func begin(config: Dictionary) -> void:
 	bots.setup(int(config.get("rng_seed", 1)) ^ 0x3A5CED, players.size(),
 		CROWD_TOTAL, _waltz_len)
 	bots.photo_mode = _snaps or _netdemo
-	print("MB_BEGIN players=%d seed=%d practice=%s bots=%s waltz=%.0f" % [
+	print("MBC_BEGIN players=%d seed=%d practice=%s bots=%s rounds=%d round_time=%.0f order=%s" % [
 		players.size(), rng.seed, str(_practice),
-		str(players.map(func(p): return p.is_bot)), _waltz_len])
+		str(players.map(func(p): return p.is_bot)), _round_total, _waltz_len,
+		str(_coroner_order)])
 	for i in players.size():
 		print("MB_SELF seat=%d %s body=%d" % [i, players[i].name, _body_of[i]])
 	# NIT 7 idiom: intro card at load; headless evidence/capture/probe keep sync start.
@@ -358,21 +414,27 @@ func _present_intro_card() -> void:
 	_intro_card.started.connect(_start_waltz_intro)
 	var spec: Dictionary = GAME_INTRO.duplicate(true)
 	# name/goal/tips pulled LIVE from dialog.json so Alex can rewrite the guide there.
-	spec["name"] = Dialog.text("intro.maskedball.name")
-	spec["goal"] = Dialog.text("intro.maskedball.goal")
-	spec["tips"] = Dialog.paras("intro.maskedball.tips")
+	spec["name"] = Dialog.text("intro.maskedball_coroner.name")
+	spec["goal"] = Dialog.text("intro.maskedball_coroner.goal")
+	spec["tips"] = Dialog.paras("intro.maskedball_coroner.tips")
 	spec["seats"] = _human_seats()
 	_intro_card.present(spec)
+
+func _setup_errand_hud() -> void:
+	if _tally or _errand_hud != null:
+		return
+	_errand_hud = MBErrandHUD.new()
+	$UI.add_child(_errand_hud)
 
 
 func _start_waltz_intro() -> void:
 	phase = Phase.INTRO
 	_intro_t = 0.0
-	phase_label.text = "MASKED BALL"
+	phase_label.text = "THE CORONER"
 	info_label.text = _info_line()
-	_flash_banner("MASKED BALL", Color(0.92, 0.82, 1.0), 2.6)
-	_flash_sub("the Theater presents", Color(0.72, 0.62, 0.8), 2.6)
-	_say("The orchestra plays. Somebody here is breathing too deliberately.")
+	_flash_banner("THE CORONER", Color(0.92, 0.82, 1.0), 2.6)
+	_flash_sub(Dialog.text("maskedball_coroner.present"), Color(0.72, 0.62, 0.8), 2.6)
+	_say(Dialog.text("maskedball_coroner.open"))
 
 var _body_of: Array = []    # seat -> body id
 
@@ -406,6 +468,7 @@ func _spawn_crowd() -> void:
 		d.rotation.y = d.facing
 		d.npc_t = rng.randf_range(0.2, 1.6)
 		d.glint_next = rng.randf_range(1.0, 5.0)
+		d.npc_errand_t = rng.randf_range(3.0, 10.0)
 		dancers.append(d)
 
 ## ONLINE mirror crowd: the same twenty pawns with NO deal and NO rng — a
@@ -483,6 +546,7 @@ func _build_world() -> void:
 
 	_build_ballroom()
 	_build_throne()
+	_build_errand_landmarks()
 	_build_chandeliers()
 
 func _build_ballroom() -> void:
@@ -627,7 +691,133 @@ func _build_throne() -> void:
 	_zone_ring_mat.emission_energy_multiplier = 0.5
 	ring.material_override = _zone_ring_mat
 	ring.position = ZONE_C + Vector3(0, 0.02, 0)
+	ring.visible = false
 	$Arena.add_child(ring)
+
+func _build_errand_landmarks() -> void:
+	var gold := StandardMaterial3D.new()
+	gold.albedo_color = Color(0.73, 0.58, 0.24)
+	gold.metallic = 0.72
+	gold.roughness = 0.28
+	var wood := StandardMaterial3D.new()
+	wood.albedo_color = Color(0.19, 0.07, 0.045)
+	wood.roughness = 0.78
+	var silver := StandardMaterial3D.new()
+	silver.albedo_color = Color(0.78, 0.84, 0.92)
+	silver.metallic = 0.82
+	silver.roughness = 0.2
+	# Clock: a tall, unmistakable face at the east wall.
+	var clock_root := Node3D.new()
+	clock_root.position = CLOCK_C + Vector3(0.55, 0, -0.15)
+	$Arena.add_child(clock_root)
+	var case := MeshInstance3D.new()
+	var case_mesh := BoxMesh.new()
+	case_mesh.size = Vector3(0.9, 3.25, 0.55)
+	case.mesh = case_mesh
+	case.material_override = wood
+	case.position.y = 1.62
+	clock_root.add_child(case)
+	var face := MeshInstance3D.new()
+	var face_mesh := CylinderMesh.new()
+	face_mesh.top_radius = 0.43
+	face_mesh.bottom_radius = 0.43
+	face_mesh.height = 0.08
+	face.mesh = face_mesh
+	face.material_override = gold
+	face.position = Vector3(0, 2.45, 0.32)
+	face.rotation_degrees.x = 90
+	clock_root.add_child(face)
+	for hand_spec in [[Vector3(0, 2.45, 0.38), Vector3(0.05, 0.48, 0.04), 0.0],
+			[Vector3(0.13, 2.34, 0.39), Vector3(0.04, 0.34, 0.04), -48.0]]:
+		var hand := MeshInstance3D.new()
+		var hm := BoxMesh.new()
+		hm.size = hand_spec[1]
+		hand.mesh = hm
+		hand.material_override = wood
+		hand.position = hand_spec[0]
+		hand.rotation_degrees.z = float(hand_spec[2])
+		clock_root.add_child(hand)
+	# Punch: silver bowl on a round table, opposite the clock.
+	var table := MeshInstance3D.new()
+	var table_mesh := CylinderMesh.new()
+	table_mesh.top_radius = 0.82
+	table_mesh.bottom_radius = 0.68
+	table_mesh.height = 0.9
+	table.mesh = table_mesh
+	table.material_override = wood
+	table.position = PUNCH_C + Vector3(0, 0.45, 0)
+	$Arena.add_child(table)
+	var bowl := MeshInstance3D.new()
+	var bowl_mesh := SphereMesh.new()
+	bowl_mesh.radius = 0.62
+	bowl_mesh.height = 0.48
+	bowl.mesh = bowl_mesh
+	bowl.scale = Vector3(1.0, 0.45, 1.0)
+	bowl.material_override = silver
+	bowl.position = PUNCH_C + Vector3(0, 1.08, 0)
+	$Arena.add_child(bowl)
+	for a in 5:
+		var cup := MeshInstance3D.new()
+		var cup_mesh := CylinderMesh.new()
+		cup_mesh.top_radius = 0.09
+		cup_mesh.bottom_radius = 0.07
+		cup_mesh.height = 0.24
+		cup.mesh = cup_mesh
+		cup.material_override = gold
+		var th := TAU * float(a) / 5.0
+		cup.position = PUNCH_C + Vector3(cos(th) * 0.72, 1.04, sin(th) * 0.72)
+		$Arena.add_child(cup)
+	# West hall: three gilded archways and a dark runner.
+	var runner := MeshInstance3D.new()
+	var runner_mesh := BoxMesh.new()
+	runner_mesh.size = Vector3(3.7, 0.02, 5.1)
+	runner.mesh = runner_mesh
+	var runner_mat := StandardMaterial3D.new()
+	runner_mat.albedo_color = Color(0.075, 0.04, 0.13)
+	runner_mat.roughness = 0.9
+	runner.material_override = runner_mat
+	runner.position = WEST_C + Vector3(0, 0.015, 0)
+	$Arena.add_child(runner)
+	for z in [-1.75, 0.0, 1.75]:
+		for x in [-1.28, 1.28]:
+			var post := MeshInstance3D.new()
+			var post_mesh := CylinderMesh.new()
+			post_mesh.top_radius = 0.08
+			post_mesh.bottom_radius = 0.11
+			post_mesh.height = 2.5
+			post.mesh = post_mesh
+			post.material_override = gold
+			post.position = WEST_C + Vector3(x, 1.25, z)
+			$Arena.add_child(post)
+		var lintel := MeshInstance3D.new()
+		var lintel_mesh := BoxMesh.new()
+		lintel_mesh.size = Vector3(2.75, 0.18, 0.18)
+		lintel.mesh = lintel_mesh
+		lintel.material_override = gold
+		lintel.position = WEST_C + Vector3(0, 2.48, z)
+		$Arena.add_child(lintel)
+	# Prop-shaped floor halos repeat the HUD color language without labels.
+	for zone in [[CLOCK_C, CLOCK_R, Color(0.9, 0.72, 0.25)],
+			[PUNCH_C, PUNCH_R, Color(0.42, 0.75, 1.0)],
+			[WEST_C, WEST_R, Color(0.68, 0.46, 0.95)]]:
+		var ring := MeshInstance3D.new()
+		var rm := TorusMesh.new()
+		rm.inner_radius = 0.965
+		rm.outer_radius = 1.0
+		ring.mesh = rm
+		ring.scale = Vector3(float(zone[1]), 1.0, float(zone[1]))
+		var mat := StandardMaterial3D.new()
+		var zone_col: Color = zone[2]
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color = Color(zone_col.r, zone_col.g, zone_col.b, 0.34)
+		mat.emission_enabled = true
+		mat.emission = zone_col
+		mat.emission_energy_multiplier = 0.6
+		ring.material_override = mat
+		var zone_pos: Vector3 = zone[0]
+		ring.position = zone_pos + Vector3(0, 0.025, 0)
+		$Arena.add_child(ring)
 
 func _build_chandeliers() -> void:
 	for cx in [-4.2, 4.2]:
@@ -685,6 +875,9 @@ func _physics_process(delta: float) -> void:
 		Phase.WALTZ:
 			_tick_waltz(delta)
 			_tick_music(delta)
+		Phase.ROUND_END:
+			_tick_round_end(delta)
+			_tick_music(delta)
 		Phase.REVEAL:
 			_seq_run(delta)
 			_run_pending_snaps()
@@ -706,12 +899,17 @@ func _tick_shake(delta: float) -> void:
 		ShakeKit.clear(cam)
 
 func _begin_waltz() -> void:
+	if _round_index > 0:
+		_clear_round_nodes()
+		_spawn_crowd()
+	_prepare_round()
 	phase = Phase.WALTZ
 	_waltz_e = 0.0
-	phase_label.text = "MASKED BALL — THE WALTZ"
+	phase_label.text = "THE CORONER · %d/%d" % [_round_index + 1, _round_total]
 	hint_label.text = _controls_bar()
-	_flash_banner("THE WALTZ BEGINS", Color(1.0, 0.85, 0.4), 2.0)
-	_say("Dance. Preferably like nobody in particular.")
+	_flash_banner("%s  ✦  🗡" % PlayerBadge.glyph(_coroner_seat),
+		players[_coroner_seat].color, 2.0)
+	_say(Dialog.text("maskedball_coroner.round"))
 	# player bodies leave the crowd's brain; any half-finished bow is abandoned
 	for i in players.size():
 		var d: MBDancer = dancers[_body_of[i]]
@@ -719,7 +917,71 @@ func _begin_waltz() -> void:
 		d.act_t = 0.0
 	# NOTE: no game_time here — the standalone-start timer adds wall-clock
 	# wobble before begin(); every deterministic print keys off _waltz_e
-	print("MB_WALTZ_START bodies=%s" % str(_body_of))
+	print("MBC_ROUND_START round=%d/%d coroner=%d %s body=%d opener=1 guests=%s" % [
+		_round_index + 1, _round_total, _coroner_seat, players[_coroner_seat].name,
+		_body_of[_coroner_seat], _guest_seats()])
+
+func _clear_round_nodes() -> void:
+	for child in spawn_root.get_children():
+		child.queue_free()
+	dancers.clear()
+	body_to_seat.clear()
+	_body_of.clear()
+	_pos_before.clear()
+	_corpse_fade.clear()
+
+func _prepare_round() -> void:
+	_coroner_seat = int(_coroner_order[_round_index])
+	_accusation_used = false
+	_accusation_result = ""
+	_accused_body = -1
+	_round_order.clear()
+	_net_round = _round_index + 1
+	_net_coroner = [_coroner_seat, int(_body_of[_coroner_seat])]
+	_net_accuse = [0, -1, -1]
+	for i in players.size():
+		var p: Dictionary = players[i]
+		p.round_income = 0
+		p.errands = []
+		p.errand_pos = 0
+		p.errand_progress = 0.0
+		p.pending_clock = false
+		p.last_income_t = 999.0
+		p.eliminated = false
+		p.ghost_node = null
+		p.ghost_pos = Vector3.ZERO
+		p.mark_left = i == _coroner_seat
+		players[i] = p
+		dancers[_body_of[i]].seat = i
+		if i != _coroner_seat:
+			_refill_errands(i)
+	var cp: Dictionary = players[_coroner_seat]
+	dancers[_body_of[_coroner_seat]].set_coroner(cp.color,
+		PlayerBadge.glyph(_coroner_seat) + "  🗡")
+	bots.begin_round(_round_index, _coroner_seat)
+	_update_errand_hud(true)
+	info_label.text = _info_line()
+
+func _guest_seats() -> Array:
+	var out: Array = []
+	for i in players.size():
+		if i != _coroner_seat:
+			out.append(i)
+	return out
+
+func _refill_errands(seat: int) -> void:
+	var deck: Array = [Errand.CLOCK, Errand.PUNCH, Errand.WEST]
+	for k in range(deck.size() - 1, 0, -1):
+		var j := rng.randi_range(0, k)
+		var tmp = deck[k]
+		deck[k] = deck[j]
+		deck[j] = tmp
+	var p: Dictionary = players[seat]
+	var queue: Array = p.errands
+	for kind in deck:
+		queue.append(kind)
+	p.errands = queue
+	players[seat] = p
 
 ## ---- live-binding hint bar (real keys, not "A"/"B"; docs/verify/realkeys-VERIFY.md) ----
 ## Self-contained per the template; presentation only. Bindings are fixed per
@@ -761,8 +1023,7 @@ func _btn_hint(action: String, label: String) -> String:
 
 ## The main waltz bar, always real keys via describe_binding (matches the card).
 func _controls_bar() -> String:
-	return "STICK = DRIFT · FEATHER IT = your mask glints · %s · %s" % [
-		_btn_hint("a", "CURTSY"), _btn_hint("b", "UNMASK (one mark)")]
+	return "◉ = DRIFT / GLINT  ·  %s  ·  🕰  ♨  ≋" % _btn_hint("a", "BOW / ACCUSE")
 
 # ---------------------------------------------------------------- crowd
 ## NPC brain pass. During INTRO every body is crowd-driven (nobody can
@@ -774,38 +1035,44 @@ func _tick_crowd(delta: float, include_players: bool) -> void:
 		var d: MBDancer = dancers[b]
 		if d.revealed or d.gone:
 			continue
+		if d.npc_errand < 0:
+			d.npc_errand_t -= delta
+		if d.npc_errand < 0 and d.npc_errand_t <= 0.0 and not d.busy():
+			_start_npc_fake(d)
 		var moved := false
-		match d.act:
-			MBDancer.Act.CURTSY, MBDancer.Act.TWIRL:
-				d.act_t -= delta
-				if d.act_t <= 0.0:
-					if d.curtsying():
-						d.last_curtsy_end = _waltz_e
-					d.end_act()
-					d.npc_t = crowd_rng.randf_range(0.5, 2.4)
-			MBDancer.Act.PAUSE:
-				d.npc_t -= delta
-				if d.npc_t <= 0.0:
-					var roll := crowd_rng.randf()
-					var curtsy_p := 0.45 if in_zone(d.position) else 0.10
-					if roll < 0.10:
-						d.begin_twirl(1.1)
-					elif roll < 0.10 + curtsy_p:
-						d.begin_curtsy(CURTSY_TIME)
+		if d.npc_errand >= 0:
+			moved = _tick_npc_fake(d, delta)
+		else:
+			match d.act:
+				MBDancer.Act.CURTSY, MBDancer.Act.TWIRL:
+					d.act_t -= delta
+					if d.act_t <= 0.0:
+						if d.curtsying():
+							d.last_curtsy_end = _waltz_e
+						d.end_act()
+						d.npc_t = crowd_rng.randf_range(0.5, 2.4)
+				MBDancer.Act.PAUSE:
+					d.npc_t -= delta
+					if d.npc_t <= 0.0:
+						var roll := crowd_rng.randf()
+						if roll < 0.12:
+							d.begin_twirl(1.1)
+						elif roll < 0.24:
+							d.begin_curtsy(CURTSY_TIME)
+						else:
+							d.waypoint = swirl_waypoint(d.position, crowd_rng)
+							d.act = MBDancer.Act.DRIFT
+				MBDancer.Act.DRIFT:
+					var to := d.waypoint - d.position
+					to.y = 0.0
+					if to.length() < 0.2:
+						d.act = MBDancer.Act.PAUSE
+						d.npc_t = crowd_rng.randf_range(0.5, 2.4)
 					else:
-						d.waypoint = swirl_waypoint(d.position, crowd_rng)
-						d.act = MBDancer.Act.DRIFT
-			MBDancer.Act.DRIFT:
-				var to := d.waypoint - d.position
-				to.y = 0.0
-				if to.length() < 0.2:
-					d.act = MBDancer.Act.PAUSE
-					d.npc_t = crowd_rng.randf_range(0.5, 2.4)
-				else:
-					var dir := to.normalized()
-					d.position += dir * DANCE_SPEED * delta
-					d.face_toward(dir)
-					moved = true
+						var dir := to.normalized()
+						d.position += dir * DANCE_SPEED * delta
+						d.face_toward(dir)
+						moved = true
 		d.set_walking(moved)
 		# ambient mask glints — the noise floor the private pulse hides in
 		d.glint_next -= delta
@@ -813,39 +1080,82 @@ func _tick_crowd(delta: float, include_players: bool) -> void:
 			d.glint_next = crowd_rng.randf_range(2.0, 6.0)
 			d.glint()
 
+func _start_npc_fake(d: MBDancer) -> void:
+	d.npc_errand = crowd_rng.randi_range(Errand.CLOCK, Errand.WEST)
+	d.npc_errand_stage = 0
+	d.npc_errand_t = 99.0
+	d.waypoint = errand_point(d.npc_errand, crowd_rng.randf_range(0.0, TAU),
+		crowd_rng.randf_range(0.2, 0.62))
+	d.act = MBDancer.Act.DRIFT
+
+func _tick_npc_fake(d: MBDancer, delta: float) -> bool:
+	if d.npc_errand_stage == 0:
+		var to := d.waypoint - d.position
+		to.y = 0.0
+		if to.length() > 0.25:
+			var dir := to.normalized()
+			d.position += dir * DANCE_SPEED * delta
+			d.face_toward(dir)
+			return true
+		d.npc_errand_stage = 1
+		match d.npc_errand:
+			Errand.CLOCK:
+				d.begin_curtsy(CURTSY_TIME)
+			Errand.PUNCH:
+				d.act = MBDancer.Act.PAUSE
+				d.npc_errand_t = PUNCH_LINGER + crowd_rng.randf_range(-0.4, 0.7)
+			Errand.WEST:
+				d.npc_errand_t = WEST_WALTZ + crowd_rng.randf_range(0.2, 1.4)
+				d.waypoint = errand_point(Errand.WEST, crowd_rng.randf_range(0.0, TAU), 0.7)
+				d.act = MBDancer.Act.DRIFT
+		return false
+	match d.npc_errand:
+		Errand.CLOCK:
+			d.act_t -= delta
+			if d.act_t <= 0.0:
+				d.last_curtsy_end = _waltz_e
+				d.end_act()
+				_finish_npc_fake(d)
+		Errand.PUNCH:
+			d.npc_errand_t -= delta
+			if d.npc_errand_t <= 0.0:
+				_finish_npc_fake(d)
+		Errand.WEST:
+			d.npc_errand_t -= delta
+			var to2 := d.waypoint - d.position
+			to2.y = 0.0
+			if to2.length() < 0.25:
+				d.waypoint = errand_point(Errand.WEST, crowd_rng.randf_range(0.0, TAU),
+					crowd_rng.randf_range(0.3, 0.78))
+				to2 = d.waypoint - d.position
+			if d.npc_errand_t <= 0.0:
+				_finish_npc_fake(d)
+				return false
+			var dir2 := to2.normalized()
+			d.position += dir2 * DANCE_SPEED * delta
+			d.face_toward(dir2)
+			return true
+	return false
+
+func _finish_npc_fake(d: MBDancer) -> void:
+	d.npc_errand = -1
+	d.npc_errand_stage = 0
+	d.npc_errand_t = crowd_rng.randf_range(6.0, 15.0)
+	d.npc_t = crowd_rng.randf_range(0.4, 1.4)
+	d.act = MBDancer.Act.PAUSE
+
 # ---------------------------------------------------------------- waltz
 func _tick_waltz(delta: float) -> void:
 	_waltz_e += delta
 	timer_label.text = "%02d" % int(ceil(maxf(0.0, _waltz_len - _waltz_e)))
-	# 1) crowd (players excluded)
 	_tick_crowd(delta, false)
-	# 2) seats, fixed order
 	for i in players.size():
-		if players[i].eliminated:
-			_tick_ghost(i, delta)
-		else:
-			_tick_seat(i, delta)
+		_tick_seat(i, delta)
 	_post_move(delta)
-	# 3) corpse fades
-	for b in _corpse_fade.keys():
-		if _waltz_e >= float(_corpse_fade[b]) and not dancers[b].gone:
-			dancers[b].fade_out()
-	# 4) scheduled snaps
+	_update_errand_hud()
 	_run_pending_snaps()
-	if _snaps and not _snapped.has("crowd") and _waltz_e >= 14.0:
-		_snapped["crowd"] = true
-		_do_snap("crowd")
-		VerifyCapture.snap("crowd")
-	if _netdemo and not _snapped.has("mb_net_waltz") and _waltz_e >= 20.0:
-		_snapped["mb_net_waltz"] = true
-		VerifyCapture.snap("mb_net_waltz")
-	# 5) end checks
 	if _waltz_e >= _waltz_len:
-		_end_waltz("buzzer")
-	elif _waltz_e > 10.0 and _alive_count() == 1:
-		_end_waltz("floor_emptied")
-	elif _waltz_e > 10.0 and _nothing_left():
-		_end_waltz("nothing_left")
+		_settle_round("buzzer")
 
 func _tick_seat(i: int, delta: float) -> void:
 	var p: Dictionary = players[i]
@@ -854,22 +1164,14 @@ func _tick_seat(i: int, delta: float) -> void:
 		p.glint_cd = maxf(0.0, float(p.glint_cd) - delta)
 	# actions
 	var mv := Vector2.ZERO
-	var want_curtsy := false
-	var want_mark := false
+	var want_action := false
 	if p.is_bot:
 		var dec: Dictionary = bots.decide_alive(i, self, delta)
 		mv = dec.mv
-		want_curtsy = dec.curtsy
-		want_mark = dec.mark
-		var forced: Dictionary = _forced_override(i, d)
-		if not forced.is_empty():
-			mv = forced.mv
-			want_curtsy = false
-			want_mark = forced.mark
+		want_action = bool(dec.action)
 	else:
 		mv = PlayerInput.get_move(i)
-		want_curtsy = PlayerInput.just_pressed(i, "a")
-		want_mark = PlayerInput.just_pressed(i, "b")
+		want_action = PlayerInput.just_pressed(i, "a")
 	# a bow in progress locks the body
 	if d.busy():
 		d.act_t -= delta
@@ -896,10 +1198,15 @@ func _tick_seat(i: int, delta: float) -> void:
 			p.glint_cd = GLINT_CD
 			d.glint()
 			print("MB_GLINT seat=%d body=%d t=%.1f" % [i, d.body, _waltz_e])
-	if want_curtsy:
-		d.begin_curtsy(CURTSY_TIME)
-	if want_mark and p.mark_left:
-		_try_mark(i, d)
+	if i == _coroner_seat:
+		if want_action and p.mark_left:
+			_try_mark(i, d)
+	else:
+		if want_action:
+			var is_clock := errand_kind(i) == Errand.CLOCK and _in_errand(d.position, Errand.CLOCK)
+			p.pending_clock = is_clock
+			d.begin_curtsy(CURTSY_TIME)
+		_tick_guest_progress(i, d, mag, delta)
 
 ## --mbsnaps only: two scripted beats so every reveal state gets a photo.
 func _forced_override(i: int, d: MBDancer) -> Dictionary:
@@ -990,40 +1297,54 @@ func _nearest_npc_body(from: Vector3, exclude: int) -> int:
 
 func _finish_player_curtsy(i: int, d: MBDancer) -> void:
 	var p: Dictionary = players[i]
-	if not in_zone(d.position):
-		return   # a bluff, or a bow in the open — free theater
-	if int(p.pips) >= PIP_MAX or _waltz_e - float(p.last_pip) < CURTSY_GAP:
+	if i == _coroner_seat or not bool(p.pending_clock):
 		return
-	p.pips = int(p.pips) + 1
-	p.last_pip = _waltz_e
-	p.points = int(p.points) + PIP_PTS
-	_net_crt += 1   # wire fact: "somebody bowed for money" — a COUNT, no name
-	info_label.text = _info_line()
-	# the announcement is UNNAMED — the leak is "somebody bowed for money,
-	# just now"; the couch (and the bots) must catch WHO was mid-bow
-	# nobody can freeze-frame twenty dancers: anyone mid-bow OR fresh out of
-	# one near the throne shares the suspicion
-	var curtsiers: Array = []
-	for b in CROWD_TOTAL:
-		var dd: MBDancer = dancers[b]
-		if dd.revealed or dd.gone:
-			continue
-		var bowed_recently: bool = _waltz_e - dd.last_curtsy_end < 1.2
-		if (dd.curtsying() or bowed_recently or b == d.body) and in_zone_wide(dd.position):
-			curtsiers.append(b)
-	if not curtsiers.has(d.body):
-		curtsiers.append(d.body)
-	print("MB_CURTSY seat=%d %s pip=%d/%d t=%.1f set=%s" % [i, p.name,
-		int(p.pips), PIP_MAX, _waltz_e, str(curtsiers)])
-	bots.on_pip_event(curtsiers, i, self)
-	_say(_pick_line([
-		"Somebody has paid respects to the throne. How dutiful.",
-		"Another bow at the dais. The throne remains unimpressed.",
-		"A curtsy, for money. The orchestra pretends not to notice.",
-	]))
+	p.pending_clock = false
+	if errand_kind(i) == Errand.CLOCK and _in_errand(d.position, Errand.CLOCK):
+		_complete_errand(i, Errand.CLOCK)
+
+func _tick_guest_progress(i: int, d: MBDancer, move_mag: float, delta: float) -> void:
+	var p: Dictionary = players[i]
+	var kind := errand_kind(i)
+	match kind:
+		Errand.PUNCH:
+			if _in_errand(d.position, kind) and move_mag < MOVE_TH:
+				p.errand_progress = float(p.errand_progress) + delta
+			else:
+				p.errand_progress = maxf(0.0, float(p.errand_progress) - delta * 1.5)
+			if float(p.errand_progress) >= PUNCH_LINGER:
+				_complete_errand(i, kind)
+		Errand.WEST:
+			if _in_errand(d.position, kind) and move_mag >= MOVE_TH:
+				p.errand_progress = float(p.errand_progress) + delta
+			else:
+				p.errand_progress = maxf(0.0, float(p.errand_progress) - delta)
+			if float(p.errand_progress) >= WEST_WALTZ:
+				_complete_errand(i, kind)
+		_:
+			p.errand_progress = 0.0
+
+func _complete_errand(i: int, kind: int) -> void:
+	if phase != Phase.WALTZ or i == _coroner_seat or errand_kind(i) != kind:
+		return
+	var p: Dictionary = players[i]
+	p.round_income = int(p.round_income) + ERRAND_PENNIES
+	p.total_income = int(p.total_income) + ERRAND_PENNIES
+	p.last_income_t = _waltz_e
+	p.errand_pos = int(p.errand_pos) + 1
+	p.errand_progress = 0.0
+	p.pending_clock = false
+	if (p.errands as Array).size() - int(p.errand_pos) < 3:
+		players[i] = p
+		_refill_errands(i)
+		p = players[i]
+	_net_crt += 1   # cumulative public completion beat; mirror cannot lose the chime
+	print("MBC_ERRAND round=%d seat=%d body=%d kind=%s income=%d t=%.1f" % [
+		_round_index + 1, i, _body_of[i], Errand.keys()[kind], int(p.round_income), _waltz_e])
+	bots.on_errand_complete(i)
+	_update_errand_hud(true)
 	if not _tally:
 		Sfx.play("sink", -10.0)
-		_pulse_zone_ring()
 
 ## The body an unmask attempt from `pos` would actually grab: the nearest
 ## unrevealed dancer (never your own) within MARK_REACH, or -1. Shared with
@@ -1044,6 +1365,8 @@ func nearest_markable(own_body: int, pos: Vector3) -> int:
 	return best
 
 func _try_mark(i: int, d: MBDancer) -> void:
+	if i != _coroner_seat or _accusation_used:
+		return
 	var own: int = _body_of[i]
 	var best := nearest_markable(own, d.position)
 	if best < 0:
@@ -1051,9 +1374,11 @@ func _try_mark(i: int, d: MBDancer) -> void:
 			Sfx.play("invalid", -10.0)
 		return   # nobody in reach — the mark is NOT spent on empty air
 	players[i].mark_left = false
+	_accusation_used = true
+	_accused_body = best
 	info_label.text = _info_line()
 	var victim_seat: int = body_to_seat[best]
-	if victim_seat >= 0:
+	if victim_seat >= 0 and victim_seat != _coroner_seat:
 		_unmask_human(i, victim_seat, best, d)
 	else:
 		_waste_mark(i, best, d)
@@ -1065,36 +1390,22 @@ func _unmask_human(killer: int, victim: int, victim_body: int, killer_d: MBDance
 	vp.eliminated = true
 	vp.ghost_pos = vd.position + Vector3(0, 2.3, 0)
 	vp.gust_cd = 2.0
-	players[killer].points = int(players[killer].points) + UNMASK_PTS
+	_accusation_result = "correct"
 	_unmask_count += 1
-	_kill_events.append({"killer": killer, "victim": victim, "cause": "unmasked"})
-	if not _practice:
-		_currency.append({"type": "royalty", "player": killer, "amount": ROYALTY_UNMASK,
-			"reason": "tore the mask off %s for the room's amusement" % vp.name})
-		_currency.append({"type": "grudge", "player": victim, "amount": GRUDGE_MARKED,
-			"reason": "unmasked mid-waltz"})
-	bots.on_reveal(victim_body)
-	# the lunge is public: anyone watching (bots included) now suspects the
-	# body that did the tearing — fair-play parity with the couch
-	bots.on_kill_seen(killer_d.body, self)
-	# wire fact: the FIRST time this seat<->body pair exists anywhere the
-	# clients can read, minted at the same frame the couch prints the badge
+	_kill_events.append({"killer": killer, "victim": victim, "cause": "coroner_unmasked"})
+	_net_accuse = [1, victim_body, victim]
 	_net_rev.append([0, victim, victim_body, killer])
-	# REVEAL moment: the victim's badge finally exists
 	vd.reveal(vp.color, PlayerBadge.glyph(victim) + " " + vp.name, true)
-	_corpse_fade[victim_body] = _waltz_e + 2.6
 	killer_d.face_toward(vd.position - killer_d.position)
 	killer_d.glint()
 	if _first_kill_txt == "":
-		_first_kill_txt = "%s tore the mask off %s mid-waltz" % [players[killer].name, vp.name]
-	print("MB_MARK killer=%d %s victim=%d %s body=%d t=%.1f" % [killer,
-		players[killer].name, victim, vp.name, victim_body, _waltz_e])
-	_flash_banner("%s WAS HUMAN" % vp.name, vp.color, 2.6)
-	_flash_sub("%s collects the unmasking" % players[killer].name, players[killer].color, 2.6)
-	_say(_pick_line([
-		"One mask off. %s, everyone. They bowed beautifully, considering." % vp.name,
-		"%s, unmasked. The orchestra plays on. It is paid to." % vp.name,
-	]))
+		_first_kill_txt = "%s found %s" % [players[killer].name, vp.name]
+	print("MBC_ACCUSE round=%d coroner=%d target_body=%d target_seat=%d result=CORRECT t=%.1f" % [
+		_round_index + 1, killer, victim_body, victim, _waltz_e])
+	_flash_banner("✓  %s" % PlayerBadge.glyph(victim), vp.color, 2.6)
+	_flash_sub("🗡  1st   ·   %s  4th" % PlayerBadge.glyph(victim),
+		players[killer].color, 2.6)
+	_say(Dialog.text("maskedball_coroner.correct"))
 	_play_seat_tick(victim)
 	_shake = maxf(_shake, 0.4)
 	if not _tally:
@@ -1102,49 +1413,25 @@ func _unmask_human(killer: int, victim: int, victim_body: int, killer_d: MBDance
 		_time_hit(0.3, 0.4)
 		_spawn_ghost_node(victim)
 		_spawn_floor_mask(vd.position)
-	if _snaps and not _snapped.has("unmask_human"):
-		_snapped["unmask_human"] = true
-		_pending_snaps.append({"tag": "unmask_human", "at": game_time + 0.9})
-		VerifyCapture.snap("unmask_human")
-	if _snaps:
-		_forced_kill_done = true
-	if _netdemo and not _snapped.has("mb_net_unmask"):
-		_snapped["mb_net_unmask"] = true
-		VerifyCapture.snap("mb_net_unmask")
+	_settle_round("correct")
 
 func _waste_mark(accuser: int, npc_body: int, accuser_d: MBDancer) -> void:
 	var p: Dictionary = players[accuser]
-	p.points = int(p.points) + WASTE_PTS
+	_accusation_result = "wrong"
 	_waste_count += 1
-	if not _practice:
-		_currency.append({"type": "grudge", "player": accuser, "amount": GRUDGE_WASTE,
-			"reason": "accused the furniture"})
-	# the position leak — a self-inflicted reveal moment, so the badge shows
-	_net_wst.append([accuser, accuser_d.body])   # wire fact, minted with the flash
-	accuser_d.do_flash(FLASH_TIME, p.color, PlayerBadge.glyph(accuser) + " " + p.name)
-	bots.on_flash(accuser_d.body, self)
+	_net_accuse = [2, npc_body, -1]
+	_net_wst.append([accuser, accuser_d.body])
+	accuser_d.mark_wax_cross()
 	dancers[npc_body].begin_twirl(1.1)   # the furniture, offended
-	print("MB_FLASH seat=%d %s body=%d npc=%d t=%.1f" % [accuser, p.name,
-		accuser_d.body, npc_body, _waltz_e])
-	_flash_banner("%s MARKS THE FURNITURE" % p.name, p.color, 2.2)
-	_flash_sub("%+d · their dancer flashes" % WASTE_PTS, Color(1.0, 0.55, 0.4), 2.2)
-	_say(_pick_line([
-		"That one was furniture, %s. The furniture accepts your apology." % p.name,
-		"%s accuses an employee. The employee will dine on this for years." % p.name,
-	]))
+	print("MBC_ACCUSE round=%d coroner=%d target_body=%d target_seat=-1 result=WRONG t=%.1f" % [
+		_round_index + 1, accuser, npc_body, _waltz_e])
+	_flash_banner("✕  🗡", Color(0.95, 0.06, 0.08), 2.2)
+	_flash_sub("%s  4th" % PlayerBadge.glyph(accuser), p.color, 2.2)
+	_say(Dialog.text("maskedball_coroner.wrong"))
 	_play_seat_tick(accuser)
 	_shake = maxf(_shake, 0.22)
 	if not _tally:
 		Sfx.play("grudge", -6.0)
-	if _snaps and not _snapped.has("unmask_npc"):
-		_snapped["unmask_npc"] = true
-		_pending_snaps.append({"tag": "unmask_npc", "at": game_time + 0.5})
-		VerifyCapture.snap("unmask_npc")
-	if _snaps:
-		_forced_waste_done = true
-	if _netdemo and not _snapped.has("mb_net_waste"):
-		_snapped["mb_net_waste"] = true
-		VerifyCapture.snap("mb_net_waste")
 
 # ---------------------------------------------------------------- ghosts
 func _tick_ghost(i: int, delta: float) -> void:
@@ -1264,6 +1551,90 @@ func _post_move(delta: float) -> void:
 			d.flash_t = maxf(0.0, d.flash_t - delta)
 
 # ---------------------------------------------------------------- end checks
+func _settle_round(cause: String) -> void:
+	if phase != Phase.WALTZ:
+		return
+	if not _accusation_used:
+		_accusation_result = "none"
+		_net_accuse = [3, -1, -1]
+		print("MBC_ACCUSE round=%d coroner=%d target_body=-1 target_seat=-1 result=NONE t=%.1f" % [
+			_round_index + 1, _coroner_seat, _waltz_e])
+	_round_end_cause = cause
+	_round_order = _round_rank()
+	var incomes: Array = []
+	for i in players.size():
+		incomes.append(int(players[i].round_income))
+	for place in _round_order.size():
+		var seat := int(_round_order[place])
+		players[seat].round_place = place + 1
+		players[seat].round_places.append(place + 1)
+		players[seat].points = int(players[seat].points) + int(ROUND_PLACE_POINTS[place])
+	_round_receipts.append({"round": _round_index + 1, "coroner": _coroner_seat,
+		"result": _accusation_result, "duration": snappedf(_waltz_e, 0.1),
+		"order": _round_order.duplicate(), "income": incomes.duplicate()})
+	print("MBC_ROUND_RESULT round=%d coroner=%d accusation=%s order=%s income=%s duration=%.1f cause=%s" % [
+		_round_index + 1, _coroner_seat, _accusation_result.to_upper(),
+		str(_round_order), str(incomes), _waltz_e, cause])
+	# At settlement the masquerade is over for this round. This also mints the
+	# seat↔body rows the online mirror is allowed to learn now, never earlier.
+	for b in CROWD_TOTAL:
+		if body_to_seat[b] < 0:
+			dancers[b].dim_npc()
+	for i in players.size():
+		var d: MBDancer = dancers[_body_of[i]]
+		if not d.revealed:
+			_net_rev.append([1, i, int(_body_of[i]), -1])
+			d.reveal(players[i].color, PlayerBadge.glyph(i) + " " + str(players[i].name), false)
+	phase = Phase.ROUND_END
+	_round_end_t = 0.0
+	timer_label.text = ""
+	hint_label.text = ""
+	_update_errand_hud(true)
+	var podium: Array = []
+	for seat2 in _round_order:
+		podium.append(PlayerBadge.glyph(int(seat2)))
+	_flash_banner("  ›  ".join(podium), Color(1.0, 0.86, 0.42), 3.2)
+	if _accusation_result == "none":
+		_say(Dialog.text("maskedball_coroner.none"))
+	elif _accusation_result == "wrong":
+		_say(Dialog.text("maskedball_coroner.mockery"))
+	if not _tally:
+		Sfx.play("round_over")
+
+func _round_rank() -> Array:
+	var guests := _guest_seats()
+	guests.sort_custom(func(a, b):
+		var ia := int(players[a].round_income)
+		var ib := int(players[b].round_income)
+		if ia != ib:
+			return ia > ib
+		var ta := float(players[a].last_income_t)
+		var tb := float(players[b].last_income_t)
+		if not is_equal_approx(ta, tb):
+			return ta < tb
+		return int(a) < int(b))
+	match _accusation_result:
+		"correct":
+			var victim := int(body_to_seat[_accused_body])
+			guests.erase(victim)
+			return [_coroner_seat] + guests + [victim]
+		"wrong":
+			return guests + [_coroner_seat]
+		_:
+			var order := guests.duplicate()
+			order.insert(mini(2, order.size()), _coroner_seat)
+			return order
+
+func _tick_round_end(delta: float) -> void:
+	_round_end_t += delta
+	if _round_end_t < 4.0:
+		return
+	_round_index += 1
+	if _round_index < _round_total:
+		_begin_waltz()
+	else:
+		_begin_reveal()
+
 func _alive_count() -> int:
 	var n := 0
 	for p in players:
@@ -1284,12 +1655,104 @@ func _nothing_left() -> bool:
 func _end_waltz(cause: String) -> void:
 	if phase != Phase.WALTZ:
 		return
-	print("MB_WALTZ_END cause=%s t=%.1f unmasks=%d wastes=%d" % [cause, _waltz_e,
-		_unmask_count, _waste_count])
-	_begin_reveal()
+	_settle_round(cause)
 
 # ================================================================ REVEAL
 func _begin_reveal() -> void:
+	phase = Phase.REVEAL
+	phase_label.text = "THE CORONER · SETTLED"
+	hint_label.text = ""
+	timer_label.text = ""
+	if _errand_hud != null:
+		_errand_hud.set_rows([])
+	_seq.clear()
+	_seq_t = 0.0
+	_seq_add(0.0, func():
+		_flash_banner(Dialog.text("maskedball_coroner.finale"), Color(0.92, 0.85, 1.0), 2.4)
+		_say(Dialog.text("maskedball_coroner.settle")))
+	var rows := _coroner_ledger_rows()
+	for ri in rows.size():
+		var row: Dictionary = rows[ri]
+		_seq_add(0.8 + 0.5 * ri, func(): _add_ledger_row(str(row.text), row.color))
+	_seq_add(3.1, func():
+		var order := _placement_order()
+		var winner := int(order[0])
+		_net_champ = [winner, int(_body_of[winner])]
+		_flash_banner("%s  ♛" % PlayerBadge.glyph(winner), players[winner].color, 3.0))
+	_seq_add(3.7, func(): _finish_coroner_match())
+
+func _coroner_ledger_rows() -> Array:
+	var rows: Array = []
+	for idx in _placement_order():
+		var i := int(idx)
+		var p: Dictionary = players[i]
+		var places: Array = []
+		for place in p.round_places:
+			places.append(str(place))
+		rows.append({"text": "%s %s  ·  %s  ·  ♠%d  ·  %d" % [
+			PlayerBadge.glyph(i), p.name, "/".join(places), int(p.total_income), int(p.points)],
+			"color": p.color})
+	return rows
+
+func _finish_coroner_match() -> void:
+	if _reported:
+		return
+	_reported = true
+	phase = Phase.DONE
+	var points := {}
+	for i in players.size():
+		points[i] = int(players[i].points)
+	var order := _placement_order()
+	var highlights: Array = []
+	for row in _round_receipts:
+		if str(row.result) == "correct":
+			highlights.append(Dialog.text("maskedball_coroner.highlight_correct") % [
+				players[int(row.coroner)].name, int(row.round)])
+		elif str(row.result) == "wrong":
+			highlights.append(Dialog.text("maskedball_coroner.highlight_wrong") % [
+				players[int(row.coroner)].name, int(row.round)])
+	var results := {
+		"placements": order,
+		"points": points,
+		"currency_events": _currency.duplicate(),
+		"kill_events": _kill_events.duplicate(),
+		"highlights": _dedup(highlights).slice(0, 3),
+		"monuments": [],
+	}
+	print("MBC_SOAK_COMPLETE rounds=%d coroners=%s unique=%d correct=%d wrong=%d unused=%d duration_each=%s" % [
+		_round_receipts.size(), str(_coroner_order), _dedup(_coroner_order).size(),
+		_round_receipts.filter(func(r): return r.result == "correct").size(),
+		_round_receipts.filter(func(r): return r.result == "wrong").size(),
+		_round_receipts.filter(func(r): return r.result == "none").size(),
+		str(_round_receipts.map(func(r): return r.duration))])
+	print("KILL_EVENTS n=", _kill_events.size(), " ", JSON.stringify(_kill_events))
+	print("MB_RESULTS ", JSON.stringify(results))
+	if _tally:
+		_print_coroner_tally(points)
+		report_finished(results)
+		get_tree().quit()
+		return
+	var winner := int(order[0])
+	_say(Dialog.text("maskedball_coroner.winner") % players[winner].name)
+	if not _tally:
+		Sfx.play("match_win")
+		_spawn_confetti(dancers[_body_of[winner]].position + Vector3(0, 2.0, 0),
+			players[winner].color)
+	report_finished(results)
+
+func _print_coroner_tally(points: Dictionary) -> void:
+	print("======== THE CORONER TALLY ========")
+	for row in _round_receipts:
+		print("MBC_TALLY_ROUND round=%d coroner=%d result=%s duration=%.1f order=%s income=%s" % [
+			int(row.round), int(row.coroner), str(row.result).to_upper(), float(row.duration),
+			str(row.order), str(row.income)])
+	var bits: Array = []
+	for i in players.size():
+		bits.append("%s=%d/♠%d" % [players[i].name, int(points[i]), int(players[i].total_income)])
+	print("MBC_TALLY placements=%s totals=%s" % [str(_placement_order()), " ".join(bits)])
+	print("====================================")
+
+func _begin_legacy_reveal() -> void:
 	phase = Phase.REVEAL
 	phase_label.text = "MASKED BALL — THE LAST DANCE"
 	hint_label.text = ""
@@ -1404,6 +1867,10 @@ func _placement_order() -> Array:
 		var pb := int(players[b].points)
 		if pa != pb:
 			return pa > pb
+		var ia := int(players[a].get("total_income", 0))
+		var ib := int(players[b].get("total_income", 0))
+		if ia != ib:
+			return ia > ib
 		return a < b)
 	return order
 
@@ -1506,7 +1973,59 @@ func alive_body(b: int) -> bool:
 	return not d.revealed and not d.gone
 
 func has_mark(seat: int) -> bool:
-	return bool(players[seat].mark_left) and not bool(players[seat].eliminated)
+	return seat == _coroner_seat and bool(players[seat].mark_left) and not _accusation_used
+
+func coroner_seat() -> int:
+	return _coroner_seat
+
+func errand_kind(seat: int) -> int:
+	if seat < 0 or seat >= players.size() or seat == _coroner_seat:
+		return -1
+	var p: Dictionary = players[seat]
+	var queue: Array = p.errands
+	var at := int(p.errand_pos)
+	return int(queue[at]) if at >= 0 and at < queue.size() else -1
+
+func errand_center(kind: int) -> Vector3:
+	match kind:
+		Errand.CLOCK:
+			return CLOCK_C
+		Errand.PUNCH:
+			return PUNCH_C
+		_:
+			return WEST_C
+
+func errand_radius(kind: int) -> float:
+	match kind:
+		Errand.CLOCK:
+			return CLOCK_R
+		Errand.PUNCH:
+			return PUNCH_R
+		_:
+			return WEST_R
+
+func errand_point(kind: int, angle: float, k: float) -> Vector3:
+	return errand_center(kind) + Vector3(cos(angle) * errand_radius(kind) * k, 0,
+		sin(angle) * errand_radius(kind) * k)
+
+func _in_errand(pos: Vector3, kind: int) -> bool:
+	var flat := pos - errand_center(kind)
+	flat.y = 0.0
+	return flat.length() <= errand_radius(kind)
+
+## Coroner bot input is restricted to these same public pose/zone facts. NPC
+## fakes and real guests are deliberately indistinguishable to this function.
+func public_errand_evidence(body: int) -> float:
+	if body < 0 or body >= dancers.size():
+		return 0.0
+	var d: MBDancer = dancers[body]
+	if d.curtsying() and _in_errand(d.position, Errand.CLOCK):
+		return 0.42
+	if _in_errand(d.position, Errand.PUNCH) and d.still_t >= 0.65:
+		return 0.16 + minf(0.22, d.still_t * 0.025)
+	if _in_errand(d.position, Errand.WEST) and d.walking():
+		return 0.13
+	return 0.0
 
 func pips_of(seat: int) -> int:
 	return int(players[seat].pips)
@@ -1551,12 +2070,42 @@ func player_name(i: int) -> String:
 	return players[i].name if i >= 0 and i < players.size() else "???"
 
 func _info_line() -> String:
-	var marks := 0
-	for p in players:
-		if bool(p.mark_left) and not bool(p.eliminated):
-			marks += 1
-	return "DANCERS %d · HUMANS AMONG THEM %d · MARKS UNSPENT %d" % [
-		CROWD_TOTAL, _alive_count(), marks]
+	if _coroner_seat < 0:
+		return "🎭 %d  ·  🗡 4" % CROWD_TOTAL
+	var knife := "🗡" if not _accusation_used else ("✓" if _accusation_result == "correct" else "✕")
+	return "%d/%d  ·  %s %s  ·  🎭 %d" % [_round_index + 1, _round_total,
+		PlayerBadge.glyph(_coroner_seat), knife, CROWD_TOTAL]
+
+func _update_errand_hud(force := false) -> void:
+	if _errand_hud == null:
+		return
+	var rows: Array = []
+	for i in players.size():
+		if i == _coroner_seat:
+			continue
+		var p: Dictionary = players[i]
+		var queue: Array = p.errands
+		var at := int(p.errand_pos)
+		var kinds: Array = []
+		for k in 3:
+			kinds.append(int(queue[at + k]) if at + k < queue.size() else k)
+		var progress := 0.0
+		match errand_kind(i):
+			Errand.PUNCH:
+				progress = float(p.errand_progress) / PUNCH_LINGER
+			Errand.WEST:
+				progress = float(p.errand_progress) / WEST_WALTZ
+			Errand.CLOCK:
+				var d: MBDancer = dancers[_body_of[i]] if i < _body_of.size() else null
+				if d != null and bool(p.pending_clock) and d.curtsying():
+					progress = 1.0 - d.act_t / CURTSY_TIME
+		rows.append({"seat": i, "glyph": PlayerBadge.glyph(i), "color": p.color,
+			"income": int(p.round_income), "kinds": kinds,
+			"progress": clampf(progress, 0.0, 1.0)})
+	var sig := JSON.stringify(rows)
+	if force or sig != _last_hud_sig:
+		_last_hud_sig = sig
+		_errand_hud.set_rows(rows)
 
 # ================================================================ music/audio
 func _tick_music(delta: float) -> void:
@@ -1740,19 +2289,19 @@ func _do_snap(tag: String) -> void:
 # same seven quantized fields whether a hand or the crowd's brain drives them;
 # glints ride one untagged per-body counter (feather pulses, NPC decoys and
 # kill lunges are indistinguishable on the wire, exactly as on the couch).
-# seat<->body pairs exist ONLY in the cumulative reveal/waste rows, each
-# minted at the frame the couch prints the same badge. No rng_seed, no
-# _body_of, no per-seat pips/marks/points ever enter this dict. Masked ball
-# sends NOTHING on the private channel — the couch has no private beat: the
-# self-ID "secret" is a correlation with your own hidden stick, which the
-# transport cannot name and therefore cannot leak.
+# seat<->body pairs exist only for the PUBLIC Coroner and in settlement rows,
+# exactly when the couch shows those badges. Per-seat icon errands/income also
+# ride the wire because those HUD strips are public, but never beside a hidden
+# body id. No rng seed or hidden guest mapping enters this dict. The private
+# self-ID remains only the correlation between a player's stick and an untagged
+# body glint, which the transport cannot name and therefore cannot leak.
 
 const MIR_D_STRIDE := 7   # per-body ints: x, z, yaw, act, act_t, flags, glints
 const MIR_G_STRIDE := 3   # per-seat ghost ints: on, x, z
 
 ## HOST, pumped by the estate at 20 Hz. Ask of every key: is this on every
 ## couch player's screen right now? Bodies, ghosts, HUD text, reveal rows —
-## yes. Who owns an unrevealed body — never.
+## yes. Who owns an unrevealed GUEST body — never; the Coroner is public.
 func _net_state() -> Dictionary:
 	if dancers.size() < CROWD_TOTAL:
 		return {"ph": phase}   # pump beat before begin() — nothing staged yet
@@ -1773,6 +2322,10 @@ func _net_state() -> Dictionary:
 			fl |= 4
 		if d.dimmed():
 			fl |= 8
+		if d.coroner:
+			fl |= 16
+		if d.waxed:
+			fl |= 32
 		dd.append(fl)
 		dd.append(d.glints)
 	var gh := PackedInt32Array()
@@ -1783,6 +2336,9 @@ func _net_state() -> Dictionary:
 		gh.append(int(roundf(float(p.ghost_pos.z) * 100.0)))
 	return {
 		"ph": phase,
+		"rn": _net_round,
+		"co": _net_coroner.duplicate(),
+		"au": _net_accuse.duplicate(),
 		"wt": snappedf(_waltz_e, 0.1),
 		"wl": snappedf(_waltz_len, 0.1),
 		"d": dd,
@@ -1799,7 +2355,30 @@ func _net_state() -> Dictionary:
 		"pl": phase_label.text,
 		"info": info_label.text,
 		"tmr": timer_label.text,
+		"er": _net_errand_rows(),
 	}
+
+func _net_errand_rows() -> Array:
+	var out: Array = []
+	for i in players.size():
+		if i == _coroner_seat:
+			out.append([int(players[i].round_income), -1, -1, -1, 0])
+			continue
+		var p: Dictionary = players[i]
+		var queue: Array = p.errands
+		var at := int(p.errand_pos)
+		var kinds := [-1, -1, -1]
+		for k in 3:
+			if at + k < queue.size():
+				kinds[k] = int(queue[at + k])
+		var frac := 0.0
+		if kinds[0] == Errand.PUNCH:
+			frac = float(p.errand_progress) / PUNCH_LINGER
+		elif kinds[0] == Errand.WEST:
+			frac = float(p.errand_progress) / WEST_WALTZ
+		out.append([int(p.round_income), kinds[0], kinds[1], kinds[2],
+			int(roundf(clampf(frac, 0.0, 1.0) * 100.0))])
+	return out
 
 ## CLIENT. Latest-state-wins; all juice from deltas (counters + cumulative
 ## rows, never events — a dropped packet loses nothing but in-between frames).
@@ -1809,6 +2388,24 @@ func _net_apply(state: Dictionary) -> void:
 	var prev := _mir
 	_mir = state
 	var first: bool = (prev.get("d", PackedInt32Array()) as PackedInt32Array).is_empty()
+	var new_round := int(state.get("rn", 0))
+	if new_round != _mir_round:
+		if _mir_round >= 0 and not first:
+			_clear_round_nodes()
+			_spawn_crowd_mirror()
+		first = true
+		_mir_round = new_round
+		_mir_coroner = state.get("co", [-1, -1])
+		for i in players.size():
+			players[i].eliminated = false
+			players[i].ghost_node = null
+		print("MBC_MIRROR_ROUND round=%d coroner=%s" % [_mir_round, str(_mir_coroner)])
+	var co: Array = state.get("co", [-1, -1])
+	if co.size() >= 2 and int(co[0]) >= 0 and int(co[0]) < players.size() \
+			and int(co[1]) >= 0 and int(co[1]) < dancers.size():
+		_coroner_seat = int(co[0])
+		dancers[int(co[1])].set_coroner(players[_coroner_seat].color,
+			PlayerBadge.glyph(_coroner_seat) + "  🗡")
 	var new_ph := int(state.get("ph", phase))
 	if new_ph != phase:
 		phase = new_ph as Phase
@@ -1817,7 +2414,7 @@ func _net_apply(state: Dictionary) -> void:
 			# the mirror builds the bar from THIS machine's bindings (my local
 			# seat samples locally — the tilt/dead_weight mirror precedent)
 			hint_label.text = _controls_bar()
-		elif phase == Phase.REVEAL:
+		elif phase == Phase.ROUND_END or phase == Phase.REVEAL:
 			hint_label.text = ""
 			if not _tally:
 				Sfx.play("round_over")
@@ -1846,6 +2443,8 @@ func _net_apply(state: Dictionary) -> void:
 			d.fade_out()
 		if (fl & 8) == 8 and (pfl & 8) == 0:
 			d.dim_npc()   # the hired bodies stop pretending — reveal-beat fact
+		if (fl & 32) == 32 and (pfl & 32) == 0:
+			d.mark_wax_cross()
 		var gl := dd[k + 6]
 		var pgl := gl if pd.size() <= k + 6 else pd[k + 6]
 		if gl > pgl and not first:
@@ -1867,7 +2466,7 @@ func _net_apply(state: Dictionary) -> void:
 	# --- unnamed scored-curtsy count: ring pulse + coin clink, no name
 	if int(state.get("crt", 0)) > int(prev.get("crt", 0)) and not first:
 		Sfx.play("sink", -10.0)
-		_pulse_zone_ring()
+	_apply_mirror_errands(state.get("er", []))
 	# --- ghost pews: wisps for the unmasked (dead = already revealed)
 	_apply_mir_ghosts(state.get("gh", PackedInt32Array()), state.get("gu", []),
 		prev.get("gu", []), first)
@@ -1897,6 +2496,20 @@ func _net_apply(state: Dictionary) -> void:
 	if _netdemo and _demo_glint_seen and _demo_feather \
 			and float(state.get("wt", 0.0)) >= 15.9:
 		_mir_snap_later("mb_client_glint", 0.0)
+
+func _apply_mirror_errands(rows: Array) -> void:
+	for i in mini(players.size(), rows.size()):
+		var row: Array = rows[i]
+		if row.size() < 5:
+			continue
+		var p: Dictionary = players[i]
+		p.round_income = int(row[0])
+		p.errands = [int(row[1]), int(row[2]), int(row[3])]
+		p.errand_pos = 0
+		var frac := float(row[4]) / 100.0
+		p.errand_progress = frac * (PUNCH_LINGER if int(row[1]) == Errand.PUNCH else WEST_WALTZ)
+		players[i] = p
+	_update_errand_hud(true)
 
 ## One reveal row: [kind(0 unmask/1 survivor), seat, body, killer_seat|-1].
 func _apply_rev_row(row: Array) -> void:
@@ -1947,8 +2560,8 @@ func _apply_wst_row(row: Array) -> void:
 	if seat < 0 or seat >= players.size() or body < 0 or body >= dancers.size():
 		return
 	var p: Dictionary = players[seat]
-	print("MB_MIRROR waste seat=%d body=%d" % [seat, body])
-	dancers[body].do_flash(FLASH_TIME, p.color, PlayerBadge.glyph(seat) + " " + str(p.name))
+	print("MBC_MIRROR wrong seat=%d body=%d" % [seat, body])
+	dancers[body].mark_wax_cross()
 	_play_seat_tick(seat)
 	_shake = maxf(_shake, 0.22)
 	if not _tally:

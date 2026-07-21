@@ -10,6 +10,20 @@
     "♠ (pennies) and ⚘ (wreath) are literal text. Loaded by core/dialog.gd (autoload",
     "Dialog); call Dialog.reload() after editing to see changes live."
   ],
+  "maskedball_coroner": {
+    "open": "Four turns of the knife. Everybody carries it once.",
+    "present": "Four knives. Four dances.",
+    "round": "Guests earn. The Coroner watches.",
+    "correct": "A guest. The knife is satisfied.",
+    "wrong": "Furniture. Let the red wax answer.",
+    "mockery": "The guests finish. Kindly laugh where it can hear you.",
+    "none": "The knife went hungry. Third is the kindest sentence.",
+    "settle": "Four knives returned. Count the pennies.",
+    "finale": "THE FOURTH KNIFE",
+    "winner": "%s leaves with the dance.",
+    "highlight_correct": "%s found a guest in round %d.",
+    "highlight_wrong": "%s wore the red wax in round %d."
+  },
   "executor": {
     "greeting": [
       "Good evening. You are all here for the reading, whether you know it or not.",
@@ -267,6 +281,15 @@
         "Your own dancer answers your stick the instant you move — the crowd merely wanders.",
         "Feather the stick below a full drift and only your mask glints, privately.",
         "Marking empty air still costs your one mark. Aim before you spend it."
+      ]
+    },
+    "maskedball_coroner": {
+      "name": "THE CORONER",
+      "goal": "One visible knife hunts three hidden guests while icon errands pay pennies.",
+      "tips": [
+        "Guests follow the clock, bowl, and west-hall icons. Dancers fake them too.",
+        "The public Coroner walks close and presses the action once.",
+        "A wrong accusation wears red wax and takes fourth. Silence takes third."
       ]
     },
     "seance": {

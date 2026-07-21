@@ -38,6 +38,9 @@ var last_curtsy_end := -99.0  # waltz time this body last finished a bow
 var npc_t := 0.5              # pause countdown / drift retry
 var waypoint := Vector3.ZERO
 var glint_next := 3.0
+var npc_errand := -1           # public fake: clock / punch / west hall
+var npc_errand_stage := 0
+var npc_errand_t := 0.0
 ## ONLINE mirror counter: every glint (NPC decoy, feather pulse, kill lunge)
 ## bumps it, UNTAGGED — the wire carries "this mask glinted", never "whose
 ## hand did it". A remote player's own correlation with their hidden stick is
@@ -61,6 +64,12 @@ var _flash_light: OmniLight3D = null
 var _reaction_lock := 0.0
 var _dimmed := false
 var _wobble_t := 0.0          # ghost-gust shiver (visual only)
+var coroner := false
+var waxed := false
+var _opener: Node3D = null
+var _opener_mat: StandardMaterial3D = null
+var _coroner_ring: MeshInstance3D = null
+var _wax_root: Node3D = null
 
 func setup(p_body: int, char_scene: PackedScene, visual: bool) -> void:
 	body = p_body
@@ -159,6 +168,93 @@ func face_toward(dir: Vector3) -> void:
 func glint() -> void:
 	glints += 1
 	_glint_t = 0.55
+
+## The Coroner is the one public body. The silver letter-opener is deliberately
+## oversized and emissive: its glint, ring and badge all say the same thing
+## without asking the room to read prose.
+func set_coroner(col: Color, tag_text: String) -> void:
+	coroner = true
+	if not _visual or _opener != null:
+		return
+	_coroner_ring = MeshInstance3D.new()
+	var rm := TorusMesh.new()
+	rm.inner_radius = 0.43
+	rm.outer_radius = 0.5
+	_coroner_ring.mesh = rm
+	var ring_mat := StandardMaterial3D.new()
+	ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_mat.albedo_color = col
+	ring_mat.emission_enabled = true
+	ring_mat.emission = col
+	ring_mat.emission_energy_multiplier = 1.15
+	_coroner_ring.material_override = ring_mat
+	_coroner_ring.position.y = 0.035
+	add_child(_coroner_ring)
+	_show_tag(tag_text, col)
+	_opener = Node3D.new()
+	_opener.name = "LetterOpener"
+	_opener.position = Vector3(0.48, 1.05, 0.3)
+	_opener.rotation_degrees = Vector3(68, 0, -24)
+	add_child(_opener)
+	var blade := MeshInstance3D.new()
+	var bm := BoxMesh.new()
+	bm.size = Vector3(0.075, 0.075, 1.05)
+	blade.mesh = bm
+	_opener_mat = StandardMaterial3D.new()
+	_opener_mat.albedo_color = Color(0.82, 0.88, 0.96)
+	_opener_mat.metallic = 0.92
+	_opener_mat.roughness = 0.16
+	_opener_mat.emission_enabled = true
+	_opener_mat.emission = Color(0.72, 0.84, 1.0)
+	_opener_mat.emission_energy_multiplier = 1.4
+	blade.material_override = _opener_mat
+	blade.position.z = 0.34
+	_opener.add_child(blade)
+	var grip := MeshInstance3D.new()
+	var gm := CylinderMesh.new()
+	gm.top_radius = 0.09
+	gm.bottom_radius = 0.11
+	gm.height = 0.38
+	grip.mesh = gm
+	var grip_mat := StandardMaterial3D.new()
+	grip_mat.albedo_color = Color(0.18, 0.07, 0.055)
+	grip_mat.roughness = 0.68
+	grip.material_override = grip_mat
+	grip.rotation_degrees.x = 90.0
+	grip.position.z = -0.34
+	_opener.add_child(grip)
+
+## Wrong accusation: the opener visibly clatters away and a red-wax X stays
+## on the public Coroner for the rest of the errand race.
+func mark_wax_cross() -> void:
+	waxed = true
+	if not _visual:
+		return
+	if _opener != null:
+		var tw := create_tween()
+		tw.set_parallel(true)
+		tw.tween_property(_opener, "position", Vector3(0.9, 0.05, 0.8), 0.42)
+		tw.tween_property(_opener, "rotation_degrees", Vector3(260, 80, 120), 0.42)
+	if _wax_root != null:
+		return
+	_wax_root = Node3D.new()
+	_wax_root.name = "WaxCross"
+	_wax_root.position = Vector3(0, 1.62, 0.48)
+	add_child(_wax_root)
+	var wax_mat := StandardMaterial3D.new()
+	wax_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	wax_mat.albedo_color = Color(0.76, 0.02, 0.035)
+	wax_mat.emission_enabled = true
+	wax_mat.emission = Color(0.95, 0.015, 0.02)
+	wax_mat.emission_energy_multiplier = 1.5
+	for ang in [-42.0, 42.0]:
+		var slash := MeshInstance3D.new()
+		var sm := BoxMesh.new()
+		sm.size = Vector3(0.1, 0.78, 0.07)
+		slash.mesh = sm
+		slash.material_override = wax_mat
+		slash.rotation_degrees.z = ang
+		_wax_root.add_child(slash)
 
 # ================================================================ mirror API
 ## Render-only accessors + pose setter for the ONLINE mirror (phase 2). The
@@ -279,11 +375,11 @@ func _paint(node: Node, m: StandardMaterial3D) -> void:
 ## Main tells the pawn whether it travelled this tick (anim + still metric
 ## live with main; this only swaps the visual gait).
 func set_walking(moving: bool) -> void:
-	if not _visual or _anim == null or _reaction_lock > 0.0:
-		return
 	if moving == _walking:
 		return
 	_walking = moving
+	if not _visual or _anim == null or _reaction_lock > 0.0:
+		return
 	var want := "Idle"
 	if moving:
 		want = "Walking_A" if _anim.has_animation("Walking_A") else "Running_A"
@@ -324,6 +420,8 @@ func _process(delta: float) -> void:
 		_:
 			pass
 	var t := Time.get_ticks_msec() * 0.001
+	if _opener_mat != null and not waxed:
+		_opener_mat.emission_energy_multiplier = 1.0 + 1.35 * absf(sin(t * 4.2))
 	var sway := 0.05 * sin(t * 2.4 + _sway)
 	if _wobble_t > 0.0:
 		_wobble_t = maxf(0.0, _wobble_t - delta)

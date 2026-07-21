@@ -1,265 +1,182 @@
 class_name MBBots
 extends RefCounted
-## Seeded self-play brains for MASKED BALL. Deterministic per rng_seed: every
-## roll comes from ONE RNG consumed in tick order at a pinned dt (tally mode).
-##
-## BLEND: a bot knows which body is its own (fair — a human learns theirs in
-## seconds through the feather-glint) and drives it exactly like the crowd:
-## same swirl waypoints, same speed, pauses kept SHORTER than the NPC maximum
-## so the stillness tell never fires on a bot. Three seeded curtsy windows
-## send it to the throne for its pips; a seeded bluff timer makes it curtsy
-## in the open now and then, because only the guilty never bow.
-##
-## HUNT: bots read only PUBLIC evidence, through seeded noise:
-##   1. pip coincidence — when the Executor announces an (unnamed) scored
-##      curtsy, every dancer mid-curtsy near the throne shares the suspicion,
-##      split by how many were bowing (deniability by parallelism).
-##   2. the waste-flash — a flashed body is a KNOWN human; certainty decays
-##      as the crowd churns (humans lose track of a body; so do bots).
-##   3. stillness — no NPC ever freezes longer than ~2.6s. A body statuing
-##      past 4s is breathing too deliberately.
-## A bot spends its ONE mark when suspicion clears its personal threshold
-## (lower in the closing bars — desperation is seeded too), steering to the
-## target at a 7% hunt stride. Wastes happen: an unlucky NPC that bowed at
-## the wrong moments can clear a desperate threshold. That is the game.
+## Seeded self-play brains for THE CORONER. Guests know only their own current
+## icon errand and body. The public Coroner reads only visible floor evidence:
+## clock bows, punch-bowl loitering, and sustained west-hall waltzing. NPC fakes
+## feed the exact same evidence function, so a tell is evidence, never proof.
 
 var rng := RandomNumberGenerator.new()
 var n_seats := 0
 var n_bodies := 0
-var waltz_len := 150.0
-## --mbsnaps photographer's rig: bots blend and curtsy but never self-hunt,
-## so the two SCRIPTED reveal beats own the frame. Never set in tally.
+var round_len := 75.0
 var photo_mode := false
 
-# per-seat personality
-var _threshold: Array = []      # suspicion needed to spend the mark
-var _desperation: Array = []    # late-game threshold (from t > 78% waltz)
-var _pause_lo: Array = []
-var _pause_hi: Array = []
-
-# per-seat state
-var _wp: Array = []             # waypoint Vector3
+var _wp: Array = []
 var _pause_t: Array = []
-var _mode: Array = []           # 0 = blend, 1 = hunt, 2 = objective run
-var _hunt_body: Array = []
-var _curtsy_at: Array = []      # 3 seeded window times each
-var _next_window: Array = []
-var _obj_point: Array = []      # seeded spot inside the throne zone
-var _bluff_t: Array = []
 var _eval_t: Array = []
-var _sus: Array = []            # per seat: Array[float] per body
-# ghost state
-var _gwp: Array = []
-var _gust_t: Array = []
+var _sus: Array = []
+var _hunt_body: Array = []
+var _commit_at: Array = []
+var _threshold: Array = []
+var _alternate_pick: Array = []
+var _last_kind: Array = []
+var _round := 0
+var _coroner := -1
 
-func setup(seed_value: int, seats: int, bodies: int, p_waltz_len: float) -> void:
+func setup(seed_value: int, seats: int, bodies: int, p_round_len: float) -> void:
 	rng.seed = seed_value
 	n_seats = seats
 	n_bodies = bodies
-	waltz_len = p_waltz_len
-	for arr in [_threshold, _desperation, _pause_lo, _pause_hi, _wp, _pause_t,
-			_mode, _hunt_body, _curtsy_at, _next_window, _obj_point, _bluff_t,
-			_eval_t, _sus, _gwp, _gust_t]:
+	round_len = p_round_len
+	for arr in [_wp, _pause_t, _eval_t, _sus, _hunt_body, _commit_at,
+			_threshold, _alternate_pick, _last_kind]:
 		(arr as Array).clear()
-	for i in seats:
-		_threshold.append(rng.randf_range(3.9, 5.7))
-		_desperation.append(rng.randf_range(1.8, 2.7))
-		_pause_lo.append(rng.randf_range(0.4, 0.8))
-		_pause_hi.append(rng.randf_range(1.6, 2.3))
+	for _i in seats:
 		_wp.append(Vector3.ZERO)
-		_pause_t.append(rng.randf_range(0.3, 1.2))
-		_mode.append(0)
-		_hunt_body.append(-1)
-		var wins: Array = []
-		for _k in 3:
-			wins.append(rng.randf_range(0.12, 0.78) * waltz_len)
-		wins.sort()
-		_curtsy_at.append(wins)
-		_next_window.append(0)
-		_obj_point.append(Vector3.ZERO)
-		_bluff_t.append(rng.randf_range(14.0, 34.0))
-		_eval_t.append(rng.randf_range(0.0, 0.5))   # desync eval beats
-		var s: Array = []
+		_pause_t.append(0.0)
+		_eval_t.append(0.0)
+		var row: Array = []
 		for _b in bodies:
-			s.append(0.0)
-		_sus.append(s)
-		_gwp.append(Vector3.ZERO)
-		_gust_t.append(rng.randf_range(3.0, 7.0))
+			row.append(0.0)
+		_sus.append(row)
+		_hunt_body.append(-1)
+		# Coroners deliberate until the last fifth. This keeps bot rounds inside
+		# the requested 60-120 second target while humans may still accuse at once.
+		_commit_at.append(rng.randf_range(60.0, 62.0))
+		_threshold.append(rng.randf_range(4.1, 5.5))
+		_alternate_pick.append(rng.randf() < 0.38)
+		_last_kind.append(-1)
 
-# ---------------------------------------------------------------- events
-## Executor announced an unnamed scored curtsy. `curtsiers` = bodies bowing
-## near the throne at that instant; `scorer_seat` knows the event was theirs.
-func on_pip_event(curtsiers: Array, scorer_seat: int, g) -> void:
-	var share := 2.3 / float(maxi(1, curtsiers.size()))
+func begin_round(round_index: int, coroner_seat: int) -> void:
+	_round = round_index
+	_coroner = coroner_seat
 	for i in n_seats:
-		var own: int = g.body_of(i)
-		for b in curtsiers:
-			var bi := int(b)
-			# every seat consumes the same rolls -> stream stays aligned
-			var noise := rng.randf_range(-0.75, 0.75)
-			if i == scorer_seat or bi == own:
-				continue
-			_sus[i][bi] = float(_sus[i][bi]) + share + noise
-	print("MBBOTS_PIP_EVIDENCE set=%s share=%.2f" % [str(curtsiers), share])
+		_wp[i] = Vector3.ZERO
+		_pause_t[i] = rng.randf_range(0.2, 1.0)
+		_eval_t[i] = rng.randf_range(0.0, 0.35)
+		_hunt_body[i] = -1
+		_commit_at[i] = rng.randf_range(60.0, 62.0)
+		_threshold[i] = rng.randf_range(4.1, 5.5)
+		_alternate_pick[i] = rng.randf() < 0.38
+		_last_kind[i] = -1
+		for b in n_bodies:
+			_sus[i][b] = 0.0
+	print("MBC_BOTS_ROUND round=%d coroner=%d commit=%.1f alternate=%s" % [
+		round_index + 1, coroner_seat, float(_commit_at[coroner_seat]),
+		str(bool(_alternate_pick[coroner_seat]))])
 
-## A waste-flash marked `flashed_body` as certainly human.
-func on_flash(flashed_body: int, g) -> void:
-	for i in n_seats:
-		var gasp := rng.randf_range(1.0, 2.5)
-		if g.body_of(i) == flashed_body:
-			continue
-		_sus[i][flashed_body] = maxf(float(_sus[i][flashed_body]), 9.0)
-		_eval_t[i] = maxf(float(_eval_t[i]), gasp)
+func on_errand_complete(seat: int) -> void:
+	if seat < 0 or seat >= n_seats:
+		return
+	_pause_t[seat] = rng.randf_range(0.7, 1.8)
+	_wp[seat] = Vector3.ZERO
 
-## An unmask-lunge is public — the tearing body becomes a LEAD, not a
-## conviction (the lunge is over in a blink and the crowd churns), and the
-## witnesses need a beat to collect themselves before acting on anything.
-func on_kill_seen(killer_body: int, g) -> void:
-	for i in n_seats:
-		var lead := 3.3 + rng.randf_range(-0.7, 0.7)
-		var shock := rng.randf_range(2.0, 5.0)
-		if g.body_of(i) == killer_body:
-			continue
-		_sus[i][killer_body] = maxf(float(_sus[i][killer_body]), lead)
-		_eval_t[i] = maxf(float(_eval_t[i]), shock)
-
-## A body was revealed (unmasked human) — never a target again.
-func on_reveal(revealed_body: int) -> void:
-	for i in n_seats:
-		_sus[i][revealed_body] = -999.0
-
-# ---------------------------------------------------------------- alive tick
-## Returns {mv: Vector2, curtsy: bool, mark: bool}. g = masked_ball.gd root.
+## Returns {mv, action}. For a guest, action is the clock bow. For the public
+## Coroner it is the one close-range accusation.
 func decide_alive(i: int, g, delta: float) -> Dictionary:
-	var mv := Vector2.ZERO
-	var curtsy := false
-	var mark := false
+	if i == _coroner:
+		return _decide_coroner(i, g, delta)
+	return _decide_guest(i, g, delta)
+
+func _decide_guest(i: int, g, delta: float) -> Dictionary:
 	var own: int = g.body_of(i)
 	var here: Vector3 = g.pos_of(own)
-	_pause_t[i] = float(_pause_t[i]) - delta
-
-	# ---- periodic evidence read
-	_eval_t[i] = float(_eval_t[i]) - delta
-	if _eval_t[i] <= 0.0:
-		_eval_t[i] = 0.5
-		_evaluate(i, g)
-
-	# ---- objective windows (pips first, hunting second, drifting last)
-	if int(_mode[i]) != 1:
-		var k := int(_next_window[i])
-		var wins: Array = _curtsy_at[i]
-		if k < wins.size() and g.waltz_t() >= float(wins[k]) and g.pips_of(i) < g.PIP_MAX:
-			if int(_mode[i]) != 2:
-				_mode[i] = 2
-				_obj_point[i] = g.zone_point(rng.randf_range(0.0, TAU), rng.randf_range(0.2, 0.85))
-
-	match int(_mode[i]):
-		2:  # objective run: walk to the throne, bow, leave
-			var to: Vector3 = _obj_point[i] - here
-			to.y = 0.0
-			if to.length() > 0.35:
-				mv = Vector2(to.x, to.z).normalized()
-			elif g.can_score_curtsy(i):
-				curtsy = true
-				_next_window[i] = int(_next_window[i]) + 1
-				_mode[i] = 0
-				_pause_t[i] = rng.randf_range(_pause_lo[i], _pause_hi[i])
-			elif _pause_t[i] <= 0.0:
-				# scoring gap not open yet — mill about the zone, never statue
-				_obj_point[i] = g.zone_point(rng.randf_range(0.0, TAU), rng.randf_range(0.2, 0.85))
-				_pause_t[i] = rng.randf_range(0.6, 1.4)
-		1:  # hunt
-			var hb := int(_hunt_body[i])
-			if hb < 0 or not g.alive_body(hb) or not g.has_mark(i):
-				_mode[i] = 0
-				_hunt_body[i] = -1
-			else:
-				var tp: Vector3 = g.pos_of(hb) - here
-				tp.y = 0.0
-				if tp.length() <= g.MARK_REACH * 0.82 and g.nearest_markable(own, here) == hb:
-					# fire only when the grab would land on the TARGET —
-					# never through a bystander
-					mark = true
-					_mode[i] = 0
-					_hunt_body[i] = -1
-				else:
-					mv = Vector2(tp.x, tp.z).normalized() * 1.07   # hunt stride
-		_:  # blend: swirl like the crowd
+	_pause_t[i] = maxf(0.0, float(_pause_t[i]) - delta)
+	if float(_pause_t[i]) > 0.0:
+		return {"mv": _blend_move(i, here, g), "action": false}
+	var kind: int = int(g.errand_kind(i))
+	if int(_last_kind[i]) != kind:
+		_last_kind[i] = kind
+		_wp[i] = Vector3.ZERO
+	var center: Vector3 = g.errand_center(kind)
+	var radius: float = g.errand_radius(kind)
+	var flat := center - here
+	flat.y = 0.0
+	match kind:
+		0: # CLOCK
+			if flat.length() > radius * 0.52:
+				return {"mv": Vector2(flat.x, flat.z).normalized(), "action": false}
+			return {"mv": Vector2.ZERO, "action": true}
+		1: # PUNCH
+			if flat.length() > radius * 0.45:
+				return {"mv": Vector2(flat.x, flat.z).normalized(), "action": false}
+			return {"mv": Vector2.ZERO, "action": false}
+		_:
+			# Waltz continuously inside the west hall; waypoint changes look like
+			# the hired dancers' fake circuit rather than a statue in a trigger.
+			if flat.length() > radius * 0.75:
+				return {"mv": Vector2(flat.x, flat.z).normalized(), "action": false}
 			var to_wp: Vector3 = _wp[i] - here
 			to_wp.y = 0.0
-			if _wp[i] == Vector3.ZERO or to_wp.length() < 0.22:
-				if _pause_t[i] <= 0.0:
-					_wp[i] = g.swirl_waypoint(here, rng)
-					_pause_t[i] = rng.randf_range(_pause_lo[i], _pause_hi[i])
-			elif _pause_t[i] <= 0.0:
-				mv = Vector2(to_wp.x, to_wp.z).normalized()
-			# bluff curtsy: only the guilty never bow
-			_bluff_t[i] = float(_bluff_t[i]) - delta
-			if _bluff_t[i] <= 0.0:
-				_bluff_t[i] = rng.randf_range(14.0, 34.0)
-				curtsy = true
+			if _wp[i] == Vector3.ZERO or to_wp.length() < 0.3:
+				_wp[i] = g.errand_point(kind, rng.randf_range(0.0, TAU),
+					rng.randf_range(0.25, 0.72))
+				to_wp = _wp[i] - here
+			return {"mv": Vector2(to_wp.x, to_wp.z).normalized(), "action": false}
 
-	return {"mv": mv, "curtsy": curtsy, "mark": mark}
+func _blend_move(i: int, here: Vector3, g) -> Vector2:
+	var to_wp: Vector3 = _wp[i] - here
+	to_wp.y = 0.0
+	if _wp[i] == Vector3.ZERO or to_wp.length() < 0.24:
+		_wp[i] = g.swirl_waypoint(here, rng)
+		to_wp = _wp[i] - here
+	return Vector2(to_wp.x, to_wp.z).normalized()
 
-func _evaluate(i: int, g) -> void:
+func _decide_coroner(i: int, g, delta: float) -> Dictionary:
 	var own: int = g.body_of(i)
-	# decay + stillness read, fixed body order
-	for b in n_bodies:
-		var s := float(_sus[i][b])
-		if s <= -100.0:
-			continue
-		s *= exp(-0.03 * 0.5)   # evidence fades as the crowd churns
-		if b != own and g.alive_body(b) and g.still_of(b) > 4.0:
-			s += 1.2 + rng.randf_range(0.0, 0.5)
-		_sus[i][b] = s
-	if photo_mode or not g.has_mark(i) or int(_mode[i]) == 1:
-		return
-	# spend the mark?
-	var best := -1
-	var best_s := 0.0
-	var second := -1
-	var second_s := 0.0
+	var here: Vector3 = g.pos_of(own)
+	_eval_t[i] -= delta
+	if _eval_t[i] <= 0.0:
+		_eval_t[i] = 0.35
+		_read_floor(i, own, g)
+	var target := int(_hunt_body[i])
+	if target < 0 and not photo_mode and g.has_mark(i) \
+			and g.waltz_t() >= float(_commit_at[i]):
+		target = _choose_accusation(i, own, g)
+		_hunt_body[i] = target
+		if target >= 0:
+			print("MBC_BOT_ACCUSE_PLAN round=%d seat=%d body=%d suspicion=%.2f t=%.1f" % [
+				_round + 1, i, target, float(_sus[i][target]), g.waltz_t()])
+	if target >= 0 and g.has_mark(i) and g.alive_body(target):
+		var to: Vector3 = g.pos_of(target) - here
+		to.y = 0.0
+		if to.length() <= g.MARK_REACH * 0.82 \
+				and g.nearest_markable(own, here) == target:
+			return {"mv": Vector2.ZERO, "action": true}
+		return {"mv": Vector2(to.x, to.z).normalized() * 1.08, "action": false}
+	return {"mv": _blend_move(i, here, g), "action": false}
+
+func _read_floor(i: int, own: int, g) -> void:
 	for b in n_bodies:
 		if b == own or not g.alive_body(b):
 			continue
-		var s2 := float(_sus[i][b])
-		if s2 > best_s:
-			second = best
-			second_s = best_s
-			best_s = s2
-			best = b
-		elif s2 > second_s:
-			second_s = s2
-			second = b
-	var th := float(_threshold[i])
-	if g.waltz_t() > g.waltz_len() * 0.8:
-		th = float(_desperation[i])
-	if best >= 0 and best_s >= th:
-		# couch players misremember which body did what — sometimes the
-		# runner-up suspect eats the mark instead (this is where bot wastes
-		# come from; the flash then feeds the next act of the drama)
-		var pick := best
-		if second >= 0 and second_s > 0.2 and rng.randf() < 0.18:
-			pick = second
-		_mode[i] = 1
-		_hunt_body[i] = pick
-		print("MBBOTS_HUNT seat=%d body=%d sus=%.2f th=%.2f t=%.1f%s" % [i, pick,
-			best_s, th, g.waltz_t(), " (runner-up)" if pick != best else ""])
+		var s := float(_sus[i][b]) * 0.975
+		var visible: float = float(g.public_errand_evidence(b))
+		if visible > 0.0:
+			s += visible * rng.randf_range(0.72, 1.18)
+		_sus[i][b] = s
 
-# ---------------------------------------------------------------- ghost tick
-## Returns {mv: Vector2, gust: bool}. Ghosts drift and heckle; pure mischief.
-func decide_ghost(i: int, g, delta: float) -> Dictionary:
-	var mv := Vector2.ZERO
-	var gust := false
-	var here: Vector3 = g.ghost_pos_of(i)
-	var to: Vector3 = _gwp[i] - here
-	to.y = 0.0
-	if _gwp[i] == Vector3.ZERO or to.length() < 0.4:
-		_gwp[i] = g.swirl_waypoint(here, rng)
-	else:
-		mv = Vector2(to.x, to.z).normalized()
-	_gust_t[i] = float(_gust_t[i]) - delta
-	if _gust_t[i] <= 0.0:
-		_gust_t[i] = rng.randf_range(4.0, 9.0)
-		gust = true
-	return {"mv": mv, "gust": gust}
+func _choose_accusation(i: int, own: int, g) -> int:
+	var ranked: Array = []
+	for b in n_bodies:
+		if b != own and g.alive_body(b):
+			ranked.append(b)
+	ranked.sort_custom(func(a, b): return float(_sus[i][a]) > float(_sus[i][b]))
+	if ranked.is_empty():
+		return -1
+	var best := int(ranked[0])
+	var threshold := float(_threshold[i])
+	# At the deadline the knife demands use. A hesitant Coroner picks the best
+	# public lead even below threshold; seeded memory noise sometimes chooses
+	# the runner-up or third lead, producing honest wrong accusations.
+	if float(_sus[i][best]) < threshold and g.waltz_t() < round_len - 15.0:
+		return -1
+	if bool(_alternate_pick[i]) and ranked.size() > 1:
+		var top_n := mini(3, ranked.size())
+		return int(ranked[rng.randi_range(1, top_n - 1)])
+	return best
+
+## Kept for the existing mirror/legacy ghost hook. THE CORONER settles a
+## correct accusation immediately, so this path is not entered by new rounds.
+func decide_ghost(_i: int, _g, _delta: float) -> Dictionary:
+	return {"mv": Vector2.ZERO, "gust": false}
