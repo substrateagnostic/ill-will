@@ -1402,8 +1402,28 @@ func _light_stir_site(site: Vector3, col: Color) -> void:
 	tw.tween_property(lamp, "light_energy", 1.05, 1.8)
 
 ## MAJOR 1 — the dormant sculpt wakes: he rises, glides to the corridor, the
-## scythe sweeps its arc, and the carve stone surfaces where it fell. He
-## keeps his new post at the cut's edge — watching what he opened.
+## scythe sweeps its arc alongside a rigged SWEEP hero pose held at the carve
+## beat, and the carve stone surfaces where it fell. He keeps his new post at
+## the cut's edge — watching what he opened.
+##
+## G4 (#81) call: the WALK clip stayed BENCHED. The camera holds a fixed shot
+## on the site the whole beat (never tracks the traveler — true of the
+## original static glide too), so a live walk cycle would only ever be seen
+## arriving, never striding; and the "Slow Orc Walk" preset's own hunched,
+## claw-handed pose (docs/verify/shots/asset_finish_rigfix_postfix_reaper_walk.png)
+## reads as a lunge, not a glide. The static sculpt keeps doing the glide.
+## SWEEP is wired, but NOT played live either — a real-time drift check
+## (tools/_tmp_reaper_driftcheck, deleted after use) showed the clip's early
+## seconds crouch the whole body down near ground level, and this event's
+## site can land in low/watery ground (e.g. the Hollow Woods bog, site.y well
+## below 0) where a crouched silhouette gets swallowed by the water surface —
+## invisible in an actual ceremony capture even though the node, position and
+## mesh were all verified correct. The fix: SEEK to a single held frame late
+## in the clip (t=1.8s) where the pose stands tall, one arm raised — a hero
+## silhouette no shorter than the static sculpt, so it can never sink below
+## whatever the static sculpt would already clear. Frozen, not looping,
+## mirroring the same freeze convention board_graph.gd already uses for the
+## dormant Reaper (_rigged_npc frozen=true).
 func _fx_reaper_shortcut(info: Dictionary) -> void:
 	var site := (info.get("site", Vector3.ZERO) as Vector3)
 	if board.reaper_prop != null:
@@ -1427,10 +1447,29 @@ func _fx_reaper_shortcut(info: Dictionary) -> void:
 		if board.reaper_scythe != null:
 			var sc := board.reaper_scythe
 			sc.global_position = stand + Vector3(-0.6, 0.4, -0.4)
+			# G4: swap the static sculpt for the rigged SWEEP hero pose only
+			# for this flourish — same native/target height as the static
+			# prop (no scale pop), held at one dramatic frame (see doc block
+			# above for why it isn't played live).
+			board.reaper_prop.visible = false
+			var sweeper := MeshyProp.instance_rigged(ProcessionBoardGraph.ZF_REAPER_SWEEP,
+				ProcessionBoardGraph.REAPER_RIG_NATIVE_H, ProcessionBoardGraph.REAPER_RIG_TARGET_H)
+			board.add_child(sweeper)
+			sweeper.look_at_from_position(stand, Vector3(site.x, stand.y, site.z), Vector3.UP)
+			var sw_anim: AnimationPlayer = sweeper.find_child("AnimationPlayer", true, false)
+			if sw_anim != null and sw_anim.get_animation_list().size() > 0:
+				var sname := String(sw_anim.get_animation_list()[0])
+				sw_anim.play(sname)
+				sw_anim.seek(1.8, true)
+				sw_anim.speed_scale = 0.0
 			var arc := create_tween()
 			arc.tween_property(sc, "rotation:y", sc.rotation.y + PI * 1.4, 0.55) \
 				.set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+			if _capture:
+				await _cap_snap("reaper_sweep_pose")
 			await arc.finished
+			sweeper.queue_free()
+			board.reaper_prop.visible = true
 	for k in (info.stones as Array).size():
 		await _fx_stone_pop(int((info.stones as Array)[k]))
 
