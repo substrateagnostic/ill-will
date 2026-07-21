@@ -156,6 +156,7 @@ var _capture := false            # windowed: pose beats + snap for screenshots
 var _vendettatest := false       # dev flag: force the board-drama presentation with bot data (screenshots)
 var _longnames := false          # dev flag (W9): worst-case long names to stress the text surfaces
 var _graphtest := false          # --boardgraphtest: print the topology receipt and quit
+var _stirnettest := false        # --stirnettest: host snapshot -> fresh mirror replay probe
 var _walk := false               # --walk: dev walkabout on the grounds, no night
 var _parprobe := false           # --parprobe: run the legacy Par adapter once, print, quit
 # ---- the NAMED rng streams (header doctrine; LAYOUT lives in board_graph) ----
@@ -169,6 +170,11 @@ var _stirs_rng := RandomNumberGenerator.new()    # STIRS: the estate's own hand 
 var stirs := ProcessionStirs.new()   # this game's drawn events + live minor state
 var _stir_force_major := ""          # --stir=major[,minor] dev override (probes/stills)
 var _stir_force_minor := ""
+# Host keeps the mutation receipts because a latest-state snapshot must be
+# sufficient for a guest arriving after either event fired. Clients keep a
+# separate id guard: the 20 Hz channel repeats facts, never commands.
+var _stir_info_by_id := {}            # event id -> receipt-shaped info Dictionary
+var _stir_replayed := {}              # client event id -> true (topology already applied)
 var _epitaphs: Array = []        # per seat: epitaph String a duel winner hung ("" = none)
 var _epitaph_tags := {}          # seat -> Label3D (the persistent gravestone tag riding the pawn)
 var _stakes_ui: VendettaStakes = null   # sealed-stakes overlay (lazy; windowed only)
@@ -355,6 +361,9 @@ func _boot(config: Dictionary) -> void:
 	# intro, fired at fixed night beats. The draw is part of the match receipt.
 	stirs.draw(_stirs_rng, _stir_force_major, _stir_force_minor)
 	print("PROCESSION_STIRS major=%s minor=%s" % [stirs.major, stirs.minor])
+	if _stirnettest:
+		_stirnettest_run()
+		return
 	if _parprobe:
 		_parprobe_run()   # dev probe: the legacy Par adapter, alone, then quit
 		return
@@ -415,6 +424,13 @@ func _parse_cli() -> void:
 			print("PROCESSION note: %s is retired on the graph board (use --turncap=N)" % arg.split("=")[0])
 		elif arg == "--boardgraphtest":
 			_graphtest = true     # topology receipt: nodes/edges/routes/ratios/reach
+		elif arg == "--stirnettest":
+			# Headless only: fire the forced pair, snapshot it, and apply that
+			# snapshot twice to a fresh mirror board.
+			_stirnettest = true
+			_autoplay = true
+			_fast = true
+			_minisim = true
 		elif arg.begins_with("--autoplay="):
 			_autoplay = true
 			_fast = true
@@ -1195,6 +1211,10 @@ func _fire_stir(kind: String, id: String) -> void:
 	else:
 		stirs.major_fired = true
 	var info: Dictionary = stirs.apply(id, board, _stirs_rng)
+	# Keep only the public ground truth printed by the receipt. This survives in
+	# every later snapshot, making an unreliable latest-state channel safe for
+	# both packet loss and a mirror that boots after the mutation.
+	_stir_info_by_id[id] = _stir_wire_info(info)
 	# The fire line carries the event's ground truth — entry/exit/stone ids
 	# and the site — so a receipt can prove WHERE the estate moved, not just
 	# that it did. Fixed key order (deterministic).
@@ -1230,6 +1250,17 @@ func _stir_settle(id: String, info: Dictionary) -> void:
 			if board.cart_lantern != null:
 				board.cart_lantern.global_position = \
 					board.cart_park_pos(int(info.to)) + Vector3(0.6, 0, 0.4)
+		"flood":
+			# The host's full ceremony owns these effects. A mirror never runs a
+			# ceremony, so its settle path must stage the already-fired world.
+			if _mirror and stirs.flood_left > 0:
+				_settle_flood_fx()
+		"wake":
+			if _mirror and stirs.wake_left > 0:
+				_settle_wake_fx(info)
+		"crow_court":
+			if _mirror and not stirs.crow_done and stirs.crow_stone >= 0:
+				_settle_crow_fx(info)
 
 ## The full ceremony: the announce card reads over the site shot, then GETS
 ## OUT OF THE WAY — the effect plays on a clean frame with only the
@@ -1486,6 +1517,14 @@ func _fx_procession_road(info: Dictionary) -> void:
 ## MINOR 1 — Garden Row closes: shallow floodwater pools over every garden
 ## stone for 2 rounds (fork options drop the road; stones still resolve).
 func _fx_flood() -> void:
+	_settle_flood_fx()
+	await _beat(1.0)
+
+## Immediate form shared by the host ceremony and a guest's no-ceremony
+## settle. The empty guard also makes presentation replay harmless.
+func _settle_flood_fx() -> void:
+	if not _flood_fx.is_empty():
+		return
 	for n in board.nodes:
 		if String(n.route) != "garden":
 			continue
@@ -1508,7 +1547,6 @@ func _fx_flood() -> void:
 		board.add_child(disc)
 		disc.global_position = (n.pos as Vector3) + Vector3(0, 0.09, 0)
 		_flood_fx.append(disc)
-	await _beat(1.0)
 
 ## MINOR 3 — the hearse treks to its new pad, lantern trailing.
 func _fx_hearse_moves(info: Dictionary) -> void:
@@ -1527,6 +1565,12 @@ func _fx_hearse_moves(info: Dictionary) -> void:
 
 ## MINOR 4 — the mourners crowd their three stones (2 per stone, idling).
 func _fx_wake(info: Dictionary) -> void:
+	_settle_wake_fx(info)
+	await _beat(1.0)
+
+func _settle_wake_fx(info: Dictionary) -> void:
+	if not _wake_fx.is_empty():
+		return
 	for sid in (info.stones as Array):
 		var p := board.space_pos(int(sid))
 		for k in 2:
@@ -1534,10 +1578,15 @@ func _fx_wake(info: Dictionary) -> void:
 			var m := board.spawn_mourner(p + Vector3(side * 1.3, 0, 0.7 * side), p)
 			if m != null:
 				_wake_fx.append(m)
-	await _beat(1.0)
 
 ## MINOR 5 — the court convenes: two perched, one aloft, all patient.
 func _fx_crow_court(info: Dictionary) -> void:
+	_settle_crow_fx(info)
+	await _beat(1.0)
+
+func _settle_crow_fx(info: Dictionary) -> void:
+	if not _crow_fx.is_empty():
+		return
 	var p := board.space_pos(int(info.node))
 	for spec in [{"o": Vector3(0.8, 0.1, 0.5), "fly": false},
 			{"o": Vector3(-0.7, 0.1, -0.4), "fly": false},
@@ -1558,7 +1607,6 @@ func _fx_crow_court(info: Dictionary) -> void:
 	var tw := create_tween()
 	tw.tween_property(rim, "light_energy", 1.3, 0.6)
 	_crow_fx.append(rim)
-	await _beat(1.0)
 
 ## The court adjourns: the murder scatters skyward with its takings.
 func _scatter_crows() -> void:
@@ -4342,6 +4390,34 @@ func _push_net() -> void:
 	# HUD authoritative and gives the pump a coherent snapshot to fan out.
 	pass
 
+## Public, receipt-shaped event facts. `site` remains a Vector3 on Godot's
+## Variant wire; arrays are deep-copied so the snapshot cannot alias live sim.
+func _stir_wire_info(info: Dictionary) -> Dictionary:
+	var out := {}
+	for key in ["entry", "exit", "from", "to", "node", "stones", "site"]:
+		if not info.has(key):
+			continue
+		var value: Variant = info[key]
+		if typeof(value) == TYPE_ARRAY:
+			value = (value as Array).duplicate(true)
+		elif typeof(value) == TYPE_DICTIONARY:
+			value = (value as Dictionary).duplicate(true)
+		out[key] = value
+	return out
+
+func _net_stirs_state() -> Dictionary:
+	var infos := {}
+	for id in [stirs.minor, stirs.major]:
+		if id != "" and _stir_info_by_id.has(id):
+			infos[id] = (_stir_info_by_id[id] as Dictionary).duplicate(true)
+	return {
+		"major": stirs.major, "minor": stirs.minor,
+		"major_fired": stirs.major_fired, "minor_fired": stirs.minor_fired,
+		"info": infos,
+		"flood_left": stirs.flood_left, "wake_left": stirs.wake_left,
+		"crow_stone": stirs.crow_stone, "crow_done": stirs.crow_done,
+	}
+
 func _net_state() -> Dictionary:
 	var routes: Array = []
 	for i in roster.size():
@@ -4353,12 +4429,17 @@ func _net_state() -> Dictionary:
 		"routes": routes, "arrived": arrived.duplicate(),
 		"arrival_order": arrival_order.duplicate(), "bell_round": bell_round,
 		"banner": _reveal.get_parsed_text() if _reveal and _reveal.visible else "",
+		"stirs": _net_stirs_state(),
 	}
 
 func _net_apply(state: Dictionary) -> void:
 	_phase = String(state.get("phase", _phase))
 	round_num = int(state.get("round", round_num))
 	grudge.assign(state.get("grudge", grudge))
+	# Topology must exist before a mirrored pawn can be seated on a Stirs-born
+	# node. Old snapshots without this key remain backward-compatible.
+	if state.has("stirs"):
+		_net_apply_stirs(state["stirs"] as Dictionary)
 	positions.assign(state.get("positions", positions))
 	moved_total.assign(state.get("moved", moved_total))
 	arrived = state.get("arrived", arrived)
@@ -4374,3 +4455,232 @@ func _net_apply(state: Dictionary) -> void:
 			_reveal.visible = false
 		else:
 			executor.say(banner_text, Color.WHITE)
+
+## Apply full current facts, then replay only fired IDs this board has never
+## seen. This is intentionally snapshot logic, not an event queue: a guest's
+## first packet may arrive minutes after both mutations.
+func _net_apply_stirs(wire: Dictionary) -> void:
+	stirs.major = String(wire.get("major", stirs.major))
+	stirs.minor = String(wire.get("minor", stirs.minor))
+	stirs.flood_left = int(wire.get("flood_left", stirs.flood_left))
+	stirs.wake_left = int(wire.get("wake_left", stirs.wake_left))
+	stirs.crow_stone = int(wire.get("crow_stone", stirs.crow_stone))
+	stirs.crow_done = bool(wire.get("crow_done", stirs.crow_done))
+	var infos: Dictionary = wire.get("info", {})
+	for kind in ["minor", "major"]:
+		var id := stirs.minor if kind == "minor" else stirs.major
+		var fired := bool(wire.get("%s_fired" % kind, false))
+		if kind == "minor":
+			stirs.minor_fired = fired
+		else:
+			stirs.major_fired = fired
+		if not fired or id == "" or _stir_replayed.has(id) or not infos.has(id):
+			continue
+		var info: Dictionary = (infos[id] as Dictionary).duplicate(true)
+		if not _net_stir_info_ready(id, info):
+			push_warning("PROCESSION mirror: incomplete Stirs info for %s" % id)
+			continue
+		# Guard BEFORE mutation. Even if presentation callbacks provoke another
+		# apply in the same frame, this event id cannot touch the graph twice.
+		_stir_replayed[id] = true
+		_stir_info_by_id[id] = info
+		_net_replay_stir(id, info)
+		_stir_settle(id, info)
+		print("PROCESSION_NET_STIR_REPLAY id=%s nodes=%d" % [id, board.nodes.size()])
+	if stirs.flood_left <= 0 and not _flood_fx.is_empty():
+		_clear_stir_fx(_flood_fx)
+	if stirs.wake_left <= 0 and not _wake_fx.is_empty():
+		_clear_stir_fx(_wake_fx)
+	if stirs.crow_done and not _crow_fx.is_empty():
+		_clear_stir_fx(_crow_fx)
+
+func _net_stir_info_ready(id: String, info: Dictionary) -> bool:
+	match id:
+		"bone_bridge", "reaper_shortcut", "procession_road":
+			return info.has("entry") and info.has("exit") \
+				and info.has("stones") and info.has("site")
+		"landslip", "hearse_moves":
+			return info.has("from") and info.has("to") and info.has("site")
+		"hungry_grave", "crow_court":
+			return info.has("node") and info.has("site")
+		"wake":
+			return info.has("stones") and info.has("site")
+		"flood":
+			return info.has("site")
+	return false
+
+## Replay from host-chosen facts only: no draw, no candidate search, no client
+## RNG. Each topology-changing case calls the same BoardGraph mutation API as
+## ProcessionStirs.apply().
+func _net_replay_stir(id: String, info: Dictionary) -> void:
+	match id:
+		"bone_bridge":
+			var entry := int(info.entry)
+			var exit_node := int(info.exit)
+			var pa := board.space_pos(entry)
+			var pb := board.space_pos(exit_node)
+			var deck_y := ProcessionGrounds.WATER_Y + 0.55
+			var deck: Array = [
+				Vector3(lerpf(pa.x, pb.x, 0.36), deck_y, lerpf(pa.z, pb.z, 0.36)),
+				Vector3(lerpf(pa.x, pb.x, 0.64), deck_y, lerpf(pa.z, pb.z, 0.64)),
+			]
+			board.register_route("bridge", "THE BONE BRIDGE", Color("d9d2bc"),
+				"THE BOG'S OWN SHORTCUT · IT REMEMBERS BEING WALKED")
+			_net_check_stir_ids(id, board.append_stir_chain(entry, exit_node, deck,
+				"bridge"), info.stones as Array)
+		"reaper_shortcut":
+			board.register_route("carve", "THE REAPER'S CUT", Color("7fd6a8"),
+				"HE OPENED IT · HE DID NOT SAY FOR WHOM")
+			_net_check_stir_ids(id, board.append_stir_chain(int(info.entry),
+				int(info.exit), [info.site as Vector3], "carve"), info.stones as Array)
+		"landslip":
+			board.replace_next(int(info.from), [int(info.to)])
+		"procession_road":
+			var entry := int(info.entry)
+			var exit_node := int(info.exit)
+			var pa := board.space_pos(entry)
+			var pb := board.space_pos(exit_node)
+			var lane: Array = []
+			for k in 4:
+				lane.append(ProcessionGrounds.snap(pa.lerp(pb,
+					(float(k) + 1.0) / 5.0), 0.0))
+			board.register_route("ghostroad", "THE PROCESSION ROAD", Color("bfd8ea"),
+				"DEAD MEN PACED IT FIRST · IT WHISPERS")
+			_net_check_stir_ids(id, board.append_stir_chain(entry, exit_node, lane,
+				"ghostroad"), info.stones as Array)
+		"hungry_grave":
+			board.retype_stone(int(info.node), Spaces.OPEN_GRAVE)
+		"hearse_moves":
+			board.orphan_cart()
+			board.retype_stone(int(info.from), Spaces.BLANK)
+			board.retype_stone(int(info.to), Spaces.CART, false)
+		"wake":
+			stirs.wake_stones = (info.stones as Array).duplicate()
+		"crow_court":
+			# Current crow_stone/crow_done arrived above; the original node stays
+			# in info so a still-sitting court can be staged on first apply.
+			pass
+		"flood":
+			pass
+	if _minimap != null:
+		_minimap._refit_if_grown()
+		_minimap.queue_redraw()
+
+func _net_check_stir_ids(id: String, actual: Array, expected: Array) -> void:
+	if actual != expected:
+		push_error("PROCESSION mirror: %s stone ids host=%s client=%s" % [
+			id, str(expected), str(actual)])
+
+# --------------------------------------------------------------------------
+# HEADLESS STIRS MIRROR PROBE (--stirnettest). This builds an actual fresh
+# Procession scene and exercises _net_apply(_net_state()), including a second
+# identical apply for the event-id idempotence proof.
+# --------------------------------------------------------------------------
+func _stirnettest_run() -> void:
+	night_index = 1
+	round_num = 3
+	await _fire_stir("minor", stirs.minor)
+	round_num = 5
+	await _fire_stir("major", stirs.major)
+	var state := _net_state()
+	var wire: Dictionary = state.stirs
+	var infos: Dictionary = wire.info
+	print("PROCESSION_NET_STIR_WIRE major=%s fired=%s info=%s minor=%s fired=%s info=%s flood_left=%d wake_left=%d" % [
+		String(wire.major), str(bool(wire.major_fired)), str(infos.get(wire.major, {})),
+		String(wire.minor), str(bool(wire.minor_fired)), str(infos.get(wire.minor, {})),
+		int(wire.flood_left), int(wire.wake_left)])
+
+	var mirror = load("res://estate/procession/procession.tscn").instantiate()
+	# Suppress its deferred self-boot; this is a real render shell with a fresh
+	# base graph, but no second simulation is allowed to start.
+	mirror._started = true
+	mirror._autoplay = true
+	mirror._fast = true
+	mirror._mirror = true
+	mirror.roster = roster.duplicate(true)
+	get_tree().root.add_child(mirror)
+	mirror._init_arrays()
+	mirror._build_world()
+	mirror._build_hud()
+	mirror._choose_clauses()
+	var base_nodes: int = mirror.board.nodes.size()
+	mirror._net_apply(state)
+	var host_nodes: int = board.nodes.size()
+	var client_nodes: int = mirror.board.nodes.size()
+	var host_adj := _stir_graph_checksum(board, true)
+	var client_adj := _stir_graph_checksum(mirror.board, true)
+	var host_shape := _stir_graph_checksum(board, false)
+	var client_shape := _stir_graph_checksum(mirror.board, false)
+	var first_replayed: int = mirror._stir_replayed.size()
+	mirror._net_apply(state)
+	var replay_nodes: int = mirror.board.nodes.size()
+	var replay_adj := _stir_graph_checksum(mirror.board, true)
+	var replay_shape := _stir_graph_checksum(mirror.board, false)
+	var same := host_nodes == client_nodes and host_adj == client_adj \
+		and host_shape == client_shape
+	var idempotent: bool = replay_nodes == client_nodes and replay_adj == client_adj \
+		and replay_shape == client_shape and mirror._stir_replayed.size() == first_replayed
+	print("PROCESSION_NET_STIR_TOPOLOGY base_nodes=%d host_nodes=%d client_nodes=%d host_adj=%s client_adj=%s host_shape=%s client_shape=%s same=%s replay_nodes=%d replay_adj=%s idempotent=%s" % [
+		base_nodes, host_nodes, client_nodes, host_adj, client_adj, host_shape,
+		client_shape, str(same), replay_nodes, replay_adj, str(idempotent)])
+
+	var settle_ok := true
+	if stirs.major == "bone_bridge":
+		var host_ribs: Node3D = board.grounds.bone_bridge() if board.grounds != null else null
+		var client_ribs: Node3D = mirror.board.grounds.bone_bridge() \
+			if mirror.board.grounds != null else null
+		var ribs_same: bool = host_ribs != null and client_ribs != null \
+			and host_ribs.global_position.is_equal_approx(client_ribs.global_position) \
+			and host_ribs.scale.is_equal_approx(client_ribs.scale)
+		settle_ok = settle_ok and ribs_same
+		print("PROCESSION_NET_STIR_SETTLE bone_bridge same=%s y=%.2f scale=%s" % [
+			str(ribs_same), client_ribs.global_position.y if client_ribs != null else INF,
+			str(client_ribs.scale) if client_ribs != null else "missing"])
+	if stirs.minor == "hearse_moves":
+		var cart_same: bool = board.cart_prop != null and mirror.board.cart_prop != null \
+			and board.cart_prop.global_position.is_equal_approx(
+				mirror.board.cart_prop.global_position)
+		settle_ok = settle_ok and cart_same
+		print("PROCESSION_NET_STIR_SETTLE hearse_moves same=%s at=%s" % [
+			str(cart_same), str(mirror.board.cart_prop.global_position) \
+				if mirror.board.cart_prop != null else "missing"])
+
+	# Temporary minors are current facts, not one-shot events. Prove their FX
+	# survive an intermediate countdown snapshot and clear on the zero snapshot.
+	var burn_ok := true
+	if stirs.minor == "flood" or stirs.minor == "wake":
+		var active_fx: int = mirror._flood_fx.size() if stirs.minor == "flood" \
+			else mirror._wake_fx.size()
+		_stir_tick()
+		mirror._net_apply(_net_state())
+		var mid_left: int = mirror.stirs.flood_left if stirs.minor == "flood" \
+			else mirror.stirs.wake_left
+		_stir_tick()
+		mirror._net_apply(_net_state())
+		var final_left: int = mirror.stirs.flood_left if stirs.minor == "flood" \
+			else mirror.stirs.wake_left
+		var final_fx: int = mirror._flood_fx.size() if stirs.minor == "flood" \
+			else mirror._wake_fx.size()
+		burn_ok = active_fx > 0 and mid_left == 1 and final_left == 0 and final_fx == 0
+		print("PROCESSION_NET_STIR_BURNDOWN id=%s active_fx=%d mid_left=%d final_left=%d final_fx=%d clear=%s" % [
+			stirs.minor, active_fx, mid_left, final_left, final_fx,
+			str(burn_ok)])
+
+	var ok: bool = same and idempotent and settle_ok and burn_ok
+	print("PROCESSION_NET_STIR_%s" % ("OK" if ok else "FAIL"))
+	mirror.queue_free()
+	await get_tree().process_frame
+	get_tree().quit()
+
+## `adjacency_only` is the requested mutation checksum; the full shape hash
+## additionally catches retypes and route-tag drift.
+func _stir_graph_checksum(target: ProcessionBoardGraph,
+		adjacency_only: bool) -> String:
+	var sig := ""
+	for n in target.nodes:
+		if adjacency_only:
+			sig += "%d:%s|" % [int(n.id), str(n.next)]
+		else:
+			sig += "%d:%s:%s:%s|" % [int(n.id), String(n.type),
+				String(n.route), str(n.next)]
+	return "%08x" % (sig.hash() & 0xFFFFFFFF)

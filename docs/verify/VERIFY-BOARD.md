@@ -162,6 +162,54 @@ the canonical + sweeps. THE DRIVE re-fits its projection when the node count
 grows (board_minimap `_refit_if_grown` — the id-76 out-of-bounds die found
 and killed this freeze).
 
+### 4-NET. Estate Stirs net mirror
+
+The procession uses the existing 20 Hz module-state channel. Every snapshot
+now carries a `stirs` fact with the drawn `major`/`minor`, their fired flags,
+receipt-shaped `info` keyed by event id, and the live `flood_left` /
+`wake_left` countdowns. It is deliberately a full current snapshot, not a
+one-shot RPC: the first packet seen by a mid-match join contains everything
+needed to rebuild the live graph. The client replays minor then major using
+the normal `ProcessionBoardGraph` mutation API and guards the operation by
+event id before settling presentation.
+
+Headless fresh-board probe (PowerShell; the second command also proves a
+temporary minor remains dressed at `left=1` and clears at `left=0`):
+
+```powershell
+$g = 'C:\Users\agall\AppData\Local\Microsoft\WinGet\Packages\GodotEngine.GodotEngine_Microsoft.Winget.Source_8wekyb3d8bbwe\Godot_v4.6.2-stable_win64_console.exe'
+& $g --headless --path . -- --procession --stirnettest --stir=bone_bridge,hearse_moves
+& $g --headless --path . -- --procession --stirnettest --stir=procession_road,flood
+```
+
+A passing bridge/cart run emits these receipt shapes (the two values denoted
+`<H>` must be byte-equal on that line; the full-shape pair covers retypes in
+addition to the requested adjacency hash):
+
+```text
+PROCESSION_NET_STIR_WIRE major=bone_bridge fired=true info={ ... "entry": ..., "exit": ..., "stones": [76, 77], "site": ... } minor=hearse_moves fired=true info={ ... "from": ..., "to": ..., "site": ... } flood_left=0 wake_left=0
+PROCESSION_NET_STIR_REPLAY id=hearse_moves nodes=76
+PROCESSION_NET_STIR_REPLAY id=bone_bridge nodes=78
+PROCESSION_NET_STIR_TOPOLOGY base_nodes=76 host_nodes=78 client_nodes=78 host_adj=<H> client_adj=<H> host_shape=<H> client_shape=<H> same=true replay_nodes=78 replay_adj=<H> idempotent=true
+PROCESSION_NET_STIR_SETTLE bone_bridge same=true y=-2.90 scale=...
+PROCESSION_NET_STIR_SETTLE hearse_moves same=true at=...
+PROCESSION_NET_STIR_OK
+```
+
+The road/flood run must likewise report `host_nodes=80 client_nodes=80`, equal
+adjacency/full-shape hashes, `idempotent=true`, and:
+
+```text
+PROCESSION_NET_STIR_BURNDOWN id=flood active_fx=... mid_left=1 final_left=0 final_fx=0 clear=true
+PROCESSION_NET_STIR_OK
+```
+
+The probe calls `_net_apply(_net_state())` on a separately instantiated base
+board, then applies the identical snapshot again. Node count and both hashes
+must remain unchanged on the second apply. `PROCESSION_NET_STIR_OK` also
+requires the risen-ribs/cart settle checks (when selected) and burn-down FX
+check (when selected), so it is the grep gate.
+
 **THE WRONG-WAY STILLS — solved (eleventh watch).** Tenth-watch ceremony
 captures could render facing the MANOR while the director provably stood
 posed at the site, `current=true`. Root cause: `executor_host.gd`'s
