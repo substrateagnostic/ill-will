@@ -1,32 +1,24 @@
 extends Node3D
-## THE ESTATE — night-loop shell: GROUNDS -> AUCTION -> GAME -> RECKONING.
-## v1 "clipboard" grounds (panel UI); walkable grounds is phase E2.
+## THE ESTATE — hub shell for THE PROCESSION and exhibition minigames.
 
-enum Phase { LOBBY, SELECTOR, GROUNDS, TILES, AUCTION, CHOOSING, GAME, RECKONING, NIGHT_END, TITLE }
+enum Phase { LOBBY, SELECTOR, GROUNDS, GAME, TITLE }
 
-const TILE_COST := 2
-
-## "intro": true = the module shows its own ui_kit IntroCard at load (the AAA
-## beat). The estate's GET READY card collapses for these — couch launches skip
-## straight to the IntroCard; online keeps only a minimal "everyone in" sync
-## (the double-gate collapse, morning menu #4 / doc 14 §5).
 const MODULES := {
 	"par": {"name": "PAR FOR THE CURSE", "scene": "res://scenes/main.tscn", "mode": "gamestate"},
-	"echo": {"name": "ECHO CHAMBER", "scene": "res://minigames/echo_chamber/echo_chamber.tscn", "mode": "contract", "intro": true},
-	"tilt": {"name": "TILT", "scene": "res://minigames/tilt/tilt.tscn", "mode": "contract", "intro": true},
-	"orbital": {"name": "ORBITAL DODGEBALL", "scene": "res://minigames/orbital/orbital.tscn", "mode": "contract", "intro": true},
-	"mower": {"name": "MOWER MAYHEM", "scene": "res://minigames/mower/mower.tscn", "mode": "contract", "intro": true},
-	"greed": {"name": "GREED INC.", "scene": "res://minigames/greed/greed.tscn", "mode": "contract", "intro": true},
+	"echo": {"name": "ECHO CHAMBER", "scene": "res://minigames/echo_chamber/echo_chamber.tscn", "mode": "contract"},
+	"tilt": {"name": "TILT", "scene": "res://minigames/tilt/tilt.tscn", "mode": "contract"},
+	"orbital": {"name": "ORBITAL DODGEBALL", "scene": "res://minigames/orbital/orbital.tscn", "mode": "contract"},
+	"mower": {"name": "MOWER MAYHEM", "scene": "res://minigames/mower/mower.tscn", "mode": "contract"},
+	"greed": {"name": "GREED INC.", "scene": "res://minigames/greed/greed.tscn", "mode": "contract"},
 	"swap": {"name": "SWAP MEET", "scene": "res://minigames/swap_meet/swap_meet.tscn", "mode": "contract"},
-	"deadweight": {"name": "DEAD WEIGHT", "scene": "res://minigames/dead_weight/dead_weight.tscn", "mode": "contract", "intro": true},
-	"throne": {"name": "THE THRONE", "scene": "res://minigames/throne/throne.tscn", "mode": "contract", "intro": true},
-	"lastwill": {"name": "LAST WILL", "scene": "res://minigames/last_will/last_will.tscn", "mode": "contract", "intro": true},
-	"widowsgaze": {"name": "THE WIDOW'S GAZE", "scene": "res://minigames/widows_gaze/widows_gaze.tscn", "mode": "contract", "intro": true},
-	"seance": {"name": "THE SÉANCE", "scene": "res://minigames/seance/seance.tscn", "mode": "contract", "theater": true, "intro": true},
-	"understudy": {"name": "THE UNDERSTUDY", "scene": "res://minigames/understudy/understudy.tscn", "mode": "contract", "theater": true, "intro": true},
-	"maskedball": {"name": "MASKED BALL", "scene": "res://minigames/masked_ball/masked_ball.tscn", "mode": "contract", "theater": true, "intro": true},
-	"pallbearers": {"name": "PALLBEARERS", "scene": "res://minigames/pallbearers/pallbearers.tscn", "mode": "contract", "intro": true},  # B7-HOOK
-	"mock": {"name": "EXHIBITION MATCH", "scene": "res://estate/mock_game.tscn", "mode": "contract"},
+	"deadweight": {"name": "DEAD WEIGHT", "scene": "res://minigames/dead_weight/dead_weight.tscn", "mode": "contract"},
+	"throne": {"name": "THE THRONE", "scene": "res://minigames/throne/throne.tscn", "mode": "contract"},
+	"lastwill": {"name": "LAST WILL", "scene": "res://minigames/last_will/last_will.tscn", "mode": "contract"},
+	"widowsgaze": {"name": "THE WIDOW'S GAZE", "scene": "res://minigames/widows_gaze/widows_gaze.tscn", "mode": "contract"},
+	"seance": {"name": "THE SÉANCE", "scene": "res://minigames/seance/seance.tscn", "mode": "contract", "theater": true},
+	"understudy": {"name": "THE UNDERSTUDY", "scene": "res://minigames/understudy/understudy.tscn", "mode": "contract", "theater": true},
+	"maskedball": {"name": "MASKED BALL", "scene": "res://minigames/masked_ball/masked_ball.tscn", "mode": "contract", "theater": true},
+	"pallbearers": {"name": "PALLBEARERS", "scene": "res://minigames/pallbearers/pallbearers.tscn", "mode": "contract"},  # B7-HOOK
 }
 const CHAR_PATHS := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -35,29 +27,16 @@ const CHAR_PATHS := [
 	"res://assets/models/kaykit/Rogue.glb",
 ]
 const GROUNDS_TIME := 20.0
-const BID_TIME := 8.0
-## Pre-game GET READY card: launch when all humans ready or this many seconds
-## elapse, whichever first. A soak (all bots) never sees it.
-const READY_GATE_TIME := 15.0
 var phase := Phase.GROUNDS
 var bots := false
-var mockonly := false
-var pool_override: Array = []
-var auction_options: Array = []
-var high_bid := 0
-var high_bidder := -1
-var _bid_timer := 0.0
 var _grounds_timer := GROUNDS_TIME
 var _module: Node = null
-var _bet_targets := {}
 var _monuments_drawn := 0
 var walkers: Array = []
 var _saved_env: Environment = null
 var _selected_walker := -1
 var _skip_panel_focus := false    # one-shot: _build_lobby_panel opts out of the L1 pad-focus grab
 var _bot_wander_timer := 0.0
-var _tile_buyers: Array = []
-var exhibition := false
 var _practice := false
 
 # ----- ONLINE PHASE 1 (doc 10): the estate IS the shared lobby -----
@@ -77,22 +56,14 @@ var _net_module_seq := 0
 var _client_last_state := {}      # client: last mirrored lobby facts
 var _client_panel_sig := ""       # client: rebuild panel only when facts change
 var _client_walker_targets := {}  # client: p -> {pos, rot, moving} interp targets
-# ----- ONLINE PHASE 3 (this lane): PODIUMS + NIGHT CEREMONIES mirror. The host
-# narrates each ceremony stage as facts riding the 5 Hz lobby channel; clients
-# restage the same podium/panel locally — render truth, never simulate it. -----
-var _net_ceremony := {}           # host: current ceremony stage facts ({} = none)
-var _net_ticker: Array = []       # host: reckoning ticker lines (facts while RECKONING)
-var _net_auction_flavor := {}     # host: executor quip + vendetta notice this auction
-var _net_chooser := -1            # host: who won the auction (CHOOSING phase fact)
+# Exhibition podiums mirror as host-authored facts.
+var _net_ceremony := {}
 var _client_podium: Podium = null # client: the restaged podium (host decides its end)
 var _client_cer_stage := ""       # client: ceremony stage currently rendered
 var _client_banner_sig := ""      # client: last mirrored banner (flash once per change)
-var _client_trail := {}           # client: p -> stone rendered on the local trail
-var _client_trail_tweens := {}    # client: p -> running advance tween (parade mirror)
 var _client_hats_sig := ""        # client: last applied wardrobe facts
-var _client_statues := {}         # client: statue idx already added to the gate
 
-# ----- READY ROOM v2 (seat tri-state, join/ready, pre-game GET READY card) -----
+# ----- READY ROOM v2 (seat tri-state, join/ready) -----
 var _lobby_ready := {}            # seat -> bool: lobby READY chip toggled on
 var _lobby_ready_edge := {}       # seat -> physics frame of last READY toggle
 var _kb_join_held := {}           # keyboard device (-1/-2) -> bool: A-key edge
@@ -100,28 +71,8 @@ var _join_ready_lock := {}        # seat -> bool: swallow the join press so it
                                   # does not also flip READY until A releases
 var _start_button_held: bool = false
 var _start_force_hold: HoldConfirm = null
-var _ready_gate_active := false   # the pre-game GET READY card is up
-var _ready_gate_id := ""
-var _ready_gate_practice := false
-var _ready_gate_countdown := 0.0
-var _ready_gate_ready := {}       # seat -> bool: readied on the pre-game card
-var _ready_gate_needed: Array = []  # human seats that must press A to launch
-
-# ----- FIRST-NIGHT HOUSE RULES card (economy primer, once per fresh estate) --
-var _house_rules_active := false   # the one-time HOUSE RULES card is up
-var _house_rules_countdown := 0.0
-var _house_rules_ready := {}       # seat -> bool: pressed A to continue
-var _house_rules_needed: Array = []  # local human seats that must press A
-
-# ----- THE STANDING GRUDGE card (W2 saga): the night-open review of the
-# standing accounts. Shown once before the first auction of each night on a
-# human table (soaks/guests skip). Deduped by night so the button's re-entry
-# into _enter_auction does not re-raise it.
-var _standing_grudge_active := false
-var _standing_grudge_night := -1
 
 @onready var cam: Camera3D = $Camera3D
-@onready var top_bar: HBoxContainer = $UI/TopBar/Row
 @onready var phase_panel: PanelContainer = $UI/PhasePanel
 @onready var phase_box: VBoxContainer = $UI/PhasePanel/Box
 @onready var banner: Label = $UI/Banner
@@ -194,30 +145,23 @@ func _ready() -> void:
 	# hairline) instead of the old grey theme panel, so every desk built into it
 	# matches the title door.
 	Stationery.panel(phase_panel)
-	# Slot panel picks (PLAY THIS ESTATE / START FRESH) reload this scene; the
-	# player expects to be IN the game, not back at the title (Andrew: "trying
-	# to start a new estate game just brings me back to the main menu").
+	# Slot picks reload this scene and reopen the unified PLAY panel.
 	if EstateState.pending_play:
 		EstateState.pending_play = false
-		call_deferred("_play_pressed")
+		call_deferred("_build_play_panel")
 	Input.joy_connection_changed.connect(_on_joy_connection_changed)
-	var start_night_now := false
+	var open_play_now := false
 	var args := OS.get_cmdline_user_args()
 	for arg in args:
 		if arg == "--estatebots":
 			bots = true
-		elif arg == "--mockonly":
-			mockonly = true
 		elif arg == "--estate":
-			start_night_now = true
-		elif arg.begins_with("--pool="):
-			pool_override = Array(arg.trim_prefix("--pool=").split(","))
+			open_play_now = true
 		elif arg.begins_with("--netprobe="):
 			_netprobe = arg.trim_prefix("--netprobe=")
 		elif arg.begins_with("--exhibtest="):
 			var gid := arg.trim_prefix("--exhibtest=")
 			get_tree().create_timer(1.2).timeout.connect(func():
-				exhibition = true
 				_launch_game(gid))
 		elif arg.begins_with("--quittest="):
 			# Zombie-module receipt (Andrew round 2): forfeit the running game
@@ -290,18 +234,6 @@ func _ready() -> void:
 				VerifyCapture.snap("input2_hold_confirm"))
 		elif arg == "--wardrobetest":
 			WardrobePanel.schedule_wardrobe_test(self)
-		elif arg == "--readytest":
-			HowtoCards.schedule_ready_test(self)
-		elif arg == "--houserulestest":
-			HowtoCards.schedule_house_rules_test(self)
-		elif arg == "--grudgetest":
-			SagaCards.schedule_standing_grudge_test(self)
-		elif arg == "--funeralstatstest":
-			SagaCards.schedule_funeral_stats_test(self)
-		elif arg == "--runovertest":
-			SagaCards.schedule_run_over_test(self)
-		elif arg == "--eulogyreceipttest":
-			SagaCards.schedule_eulogy_receipt_test(self)
 		elif arg == "--readylobbytest":
 			# Windowed lobby proof: an EMPTY chair (dim) + a READY chip + a
 			# waiting START button. Self-contained backup/restore of the seats.
@@ -328,7 +260,7 @@ func _ready() -> void:
 					get_tree().quit()))
 		elif arg == "--playmenutest":
 			# Windowed proof (P3): PLAY is THE PROCESSION only — the nights +
-			# turn-cap dials and GO. Classic is retired from this panel.
+			# turn-cap dials and GO.
 			get_tree().create_timer(1.2).timeout.connect(func():
 				_build_play_panel()
 				get_tree().create_timer(0.4).timeout.connect(func():
@@ -372,16 +304,14 @@ func _ready() -> void:
 	_spawn_toys()
 	_spawn_executor()
 	_ambient_life_setup()   # B3-HOOK: the troupe that makes the grounds breathe (core/ambient_life.gd)
-	$Trail.build(EstateState.players, EstateState.gate_statues)
-	$Trail.seat_all(EstateState.trail_pos)
 	_redraw_monuments()
 	_redraw_graffiti()
 	banner.visible = false
 	_apply_night_grounds()
 	_saved_env = $WorldEnvironment.environment
 	_net_wire_signals()
-	if start_night_now:
-		_play_pressed()
+	if open_play_now:
+		_build_play_panel()
 	else:
 		_enter_title()
 	if _netprobe != "":
@@ -423,34 +353,8 @@ func _apply_night_grounds() -> void:
 
 var _title_layer: Control = null
 
-## PLAY = the full game, immediately. Resumes an in-progress run at its
-## between-nights rest; otherwise begins a fresh run at night one.
-func _play_pressed() -> void:
-	Sfx.play("ui_confirm")
-	_hide_title()
-	_fill_empty_seats_with_bots()
-	PlayerInput.save_setup()
-	GameState.reset_match()
-	if not EstateState.night_length_forced:
-		EstateState.night_length = clampi(int(PartySetup.pref("night_length", 3)), 1, 9)
-	var resuming: bool = EstateState.run_active and EstateState.at_boundary
-	EstateState.start_night(4)
-	$Trail.seat_all(EstateState.trail_pos)
-	$UI/TopBar.visible = true
-	_rebuild_top_bar()
-	if resuming:
-		print("RUN resumed at boundary (night %d next)" % (EstateState.run_night + 1))
-		_enter_grounds()
-		return
-	if EstateState.nights_played > 0:
-		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.2)
-	_enter_auction()
-
-## PLAY (P3 hub simplification): THE PROCESSION is the game — one panel, the
-## night-count + turn-cap dials, and GO. CLASSIC NIGHTS is retired at the UI
-## level only (per the replacement-coverage rule its code stays dormant behind
-## the scenes for a later excision lane). The flow from here: seats/lobby →
-## walkabout → ready at the LYCHGATE → the match.
+## PLAY: THE PROCESSION is the game — one panel, the night-count + turn-cap
+## dials, and GO. The flow is seats/lobby → walkabout → lychgate → match.
 func _build_play_panel() -> void:
 	phase = Phase.LOBBY
 	_hide_title()
@@ -504,7 +408,6 @@ func _build_play_panel() -> void:
 	go_btn.add_theme_font_size_override("font_size", 28)
 	go_btn.pressed.connect(func():
 		Sfx.play("ui_confirm")
-		_procession_next = true
 		_enter_lobby())
 	var pc := CenterContainer.new()
 	pc.add_child(go_btn)
@@ -514,32 +417,11 @@ func _build_play_panel() -> void:
 	back.pressed.connect(_enter_title)
 	phase_box.add_child(back)
 
-## P3: THE PROCESSION is what PLAY plays. The flag routes the lobby's START
-## and the walkabout's ready-up to the board match (classic's transitions stay
-## on disk, dormant, unreferenced by any live button).
-var _procession_next := true
-
 func _proc_nights() -> int:
 	return clampi(int(PartySetup.pref("proc_nights", 3)), 1, 3)
 
 func _proc_turncap() -> int:
 	return clampi(int(PartySetup.pref("proc_turncap", 12)), 4, 40)
-
-## RETIRED (P3): the ring-era Deed-goal dial. Kept on disk, unwired — the
-## Codicil died with the graph board (doc 28 §1); prefs key left untouched.
-const DEED_GOALS := [4, 6, 9]
-
-func _deed_goal_label() -> String:
-	var g := clampi(int(PartySetup.pref("deed_goal", 4)), 4, 9)
-	var tier := "SHORT" if g <= 4 else ("FULL" if g <= 6 else "VIGIL")
-	return "%s  ·  %d deeds" % [tier, g]
-
-func _cycle_deed_goal() -> void:
-	var g := clampi(int(PartySetup.pref("deed_goal", 4)), 4, 9)
-	var idx: int = DEED_GOALS.find(g)
-	if idx < 0:
-		idx = 0
-	PartySetup.set_pref("deed_goal", DEED_GOALS[(idx + 1) % DEED_GOALS.size()])
 
 ## Launch THE PROCESSION board mode (doc 19). The scene lives at the tree root
 ## like a gamestate module (zombie-swept); it supplies its own camera, HUD and
@@ -551,7 +433,6 @@ func _enter_procession() -> void:
 	_hide_title()
 	banner.visible = false
 	phase_panel.visible = false
-	$UI/TopBar.visible = false
 	# G3 photobomb law, applied to the one launch that never had it: the hub
 	# AND the estate's copy of the world hide while the procession runs its
 	# own — two identical worlds in one space z-fight and the match "plays in
@@ -584,9 +465,7 @@ func _enter_procession() -> void:
 		$Plinths.visible = true
 		cam.current = true
 		_enter_title(), CONNECT_ONE_SHOT)
-	# P3: the PLAY-panel dials feed the real match config (deed_goal retired
-	# with the Codicil — landmine 1: match_nights is its own field, never
-	# night_length).
+	# P3: the PLAY-panel dials feed the real match config.
 	proc.begin({"roster": roster, "seed": EstateState.rng.randi(),
 		"match_nights": _proc_nights(), "turn_cap": _proc_turncap()})
 	# ONLINE PHASE 2: fan the board to guests through the existing 20 Hz module
@@ -900,9 +779,7 @@ func _build_lobby_panel() -> void:
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 16)
-	# P3: the classic games-per-night dial is retired from the lobby (UI level
-	# only). The panel instead reads back the PROCESSION match shape chosen on
-	# the PLAY panel — nights + turn cap, glanceable before START.
+	# Read back the PROCESSION match shape chosen on the PLAY panel.
 	var match_lbl := Label.new()
 	match_lbl.text = "THE PROCESSION · %d NIGHT%s · CAP %d" % [
 		_proc_nights(), "" if _proc_nights() == 1 else "S", _proc_turncap()]
@@ -931,7 +808,7 @@ func _build_lobby_panel() -> void:
 	sel_btn.custom_minimum_size = Vector2(190, 48)
 	var n_games := 0
 	for mid in MODULES:
-		if mid != "mock" and ResourceLoader.exists(String(MODULES[mid].scene)):
+		if ResourceLoader.exists(String(MODULES[mid].scene)):
 			n_games += 1
 	sel_btn.text = "MINIGAMES (%d)" % n_games
 	sel_btn.pressed.connect(_enter_selector)
@@ -976,21 +853,9 @@ func _start_night_from_lobby() -> void:
 		_start_force_hold.cancel()
 	_fill_empty_seats_with_bots()
 	PlayerInput.save_setup()
-	# P3 flow: seats are settled — walk the grounds, ready up at the LYCHGATE,
-	# and the match begins. (Classic's start path below stays dormant.)
-	if _procession_next:
-		banner.visible = false
-		Sfx.play("ui_confirm")
-		_enter_grounds()
-		return
-	GameState.reset_match()
-	EstateState.start_night(4)
-	$Trail.reset_pawns()
+	# Seats are settled; gather on the grounds and ready at the lychgate.
 	banner.visible = false
-	$UI/TopBar.visible = true
 	Sfx.play("ui_confirm")
-	if EstateState.nights_played > 0:
-		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.5)
 	_enter_grounds()
 
 ## ----- READY ROOM SEATS: tri-state, join, ready chips -----
@@ -1418,7 +1283,7 @@ func _spawn_toys() -> void:
 		b.global_position = hub_off + Vector3(-2.0 + i * 2.0, 0.4, -1.5)
 
 func _unhandled_input(event: InputEvent) -> void:
-	if phase == Phase.GAME or _module != null or _ready_gate_active or _house_rules_active or NetSession.is_client():
+	if phase == Phase.GAME or _module != null or NetSession.is_client():
 		return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var origin := cam.project_ray_origin(event.position)
@@ -1428,9 +1293,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		var hit := space.intersect_ray(q)
 		if hit.is_empty():
 			return
-		if phase == Phase.TILES and not _tile_buyers.is_empty():
-			_place_tile(_tile_buyers[0], hit.position)
-		elif hit.collider is EstateWalker:
+		if hit.collider is EstateWalker:
 			_select_walker(hit.collider.player_idx)
 		elif _selected_walker >= 0:
 			walkers[_selected_walker].walk_target = hit.position
@@ -1473,9 +1336,9 @@ func _exit_stroll(open_act := "") -> void:
 		"album":
 			_build_album_panel()
 		"procession":
-			# P3: the lychgate walk-up. On the pre-match grounds it IS the
-			# ready-up; from the lobby stroll it just returns to the seats.
-			if phase == Phase.GROUNDS and _procession_next:
+			# On the pre-match grounds the lychgate starts the match; from a
+			# lobby stroll it returns to the seats.
+			if phase == Phase.GROUNDS:
 				_continue_to_night()
 			else:
 				_build_lobby_panel()
@@ -1624,14 +1487,7 @@ func _process(delta: float) -> void:
 				ProcessionGrounds.EXT_Z.x + 4.0, ProcessionGrounds.EXT_Z.y - 4.0)
 		if _world_board != null and is_instance_valid(walkers[0]):
 			_world_board.reveal_names_near(walkers[0].global_position)
-	if _ready_gate_active:
-		_poll_ready_gate(delta)
-	if _house_rules_active:
-		_poll_house_rules(delta)
-	# The HOUSE RULES / STANDING GRUDGE cards can be up while phase is still
-	# GROUNDS (the --estate boot default) — suppress lobby join/ready polling so
-	# the table's input belongs to the card, not a stray seat toggle.
-	if (phase == Phase.LOBBY or phase == Phase.GROUNDS) and not _house_rules_active and not _standing_grudge_active:
+	if phase == Phase.LOBBY or phase == Phase.GROUNDS:
 		if _strolling:
 			# L1 bug 2: a dropped/late pad must be able to reclaim a seat while the
 			# table is on the walkabout too — _poll_pad_join only ever acts on an
@@ -1656,36 +1512,12 @@ func _process(delta: float) -> void:
 				var w: EstateWalker = bot_walkers[EstateState.rng.randi_range(0, bot_walkers.size() - 1)]
 				w.walk_target = Vector3(EstateState.rng.randf_range(-6.0, 6.0), 0, EstateState.rng.randf_range(-7.0, 1.5))
 	if phase == Phase.GROUNDS:
-		# Free roam has no countdown for humans — the estate rests until
-		# CONTINUE. Bot-only tables move on after a short breath.
+		# Free roam has no countdown for humans. Bot-only tables move on after
+		# a short breath.
 		if _all_bots():
 			_grounds_timer -= delta
 			if _grounds_timer <= GROUNDS_TIME - 4.0:
-				_bots_buy_tiles()
 				_continue_to_night()
-	elif phase == Phase.AUCTION:
-		_bid_timer -= delta
-		_update_auction_clock()
-		if _bid_timer < BID_TIME - 1.0 and high_bidder < 0:
-			_bots_bid()
-		if _bid_timer <= 0.0:
-			_resolve_auction()
-
-func _rebuild_top_bar() -> void:
-	for c in top_bar.get_children():
-		c.queue_free()
-	for i in EstateState.standings():
-		var pl = EstateState.players[i]
-		top_bar.add_child(PlayerBadge.make(i, 18))
-		var l := Label.new()
-		l.text = " %s %d  ♠%d   " % [pl.name, pl.points, pl.grudge]
-		l.add_theme_font_size_override("font_size", 24)
-		l.add_theme_color_override("font_color", pl.color)
-		top_bar.add_child(l)
-	var info := Label.new()
-	info.text = "|  GAME %d/%d   POT %d♠" % [mini(EstateState.games_played + 1, EstateState.night_length), EstateState.night_length, EstateState.pot]
-	info.add_theme_font_size_override("font_size", 24)
-	top_bar.add_child(info)
 
 func _clear_panel(title: String, color := Color(1, 0.9, 0.5)) -> void:
 	for c in phase_box.get_children():
@@ -1712,7 +1544,6 @@ func _clear_panel(title: String, color := Color(1, 0.9, 0.5)) -> void:
 ## control the pad-focus cursor parked on. A desk is pad-navigable iff a Button
 ## takes focus (the LOBBY is the one deliberate "none" — see _focus_panel_deferred).
 func _focus_sweep_run() -> void:
-	EstateState.house_rules_shown = true          # skip the first-night gate on the auction
 	PlayerInput.assign(0, 0)                        # a (phantom) seated human pad
 	PlayerInput.set_bot(0, false)
 	for i in range(1, 4):
@@ -1722,7 +1553,6 @@ func _focus_sweep_run() -> void:
 		["slot_panel", func() -> void: _build_slot_panel()],
 		["selector", func() -> void: _enter_selector()],
 		["howto_card", func() -> void: _show_howto("orbital")],
-		["auction", func() -> void: phase = Phase.GROUNDS; _enter_auction()],
 		["wardrobe", func() -> void: _build_wardrobe_panel()],
 		["family_album", func() -> void: _build_album_panel()],
 		["freeroam_grounds", func() -> void: phase = Phase.GROUNDS; _build_freeroam_panel()],
@@ -1766,7 +1596,6 @@ func _m2_capture(dev: String) -> void:
 		await get_tree().create_timer(0.3).timeout
 		_enter_title()
 		await get_tree().create_timer(0.4).timeout
-	exhibition = true
 	_launch_game("tilt")
 	await get_tree().create_timer(2.0).timeout
 	await VerifyCapture.snap("game_introcard_%s" % dev)      # device-aware glyphs
@@ -1817,15 +1646,12 @@ func _focus_panel_deferred() -> void:
 		return
 	UiFocus.grab_first(phase_box)
 
-## FREE ROAM — the estate rests between nights. The grounds are walkable
-## (stroll on by default), trap tiles are bought here, and the night
-## begins when someone presses CONTINUE. No countdown for humans.
+## Pre-match free roam. The grounds are walkable and the match begins when the
+## table gathers at the lychgate. There is no countdown for humans.
 func _enter_grounds() -> void:
 	phase = Phase.GROUNDS
-	_net_set_ceremony({})   # boundary handoff: guests return to grounds + panel
+	_net_set_ceremony({})
 	_grounds_timer = GROUNDS_TIME
-	_tile_buyers.clear()
-	_rebuild_top_bar()
 	# NIT 6: the swap into free roam rides the iris wipe (skipped for soaks/clients)
 	_wipe_swap(func() -> void:
 		Music.play_slot("grounds")
@@ -1838,7 +1664,7 @@ func _build_freeroam_panel() -> void:
 	_strolling = false
 	banner.remove_theme_font_size_override("font_size")
 	banner.visible = false
-	_clear_panel(Dialog.text("estate.walkabout.freeroam_header") % (EstateState.run_night + 1))
+	_clear_panel(Dialog.text("estate.walkabout.freeroam_header"))
 	var hint := Label.new()
 	hint.text = Dialog.text("estate.walkabout.freeroam_hint")
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -1847,28 +1673,6 @@ func _build_freeroam_panel() -> void:
 	hint.add_theme_font_size_override("font_size", 15)
 	hint.modulate.a = 0.75
 	phase_box.add_child(hint)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	row.add_theme_constant_override("separation", 14)
-	for i in EstateState.players.size():
-		if _is_bot(i) or NetSession.is_seat_remote(i):
-			continue
-		var pl = EstateState.players[i]
-		var tile_btn := Button.new()
-		tile_btn.custom_minimum_size = Vector2(190, 48)
-		tile_btn.text = "%s: TRAP TILE %d♠" % [pl.name, TILE_COST]
-		tile_btn.add_theme_color_override("font_color", pl.color)
-		tile_btn.pressed.connect(func():
-			if not _tile_buyers.has(i) and EstateState.spend_grudge(i, TILE_COST):
-				_tile_buyers.append(i)
-				tile_btn.text = "%s: TILE BOUGHT" % pl.name
-				tile_btn.disabled = true
-				Sfx.play("grudge")
-				_rebuild_top_bar()
-			else:
-				Sfx.play("invalid"))
-		row.add_child(tile_btn)
-	phase_box.add_child(row)
 	var row2 := HBoxContainer.new()
 	row2.alignment = BoxContainer.ALIGNMENT_CENTER
 	row2.add_theme_constant_override("separation", 14)
@@ -1879,16 +1683,12 @@ func _build_freeroam_panel() -> void:
 	row2.add_child(roam)
 	var cont := Button.new()
 	cont.custom_minimum_size = Vector2(300, 56)
-	# P3: the ready-up reads as the flow it is — the mourners gather at the gate.
-	cont.text = "READY AT THE LYCHGATE" if _procession_next \
-		else "CONTINUE — NIGHT %d" % (EstateState.run_night + 1)
+	cont.text = "READY AT THE LYCHGATE"
 	cont.pressed.connect(_continue_to_night)
 	row2.add_child(cont)
 	phase_box.add_child(row2)
 
-## Leaves free roam. P3: the walkabout's ready-up leads to THE PROCESSION —
-## the mourners gather at the lychgate and the match begins. (Classic's
-## tiles→auction continuation below stays dormant behind the flag.)
+## Leaves free roam and launches THE PROCESSION.
 func _continue_to_night() -> void:
 	if phase != Phase.GROUNDS:
 		return
@@ -1896,301 +1696,12 @@ func _continue_to_night() -> void:
 	banner.remove_theme_font_size_override("font_size")
 	banner.visible = false
 	Sfx.play("confirm")
-	if _procession_next:
-		_enter_procession()
-		return
-	if EstateState.nights_played > 0 and EstateState.games_played == 0:
-		_flash("NIGHT %d — THE ESTATE REMEMBERS" % (EstateState.nights_played + 1), Color(1, 0.85, 0.2), 2.2)
-	_enter_tiles()
+	_enter_procession()
 
-func _bots_place_bets() -> void:
-	for i in EstateState.players.size():
-		if _is_bot(i):
-			EstateState.place_bet(i, EstateState.rng.randi_range(0, EstateState.players.size() - 1))
-
-func _bots_buy_tiles() -> void:
-	for i in EstateState.players.size():
-		if _is_bot(i) and EstateState.rng.randf() < 0.55 and not _tile_buyers.has(i):
-			if EstateState.spend_grudge(i, TILE_COST):
-				_tile_buyers.append(i)
-
-func _enter_tiles() -> void:
-	if _tile_buyers.is_empty():
-		_enter_auction()
-		return
-	phase = Phase.TILES
-	_rebuild_top_bar()
-	_prompt_next_tile()
-
-func _prompt_next_tile() -> void:
-	if _tile_buyers.is_empty():
-		_enter_auction()
-		return
-	var p: int = _tile_buyers[0]
-	var pl = EstateState.players[p]
-	_clear_panel(Dialog.text("estate.walkabout.tile_prompt") % pl.name, pl.color)
-	if _is_bot(p):
-		var spot := Vector3(EstateState.rng.randf_range(-5.0, 5.0), 0, EstateState.rng.randf_range(-6.0, 1.0))
-		_place_tile(p, spot)
-
-func _place_tile(p: int, pos: Vector3) -> void:
-	if Vector2(pos.x - hub_off.x, pos.z - hub_off.z + 4.0).length() > 11.0:
-		Sfx.play("invalid")
-		return
-	_tile_buyers.pop_front()
-	var tile := TrapTile.new()
-	$Grounds.add_child(tile)
-	tile.global_position = Vector3(pos.x, ProcessionGrounds.height(pos.x, pos.z) + 0.02, pos.z)
-	tile.setup(p, EstateState.players[p].color)
-	tile.tripped.connect(_on_tile_tripped)
-	Sfx.play("place")
-	_prompt_next_tile()
-
-func _on_tile_tripped(victim: int, owner_idx: int) -> void:
-	var taken := EstateState.steal_grudge(victim, owner_idx, 1)
-	print("TILE_TRIP victim=%d owner=%d stole=%d" % [victim, owner_idx, taken])
-	var v = EstateState.players[victim]
-	var o = EstateState.players[owner_idx]
-	var suffix := " and steals 1♠" if taken > 0 else ""
-	_flash("%s'S TILE TRIPS %s%s" % [o.name, v.name, suffix], o.color, 2.0)
-	EstateState.add_graffiti("%s tripped %s on the grounds" % [o.name, v.name])
-	_redraw_graffiti()
-	_rebuild_top_bar()
-
-func _should_show_house_rules() -> bool:
-	return HowtoCards.should_show_house_rules(self)
-
-func _maybe_show_house_rules() -> bool:
-	return HowtoCards.maybe_show_house_rules(self)
-
-func _show_house_rules() -> void:
-	HowtoCards.show_house_rules(self)
-
-func _all_house_rules_ready() -> bool:
-	return HowtoCards.all_house_rules_ready(self)
-
-func _refresh_house_rules_countdown() -> void:
-	HowtoCards.refresh_house_rules_countdown(self)
-
-func _poll_house_rules(delta: float) -> void:
-	HowtoCards.poll_house_rules(self, delta)
-
-func _enter_auction() -> void:
-	if phase == Phase.AUCTION:
-		return
-	# A brand-new estate meets THE HOUSE RULES before its first auction. The card
-	# marks itself shown and re-enters here when dismissed (flag now blocks it).
-	if _maybe_show_house_rules():
-		return
-	# THE STANDING GRUDGE (W2): night 2+ opens on a review of the standing
-	# accounts. Same re-entry contract as the house rules — dismiss returns here,
-	# the per-night flag now blocks a second raise.
-	if SagaCards.maybe_show_standing_grudge(self):
-		return
-	phase = Phase.AUCTION
-	_net_set_ceremony({})
-	_net_auction_flavor = {}
-	_net_chooser = -1
-	Music.play_slot("auction")
-	high_bid = 0
-	high_bidder = -1
-	_bid_timer = BID_TIME
-	var pool := ["mock", "mock", "mock"] if mockonly else ["par", "echo", "tilt", "orbital", "mower", "greed", "swap", "deadweight", "throne", "lastwill"]
-	if not mockonly and ResourceLoader.exists("res://minigames/pallbearers/pallbearers.tscn"): pool.append("pallbearers")  # B7-HOOK
-	if not mockonly and bool(PartySetup.pref("theater_in_pool", false)):
-		for tid in ["seance", "understudy"]:
-			if ResourceLoader.exists(String(MODULES[tid].scene)):
-				pool.append(tid)
-	if not pool_override.is_empty():
-		pool = pool_override
-	auction_options.clear()
-	# Sample WITHOUT replacement — Andrew's auction offered LAST WILL twice.
-	var bag := pool.duplicate()
-	for k in 3:
-		if bag.is_empty():
-			bag = pool.duplicate()
-		var pick := EstateState.rng.randi_range(0, bag.size() - 1)
-		auction_options.append(bag[pick])
-		bag.remove_at(pick)
-	_bots_place_bets()
-	_rebuild_top_bar()
-	_clear_panel(Dialog.text("estate.auction.header"))
-	if EstateState.games_played == 0 and not EstateState.vendetta.is_empty():
-		var v: Dictionary = EstateState.vendetta
-		var vl := Label.new()
-		vl.text = Dialog.text("estate.auction.vendetta") % [EstateState.players[int(v.hunter)].name, EstateState.players[int(v.prey)].name]
-		vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		vl.custom_minimum_size = Vector2(700, 0)
-		vl.add_theme_font_size_override("font_size", 15)
-		vl.add_theme_color_override("font_color", Color(0.9, 0.75, 0.75))
-		phase_box.add_child(vl)
-		_net_auction_flavor["vendetta"] = vl.text
-	var exec_lines: Array = Dialog.paras("estate.auction.quips")
-	var eq := Label.new()
-	eq.text = "“%s”" % String(exec_lines[EstateState.rng.randi_range(0, exec_lines.size() - 1)])
-	eq.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	eq.add_theme_font_size_override("font_size", 15)
-	eq.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
-	eq.modulate.a = 0.8
-	phase_box.add_child(eq)
-	_net_auction_flavor["quip"] = eq.text
-	var opts := Label.new()
-	var names: Array = []
-	for id in auction_options:
-		names.append(MODULES[id].name)
-	opts.text = Dialog.text("estate.auction.on_block") + " / ".join(names)
-	opts.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	phase_box.add_child(opts)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	for i in EstateState.players.size():
-		var pl = EstateState.players[i]
-		var b := Button.new()
-		b.text = "%s: RAISE TO %d♠" % [pl.name, high_bid + 1]
-		# Remote seats bid via panel intents (phase 2) — the host's cursor
-		# never spends another player's grudge.
-		b.disabled = _is_bot(i) or NetSession.is_seat_remote(i)
-		b.pressed.connect(_on_bid.bind(i))
-		row.add_child(b)
-	row.name = "BidRow"
-	phase_box.add_child(row)
-	# Side bets ride the auction now (free roam replaced the betting phase).
-	var bet_row := HBoxContainer.new()
-	bet_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	bet_row.add_theme_constant_override("separation", 10)
-	for i in EstateState.players.size():
-		if _is_bot(i) or EstateState.bets.has(i) or NetSession.is_seat_remote(i):
-			continue
-		var pl = EstateState.players[i]
-		_bet_targets[i] = (i + 1) % EstateState.players.size()
-		var tb := Button.new()
-		tb.custom_minimum_size = Vector2(120, 40)
-		tb.text = "on %s" % EstateState.players[_bet_targets[i]].name
-		tb.add_theme_font_size_override("font_size", 15)
-		tb.pressed.connect(func():
-			_bet_targets[i] = (_bet_targets[i] + 1) % EstateState.players.size()
-			tb.text = "on %s" % EstateState.players[_bet_targets[i]].name)
-		bet_row.add_child(tb)
-		var bb := Button.new()
-		bb.custom_minimum_size = Vector2(150, 40)
-		bb.text = "%s BETS 1♠" % pl.name
-		bb.add_theme_font_size_override("font_size", 15)
-		bb.add_theme_color_override("font_color", pl.color)
-		bb.pressed.connect(func():
-			if EstateState.place_bet(i, _bet_targets[i]):
-				bb.text = "BET PLACED"
-				bb.disabled = true
-				tb.disabled = true
-				Sfx.play("card")
-				_rebuild_top_bar())
-		bet_row.add_child(bb)
-	if bet_row.get_child_count() > 0:
-		phase_box.add_child(bet_row)
-	var clock := Label.new()
-	clock.name = "Clock"
-	clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	phase_box.add_child(clock)
-
-func _on_bid(p: int) -> void:
-	var pl = EstateState.players[p]
-	if pl.grudge < high_bid + 1:
-		Sfx.play("invalid")
-		return
-	high_bid += 1
-	high_bidder = p
-	_bid_timer = minf(_bid_timer + 3.0, BID_TIME)
-	Sfx.play("card")
-	var row := phase_box.get_node_or_null("BidRow")
-	if row:
-		for i in row.get_child_count():
-			var b: Button = row.get_child(i)
-			b.text = "%s: RAISE TO %d♠" % [EstateState.players[i].name, high_bid + 1]
-
-func _update_auction_clock() -> void:
-	var clock := phase_box.get_node_or_null("Clock")
-	if clock:
-		var lead := Dialog.text("estate.auction.no_bids") if high_bidder < 0 else "%s leads at %d♠" % [EstateState.players[high_bidder].name, high_bid]
-		clock.text = "%s   (%ds)" % [lead, ceili(_bid_timer)]
-
-func _bots_bid() -> void:
-	var candidates: Array = []
-	for i in EstateState.players.size():
-		if _is_bot(i) and EstateState.players[i].grudge > high_bid:
-			candidates.append(i)
-	if candidates.is_empty():
-		return
-	_on_bid(candidates[EstateState.rng.randi_range(0, candidates.size() - 1)])
-
-func _resolve_auction() -> void:
-	if phase != Phase.AUCTION:
-		return
-	phase = Phase.CHOOSING
-	var chooser := high_bidder
-	if chooser >= 0:
-		EstateState.players[chooser].grudge = maxi(0, EstateState.players[chooser].grudge - high_bid)
-		EstateState.pot += high_bid
-		_rebuild_top_bar()
-	else:
-		chooser = EstateState.standings().back()
-	_net_chooser = chooser
-	if _is_bot(chooser):
-		_launch_game(auction_options[EstateState.rng.randi_range(0, auction_options.size() - 1)])
-		return
-	_clear_panel("%s CHOOSES" % EstateState.players[chooser].name, EstateState.players[chooser].color)
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_CENTER
-	for id in auction_options:
-		var b := Button.new()
-		b.text = MODULES[id].name
-		b.custom_minimum_size = Vector2(220, 90)
-		b.pressed.connect(_launch_game.bind(id))
-		row.add_child(b)
-	phase_box.add_child(row)
-
-func _show_get_ready(id: String, practice := false, minimal := false) -> void:
-	HowtoCards.show_get_ready(self, MODULES, READY_GATE_TIME, id, practice, minimal)
-
-## Any seated human playing from another estate right now?
-func _any_remote_human() -> bool:
-	for i in EstateState.players.size():
-		if NetSession.is_seat_remote(i):
-			return true
-	return false
-
-func _all_ready_gate() -> bool:
-	return HowtoCards.all_ready_gate(self)
-
-func _refresh_ready_gate_countdown() -> void:
-	HowtoCards.refresh_ready_gate_countdown(self)
-
-func _poll_ready_gate(delta: float) -> void:
-	HowtoCards.poll_ready_gate(self, delta)
-
-## Night-flow entry: the chosen game shows a GET READY card (goal + live
-## controls + per-seat A-to-ready) before it launches. Exhibition/practice from
-## the selector already showed the How-to card, so they skip straight to launch;
-## an all-bot soak skips the card entirely so it never stalls.
+## Exhibition minigames launch from their how-to card. Modules with their own
+## IntroCard keep that ready-up; the hub does not add a second gate.
 func _launch_game(id: String, practice := false) -> void:
-	if phase == Phase.GAME or _ready_gate_active:
-		return
-	if not exhibition and not _all_bots():
-		# THE DOUBLE-GATE COLLAPSE (morning menu #4 debt, director's ruling):
-		# when the module brings its own IntroCard (the AAA beat, with its own
-		# per-seat ready ring), the estate's full GET READY card would be a
-		# second ready gate back to back — the IntroCard wins. Couch: launch
-		# straight into it. Online with remote humans: keep the gate, but as a
-		# minimal "everyone in" sync — it is the only cross-estate hold (remote
-		# seats ready via relayed A / the ready_toggle intent, and guests render
-		# it from the lobby "gate" fact) — stripped of the goal/controls
-		# preview the IntroCard is about to repeat.
-		if bool(MODULES[id].get("intro", false)):
-			if _any_remote_human():
-				_show_get_ready(id, practice, true)
-			else:
-				_do_launch_game(id, practice)
-			return
-		_show_get_ready(id, practice)
+	if phase == Phase.GAME:
 		return
 	_do_launch_game(id, practice)
 
@@ -2232,11 +1743,8 @@ func _launch_game_swap(id: String, practice := false) -> void:
 	$Grounds.process_mode = Node.PROCESS_MODE_DISABLED
 	plinths.visible = false
 	$GraffitiWall.visible = false
-	$Trail.visible = false
-	$Trail.process_mode = Node.PROCESS_MODE_DISABLED
 	$Sun.visible = false
 	$WorldEnvironment.environment = null
-	$UI/TopBar.visible = false
 	if info.mode == "gamestate":
 		GameState.player_count = EstateState.players.size()
 		GameState.reset_match()
@@ -2285,30 +1793,19 @@ func _on_module_finished(results: Dictionary) -> void:
 	$Grounds.visible = true
 	$Grounds.process_mode = Node.PROCESS_MODE_INHERIT
 	plinths.visible = true
-	$Trail.visible = true
-	$Trail.process_mode = Node.PROCESS_MODE_INHERIT
 	$Sun.visible = true
 	$WorldEnvironment.environment = _saved_env
 	$GraffitiWall.visible = true
-	$UI/TopBar.visible = true
 	cam.current = true
 	var placements: Array = results.get("placements", [])
 	if placements.size() >= 2:
 		await _present_match_podium(placements)
-	if exhibition:
-		exhibition = false
-		$UI/TopBar.visible = false
-		var champ_line := "EXHIBITION OVER"
-		if not placements.is_empty():
-			var w = EstateState.players[placements[0]]
-			champ_line = "EXHIBITION: %s TAKES IT" % w.name
-		_flash(champ_line, Color(0.9, 0.95, 0.9), 3.0)
-		_enter_selector()
-		return
-	var ticker := EstateState.apply_results(results)
-	_redraw_monuments()
-	_redraw_graffiti()
-	_enter_reckoning(ticker)
+	var champ_line := "EXHIBITION OVER"
+	if not placements.is_empty():
+		var w = EstateState.players[placements[0]]
+		champ_line = "EXHIBITION: %s TAKES IT" % w.name
+	_flash(champ_line, Color(0.9, 0.95, 0.9), 3.0)
+	_enter_selector()
 
 ## Every minigame ends on the podium (Alex's call): quick shared ceremony
 ## with characters, hats, and confetti before the estate takes over again.
@@ -2335,400 +1832,8 @@ func _present_match_podium(placements: Array) -> void:
 	podium.queue_free()
 	cam.current = true
 
-func _enter_reckoning(ticker: Array) -> void:
-	phase = Phase.RECKONING
-	_rebuild_top_bar()
-	_clear_panel("THE RECKONING")
-	Sfx.play("round_over")
-	if ticker.size() > 8:
-		var extra := ticker.size() - 7
-		ticker = ticker.slice(0, 7)
-		ticker.append("...and %d more (carved into the graffiti wall)" % extra)
-	_net_ticker = ticker.duplicate()
-	_net_set_ceremony({})   # podium folds on every guest; the ticker takes over
-	for line in ticker:
-		var l := Label.new()
-		l.text = str(line)
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.modulate.a = 0.0
-		phase_box.add_child(l)
-	var i := 0
-	for c in phase_box.get_children():
-		if c is Label and c.modulate.a == 0.0:
-			var tw := create_tween()
-			tw.tween_interval(0.35 * i)
-			tw.tween_property(c, "modulate:a", 1.0, 0.3)
-			i += 1
-	await get_tree().create_timer(0.35 * ticker.size() + 0.5).timeout
-	var btn := Button.new()
-	btn.text = "TO THE AUCTION" if EstateState.games_played < EstateState.night_length else "THE NIGHT SETTLES"
-	btn.pressed.connect(_after_reckoning)
-	phase_box.add_child(btn)
-	if _all_bots():
-		get_tree().create_timer(2.0).timeout.connect(_after_reckoning)
-
-## THE PARADE — once per night: every pawn advances by their NIGHT total,
-## worst first, winner last. Handles tollgate claims/payments. Returns a
-## summit player index (the manor is reached — the RUN ends) or -1.
-func _run_parade() -> int:
-	var deltas := {}
-	for pl in EstateState.players:
-		deltas[int(pl.index)] = int(pl.points)
-	var order: Array = deltas.keys()
-	order.sort_custom(func(a, b): return deltas[a] < deltas[b])
-	var summit := -1
-	for p in order:
-		var delta: int = deltas[p]
-		if delta <= 0:
-			continue
-		var from: int = EstateState.trail_pos[p]
-		var to: int = mini(from + delta, Trail.STONES - 1)
-		if to == from:
-			continue
-		var tw: Tween = $Trail.advance_pawn(p, from, to)
-		await tw.finished
-		EstateState.trail_pos[p] = to
-		_net_push_facts()   # guests' pawns chase the trail fact per advance
-		print("PARADE p=%d from=%d to=%d" % [p, from, to])
-		for s in range(from + 1, to + 1):
-			if s in Trail.TOLLGATES:
-				if not EstateState.tollgates.has(s):
-					EstateState.tollgates[s] = p
-					_flash("%s CLAIMS THE TOLLGATE" % EstateState.players[p].name, EstateState.players[p].color, 1.6)
-					EstateState.add_graffiti("%s claimed a tollgate" % EstateState.players[p].name)
-				elif EstateState.tollgates[s] != p:
-					var owner_idx: int = EstateState.tollgates[s]
-					var taken := EstateState.steal_grudge(p, owner_idx, 1)
-					if taken > 0:
-						EstateState.record_toll(owner_idx, taken)
-						_flash("%s PAYS %s'S TOLL (1♠)" % [EstateState.players[p].name, EstateState.players[owner_idx].name], EstateState.players[owner_idx].color, 1.6)
-				await get_tree().create_timer(0.7).timeout
-		if to >= Trail.STONES - 1:
-			if summit < 0 or EstateState.players[p].points > EstateState.players[summit].points:
-				summit = p
-		_rebuild_top_bar()
-	_redraw_graffiti()
-	return summit
-
-func _after_reckoning() -> void:
-	if phase != Phase.RECKONING:
-		return
-	if EstateState.games_played >= EstateState.night_length:
-		_night_ceremonies()
-	else:
-		_enter_auction()
-
-## The night is settled: podium -> will reading -> parade -> free roam
-## (or, if the parade reaches the manor, the RUN is over).
-func _night_ceremonies() -> void:
-	phase = Phase.NIGHT_END
-	var champ = EstateState.end_night(EstateState.standings()[0])
-	$Trail.add_statue(EstateState.gate_statues.back(), EstateState.gate_statues.size() - 1)
-	_redraw_monuments()
-	_rebuild_top_bar()
-	phase_panel.visible = false
-	var podium := Podium.new()
-	add_child(podium)
-	var entries: Array = []
-	var order := EstateState.standings()
-	_net_set_ceremony({"stage": "night_podium", "placements": order,
-		"champ": champ.index, "statue": EstateState.gate_statues.back(),
-		"statue_idx": EstateState.gate_statues.size() - 1})
-	for rank in order.size():
-		var pl = EstateState.players[order[rank]]
-		entries.append({
-			"name": pl.name, "color": pl.color, "rank": rank,
-			"char_scene": CHAR_SCENES[order[rank]],
-			"player": order[rank],
-		})
-	podium.present(entries)
-	_flash(Dialog.text("estate.will.night_win_banner") % champ.name, champ.color, 9999.0)
-	print("NIGHT_OVER winner=", champ.name, " monuments=", EstateState.monuments.size())
-	await podium.done
-	podium.queue_free()
-	cam.current = true
-	banner.visible = false
-	# THE ESTATE'S MEMORY: the night's newsreel plays before the will is read,
-	# then its stills are archived into the family album and the reel is reset.
-	var reel_moments := MomentScribe.night_moments()
-	if not reel_moments.is_empty():
-		await _play_newsreel(reel_moments)
-	FamilyAlbumWall.archive(reel_moments, EstateState.current_slot)
-	MomentScribe.clear_night()
-	_refresh_album_wall()               # rebuild the grounds gallery with tonight's frames
-	_enter_will_reading(champ)
-
-## After the podium: the night's superlatives, read aloud like an
-## inheritance. Ends at the DAWN button, which returns to the lobby —
-## the estate is the main menu, so every night must find its way home.
-func _enter_will_reading(champ) -> void:
-	Music.play_slot("ceremony")
-	var awards: Array = EstateState.night_superlatives(champ.index)
-	_clear_panel("THE READING OF THE WILL", Color(0.85, 0.75, 1.0))
-	var head := Label.new()
-	head.text = Dialog.text("estate.will.header") % champ.name
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	head.add_theme_color_override("font_color", champ.color)
-	phase_box.add_child(head)
-	var aw_facts: Array = []
-	for aw in awards:
-		var pl = EstateState.players[aw.player]
-		var l := Label.new()
-		l.text = "%s, %s — %s" % [pl.name, aw.title, aw.line]
-		aw_facts.append([int(aw.player), l.text])
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.add_theme_color_override("font_color", pl.color)
-		l.modulate.a = 0.0
-		phase_box.add_child(l)
-	var vend_text := ""
-	if not EstateState.vendetta.is_empty() and EstateState.vendetta_settled_by < 0:
-		var v: Dictionary = EstateState.vendetta
-		var open_l := Label.new()
-		open_l.text = Dialog.text("estate.will.vendetta_open") % [
-			EstateState.players[int(v.hunter)].name, EstateState.players[int(v.prey)].name]
-		vend_text = open_l.text
-		open_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		open_l.add_theme_font_size_override("font_size", 15)
-		open_l.modulate.a = 0.0
-		open_l.self_modulate.a = 0.7
-		phase_box.add_child(open_l)
-	# THE GRUDGE LEDGER: the estate recalls a pattern or two from across the
-	# nights, in the same dry register as the will. These fade in with the
-	# award stagger below (they start at modulate.a == 0, like the award rows).
-	for cl in EstateState.chronicle_lines(2):
-		var chl := Label.new()
-		chl.text = String(cl)
-		chl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		chl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		chl.custom_minimum_size = Vector2(680, 0)
-		chl.add_theme_font_size_override("font_size", 15)
-		chl.add_theme_color_override("font_color", Color(0.75, 0.72, 0.85))
-		chl.modulate.a = 0.0
-		phase_box.add_child(chl)
-	# EULOGY AS ITEMISED RECEIPT (W2): the reading closes on a transaction block.
-	# The estate does not mourn; it processes. These fade in last with the same
-	# stagger (they start at modulate.a == 0, like the rows above).
-	for r in SagaCards.eulogy_receipt_lines():
-		var rl := Label.new()
-		rl.text = String(r.get("text", ""))
-		rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		rl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		rl.custom_minimum_size = Vector2(680, 0)
-		var is_head: bool = bool(r.get("header", false))
-		rl.add_theme_font_size_override("font_size", 17 if is_head else 15)
-		rl.add_theme_color_override("font_color", Color(0.86, 0.78, 0.52) if is_head else Color(0.78, 0.73, 0.58))
-		rl.modulate.a = 0.0
-		phase_box.add_child(rl)
-	# The superlative cards travel as composed lines — the guest's reading is
-	# word-for-word the couch's, sequenced by the same stagger.
-	_net_set_ceremony({"stage": "will", "champ": champ.index, "head": head.text,
-		"awards": aw_facts, "vendetta": vend_text})
-	var i := 0
-	for c in phase_box.get_children():
-		if c is Label and c.modulate.a == 0.0:
-			var tw := create_tween()
-			tw.tween_interval(0.45 * i)
-			tw.tween_property(c, "modulate:a", 1.0, 0.3)
-			i += 1
-	print("WILL_READ night=%d awards=%d vendetta_settled=%d" % [EstateState.nights_played, awards.size(), EstateState.vendetta_settled_by])
-	await get_tree().create_timer(0.45 * i + 0.6).timeout
-	VerifyCapture.snap("will_reading")
-	if phase != Phase.NIGHT_END:
-		return
-	var btn := Button.new()
-	btn.text = "TO THE PARADE"
-	btn.pressed.connect(_night_parade)
-	phase_box.add_child(btn)
-	if _all_bots():
-		get_tree().create_timer(2.5).timeout.connect(_night_parade)
-
-## The silent-film ceremony, both screens (doc 20's guest-parity field): the
-## host ships tonight's stills as compact JPEGs + intertitle text over the
-## reliable channel, then rolls its own reel; each guest rolls the same reel
-## locally from the received frames. Net mirrors otherwise stay on the
-## night_podium facts until the will facts arrive — and the will fact is what
-## folds a guest reel that is still running (the host's pacing is authority).
-## Blocks until the host reel finishes or is skipped.
-func _play_newsreel(moments: Array) -> void:
-	_net_send_newsreel(moments)
-	var done := [false]
-	Newsreel.play(moments, func(): done[0] = true)
-	while not done[0]:
-		await get_tree().process_frame
-
-## GUEST PARITY: downscale tonight's kept stills to ~360px JPEG (quality 0.6 —
-## the newsreel shader's sepia/grain hides the compression) and send each with
-## its intertitle facts, then the roll order. One reliable burst of <= ~150 kB
-## per night. A still whose PNG cannot be read ships text-only — the guest reel
-## degrades to intertitles over black for that act, never breaks.
-func _net_send_newsreel(moments: Array) -> void:
-	if not (NetSession.is_host() and NetSession.has_guests()):
-		return
-	var n: int = mini(moments.size(), Newsreel.MAX_STILLS)
-	for i in n:
-		var m: Dictionary = moments[i]
-		NetSession.send_ceremony_media({
-			"kind": "reel_still", "i": i,
-			"caption": String(m.get("caption", "A MOMENT")),
-			"game": String(m.get("game", "")),
-			"players": m.get("players", []),
-			"jpg": _reel_jpeg_of(m),
-		})
-	NetSession.send_ceremony_media({"kind": "reel_roll", "n": n})
-	print("NEWSREEL_NET sent stills=%d" % n)
-
-func _reel_jpeg_of(m: Dictionary) -> PackedByteArray:
-	var path := String(m.get("abs", ""))
-	if path == "" and m.has("file"):
-		path = ProjectSettings.globalize_path(String(m.file))
-	if path == "" or not FileAccess.file_exists(path):
-		return PackedByteArray()
-	var img := Image.load_from_file(path)
-	if img == null:
-		return PackedByteArray()
-	const REEL_W := 360
-	if img.get_width() > REEL_W:
-		img.resize(REEL_W, maxi(1, int(img.get_height() * float(REEL_W) / float(img.get_width()))), Image.INTERPOLATE_LANCZOS)
-	return img.save_jpg_to_buffer(0.6)
-
-var _parade_running := false
-
-func _night_parade() -> void:
-	if phase != Phase.NIGHT_END or _parade_running:
-		return
-	_parade_running = true
-	phase_panel.visible = false
-	Music.play_slot("grounds")
-	_net_set_ceremony({"stage": "parade"})
-	var summit := await _run_parade()
-	EstateState.save_estate()
-	_parade_running = false
-	if summit >= 0:
-		_flash(Dialog.text("estate.heir.reaches_banner") % EstateState.players[summit].name, EstateState.players[summit].color, 3.0)
-		await get_tree().create_timer(2.2).timeout
-		_run_over(summit)
-		return
-	_start_boundary()
-
-## The rest between nights: arm the next night, then free roam.
-func _start_boundary() -> void:
-	GameState.reset_match()
-	EstateState.start_night(4)
-	_rebuild_top_bar()
-	banner.visible = false
-	print("DAWN free roam (night %d next)" % (EstateState.run_night + 1))
-	_enter_grounds()
-
-## Someone took the manor — the full game ends here.
-func _run_over(p: int) -> void:
-	phase = Phase.NIGHT_END
-	var pl = EstateState.finish_run(p)
-	_redraw_monuments()
-	_redraw_graffiti()
-	Music.play_slot("ceremony")
-	var podium := Podium.new()
-	add_child(podium)
-	var order: Array = EstateState.trail_pos.keys()
-	order.sort_custom(func(a, b): return EstateState.trail_pos[a] > EstateState.trail_pos[b])
-	_net_set_ceremony({"stage": "run_podium", "placements": order, "heir": p})
-	var entries: Array = []
-	for rank in order.size():
-		var q = EstateState.players[order[rank]]
-		entries.append({"name": q.name, "color": q.color, "rank": rank,
-			"char_scene": CHAR_SCENES[order[rank]], "player": order[rank]})
-	podium.present(entries)
-	_flash(Dialog.text("estate.heir.manor_banner") % pl.name, pl.color, 9999.0)
-	await podium.done
-	podium.queue_free()
-	cam.current = true
-	banner.visible = false
-	_clear_panel("THE ESTATE HAS AN HEIR", Color(1, 0.85, 0.2))
-	var l := Label.new()
-	l.text = Dialog.text("estate.heir.reading") % [pl.name, maxi(1, EstateState.run_night), pl.name]
-	_net_set_ceremony({"stage": "heir", "heir": p, "text": l.text})
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.custom_minimum_size = Vector2(700, 0)
-	l.add_theme_color_override("font_color", pl.color)
-	phase_box.add_child(l)
-	# FUNERAL STATISTICS (W2): the heir named, the estate closes its books with an
-	# itemised audit before anyone is let back to the title.
-	var btn := Button.new()
-	btn.text = "THE FINAL AUDIT"
-	btn.pressed.connect(func(): _enter_funeral_statistics(p))
-	phase_box.add_child(btn)
-	btn.grab_focus()
-	if _all_bots():
-		get_tree().create_timer(4.0).timeout.connect(func():
-			if phase == Phase.NIGHT_END:
-				_enter_funeral_statistics(p))
-
-## Dev-only: the saga verification hooks stage NIGHT_END ceremony cards directly
-## (the enum is not reachable through the instance from another script).
-func _dev_set_phase_night_end() -> void:
-	phase = Phase.NIGHT_END
-
-## The run-end audit: the estate totts up the whole tenure aloud — nights kept,
-## monuments raised, reprisals settled, kindnesses (none), then the heir and a
-## souring commendation — read with the will-reading's fade-in stagger. Read-only
-## over what the slot already holds. Ends at the title, where the estate lives.
-func _enter_funeral_statistics(heir_idx: int) -> void:
-	if phase != Phase.NIGHT_END:
-		return
-	Music.play_slot("ceremony")
-	_clear_panel("THE FINAL AUDIT", Color(0.9, 0.8, 0.4))
-	var sub := Label.new()
-	sub.text = Dialog.text("estate.audit.subtitle")
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	sub.custom_minimum_size = Vector2(720, 0)
-	sub.add_theme_font_size_override("font_size", 16)
-	sub.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
-	sub.modulate.a = 0.0
-	phase_box.add_child(sub)
-	for item in SagaCards.funeral_audit_lines(heir_idx):
-		var il := Label.new()
-		il.text = "·  " + String(item.get("text", ""))
-		il.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		il.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		il.custom_minimum_size = Vector2(720, 0)
-		il.add_theme_font_size_override("font_size", 18)
-		var who: int = int(item.get("who", -1))
-		if who >= 0 and who < GameState.PLAYER_COLORS.size():
-			il.add_theme_color_override("font_color", GameState.PLAYER_COLORS[who])
-		else:
-			il.add_theme_color_override("font_color", Color(0.82, 0.79, 0.7))
-		il.modulate.a = 0.0
-		phase_box.add_child(il)
-	var i := 0
-	for c in phase_box.get_children():
-		if c is Label and c.modulate.a == 0.0:
-			var tw := create_tween()
-			tw.tween_interval(0.4 * i)
-			tw.tween_property(c, "modulate:a", 1.0, 0.3)
-			i += 1
-	print("FUNERAL_AUDIT heir=%s nights=%d monuments=%d" % [
-		GameState.PLAYER_NAMES[heir_idx], EstateState.nights_played, EstateState.monuments.size()])
-	await get_tree().create_timer(0.4 * i + 0.6).timeout
-	VerifyCapture.snap("funeral_audit")
-	if phase != Phase.NIGHT_END:
-		return
-	var done := Button.new()
-	done.text = "RETURN TO THE TITLE"
-	done.pressed.connect(func():
-		GameState.reset_match()
-		_enter_title())
-	phase_box.add_child(done)
-	done.grab_focus()
-	if _all_bots():
-		get_tree().create_timer(3.0).timeout.connect(func():
-			if phase == Phase.NIGHT_END:
-				GameState.reset_match()
-				_enter_title())
-
 func _flash(text: String, color: Color, dur: float) -> void:
-	# Mid-ceremony banners (WINS THE NIGHT, tollgate claims, REACHES THE MANOR)
-	# ride the stage facts so guests see the same words at the same beat.
+	# Podium banners ride the stage facts so guests see the same words.
 	if not _net_ceremony.is_empty():
 		_net_ceremony["banner"] = [text, color.to_html(), dur]
 		_net_push_facts()
@@ -2769,7 +1874,7 @@ func _net_host_broadcast(delta: float) -> void:
 	NetLobby.host_broadcast(self, delta)
 
 func _net_build_lobby_state() -> Dictionary:
-	return NetLobby.build_lobby_state(self, MODULES)
+	return NetLobby.build_lobby_state(self)
 
 func _net_hats() -> Dictionary:
 	return NetLobby.hats()
@@ -2813,42 +1918,6 @@ func _on_net_module_state(state: Dictionary) -> void:
 func _on_net_module_private(data: Dictionary) -> void:
 	NetLobby.on_module_private(self, data)
 
-## ----- THE NEWSREEL on the guest screen (doc 20 guest-parity field) -----
-## The host ships compressed stills + intertitle facts (reliable, ordered),
-## then the roll order; this guest plays the SAME Newsreel scene locally.
-var _client_reel_pending: Array = []
-var _client_reel: Node = null
-
-func _on_net_ceremony_media(data: Dictionary) -> void:
-	match String(data.get("kind", "")):
-		"reel_still":
-			var m: Dictionary = {
-				"caption": String(data.get("caption", "A MOMENT")),
-				"game": String(data.get("game", "")),
-				"players": data.get("players", []),
-			}
-			var jpg: PackedByteArray = data.get("jpg", PackedByteArray())
-			if not jpg.is_empty():
-				var img := Image.new()
-				if img.load_jpg_from_buffer(jpg) == OK:
-					m["tex"] = ImageTexture.create_from_image(img)
-			_client_reel_pending.append(m)
-		"reel_roll":
-			if _client_reel_pending.is_empty():
-				return
-			print("NET newsreel roll: %d stills" % _client_reel_pending.size())
-			_client_reel = Newsreel.play(_client_reel_pending,
-				func() -> void: _client_reel = null)
-			_client_reel_pending = []
-
-## The host's ceremony moved on (will facts landed, or the stage cleared at a
-## boundary): a guest reel still running folds now — host pacing is authority.
-func _client_close_reel() -> void:
-	_client_reel_pending = []
-	if _client_reel != null and is_instance_valid(_client_reel):
-		(_client_reel as Newsreel).finish_now()
-	_client_reel = null
-
 ## Boot the same module scene in mirror mode: same roster shape the host
 ## builds, no seed, no sim — _net_apply drives everything.
 var _client_mirror_up := false   # guards teardown: never touch a HOST module
@@ -2868,11 +1937,8 @@ func _client_ensure_mirror(id: String) -> void:
 	$Grounds.process_mode = Node.PROCESS_MODE_DISABLED
 	plinths.visible = false
 	$GraffitiWall.visible = false
-	$Trail.visible = false
-	$Trail.process_mode = Node.PROCESS_MODE_DISABLED
 	$Sun.visible = false
 	$WorldEnvironment.environment = null
-	$UI/TopBar.visible = false
 	var scene: PackedScene = load(info.scene)
 	_module = scene.instantiate()
 	# PAR ONLINE (doc 22 §7b): gamestate modules mirror themselves — par
@@ -2904,8 +1970,6 @@ func _client_teardown_mirror() -> void:
 	$Grounds.visible = true
 	$Grounds.process_mode = Node.PROCESS_MODE_INHERIT
 	plinths.visible = true
-	$Trail.visible = true
-	$Trail.process_mode = Node.PROCESS_MODE_INHERIT
 	$Sun.visible = true
 	$GraffitiWall.visible = true
 	$WorldEnvironment.environment = _saved_env
@@ -2920,15 +1984,8 @@ func _client_build_panel() -> void:
 func _client_build_spectate_panel(state: Dictionary) -> void:
 	NetLobby.client_build_spectate_panel(self, state)
 
-## ----- PHASE 3 (this lane): podiums + night ceremonies on the guest screen --
-## The host narrates stages as facts; the guest RESTAGES them — same Podium
-## scene, same composed lines, same banners — and never simulates an outcome.
-
-## Auction visibility (spec item 3): bids, pot, the vendetta book and the
-## Executor's quip as read-only rows. Bidding stays couch-side (no new inputs).
-func _client_build_auction_rows(auc: Dictionary) -> void:
-	NetLobby.client_build_auction_rows(self, auc)
-
+## The host narrates an exhibition podium as facts; the guest restages it and
+## never simulates an outcome.
 func _client_render_ceremony(cer: Dictionary) -> void:
 	# Banners ride the stage; flash each distinct one exactly once.
 	var b: Array = cer.get("banner", [])
@@ -2939,33 +1996,20 @@ func _client_render_ceremony(cer: Dictionary) -> void:
 			_flash(String(b[0]), Color.from_string(String(b[1]), Color.WHITE), float(b[2]))
 	var stg := String(cer.get("stage", ""))
 	if stg == _client_cer_stage:
-		return  # already staged; only incremental facts (banner/trail) changed
+		return
 	_client_cer_stage = stg
-	# A fresh stage without a banner fact means the host cleared its banner
-	# (podium flash -> will reading, will -> parade). Match it.
 	if not cer.has("banner"):
 		banner.visible = false
 		_client_banner_sig = ""
 	print("NET ceremony stage: %s" % stg)
-	match stg:
-		"match_podium", "night_podium", "run_podium":
-			_client_show_podium(cer)
-		"will":
-			_client_close_reel()   # a straggling guest reel folds under the will
-			_client_show_will(cer)
-		"parade":
-			_client_clear_podium()
-			phase_panel.visible = false
-			Music.play_slot("grounds")
-		"heir":
-			_client_show_heir(cer)
+	if stg == "match_podium":
+		_client_show_podium(cer)
 
 func _client_end_ceremony() -> void:
 	if _client_cer_stage == "":
 		return
 	_client_cer_stage = ""
 	_client_banner_sig = ""
-	_client_close_reel()
 	_client_clear_podium()
 	banner.visible = false
 
@@ -2982,14 +2026,6 @@ func _client_show_podium(cer: Dictionary) -> void:
 	_client_teardown_mirror()
 	_client_clear_podium()
 	phase_panel.visible = false
-	var stg := String(cer.get("stage", ""))
-	if stg == "night_podium" and cer.has("statue"):
-		var sidx := int(cer.get("statue_idx", 0))
-		if not _client_statues.has(sidx):
-			_client_statues[sidx] = true
-			$Trail.add_statue(cer["statue"], sidx)
-	if stg == "run_podium":
-		Music.play_slot("ceremony")
 	var hats: Dictionary = _client_last_state.get("hats", {})
 	var podium := Podium.new()
 	_client_podium = podium
@@ -3004,95 +2040,6 @@ func _client_show_podium(cer: Dictionary) -> void:
 			"cosmetics": _hats_of(hats, p),
 		})
 	podium.stage_entries(entries)
-
-## THE READING OF THE WILL, word for word, with the couch's 0.45 s stagger.
-func _client_show_will(cer: Dictionary) -> void:
-	_client_clear_podium()
-	Music.play_slot("ceremony")
-	var champ := int(cer.get("champ", 0))
-	_clear_panel("THE READING OF THE WILL", Color(0.85, 0.75, 1.0))
-	var head := Label.new()
-	head.text = String(cer.get("head", ""))
-	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	head.add_theme_color_override("font_color", GameState.PLAYER_COLORS[champ])
-	phase_box.add_child(head)
-	var awards: Array = cer.get("awards", [])
-	for aw in awards:
-		if not (aw is Array) or aw.size() < 2:
-			continue
-		var l := Label.new()
-		l.text = String(aw[1])
-		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[clampi(int(aw[0]), 0, 3)])
-		l.modulate.a = 0.0
-		phase_box.add_child(l)
-	if String(cer.get("vendetta", "")) != "":
-		var open_l := Label.new()
-		open_l.text = String(cer["vendetta"])
-		open_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		open_l.add_theme_font_size_override("font_size", 15)
-		open_l.modulate.a = 0.0
-		open_l.self_modulate.a = 0.7
-		phase_box.add_child(open_l)
-	var i := 0
-	for c in phase_box.get_children():
-		if c is Label and c.modulate.a == 0.0:
-			var tw := create_tween()
-			tw.tween_interval(0.45 * i)
-			tw.tween_property(c, "modulate:a", 1.0, 0.3)
-			i += 1
-	var foot := Label.new()
-	foot.text = Dialog.text("estate.client.will_foot")
-	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	foot.add_theme_font_size_override("font_size", 13)
-	foot.modulate.a = 0.55
-	phase_box.add_child(foot)
-	print("WILL_READ_MIRROR awards=%d vendetta=%s" % [awards.size(), str(String(cer.get("vendetta", "")) != "")])
-	await get_tree().create_timer(0.45 * i + 0.6).timeout
-	if _client_cer_stage == "will":
-		VerifyCapture.snap("will_reading_mirror")
-
-func _client_show_heir(cer: Dictionary) -> void:
-	_client_clear_podium()
-	var heir := clampi(int(cer.get("heir", 0)), 0, 3)
-	_clear_panel("THE ESTATE HAS AN HEIR", Color(1, 0.85, 0.2))
-	var l := Label.new()
-	l.text = String(cer.get("text", ""))
-	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	l.custom_minimum_size = Vector2(700, 0)
-	l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[heir])
-	phase_box.add_child(l)
-	var foot := Label.new()
-	foot.text = Dialog.text("estate.client.heir_foot")
-	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	foot.add_theme_font_size_override("font_size", 13)
-	foot.modulate.a = 0.55
-	phase_box.add_child(foot)
-	print("HEIR_MIRROR heir=%d" % heir)
-	VerifyCapture.snap("heir_mirror")
-
-## Seat the local trail pawns at the HOST's stones; during the parade stage,
-## advances animate stone-by-stone exactly like the couch (host paces them —
-## each advance lands as its own fact push).
-func _client_apply_trail(trail: Dictionary, animate: bool) -> void:
-	var reseat := false
-	for k in trail:
-		var p := int(str(k))
-		var to := int(trail[k])
-		var cur := int(_client_trail.get(p, -1))
-		if to == cur:
-			continue
-		var old: Tween = _client_trail_tweens.get(p, null)
-		if old != null and old.is_valid():
-			old.kill()
-		if animate and cur >= 0 and to > cur and $Trail.pawns.has(p):
-			_client_trail_tweens[p] = $Trail.advance_pawn(p, cur, to)
-		else:
-			reseat = true
-		_client_trail[p] = to
-	if reseat:
-		$Trail.seat_all(_client_trail)
 
 ## Wear the host estate's wardrobe truth on the mirrored walkers.
 func _client_apply_hats(hats: Dictionary) -> void:
@@ -3117,8 +2064,6 @@ func _hats_of(hats: Dictionary, p: int) -> Array:
 func _on_net_session_closed(reason: String) -> void:
 	_client_teardown_mirror()   # no-op unless a mirror is actually up
 	_client_end_ceremony()
-	_client_trail.clear()
-	_client_trail_tweens.clear()
 	_client_hats_sig = ""
 	_client_last_state = {}
 	_client_walker_targets.clear()
@@ -3133,7 +2078,7 @@ func _on_net_session_closed(reason: String) -> void:
 		_enter_title()
 
 ## ===== NETPROBE — two-instance verification rig (doc 10 §7) =====
-## host:  windowed, --net=host --netprobe=host --mockonly-equivalent night
+## host:  windowed, --net=host --netprobe=host
 ## join:  windowed, --net=join=127.0.0.1:8910 --nettape --netprobe=join
 ## couch: headless, --netprobe=couch — SAME tape through the SAME injector
 ##        with no wire, for the determinism diff. Traces print as
@@ -3190,9 +2135,6 @@ func _np_wait(cond: Callable, timeout_s: float) -> bool:
 	return true
 
 func _netprobe_host_flow(ps: String, pf: String) -> void:
-	# Phase-2 séance probe rides the REAL selector: --pool=seance keeps the
-	# auction honest and the mock game out. Without a pool, phase-1 mock night.
-	mockonly = pool_override.is_empty()
 	_hide_title()
 	PlayerInput.assign(0, -1)
 	PlayerInput.set_bot(0, false)
@@ -3226,65 +2168,14 @@ func _netprobe_host_flow(ps: String, pf: String) -> void:
 	_start_night_from_lobby()
 	await get_tree().create_timer(1.5).timeout
 	_continue_to_night()
-	var auction_up := func() -> bool: return phase == Phase.AUCTION
-	if await _np_wait(auction_up, 20.0):
-		await get_tree().create_timer(1.0).timeout
-		await _np_snap("online_host_auction")
-	var gate_up := func() -> bool: return _ready_gate_active
-	if await _np_wait(gate_up, 40.0):
-		_ready_gate_ready[0] = true
-		_refresh_ready_gate_countdown()
-		await get_tree().create_timer(0.6).timeout
-		await _np_snap("online_host_gate")
 	var in_game := func() -> bool: return phase == Phase.GAME
 	if not await _np_wait(in_game, 40.0):
-		print("NETPROBE FAIL: night never reached GAME")
+		print("NETPROBE FAIL: procession never reached GAME")
 		await _netprobe_finish(ps, pf)
 		return
 	await get_tree().create_timer(1.2).timeout
 	await _np_snap("online_host_game")
-	var podium_up := func() -> bool: return String(_net_ceremony.get("stage", "")) == "match_podium"
-	if await _np_wait(podium_up, 40.0 if mockonly else 420.0):
-		await get_tree().create_timer(1.5).timeout
-		await _np_snap("online_host_matchpodium")
-	var reckoned := func() -> bool: return phase == Phase.RECKONING
-	# a real séance night runs ~4 min; the mock night is done inside 40 s
-	if await _np_wait(reckoned, 40.0 if mockonly else 420.0):
-		await get_tree().create_timer(1.2).timeout
-		await _np_snap("online_host_reckoning")
-	var parts := "NETPROBE_RESULTS"
-	for pl in EstateState.players:
-		parts += " %s:pts=%d,grudge=%d" % [pl.name, pl.points, pl.grudge]
-	print(parts)
-	# NIGHT CEREMONIES leg (--night=1 probes): the reckoning settles the night —
-	# press the host's own CONTINUE, then walk night podium -> will reading ->
-	# parade -> boundary, pausing at each stage so both sides' snaps land.
-	if phase == Phase.RECKONING and EstateState.games_played >= EstateState.night_length:
-		_after_reckoning()
-		var npod_up := func() -> bool: return String(_net_ceremony.get("stage", "")) == "night_podium"
-		if await _np_wait(npod_up, 20.0):
-			await get_tree().create_timer(2.0).timeout
-			await _np_snap("online_host_nightpodium")
-		# The NEWSREEL now plays between the night podium and the will (up to
-		# ~45 s for a full reel) — snap it, and give the will wait room for it.
-		var reel_up := func() -> bool: return get_tree().root.get_node_or_null("Newsreel") != null
-		if await _np_wait(reel_up, 15.0):
-			await get_tree().create_timer(4.0).timeout
-			await _np_snap("online_host_newsreel")
-		var will_up := func() -> bool: return String(_net_ceremony.get("stage", "")) == "will"
-		if await _np_wait(will_up, 75.0):
-			await get_tree().create_timer(4.0).timeout
-			await _np_snap("online_host_will")
-		_night_parade()
-		var parade_up := func() -> bool: return String(_net_ceremony.get("stage", "")) == "parade"
-		if await _np_wait(parade_up, 15.0):
-			await get_tree().create_timer(1.0).timeout
-			await _np_snap("online_host_parade")
-		var at_boundary := func() -> bool: return phase == Phase.GROUNDS
-		if await _np_wait(at_boundary, 60.0):
-			await get_tree().create_timer(1.5).timeout
-			await _np_snap("online_host_boundary")
-		print("NETPROBE ceremonies leg done (boundary=%s)" % str(phase == Phase.GROUNDS))
+	print("NETPROBE_RESULTS procession_started=true")
 	await _netprobe_finish(ps, pf)
 
 func _netprobe_finish(ps: String, pf: String) -> void:
@@ -3314,63 +2205,14 @@ func _netprobe_join_flow() -> void:
 	print("NETPROBE client sees own ready=%s" % str(ready_seen))
 	await get_tree().create_timer(0.5).timeout
 	await _np_snap("online_client_ready")
-	var auction_seen := func() -> bool: return not (_client_last_state.get("auction", {}) as Dictionary).is_empty()
-	if await _np_wait(auction_seen, 40.0):
-		await get_tree().create_timer(1.0).timeout
-		await _np_snap("online_client_auction")
-	var gate_seen := func() -> bool: return _client_last_state.has("gate")
-	if await _np_wait(gate_seen, 40.0):
-		await get_tree().create_timer(0.6).timeout
-		await _np_snap("online_client_gate")
 	var game_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "GAME"
 	if await _np_wait(game_seen, 40.0):
 		await get_tree().create_timer(1.2).timeout
-		# phase 1 this was the spectate card; with a mirrorable game it is the
-		# booted mirror itself (the séance stage, INTRO/CAST)
 		await _np_snap("online_client_game")
-	var pod_seen := func() -> bool: return _client_cer_fact() == "match_podium"
-	if await _np_wait(pod_seen, 420.0):
-		await get_tree().create_timer(1.5).timeout
-		await _np_snap("online_client_matchpodium")
-	var reck_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "RECKONING"
-	if await _np_wait(reck_seen, 60.0):
-		await get_tree().create_timer(1.0).timeout
-		await _np_snap("online_client_reckoning")
-	# NIGHT CEREMONIES leg — only when the host's night actually settles
-	# (--night=1 probes). A phase-1/2 probe host quits at the reckoning instead;
-	# the session drop skips this whole block.
-	var night_end_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "NIGHT_END" or not NetSession.is_online()
-	if await _np_wait(night_end_seen, 30.0) and NetSession.is_online():
-		var npod_seen := func() -> bool: return _client_cer_fact() == "night_podium"
-		if await _np_wait(npod_seen, 20.0):
-			await get_tree().create_timer(2.0).timeout
-			await _np_snap("online_client_nightpodium")
-		# GUEST NEWSREEL (doc 20 parity): the received reel rolls between the
-		# night podium and the will facts — snap it mid-still.
-		var reel_seen := func() -> bool: return _client_reel != null
-		if await _np_wait(reel_seen, 20.0):
-			await get_tree().create_timer(4.0).timeout
-			await _np_snap("online_client_newsreel")
-		var will_seen := func() -> bool: return _client_cer_fact() == "will"
-		if await _np_wait(will_seen, 75.0):
-			await get_tree().create_timer(3.6).timeout
-			await _np_snap("online_client_will")
-		var parade_seen := func() -> bool: return _client_cer_fact() == "parade"
-		if await _np_wait(parade_seen, 30.0):
-			await get_tree().create_timer(1.2).timeout
-			await _np_snap("online_client_parade")
-		var grounds_seen := func() -> bool: return String(_client_last_state.get("phase", "")) == "GROUNDS" and _client_cer_fact() == ""
-		if await _np_wait(grounds_seen, 60.0):
-			await get_tree().create_timer(1.5).timeout
-			await _np_snap("online_client_boundary")
 	print("NETPROBE_CLIENT_DONE")
 	# outlive the host by a breath so its quit lands first, then leave
 	await get_tree().create_timer(6.0).timeout
 	get_tree().quit()
-
-## The ceremony stage as the CLIENT knows it — from facts, never local state.
-func _client_cer_fact() -> String:
-	return String((_client_last_state.get("ceremony", {}) as Dictionary).get("stage", ""))
 
 # ============================================================ AMBIENT LIFE (B3)
 ## The estate grounds, made to breathe. This is the ONE setup region the ambient

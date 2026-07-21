@@ -531,9 +531,8 @@ func _update_idle() -> void:
 		_idle_narrated = true
 		_show_idle_line(seat)
 
-## A menu desk awaiting the couch — the LOBBY/GROUNDS/AUCTION/CHOOSING/TILES phases,
-## where the estate's own panel is up and no game is running. Excludes the live game,
-## the reveal ceremonies, and the title.
+## A menu desk awaiting the couch — the LOBBY/GROUNDS phases, where the estate's
+## own panel is up and no game is running. Excludes the live game and the title.
 func _idle_surface_ok() -> bool:
 	var scene: Node = get_tree().current_scene
 	if scene == null or scene.scene_file_path != "res://estate/estate.tscn":
@@ -545,7 +544,7 @@ func _idle_surface_ok() -> bool:
 		return false
 	if scene.has_method("get_phase_name"):
 		var ph := str(scene.call("get_phase_name"))
-		if not (ph in ["LOBBY", "GROUNDS", "TILES", "AUCTION", "CHOOSING"]):
+		if not (ph in ["LOBBY", "GROUNDS"]):
 			return false
 	return true
 
@@ -1040,28 +1039,12 @@ func _stop_listen() -> void:
 	_listen_action = ""
 	_listen_btn = null
 
-## ----- GAME tab (run configuration; applies to the next night) -----
+## ----- GAME tab (shared exhibition configuration) -----
 
 func _build_game_tab() -> Control:
 	var v := VBoxContainer.new()
 	v.name = "GAME"
 	v.add_theme_constant_override("separation", 14)
-	var row1 := HBoxContainer.new()
-	row1.alignment = BoxContainer.ALIGNMENT_CENTER
-	row1.add_theme_constant_override("separation", 16)
-	var l1 := Label.new()
-	l1.text = "GAMES PER NIGHT"
-	row1.add_child(l1)
-	var nights := OptionButton.new()
-	nights.custom_minimum_size = Vector2(140, 44)
-	for opt in [3, 5, 7]:
-		nights.add_item(str(opt))
-	nights.selected = maxi(0, [3, 5, 7].find(int(pref("night_length", 3))))
-	nights.item_selected.connect(func(idx: int):
-		set_pref("night_length", [3, 5, 7][idx])
-		Sfx.play("ui_move"))
-	row1.add_child(nights)
-	v.add_child(row1)
 	var row2 := HBoxContainer.new()
 	row2.alignment = BoxContainer.ALIGNMENT_CENTER
 	row2.add_theme_constant_override("separation", 16)
@@ -1078,17 +1061,8 @@ func _build_game_tab() -> Control:
 		Sfx.play("ui_move"))
 	row2.add_child(rounds)
 	v.add_child(row2)
-	var theater := CheckButton.new()
-	theater.text = "THEATER GAMES IN THE NIGHT ROTATION (Séance, Understudy)"
-	theater.button_pressed = bool(pref("theater_in_pool", false))
-	theater.toggled.connect(func(on: bool):
-		set_pref("theater_in_pool", on)
-		Sfx.play("ui_move"))
-	var tc := CenterContainer.new()
-	tc.add_child(theater)
-	v.add_child(tc)
 	var note := Label.new()
-	note.text = "The full game runs night after night until someone takes the manor.\nChanges apply from the next night."
+	note.text = "This setting applies to exhibition minigames launched from the theater."
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	note.add_theme_font_size_override("font_size", 14)
 	note.modulate.a = 0.65

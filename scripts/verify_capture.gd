@@ -9,8 +9,6 @@ var shot_frames: Array[int] = []
 var autoputts: Array = []
 var autoplay: Array = []
 var autobuild := false
-var auctiontest := false
-var _at_state := 0
 var placetest := false
 var _pt_frame := -1
 var _pt_done := false
@@ -66,9 +64,6 @@ func _ready() -> void:
 			active = true
 		elif arg == "--placetest":
 			placetest = true
-			active = true
-		elif arg == "--auctiontest":
-			auctiontest = true
 			active = true
 		elif arg == "--stealtest":
 			stealtest = true
@@ -294,30 +289,6 @@ func _process(_delta: float) -> void:
 		_run_placetest()
 	if stealtest:
 		_run_stealtest(scene)
-	if auctiontest and scene.has_method("get_phase_name"):
-		_ap_cooldown -= 1
-		if _at_state == 0 and scene.get_phase_name() == "AUCTION" and _ap_cooldown <= 0:
-			scene._on_bid(0)
-			print("AUCTIONTEST bid placed as P0, high_bid=", scene.high_bid, " bidder=", scene.high_bidder)
-			_at_state = 1
-			_ap_cooldown = 30
-		elif _at_state == 1 and scene.get_phase_name() == "CHOOSING" and _ap_cooldown <= 0:
-			var btns: Array = []
-			for row in scene.phase_box.get_children():
-				if row is HBoxContainer:
-					for b in row.get_children():
-						if b is Button:
-							btns.append(b)
-			if btns.size() > 0:
-				print("AUCTIONTEST clicking game button: ", btns[0].text)
-				btns[0].pressed.emit()
-				_at_state = 2
-			else:
-				print("AUCTIONTEST FAIL: no game buttons in CHOOSING panel")
-				_at_state = 3
-		elif _at_state == 2 and scene.get_phase_name() == "GAME":
-			print("AUCTIONTEST PASS: game launched via clicked button")
-			_at_state = 3
 	if autobuild:
 		var m := scene
 		if m.has_method("get_phase_name"):

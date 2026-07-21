@@ -3,8 +3,8 @@ extends RefCounted
 
 ## ===== ONLINE PHASE 1 — the estate as the shared lobby (doc 10 §5) =====
 ## Host: remote peers claim seats; their walkers stroll these grounds on
-## relayed input; READY and the GET READY gate poll PlayerInput as ever
-## (relay-transparent). Client: renders a mirror of the lobby facts + walker
+## relayed input; READY polls PlayerInput as ever (relay-transparent).
+## Client: renders a mirror of the lobby facts + walker
 ## snapshots; minigames stay host-screen-only this phase (spectate card).
 
 static func wire_signals(estate) -> void:
@@ -18,7 +18,6 @@ static func wire_signals(estate) -> void:
 	NetSession.probe_first_input.connect(Callable(estate, "_on_net_probe_first_input"))
 	NetSession.module_state_received.connect(Callable(estate, "_on_net_module_state"))
 	NetSession.module_private_received.connect(Callable(estate, "_on_net_module_private"))
-	NetSession.ceremony_media_received.connect(Callable(estate, "_on_net_ceremony_media"))
 
 ## ----- host side -----
 
@@ -76,28 +75,15 @@ static func on_peer_left_seat(estate, seat: int, _peer_id: int) -> void:
 		estate._build_lobby_panel()
 
 ## Semantic UI intents from guests (spec §5.3): the client clicked a mirrored
-## control, the host runs the seat-parameterized handler. Phase 1 ships the
-## ready toggle; auction raises/bets/tiles ride the same pipe in phase 2.
+## control, the host runs the seat-parameterized handler.
 static func on_panel_intent(estate, seat: int, intent: Dictionary) -> void:
 	match String(intent.get("kind", "")):
 		"ready_toggle":
-			if estate._ready_gate_active and seat in estate._ready_gate_needed:
-				if not estate._ready_gate_ready.get(seat, false):
-					estate._ready_gate_ready[seat] = true
-					Sfx.play("ui_confirm")
-					estate._refresh_ready_gate_countdown()
-			elif estate.get_phase_name() == "LOBBY" or estate.get_phase_name() == "GROUNDS":
+			if estate.get_phase_name() == "LOBBY" or estate.get_phase_name() == "GROUNDS":
 				estate._lobby_ready[seat] = not estate._lobby_ready.get(seat, false)
 				Sfx.play("ui_move")
 				if estate.get_phase_name() == "LOBBY":
 					estate._build_lobby_panel()
-		"bid":
-			# A remote guest raises their own paddle at the auction (fix-list item
-			# 3): the SAME seat-parameterized handler the couch's buttons call,
-			# guarded to the live auction so a stray intent can't phantom-bid.
-			# _on_bid already refuses a raise the seat's grudge can't cover.
-			if estate.get_phase_name() == "AUCTION":
-				estate._on_bid(seat)
 
 ## 5 Hz lobby facts (reliable) + 15 Hz walker snapshots (unreliable_ordered).
 static func host_broadcast(estate, delta: float) -> void:
@@ -128,7 +114,7 @@ static func host_broadcast(estate, delta: float) -> void:
 				print("NETHASH_MOD side=host seq=%d h=%s bytes=%d" % [
 					estate._net_module_seq, NetSession.snapshot_hash(ms), var_to_bytes(ms).size()])
 
-static func build_lobby_state(estate, modules: Dictionary) -> Dictionary:
+static func build_lobby_state(estate) -> Dictionary:
 	var seats: Array = []
 	for i in 4:
 		seats.append({
@@ -137,50 +123,15 @@ static func build_lobby_state(estate, modules: Dictionary) -> Dictionary:
 			"ready": estate._lobby_ready.get(i, false),
 			"ping": NetSession.rtt_of_seat(i),
 		})
-	var standings: Array = []
-	for i in EstateState.standings():
-		var pl = EstateState.players[i]
-		standings.append({"name": pl.name, "points": pl.points, "grudge": pl.grudge})
 	var state := {
 		"phase": estate.get_phase_name(),
-		"night": EstateState.run_night + 1,
 		"code": NetSession.invite_code(),
 		"addr": NetSession.listen_addr(),
 		"seats": seats,
-		"standings": standings,
-		"trail": EstateState.trail_pos.duplicate(),
 		"hats": estate._net_hats(),
 	}
-	if estate._house_rules_active:
-		state["house_rules"] = true   # guests see a waiting card, not a silent stall
-	if estate.get_phase_name() == "RECKONING" and not estate._net_ticker.is_empty():
-		state["ticker"] = estate._net_ticker
-	if estate.get_phase_name() == "AUCTION" or estate.get_phase_name() == "CHOOSING":
-		var names: Array = []
-		for id in estate.auction_options:
-			names.append(String(modules[id].name))
-		state["auction"] = {
-			"options": names,
-			"high_bid": estate.high_bid,
-			"leader": estate.high_bidder,
-			"clock": ceili(maxf(estate._bid_timer, 0.0)),
-			"pot": EstateState.pot,
-			"flavor": estate._net_auction_flavor,
-			"chooser": estate._net_chooser,
-		}
 	if not estate._net_ceremony.is_empty():
 		state["ceremony"] = estate._net_ceremony
-	if estate._ready_gate_active:
-		var waiting: Array = []
-		for i in estate._ready_gate_needed:
-			if not estate._ready_gate_ready.get(i, false):
-				waiting.append(GameState.PLAYER_NAMES[i])
-		state["gate"] = {
-			"name": String(modules[estate._ready_gate_id].name),
-			"goal": String(HowtoCards.HOWTO.get(estate._ready_gate_id, {"goal": ""}).goal),
-			"waiting": waiting,
-			"countdown": ceili(maxf(estate._ready_gate_countdown, 0.0)),
-		}
 	if estate.get_phase_name() == "GAME":
 		state["game"] = estate._net_game_name
 		if estate._net_mirror_id != "" and estate._module != null:
@@ -292,7 +243,6 @@ static func enter_client_lobby(estate, lobby_phase: int) -> void:
 	estate.phase = lobby_phase
 	estate._hide_title()
 	Music.play_slot("lobby")
-	estate.get_node("UI/TopBar").set("visible", false)
 	# Walkers become mirror puppets: the host owns every transform.
 	for w in estate.walkers:
 		if is_instance_valid(w):
@@ -354,8 +304,6 @@ static func client_build_panel(estate, client_last_state: Dictionary) -> void:
 	if state.has("hats"):
 		estate._client_apply_hats(state["hats"])
 	var cer: Dictionary = state.get("ceremony", {})
-	if state.has("trail"):
-		estate._client_apply_trail(state["trail"], String(cer.get("stage", "")) == "parade")
 	# CEREMONIES FIRST: the match podium plays while the host phase still reads
 	# GAME — a guest must see the podium, never the spectate card, at that beat.
 	if not cer.is_empty():
@@ -372,14 +320,7 @@ static func client_build_panel(estate, client_last_state: Dictionary) -> void:
 		estate._client_build_spectate_panel(state)
 		return
 	estate._client_teardown_mirror()
-	estate._clear_panel("AN ONLINE NIGHT — hosted across the wire", Color(0.9, 0.95, 0.9))
-	if state.get("house_rules", false):
-		var hr := Label.new()
-		hr.text = "the host is reading the house rules — the night begins in a moment"
-		hr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		hr.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		hr.modulate.a = 0.85
-		estate.phase_box.add_child(hr)
+	estate._clear_panel("AN ONLINE ESTATE — hosted across the wire", Color(0.9, 0.95, 0.9))
 	var seats: Array = state.get("seats", [])
 	if seats.is_empty():
 		var wait := Label.new()
@@ -411,56 +352,6 @@ static func client_build_panel(estate, client_last_state: Dictionary) -> void:
 		if bool(s.get("ready", false)):
 			row.add_child(estate._make_ready_chip())
 		estate.phase_box.add_child(row)
-	if phase_name == "RECKONING":
-		var r_t := Label.new()
-		r_t.text = "— THE RECKONING —"
-		r_t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		r_t.add_theme_font_size_override("font_size", 16)
-		r_t.add_theme_color_override("font_color", Color(1, 0.9, 0.5))
-		estate.phase_box.add_child(r_t)
-		# The host's ticker, verbatim. Static (no stagger): this panel rebuilds
-		# on every fact change, and re-fading lines every ping tick would strobe.
-		for line in state.get("ticker", []):
-			var tl := Label.new()
-			tl.text = str(line)
-			tl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			tl.add_theme_font_size_override("font_size", 15)
-			estate.phase_box.add_child(tl)
-		var lad := Label.new()
-		lad.text = "— THE LADDER —"
-		lad.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lad.add_theme_font_size_override("font_size", 14)
-		lad.modulate.a = 0.7
-		estate.phase_box.add_child(lad)
-		for s in state.get("standings", []):
-			var rl := Label.new()
-			rl.text = "%s  %d pts  ♠%d" % [String(s.get("name", "?")), int(s.get("points", 0)), int(s.get("grudge", 0))]
-			rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			estate.phase_box.add_child(rl)
-	var auc: Dictionary = state.get("auction", {})
-	if not auc.is_empty():
-		estate._client_build_auction_rows(auc)
-	var gate: Dictionary = state.get("gate", {})
-	if not gate.is_empty():
-		var g_t := Label.new()
-		g_t.text = Voice.pick_fmt(HowtoCards.GET_READY_HEADS, [String(gate.get("name", "?"))])
-		g_t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		g_t.add_theme_font_size_override("font_size", 22)
-		g_t.add_theme_color_override("font_color", Color(1, 0.9, 0.5))
-		estate.phase_box.add_child(g_t)
-		var g_goal := Label.new()
-		g_goal.text = String(gate.get("goal", ""))
-		g_goal.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		g_goal.custom_minimum_size = Vector2(640, 0)
-		g_goal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		estate.phase_box.add_child(g_goal)
-		var g_w := Label.new()
-		var waiting: Array = gate.get("waiting", [])
-		g_w.text = "all ready — curtain up" if waiting.is_empty() else "waiting on %s  ·  begins in %ds" % [", ".join(PackedStringArray(waiting)), int(gate.get("countdown", 0))]
-		g_w.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		g_w.add_theme_font_size_override("font_size", 16)
-		g_w.add_theme_color_override("font_color", Color(0.85, 0.8, 0.95))
-		estate.phase_box.add_child(g_w)
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 14)
@@ -472,14 +363,14 @@ static func client_build_panel(estate, client_last_state: Dictionary) -> void:
 		NetSession.send_panel_intent({"kind": "ready_toggle"}))
 	btn_row.add_child(ready_btn)
 	var leave_btn := Button.new()
-	leave_btn.text = "LEAVE THE NIGHT"
+	leave_btn.text = "LEAVE THE ESTATE"
 	leave_btn.custom_minimum_size = Vector2(200, 52)
 	leave_btn.pressed.connect(func():
 		NetSession.leave())
 	btn_row.add_child(leave_btn)
 	estate.phase_box.add_child(btn_row)
 	var hint := Label.new()
-	hint.text = "MOVE strolls your walker on the host's grounds  ·  your A (or READY) toggles ready  ·  the host holds the keys to the night"
+	hint.text = "MOVE strolls your walker on the host's grounds  ·  your A (or READY) toggles ready  ·  the host holds the keys to the estate"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hint.custom_minimum_size = Vector2(700, 0)
@@ -490,83 +381,10 @@ static func client_build_panel(estate, client_last_state: Dictionary) -> void:
 ## Phase-1 posture (spec §8): games not yet mirrored render host-side only;
 ## the client keeps its seat, its input still relays, and this card says so.
 static func client_build_spectate_panel(estate, state: Dictionary) -> void:
-	estate._clear_panel("NIGHT %d — %s" % [int(state.get("night", 1)), String(state.get("game", "A GAME"))], Color(1, 0.9, 0.5))
+	estate._clear_panel(String(state.get("game", "A GAME")), Color(1, 0.9, 0.5))
 	var body := Label.new()
 	body.text = "This one plays on the host's screen — your inputs still reach your pawn.\nGames with remote mirrors play right here; the estate keeps your seat warm."
 	body.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	body.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	body.custom_minimum_size = Vector2(660, 0)
 	estate.phase_box.add_child(body)
-	var standings: Array = state.get("standings", [])
-	if not standings.is_empty():
-		var s_t := Label.new()
-		s_t.text = "— THE LADDER TONIGHT —"
-		s_t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		s_t.add_theme_font_size_override("font_size", 15)
-		s_t.modulate.a = 0.7
-		estate.phase_box.add_child(s_t)
-		for s in standings:
-			var l := Label.new()
-			l.text = "%s  %d pts  ♠%d" % [String(s.get("name", "?")), int(s.get("points", 0)), int(s.get("grudge", 0))]
-			l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			estate.phase_box.add_child(l)
-
-## Auction visibility (spec item 3): bids, pot, the vendetta book and the
-## Executor's quip as read-only rows. Bidding stays couch-side (no new inputs).
-static func client_build_auction_rows(estate, auc: Dictionary) -> void:
-	var chooser := int(auc.get("chooser", -1))
-	var a_t := Label.new()
-	a_t.text = "— THE AUCTION —" if chooser < 0 else "— %s CHOOSES THE GAME —" % GameState.PLAYER_NAMES[chooser]
-	a_t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	a_t.add_theme_font_size_override("font_size", 16)
-	a_t.add_theme_color_override("font_color", Color(1, 0.9, 0.5) if chooser < 0 else GameState.PLAYER_COLORS[chooser])
-	estate.phase_box.add_child(a_t)
-	var flavor: Dictionary = auc.get("flavor", {})
-	for key in ["vendetta", "quip"]:
-		if String(flavor.get(key, "")) != "":
-			var fl := Label.new()
-			fl.text = String(flavor[key])
-			fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			fl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			fl.custom_minimum_size = Vector2(680, 0)
-			fl.add_theme_font_size_override("font_size", 14)
-			fl.add_theme_color_override("font_color",
-				Color(0.9, 0.75, 0.75) if key == "vendetta" else Color(0.85, 0.8, 0.95))
-			fl.modulate.a = 0.85
-			estate.phase_box.add_child(fl)
-	var opts := Label.new()
-	var names: Array = auc.get("options", [])
-	opts.text = "on the block:  " + " / ".join(PackedStringArray(names))
-	opts.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	estate.phase_box.add_child(opts)
-	if chooser < 0:
-		var bid_l := Label.new()
-		var leader := int(auc.get("leader", -1))
-		var lead_txt := "no bids — cheapest seat chooses" if leader < 0 else \
-			"%s leads at %d♠" % [GameState.PLAYER_NAMES[leader], int(auc.get("high_bid", 0))]
-		bid_l.text = "%s   (%ds)   ·   POT %d♠" % [lead_txt, int(auc.get("clock", 0)), int(auc.get("pot", 0))]
-		bid_l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		if leader >= 0:
-			bid_l.add_theme_color_override("font_color", GameState.PLAYER_COLORS[leader])
-		estate.phase_box.add_child(bid_l)
-		# The guest's own paddle (fix-list item 3): a remote seat can now spend its
-		# grudge to steer which game the night picks, just like a couch seat. The
-		# raise rides the SAME panel-intent pipe as READY; the host runs _on_bid
-		# for this seat and the new high bid mirrors back on the next fact push.
-		var me := NetSession.my_seat()
-		if me >= 0:
-			var bid_btn := Button.new()
-			bid_btn.text = "RAISE TO %d♠" % (int(auc.get("high_bid", 0)) + 1)
-			bid_btn.custom_minimum_size = Vector2(260, 48)
-			bid_btn.pressed.connect(func():
-				Sfx.play("card")
-				NetSession.send_panel_intent({"kind": "bid"}))
-			var bc := CenterContainer.new()
-			bc.add_child(bid_btn)
-			estate.phase_box.add_child(bc)
-			var note := Label.new()
-			note.text = "raise the vendetta — your grudge steers which game the night picks"
-			note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			note.add_theme_font_size_override("font_size", 13)
-			note.modulate.a = 0.6
-			estate.phase_box.add_child(note)

@@ -241,22 +241,6 @@
     "chronicle_prefix": "The estate adds, for the record: "
   },
   "howto": {
-    "house_rules": {
-      "lead": "You are new to the estate, so it will explain itself. Once.",
-      "rules": [
-        "THE PROCESSION walks from the lychgate to the Manor Gate by three roads. THE LAST BREATH decides how far you go; you decide toward what.",
-        "♠ PENNIES are spite made spendable — the games pay them, the Peddler's Cart takes them, and a rival's purse is never quite closed.",
-        "⚘ WREATHS decide the heir. Arrivals, victories, and the estate's announced awards mint them. Most wreaths inherits. There is no appeal.",
-        "THE FINAL BELL: the first pawn through the gate rings it, and everyone else receives exactly one more turn. The estate is fair like that. Once.",
-        "Every night closes at THE READING, where the ledger is totted up aloud and no one, on principle, is flattered."
-      ],
-      "sig": "— The Executor"
-    },
-    "get_ready_heads": [
-      "TAKE YOUR PLACES — %s",
-      "THE ESTATE IS SEATING YOU — %s",
-      "THE ESTATE WILL SEE YOU NOW — %s"
-    ],
     "goals": {
       "par": "Sabotage golf. Draft a trap, place it on the SHARED hole, then putt it yourself. Your trap's kills pay YOU royalties. Last round is CHAOS: everyone putts at once.",
       "echo": "Duel beside your own GHOST — it replays your previous round. Shatter the others before the past catches up.",
@@ -381,44 +365,15 @@
     "win_title": "{name} INHERITS"
   },
   "settings": {
-    "hint": "Changes apply to the next game launched (estate phases apply live).\nGamepads must press a button once to be detected by the OS."
-  },
-  "saga": {
-    "grudge": {
-      "sub": "Before the night opens, the estate reviews the accounts still standing.",
-      "reign_streak_1": "The estate has answered to %s %s running.",
-      "reign_streak_2": "%s goes for the %s tonight. The estate keeps a chisel warm, on principle.",
-      "reign_single": "The estate answers, for now, to %s, with %s to their name.",
-      "leader": "%s holds more nights than anyone, and holds them without apology.",
-      "winless": "%s remains, in the estate's assessment, persistent.",
-      "reprisal": "A reprisal stands on the books: %s came for %s. The estate has left the matter open.",
-      "sig": "— The Executor"
-    },
-    "audit": {
-      "tenure": "Tenure: %s kept, and counted.",
-      "monuments_some": "Monuments raised: %d. The lawn is spoken for.",
-      "monuments_none": "Monuments raised: none. The estate found the restraint suspicious.",
-      "grudges_some": "Grudges settled: %s. The estate keeps the remainder open.",
-      "grudges_none": "Grudges settled: none. The estate keeps every one of them open.",
-      "kindness": "Kindnesses recorded: none. The estate had budgeted for this.",
-      "heir": "The manor, and its debts, pass to %s.",
-      "rank": "The account ranks in the %s percentile of grievers. The estate rates it, in candour, actionable."
-    },
-    "receipt": {
-      "header": "FUNERAL PROCESSED.",
-      "goodwill": "Goodwill recognised: +1, provisional.",
-      "kindness": "Kindness logged to the liability column, pending audit.",
-      "remains": "Remains: reallocated."
-    }
+    "hint": "Changes apply to the next game launched (estate menus apply live).\nGamepads must press a button once to be detected by the OS."
   },
   "estate": {
     "walkabout": {
       "stroll_banner": "walk to a landmark  ·  A enter  ·  B desk",
       "near": "%s — A: enter %s  ·  B: desk",
       "idle": "WALK THE GROUNDS — approach a landmark, A to enter, B back to the desk",
-      "freeroam_header": "THE ESTATE RESTS — night %d awaits",
-      "freeroam_hint": "Walk the grounds (B closes this desk) · visit the wardrobe or theater · seed a trap tile · continue when ready",
-      "tile_prompt": "%s — CLICK THE LAWN TO SEED YOUR TRAP TILE"
+      "freeroam_header": "THE GROUNDS — gather at the lychgate",
+      "freeroam_hint": "Walk the grounds (B closes this desk) · visit the wardrobe or theater · gather at the lychgate when ready"
     },
     "title": {
       "tagline": "a party nobody asked for",
@@ -426,8 +381,7 @@
     },
     "play": {
       "header": "PLAY — how does the estate settle its debts tonight?",
-      "procession_desc": "One wake, one board. Roll THE LAST BREATH from the lychgate to the Manor Gate through three roads; minigames pay pennies and wreaths; the FINAL BELL closes each night; most wreaths INHERITS the estate.",
-      "classic_desc": "Auctioned minigames, night after night, until someone climbs the trail and takes the manor."
+      "procession_desc": "One wake, one board. Roll THE LAST BREATH from the lychgate to the Manor Gate through three roads; minigames pay pennies and wreaths; the FINAL BELL closes each night; most wreaths INHERITS the estate."
     },
     "slot": {
       "header": "THE THREE ESTATES — pick where tonight happens",
@@ -437,20 +391,6 @@
     "lobby": {
       "header": "who's on the couch?",
       "controls": "PAD A or KEYBOARD Space/Enter takes an open seat  ·  A again = READY  ·  KB+MOUSE joins by button (its A is the mouse)  ·  ESC = players & controls"
-    },
-    "auction": {
-      "header": "THE AUCTION — bid pennies; the estate takes nothing else",
-      "on_block": "on the block:  ",
-      "no_bids": "no bids — cheapest seat chooses",
-      "vendetta": "“An unsettled matter: %s hunted %s last night. The estate has opened a book on the reprisal (+3♠).”  — The Executor",
-      "quips": [
-        "The Executor opens the bidding. Spite is legal tender.",
-        "The Executor reminds the room that generosity is not on the block.",
-        "The Executor accepts pennies, resentment, and exact change.",
-        "The Executor calls the lot. The reserve price is a penny, and it always clears.",
-        "The Executor notes, for the record, that the estate sells the evening and never gives it.",
-        "The Executor opens the book. Bids are entered in spite and paid in kind."
-      ]
     },
     "greeting": {
       "empty": "The Executor is pleased to receive you. The estate had been expecting someone; it was not, in candour, you.",
@@ -466,23 +406,6 @@
     "album": {
       "empty": "The estate has taken no portraits yet. Give it a night; it is patient, and it is watching.",
       "some": "%s hang in the salon. The estate remembers every face it has framed, and forgives none of them."
-    },
-    "will": {
-      "header": "The estate has reviewed the evening's conduct and finds it, on the whole, actionable.\n%s wins the night.",
-      "vendetta_open": "The matter of %s and %s remains open. The estate is patient.",
-      "night_win_banner": "%s WINS THE NIGHT\nthe estate will remember"
-    },
-    "heir": {
-      "reaches_banner": "%s REACHES THE MANOR",
-      "manor_banner": "%s TAKES THE MANOR\nthe estate has an heir",
-      "reading": "%s took the manor after %d nights.\n“The keys, the grounds, the grudges — all of it passes to %s.\nThe estate offers its condolences to everyone else.”  — The Executor"
-    },
-    "audit": {
-      "subtitle": "The manor has changed hands. The estate closes its books in full."
-    },
-    "client": {
-      "will_foot": "the host turns the page — the parade follows",
-      "heir_foot": "the run is over — the host decides what the estate does with the rest of the evening"
     }
   },
   "procession": {

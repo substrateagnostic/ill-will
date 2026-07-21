@@ -47,7 +47,6 @@ signal probe_first_input(seat: int)              # host, NETPROBE only: tape lan
 # --- PHASE 2: game mirrors (docs/design/10 §4.3; first game: THE SÉANCE) ---
 signal module_state_received(state: Dictionary)  # client: running game's _net_state()
 signal module_private_received(data: Dictionary) # client: THIS seat's hidden info only
-signal ceremony_media_received(data: Dictionary) # client: newsreel stills etc. (reliable)
 ## The host stepped into its ESC/settings overlay (or lost a local controller):
 ## the whole shared simulation is frozen on the host until it resumes. The 20 Hz
 ## state pump lives in the estate's (pausable) _process, so it stops the instant
@@ -109,10 +108,8 @@ var _steam_lobby_id := 0              # the lobby the current session rides (0 =
 var _steam_pending := ""              # "" | "host" | "join:<lobby>" (lobby callback in flight)
 
 # --- NETPROBE deterministic input tape (see docs/verify/online-phase1-VERIFY.md)
-# Steps hold until the next entry; from PULSE_FROM the tape pulses A every 90
-# ticks (6 ticks wide) so it can answer the GET READY gate whenever it appears.
-# The pulses start well past the lobby window (20 s) — earlier pulses would
-# keep toggling the lobby READY chip off again while the probe is still there.
+# Steps hold until the next entry. After the lobby window the tape pulses A
+# periodically so a mirrored minigame can exercise edge delivery.
 const TAPE := [
 	{"t": 0, "move": Vector2(-1, 0), "a": false},
 	{"t": 60, "move": Vector2(0, -1), "a": false},
@@ -125,10 +122,8 @@ const TAPE := [
 const TAPE_PULSE_FROM := 1200
 const TAPE_PULSE_EVERY := 90
 const TAPE_PULSE_WIDTH := 6
-## 13500 ticks = 225 s: long enough that the pulses still answer the séance's
-## chant window and VOTE lock (~tick 12700 in the --pool=seance probe night).
-## The phase-1 mock night reaches RECKONING far earlier; later pulses land in
-## phases that ignore a remote A (reckoning/podium are host-authoritative).
+## 13500 ticks = 225 s: long enough to reach the Séance chant window and VOTE
+## lock (~tick 12700) in the long-form network probe.
 const TAPE_END := 13500
 
 var _tape_requested := false
@@ -645,18 +640,6 @@ func _rpc_module_state(state: Dictionary) -> void:
 @rpc("authority", "call_remote", "reliable")
 func _rpc_module_private(data: Dictionary) -> void:
 	module_private_received.emit(data)
-
-## Host -> all guests, reliable: bulky one-shot ceremony media (the newsreel's
-## compressed stills + intertitle text — doc 20's guest-parity field). ENet
-## fragments/reassembles large reliable packets, so a ~10-25 kB JPEG per still
-## rides one call; the whole reel is <= ~150 kB once per night.
-func send_ceremony_media(data: Dictionary) -> void:
-	if role == Role.HOST and has_guests():
-		_rpc_ceremony_media.rpc(data)
-
-@rpc("authority", "call_remote", "reliable")
-func _rpc_ceremony_media(data: Dictionary) -> void:
-	ceremony_media_received.emit(data)
 
 ## ----- host pause (the estate holds its breath) -----
 ## The estate's state pump rides the host's (pausable) _process, so it stops the

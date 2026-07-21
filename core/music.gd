@@ -7,7 +7,6 @@ extends Node
 const SLOTS := {
 	"lobby": "res://assets/music/lobby.ogg",
 	"grounds": "res://assets/music/grounds.ogg",
-	"auction": "res://assets/music/auction.ogg",
 	"ceremony": "res://assets/music/ceremony.ogg",
 	"game_light": "res://assets/music/game_light.ogg",
 	"game_tense": "res://assets/music/game_tense.ogg",
