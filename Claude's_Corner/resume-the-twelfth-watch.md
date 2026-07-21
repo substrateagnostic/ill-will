@@ -212,3 +212,14 @@ post-merge) — water reads as water, legibility settled (0.85 retired for
 #85: bramble Meshy gen next forge wave; ripple domain-warp polish nit.
 Remaining in flight: CORONER only. Then: Throne merge → Coroner merge →
 WAVE THREE (#89).
+
+**LANDING LOG 2 (deep night):** CORONER stalled at codex after +1086 lines
+(hung 60+ min post-03:28) — finished + verified IN-HOUSE: soak seeds 1-3 +
+2P clean, rotation unique=4, VERIFY section written, committed 412b737.
+THRONE merged 5830d11 (dialog keys auto-merged). Receipts 2/2 over the
+full stack. #57 #58 complete pending couch. **WAVE THREE LAUNCHED (all 5):**
+A net-mirror (codex gpt-5.6-sol xhigh, main tree) · B G4 reaper wiring
+(worktree, windowed) · C NPC wiring (worktree, windowed — B/C self-serialize
+via title-aware monitor check) · D Greed bots (worktree, headless) ·
+E timing audit (read-only). Closer queued: night-games #76 + re-freeze
+after A-E merge. Coroner timing note for the audit: 4×75s ≈ 5min match.
