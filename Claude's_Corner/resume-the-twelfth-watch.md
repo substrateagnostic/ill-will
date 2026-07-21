@@ -229,3 +229,21 @@ coverage gaps, DW doc/code drift; 5 normalization options queued for Alex
 (#84). NET-MIRROR implemented by codex (snapshot wire format, idempotent,
 mid-join safe, --stirnettest self-probe) — sandbox blocked its godot runs
 again; verification in-house (stirnettest + receipts running in bg).
+
+**LANDING LOG 4 — THE ARC CLOSES (2026-07-21, before dawn):** Wave three
+complete, 5/5 + closer: net-mirror (197f32b — 3 codex type-inference errors
+fixed in-house; doctrine: demand explicit types in codex briefs), G4 reaper
+hero pose (103f365 — held woodcut sweep; walk benched with reasons), NPC
+wiring (03c56b8 — wake mourns with dignity, magpie on the signpost, Widow-
+in-maze filed #90), Greed bots CURED (4c075bf — drought_t design, 12 seeds
+zero zero-banks), timing audit filed (5 options await Alex, #84), and THE
+NIGHT GAMES closer (0b69d37): theater trio exclusive to the overnight slot,
+SANCTIONED RE-FREEZE → canonical md5 ccd25c2c, RED holds the crown by the
+closest race ever (44/42/39/40), single-night RED [16,7,15,6], sweeps BLUE
+[46,73,47,53] / MINT [28,53,51,74], LETTERS witness now BLUE. Receipts
+green everywhere. THE MORNING BOARD FOR ALEX: couch verdicts (Coroner feel
++ dialog red-pen, Throne feel, DW dash), timing-pass ruling (#84 five
+options), doc 36 web session (elderly spins + Auto Split), stinger_win
+tracks, Widow-in-maze nudge (#90), doc 35's built future (pre-commit #80
+ready to lane). Twelve watches of receipts say: the estate is in the best
+shape of its life.
