@@ -117,9 +117,18 @@ const ZF_CART := GEN_DIR + "peddlers_cart.glb"
 const ZF_SHRINE := GEN_DIR + "checkpoint_shrine.glb"
 const ZF_CHEST := GEN_DIR + "grave_goods_chest.glb"
 const ZF_SKIFF := GEN_DIR + "ferryman_skiff.glb"
-const ZF_FERRYMAN := GEN_DIR + "npc_ferryman_idle.glb"      # native 1.85m
-const ZF_GRAVEDIGGER := GEN_DIR + "npc_gravedigger_idle.glb" # native 1.7m
-const ZF_WIDOW := GEN_DIR + "npc_widow_idle.glb"             # native 1.6m
+## RIGGING BATCH (commit c2b1d5e, producer-greenlit): ferryman/hooded-mourner/
+## widow re-rigged onto a calmer preset idle — the original *_idle.glb exports
+## carried the same action_id=0 hip-swagger clip the Executor audition caught
+## (tools/rig_audit2.gd), so the c243-family candidates below replace them
+## outright. DOCTRINE (commit b2417e0): coat/robe bodies take ARMS-DOWN clips
+## only — the _c243 candidates were audited CLEAN against that rule; the
+## sibling hooded_bow clip ("pay respects") was REJECTED (cloth tears) and
+## must never be referenced again.
+const ZF_FERRYMAN := GEN_DIR + "npc_ferryman_idle_c243.glb"        # native 1.85m
+const ZF_GRAVEDIGGER := GEN_DIR + "npc_gravedigger_idle.glb"       # native 1.7m (untouched — not in this batch)
+const ZF_WIDOW := GEN_DIR + "npc_widow_idle_c243.glb"              # native 1.6m
+const ZF_MOURNER_HOODED := GEN_DIR + "npc_mourner_hooded_idle_c243.glb"  # native 1.75m
 const ZF_REAPER_BASE := GEN_DIR + "npc_reaper.glb"           # the standing sculpt — dormant
 const ZF_SCYTHE := GEN_DIR + "reaper_scythe.glb"             # forged separately (hand-parent later)
 ## THE REAPER's dormant post — the far graveyard edge beyond Weeping Valley,
@@ -127,6 +136,20 @@ const ZF_SCYTHE := GEN_DIR + "reaper_scythe.glb"             # forged separately
 ## lane; tonight he is just... present. (G1: pushed out with the world; y is
 ## ground-snapped at placement.)
 const REAPER_POST := Vector3(-43.0, 0.0, -33.0)
+
+## NEW NPCs (RIGGING BATCH, commit c2b1d5e; doc 28 §10 — one beat each,
+## ambient dressing only this lane): THE MOURNER-FOR-HIRE and THE MAGPIE.
+## Both posts are hand-checked against every doc-33 §5b space claim (Bone
+## Bridge bypass, Reaper's Shortcut corridor, the Crypt, the Landslip band,
+## the Procession Road ghost-line, every Hearse cart pad) — all of those sit
+## at z<=8; both posts below stand well north of that, clear by construction.
+const ZF_MOURNER_FORHIRE := GEN_DIR + "npc_mourner_forhire_idle_c243.glb"  # native 1.7m
+const ZF_MAGPIE := GEN_DIR + "npc_magpie.glb"                              # static — birds don't rig
+## Beside the broken angel where the valley road begins (same approach-zone
+## precedent as GEN_ANGEL's existing perimeter post) — graveyard-adjacent,
+## route-side, no ground claim within reach.
+const MOURNER_FORHIRE_POST := Vector3(-21.0, 0.0, 30.0)
+const MOURNER_FORHIRE_LOOK := Vector3(-8.0, 0.0, 20.0)
 
 # --------------------------------------------------------------------------
 # GRAPH STATE (filled by build() from generate())
@@ -914,10 +937,12 @@ func _finish_furniture() -> void:
 	_build_perimeter()
 
 ## ZF NPC troupe (doc 28 §10 — one beat each, never a cutscene). THE GRAVEDIGGER
-## idles by the Hollow Woods; THE WIDOW mourns along Garden Row. THE REAPER is
-## placed DORMANT and DISTANT — looming motionless at the far graveyard edge,
-## barely lit. He activates in a future Estate Stirs lane; tonight he is
-## just... present. All rigged instancing uses NATIVE heights (forge report).
+## idles by the Hollow Woods; THE WIDOW mourns along Garden Row; THE
+## MOURNER-FOR-HIRE stands graveyard-adjacent by the valley road's start. THE
+## REAPER is placed DORMANT and DISTANT — looming motionless at the far
+## graveyard edge, barely lit. He activates in a future Estate Stirs lane;
+## tonight he is just... present. All rigged instancing uses NATIVE heights
+## (forge report).
 func _build_npc_troupe() -> void:
 	var dig_id := _route_mid_id("hollow")
 	_place_facing(_rigged_npc(ZF_GRAVEDIGGER, 1.7, 1.7),
@@ -925,6 +950,12 @@ func _build_npc_troupe() -> void:
 	var wid_id := _route_mid_id("garden")
 	_place_facing(_rigged_npc(ZF_WIDOW, 1.6, 1.6),
 		_gsnap(space_pos(wid_id) + _outward(wid_id) * 3.2), space_pos(wid_id))
+	# NEW NPC (RIGGING BATCH, c2b1d5e): THE MOURNER-FOR-HIRE — beside the
+	# broken angel where the valley road begins (doc 33 §5b claims are all
+	# z<=8; this post sits at z=30, clear). Ambient only tonight (doc 28 §10's
+	# "award nomination" beat is a future gameplay lane).
+	_place_facing(_rigged_npc(ZF_MOURNER_FORHIRE, 1.7, 1.7),
+		_gsnap(MOURNER_FORHIRE_POST), _gsnap(MOURNER_FORHIRE_LOOK))
 	# THE REAPER — the standing sculpt, motionless at the graveyard's edge,
 	# facing across the valley toward the gate; his scythe planted beside him.
 	if ResourceLoader.exists(ZF_REAPER_BASE):
@@ -984,10 +1015,20 @@ func _build_lychgate() -> void:
 	var flow := _flow_dir(0)
 	_place_facing(_prop(ZF_LYCHGATE, FB_TOLLARCH, 4.4), start + Vector3(0, 0.02, 0), start + flow * 6.0)
 	_place_facing(_prop(GEN_HEARSE, FB_HEARSE, 2.1), _gsnap(start + Vector3(-3.4, 0, 1.4)), start)
-	_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), _gsnap(start + Vector3(3.0, 0, 0.8)))
+	var post := _gsnap(start + Vector3(3.0, 0, 0.8))
+	_place(_prop(GEN_SIGNPOST, FB_LANTERN, 2.6), post)
 	# A-LOOK / ZERO-ENGLISH: the covered lychgate arch + hearse + signpost ARE
 	# the read — no floating "THE LYCHGATE" caption. (The pawns start here; the
 	# name never needs to surface.)
+	# NEW NPC (RIGGING BATCH, c2b1d5e): THE MAGPIE perches atop the crooked
+	# signpost — first thing every pawn passes, an omen watching arrivals.
+	# Static (birds don't rig). A post's simple silhouette (vs. the lychgate's
+	# own sloped hip roof, tried and rejected — verify stills showed the bird
+	# buried in the tile shell at any offset off dead-centre) is the reliable
+	# perch here; elevated on existing geometry, so it carries no ground
+	# claim of its own.
+	_place_facing(_prop(ZF_MAGPIE, ZF_MAGPIE, 0.28),
+		post + Vector3(0.0, 2.5, 0.0), post + Vector3(0, 2.5, 0) + flow)
 
 ## THE MANOR GATE — the finish: the ZF grand arch, warm light, the bell's home.
 func _build_manor_gate() -> void:
@@ -1706,12 +1747,14 @@ func cart_park_pos(node_id: int) -> Vector3:
 		cart_at = Vector3(ProcessionGrounds.CART_COURT.x, 0, ProcessionGrounds.CART_COURT.y)
 	return _gsnap(cart_at)
 
-## THE WAKE's mourner crowd — the widow's sisters, idling greyer. Returns
-## null on a fresh checkout without the asset.
+## THE WAKE's mourner crowd — anonymous hooded mourners, idling greyer (RIGGING
+## BATCH, c2b1d5e: the c243 calmer idle, not the widow — she stands unique in
+## the troupe, not cloned into a crowd). Returns null on a fresh checkout
+## without the asset.
 func spawn_mourner(pos: Vector3, look_to: Vector3) -> Node3D:
-	if not ResourceLoader.exists(ZF_WIDOW):
+	if not ResourceLoader.exists(ZF_MOURNER_HOODED):
 		return null
-	var m := _rigged_npc(ZF_WIDOW, 1.6, 1.52)
+	var m := _rigged_npc(ZF_MOURNER_HOODED, 1.75, 1.66)
 	_place_facing(m, _gsnap(pos), Vector3(look_to.x, pos.y, look_to.z))
 	return m
 

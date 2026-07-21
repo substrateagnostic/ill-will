@@ -47,8 +47,11 @@ const GROUNDSKEEPER_ANIM := GEN + "npc_groundskeeper_idle.glb"
 const GROUNDSKEEPER_NATIVE := 1.8
 const MOURNER_ELDERLY_ANIM := GEN + "npc_mourner_elderly_idle.glb"
 const MOURNER_ELDERLY_NATIVE := 1.65
-const MOURNER_HOODED_ANIM_BOW := GEN + "npc_mourner_hooded_bow.glb"    # "pay respects"
-const MOURNER_HOODED_ANIM_IDLE := GEN + "npc_mourner_hooded_idle.glb"  # fallback if bow absent
+## RIGGING BATCH (c2b1d5e): the "pay respects" bow clip is REJECTED (cloth
+## tears) — never reference npc_mourner_hooded_bow.glb again. The plain idle
+## also carried the same hip-swagger clip the Executor audition caught, so
+## this now points at the calmer c243 re-rig (audited CLEAN).
+const MOURNER_HOODED_ANIM_IDLE := GEN + "npc_mourner_hooded_idle_c243.glb"
 const MOURNER_HOODED_NATIVE := 1.75
 
 # ---------------------------------------------------------------- tuning
@@ -760,12 +763,13 @@ class GhostQueue extends AmbientMember:
 		var figs := [AmbientLife.KAYKIT_MAGE, AmbientLife.KAYKIT_ROGUE]
 		var homes := [Vector3(-7.55, 0.0, -6.35), Vector3(-7.6, 0.0, -5.72)]
 		# RIGGING WAVE: real mourners get real bones. Front (with the pocket-watch
-		# gag) is the weary elder on a quiet idle; back is the hooded figure that
-		# prefers a "pay respects" bow, falling back to its own idle. Each falls
-		# back to the ghostly-hover KayKit stand-in when its GLB is absent.
+		# gag) is the weary elder on a quiet idle; back is the hooded figure on
+		# its own calmer idle (the "pay respects" bow clip is RETIRED — cloth
+		# tears, RIGGING BATCH c2b1d5e). Each falls back to the ghostly-hover
+		# KayKit stand-in when its GLB is absent.
 		var anim_sets := [
 			[AmbientLife.MOURNER_ELDERLY_ANIM],
-			[AmbientLife.MOURNER_HOODED_ANIM_BOW, AmbientLife.MOURNER_HOODED_ANIM_IDLE],
+			[AmbientLife.MOURNER_HOODED_ANIM_IDLE],
 		]
 		var natives := [AmbientLife.MOURNER_ELDERLY_NATIVE, AmbientLife.MOURNER_HOODED_NATIVE]
 		for i in 2:
