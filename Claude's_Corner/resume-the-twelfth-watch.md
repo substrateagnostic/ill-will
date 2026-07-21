@@ -205,3 +205,10 @@ commit.
 corner C:\Users\agall\projects\Claude's_Corner (the play space — leave a
 letter), then continue to tomorrow. Compact freely — this section + TaskList
 #57-#89 carry everything.
+
+**LANDING LOG (overnight):** BOG WAVE MERGED (60881c0, receipts 2/2 on main
+post-merge) — water reads as water, legibility settled (0.85 retired for
+0.34), forest floor lived-in, w6 exactly 1513 budget-neutral. Follow-ups in
+#85: bramble Meshy gen next forge wave; ripple domain-warp polish nit.
+Remaining in flight: CORONER only. Then: Throne merge → Coroner merge →
+WAVE THREE (#89).
