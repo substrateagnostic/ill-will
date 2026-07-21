@@ -80,7 +80,7 @@ godot --headless --path . -- --procession --seed=7 --turncap=12 --autoplay=bots
 Any run that prints a `PROCESSION_TALLY` line is pre-P2. The same command
 today runs a full **3-night match** (match_nights defaults to 3).
 
-## 4. THE CANONICAL MATCH RECEIPT (ES — THE ESTATE STIRS, frozen)
+## 4. THE CANONICAL MATCH RECEIPT (NG — THE NIGHT GAMES, frozen)
 
 ```
 godot --headless --path . -- --procession --seed=7 --turncap=12 --nights=3 --autoplay=bots
@@ -96,52 +96,61 @@ BLUE, wreaths [55,57,39,39]**, md5 d53a2c905f67ba94fd24cdcf03f9c58b; seed 1
 BLUE [60,70,39,39]; seed 11 RED [61,53,37,46]. Any run with no
 `PROCESSION_STIRS` line is pre-ES.
 
-frozen result (ES — verified deterministic ×3, the NIGHT/MATCH/HEIR line set
-hashes identically run to run, md5 **da76f7c9d42a6568980ecb55fcaef3e9**).
-Seed 7 draws **LANDSLIP + CROW COURT**. The stream-separation witness:
-night 1 is BYTE-IDENTICAL to the BD record (wreaths [13,5,15,8], pennies
-[10,25,19,17]) even with the court convened — the crow stone went unpassed
-before the bell, and no STIRS draw can shift an EVENT/ROLL consumer. The
-match only diverges where the landslip rewires night 2's walks:
+**SUPERSEDED — the ES record** (sanctioned, producer-ruled 2026-07-20/21,
+THE NIGHT GAMES): the theater trio (SÉANCE / UNDERSTUDY / MASKED BALL,
+`THEATER_ORDER`) is now EXCLUSIVE to the between-nights interlude — never in
+the round rotation (`CYCLE_ORDER`) — and the interlude draws only from it
+(interlude 1 random + Executor announce; interlude 2 = the DOORMAT's pick of
+the remaining two). The pool change re-resolves every EVENT-stream minigame
+draw, so the ES totals died with honor. ES's final form, for the record:
+seed 7 → **HEIR RED, wreaths [54,41,46,32]**, md5 da76f7c9d42a6568980ecb55fcaef3e9; seed 1
+BLUE [43,63,37,46]; seed 11 BLUE [55,60,37,37]. Any run where a theater game
+appears mid-round is pre-NG.
+
+frozen result (NG — verified deterministic ×2, the NIGHT/MATCH/HEIR line set
+hashes identically run to run, md5 **ccd25c2c82ad7e744595837ca949a8df**).
+Seed 7 still draws **LANDSLIP + CROW COURT** (the STIRS stream is untouched
+by the pool change — stream separation proven a third way). The crown holds
+RED through the re-freeze, now by the closest canonical race yet:
 
 ```
 PROCESSION_STIRS major=landslip minor=crow_court
 PROCESSION_STIR_FIRE night=1 round=3 kind=minor id=crow_court node=60 site=(-4.7,-37.5)
-PROCESSION_NIGHT {"arrivals":[2],"awards":[["longest",2],["generous",-1],["bloodiest",0]],"bell_round":4,"grudge":[10,25,19,17],"letters":[false,false,false,false],"night":1,"rounds":5,"wreaths":[13,5,15,8]}
+PROCESSION_NIGHT {"arrivals":[2],"awards":[["longest",2],["generous",-1],["bloodiest",0]],"bell_round":4,"grudge":[31,13,11,3],"letters":[false,false,false,false],"night":1,"rounds":5,"wreaths":[13,6,14,6]}
 PROCESSION_STIR_FIRE night=2 round=0 kind=major id=landslip from=19 to=34 site=(-18.4,-4.3)
-PROCESSION_NIGHT {"arrivals":[1,2],"awards":[["generous",0],["uninvited",1],["bloodiest",1]],"bell_round":4,"grudge":[32,49,23,30],"letters":[false,false,false,false],"night":2,"rounds":5,"wreaths":[25,28,24,15]}
-PROCESSION_NIGHT {"arrivals":[0],"awards":[["generous",2],["longest",2],["uninvited",0]],"bell_round":5,"grudge":[60,76,45,55],"letters":[false,false,false,false],"night":3,"rounds":6,"wreaths":[48,34,42,27]}
-PROCESSION_MATCH {"board":"estate_procession","board_firsts":[1,1,1,0],"grudge":[60,76,45,55],"heir":0,"heir_name":"RED","heirs":[0],"mini_wins":[6,2,1,4],"moved":[81,65,81,74],"nights":3,"seed":7,"src":{"arrival":[20,13,21,9],"award":[13,8,14,3],"liquid":[6,7,4,5],"mini":[15,13,7,15]},"turn_cap":12,"wreaths":[54,41,46,32]}
-  seat 0 RED: ⚘54 (arr 20 + mini 15 + awd 13 + liq 6)  60¢  moved=81  HEIR
-  seat 1 BLUE: ⚘41 (arr 13 + mini 13 + awd 8 + liq 7)  76¢  moved=65
-  seat 2 GOLD: ⚘46 (arr 21 + mini 7 + awd 14 + liq 4)  45¢  moved=81
-  seat 3 MINT: ⚘32 (arr 9 + mini 15 + awd 3 + liq 5)  55¢  moved=74
+PROCESSION_NIGHT {"arrivals":[1,2],"awards":[["longest",3],["mourned",0],["generous",3]],"bell_round":4,"grudge":[61,21,4,8],"letters":[false,true,false,false],"night":2,"rounds":5,"wreaths":[26,20,23,21]}
+PROCESSION_NIGHT {"arrivals":[3,1],"awards":[["generous",2],["mourned",1],["uninvited",0]],"bell_round":4,"grudge":[89,19,34,31],"letters":[false,true,false,false],"night":3,"rounds":5,"wreaths":[36,41,36,37]}
+PROCESSION_MATCH {"board":"estate_procession","board_firsts":[0,1,1,1],"grudge":[89,19,34,31],"heir":0,"heir_name":"RED","heirs":[0],"mini_wins":[5,1,3,2],"moved":[76,75,76,76],"nights":3,"seed":7,"src":{"arrival":[10,25,18,15],"award":[13,6,9,10],"liquid":[8,1,3,3],"mini":[13,10,9,12]},"turn_cap":12,"wreaths":[44,42,39,40]}
+  seat 0 RED: ⚘44 (arr 10 + mini 13 + awd 13 + liq 8)  89¢  moved=76  HEIR
+  seat 1 BLUE: ⚘42 (arr 25 + mini 10 + awd 6 + liq 1)  19¢  moved=75
+  seat 2 GOLD: ⚘39 (arr 18 + mini 9 + awd 9 + liq 3)  34¢  moved=76
+  seat 3 MINT: ⚘40 (arr 15 + mini 12 + awd 10 + liq 3)  31¢  moved=76
 PROCESSION_HEIR RED (seed 7, 3 nights)
 ```
 
 Seed-sweep secondaries (single-run records, same command, seed swapped):
 
 ```
-PROCESSION_STIRS … "seed":1  → reaper_shortcut + hungry_grave
-  fires: hungry_grave node=13 site=(18.3,-14.2) · reaper_shortcut entry=19 exit=33 stones=[76] site=(-22.0,-3.4)
-PROCESSION_MATCH … "seed":1  → wreaths=[43,63,37,46]  heir BLUE  board_firsts=[0,2,0,1]
+PROCESSION_STIRS … "seed":1  → reaper_shortcut + hungry_grave  (draw unchanged)
+PROCESSION_MATCH … "seed":1  → wreaths=[46,73,47,53]  heir BLUE
 PROCESSION_HEIR BLUE (seed 1, 3 nights)
-PROCESSION_STIRS … "seed":11 → procession_road + flood
-  fires: flood site=(33.1,-2.8) · procession_road entry=63 exit=43 stones=[76,77,78,79] site=(12.1,-21.9)
-PROCESSION_MATCH … "seed":11 → wreaths=[55,60,37,37]  heir BLUE  board_firsts=[0,2,1,0]
-PROCESSION_HEIR BLUE (seed 11, 3 nights)
+PROCESSION_STIRS … "seed":11 → procession_road + flood  (draw unchanged)
+PROCESSION_MATCH … "seed":11 → wreaths=[28,53,51,74]  heir MINT
+PROCESSION_HEIR MINT (seed 11, 3 nights)
 ```
 
-The fire lines carry ground truth (entry/exit/stone ids + site) — a
-receipt proves WHERE the estate moved. The whole line set above was
-re-verified ×3 AFTER the rolling-estate terrain + living-lawn scatter
-landed: byte-identical (station xz never moves; only y conforms), the
-strongest positions-proof yet.
+THE LETTERS witness MOVED with the re-freeze (it did not die): in the NG
+canonical it is now BLUE (seat 1) who publicly accepts the LETTERS on
+nights 2 and 3 (`"letters":[false,true,false,false]`) — the dignity floor,
+still announced, still working. The single-night record (§5) is re-frozen
+to HEIR RED wreaths [16,7,15,6]; `tools/run_receipts.ps1` carries all NG
+expectations.
 
-THE LETTERS witness MOVED again (it did not die): in BOTH sweep seeds GOLD
-(seat 2) still publicly accepts the LETTERS OF ADMINISTRATION on one night
-(`"letters":[false,false,true,false]`). The dignity floor, still announced,
-still working — through a landslip, a ghost road, and a flood.
+The fire lines carry ground truth (entry/exit/stone ids + site) — a
+receipt proves WHERE the estate moved. (Historical note, ES era: that
+record's line set was re-verified ×3 byte-identical through the
+rolling-estate terrain + living-lawn scatter — the station-xz positions
+proof carries forward unchanged into NG.)
 
 ### 4-ES. Event coverage matrix (all exit 0, zero script errors)
 

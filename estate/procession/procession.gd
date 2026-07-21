@@ -80,6 +80,16 @@ const REACT_MAP := {"b": "HA!", "up": "OOH", "down": "OOF"}
 const MINIGAME_ORDER: Array[String] = ["par", "echo", "tilt", "orbital",
 	"mower", "greed", "swap", "deadweight", "throne", "lastwill",
 	"widowsgaze", "seance", "understudy", "maskedball", "pallbearers"]
+## THE OVERNIGHT FAMILY (producer ruling 2026-07-20, doc 28 §2 refined): the
+## theater trio plays ONLY as the between-nights interlude — never in the
+## round rotation — and the interlude draws ONLY from it. Exclusive both
+## directions. Interlude 1 = the estate's random deal, announced by the
+## Executor; interlude 2 = the DOORMAT's privilege from the remaining two.
+const THEATER_ORDER: Array[String] = ["seance", "understudy", "maskedball"]
+## The round-cycle registry: MINIGAME_ORDER minus the theater trio.
+const CYCLE_ORDER: Array[String] = ["par", "echo", "tilt", "orbital",
+	"mower", "greed", "swap", "deadweight", "throne", "lastwill",
+	"widowsgaze", "pallbearers"]
 const MINIGAMES := {
 	"par": {"name": "PAR FOR THE CURSE", "scene": "res://scenes/main.tscn", "launch": "legacy", "team": "ffa"},
 	"echo": {"name": "ECHO CHAMBER", "scene": "res://minigames/echo_chamber/echo_chamber.tscn", "launch": "contract", "team": "ffa"},
@@ -500,7 +510,7 @@ func _init_arrays() -> void:
 		night_final_rank[i] = 0
 		wreath_src.append({"arrival": 0, "mini": 0, "award": 0, "liquid": 0})
 		letters.append(false)
-	_mini_pool = MINIGAME_ORDER.duplicate()
+	_mini_pool = CYCLE_ORDER.duplicate()
 	_invitation_pick = ""
 	_interlude1_pick = ""
 	pending_die.resize(n)
@@ -1692,7 +1702,7 @@ func _night_open() -> void:
 	_phase = "night_open"
 	Music.play_slot("grounds")
 	_tracker_live = false   # new night, new races — re-armed at the interim reading
-	_mini_pool = MINIGAME_ORDER.duplicate()
+	_mini_pool = CYCLE_ORDER.duplicate()
 	_cycle_mini = ""   # a card left on the table when the bell rang dies with its night
 	_night_start_wreaths = wreaths.duplicate()
 	if not _fast and match_nights > 1:
@@ -2863,7 +2873,7 @@ func _pick_crow_target(seat: int) -> int:
 func _pick_invitation(seat: int) -> String:
 	var pool := _mini_pool.duplicate()
 	if pool.is_empty():
-		pool = MINIGAME_ORDER.duplicate()
+		pool = CYCLE_ORDER.duplicate()
 	if bool(roster[seat].bot) or not _drama_visible():
 		return String(pool[_event_rng.randi_range(0, pool.size() - 1)])
 	var entries: Array = []
@@ -3803,9 +3813,8 @@ func _minigame_block() -> void:
 func _interlude_minigame() -> void:
 	_phase = "interlude"
 	executor.clear_banner()
-	var pool := _mini_pool.duplicate()   # games not yet played tonight
-	if pool.is_empty():
-		pool = MINIGAME_ORDER.duplicate()
+	# The overnight family only (producer ruling): the theater trio.
+	var pool := THEATER_ORDER.duplicate()
 	var pick := ""
 	if _interlude1_pick == "":
 		# --- interlude 1: the estate deals (EVENT stream, one randi) ---
@@ -3820,9 +3829,6 @@ func _interlude_minigame() -> void:
 	else:
 		# --- interlude 2+: the DOORMAT's privilege (no repeat of interlude 1) ---
 		pool.erase(_interlude1_pick)
-		if pool.is_empty():
-			pool = MINIGAME_ORDER.duplicate()
-			pool.erase(_interlude1_pick)
 		var doormat := int(_roll_order().back())
 		if _is_local_human(doormat) and _drama_visible():
 			var entries: Array = []
@@ -3852,7 +3858,6 @@ func _interlude_minigame() -> void:
 			await _cap_snap("interlude_card")
 		await _beat(2.2)
 		_hide_announce()
-	_mini_pool.erase(pick)
 	var placements: Array = await _run_minigame(pick)
 	if not placements.is_empty():
 		await _settle_minigame(pick, placements)
@@ -3862,7 +3867,7 @@ func _interlude_minigame() -> void:
 ## minus itself. EVENT stream, one randi per natural draw.
 func _draw_minigame() -> String:
 	if _mini_pool.is_empty():
-		_mini_pool = MINIGAME_ORDER.duplicate()
+		_mini_pool = CYCLE_ORDER.duplicate()
 	if _invitation_pick != "":
 		var pick := _invitation_pick
 		_invitation_pick = ""

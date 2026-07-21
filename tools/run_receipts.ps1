@@ -179,7 +179,7 @@ if ($r2.TimedOut) {
     $lines = Get-MatchedLines -LogPath $r2.LogPath -Pattern '^PROCESSION_(NIGHT|MATCH|HEIR)'
     $md5 = ''
     if ($lines.Count -gt 0) { $md5 = Get-LineSetMd5 -Lines $lines }
-    $expectMd5 = 'da76f7c9d42a6568980ecb55fcaef3e9'
+    $expectMd5 = 'ccd25c2c82ad7e744595837ca949a8df'
     $heirLine = $lines | Select-Object -Last 1
     $expectHeir = 'PROCESSION_HEIR RED (seed 7, 3 nights)'
     $pass = ($md5 -eq $expectMd5) -and ($heirLine -eq $expectHeir)
@@ -196,19 +196,19 @@ if (-not $Quick) {
     } else {
         $lines = Get-MatchedLines -LogPath $r3.LogPath -Pattern '^PROCESSION_(NIGHT|MATCH|HEIR)'
         $heirLine = $lines | Select-Object -Last 1
-        $expectHeir = 'PROCESSION_HEIR GOLD (seed 7, 1 nights)'
+        $expectHeir = 'PROCESSION_HEIR RED (seed 7, 1 nights)'
         $matchLine = $lines | Where-Object { $_ -match '^PROCESSION_MATCH' } | Select-Object -First 1
-        $hasWreaths = [bool]($matchLine -match '"wreaths":\[14,7,16,9\]')
+        $hasWreaths = [bool]($matchLine -match '"wreaths":\[16,7,15,6\]')
         $pass = ($heirLine -eq $expectHeir) -and $hasWreaths
-        Report-Gate 'single-night' $pass "heir=[$heirLine]; wreaths=[14,7,16,9]:$hasWreaths ($($r3.Seconds)s, $(Format-ExitNote $r3.Exit); log: $($r3.LogPath))"
+        Report-Gate 'single-night' $pass "heir=[$heirLine]; wreaths=[16,7,15,6]:$hasWreaths ($($r3.Seconds)s, $(Format-ExitNote $r3.Exit); log: $($r3.LogPath))"
     }
 }
 
 # --- Gate 4 (OPTIONAL): seed sweeps, 3-night (VERIFY-BOARD.md §4 secondaries) --
 if ($Sweeps) {
     $sweepSeeds = @(
-        [pscustomobject]@{ Seed = 1;  Heir = 'BLUE'; Wreaths = '[43,63,37,46]' },
-        [pscustomobject]@{ Seed = 11; Heir = 'BLUE'; Wreaths = '[55,60,37,37]' }
+        [pscustomobject]@{ Seed = 1;  Heir = 'BLUE'; Wreaths = '[46,73,47,53]' },
+        [pscustomobject]@{ Seed = 11; Heir = 'MINT'; Wreaths = '[28,53,51,74]' }
     )
     foreach ($sweep in $sweepSeeds) {
         $seed = $sweep.Seed
