@@ -223,3 +223,9 @@ A net-mirror (codex gpt-5.6-sol xhigh, main tree) · B G4 reaper wiring
 via title-aware monitor check) · D Greed bots (worktree, headless) ·
 E timing audit (read-only). Closer queued: night-games #76 + re-freeze
 after A-E merge. Coroner timing note for the audit: 4×75s ≈ 5min match.
+
+**LANDING LOG 3:** TIMING AUDIT complete (wave 3E) — 6× spread, dial
+coverage gaps, DW doc/code drift; 5 normalization options queued for Alex
+(#84). NET-MIRROR implemented by codex (snapshot wire format, idempotent,
+mid-join safe, --stirnettest self-probe) — sandbox blocked its godot runs
+again; verification in-house (stirnettest + receipts running in bg).
