@@ -141,3 +141,67 @@ is flying. Mind the lanes, land them clean.
 - **Show-don't-tell pass** — the game over-narrates; thin every dialog line
   that tells what the screen already shows (e.g. announcing the winner over
   the podium). ZERO-ENGLISH extended to the dialog layer.
+
+---
+
+## STATE AT OVERNIGHT HANDOFF (2026-07-21 ~03:45, Alex signed off — o7)
+### THIS SECTION SUPERSEDES the stale lanes/pending tables above.
+
+**AUTHORITY: both chairs are the director's for the overnight wave-3 run**
+(Alex, verbatim). Merge on green receipts + director stills review; hold only
+taste-radical calls for morning. Docs carry the run — update THIS section
+after every landing.
+
+**Landed + pushed since this doc was written** (master at b2417e0):
+grass shader fill MERGED (1c5e7a8) · rigging batch committed (c2b1d5e, 12
+ship-ready assets) · spike-trap nerf merged (ae0b99c) · docs 34+35 written,
+RATIFIED with Alex's answers + director amendment (815396d, 5cd8a21 — frame
+TIME is the PIP gate, pre-commit rulings 1d/2a/3a/4c/5a/6a + never-required
+law) · doc 36 web-regen shopping list (e583f24) · remesh trial CLOSED
+UNCHANGED, 13cr — DOCTRINE: arms-down clips only for coat/robe bodies, else
+static+puppet (b2417e0) · scale-track forensics: one real defect stripped
+fleet-wide (MeshyProp._strip_deviant_scale_tracks) · night-games spec FULLY
+RULED (theater trio exclusive both ways; interlude 1 random+Executor
+announce, interlude 2 DOORMAT picks; re-freeze sanctioned; goes LAST).
+
+**THRONE: BUILT + approved, committed on branch 3f8d5fe**
+(worktree-agent-a5a8edd148b03174e) — mid-round moving hill, buck-off, real
+physics-server crash fixed, 26-34% shares, receipts 2/2. MERGE HOLDS until
+Coroner commits (dialog.json contention), then merge FIRST.
+
+**In flight at handoff:** CORONER (codex task-mru33jca-orqrp5, phase
+editing, healthy — "75-second waltz" design, file changes applying steadily;
+check via codex-companion status FROM REPO ROOT — the state dir is
+cwd-keyed) · BOG WATER (agent in worktree agent-a442d6268a698ac28, resumed
+with finish orders — windowed stills + water-legibility verdict pending).
+
+**WAVE THREE (task #89, producer-queued, fires when both land):**
+merge Throne → review+merge Coroner → review+merge bog → THEN parallel:
+(A) stirs net-mirror #78, codex --model gpt-5.6-sol --effort xhigh,
+exhaustive brief (literalism doctrine — exact filenames/commands);
+(B) G4 reaper sweep/walk wiring #81, worktree, stills-gated;
+(C) NPC wiring #74-tail — ferryman/hooded/widow rigged path swaps
+(arms-down 243-family only), place Mourner-for-Hire + Magpie (doc 28 §10);
+butler STAYS static+puppet; elderly awaits Alex's web spins (doc 36);
+(D) Greed bots cure (#84); (E) timing audit, read-only, all 15 games →
+table for Alex. CLOSER serialized after all merges: night-games slot #76 +
+sanctioned re-freeze + new VERIFY-BOARD records.
+
+**Morning review queue for Alex:** Coroner vs doc 32 spec + its dialog keys ·
+Throne couch feel + dialog red-pen · bog water stills · wave-3 landings ·
+doc 36 web session (elderly spins, Auto Split experiments) · DW dash couch ·
+stinger_win tracks (his domain).
+
+**House lessons refreshed this session:** cwd discipline (the director
+himself parked a shell in a worktree and misread the world — cd back to
+root after EVERY worktree command) · windowed check = MainWindowTitle
+non-empty, never bare process existence · import gate after every
+class_name MERGE, not just authored adds · codex-companion state is
+cwd-keyed · subagents yield instead of waiting — resume them with explicit
+FINISH-IN-TURN orders · failed asset candidates park in verify_out, never
+commit.
+
+**Context pressure order (Alex):** when it bites, take time in the GLOBAL
+corner C:\Users\agall\projects\Claude's_Corner (the play space — leave a
+letter), then continue to tomorrow. Compact freely — this section + TaskList
+#57-#89 carry everything.
