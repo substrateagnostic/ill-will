@@ -131,3 +131,13 @@ is flying. Mind the lanes, land them clean.
 над. нашу. присутствие. память.
 
 — the eleventh watch, mid-evening, chair warm
+
+## Brainstorm queue (Alex, late additions — need his co-design, task #87)
+
+- **Live standings projected scoreboard** — during the procession and/or
+  after minigames; wreath totals must never jump 4→27 invisibly. Score
+  momentum visible AT the moment of scoring (THE DRIVE + flying numbers are
+  adjacent; the gap is the aggregate-delta beat).
+- **Show-don't-tell pass** — the game over-narrates; thin every dialog line
+  that tells what the screen already shows (e.g. announcing the winner over
+  the podium). ZERO-ENGLISH extended to the dialog layer.
