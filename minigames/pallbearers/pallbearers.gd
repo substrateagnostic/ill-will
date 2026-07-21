@@ -1383,18 +1383,19 @@ func _build_mourners() -> void:
 
 # W3: real mourners. The crude grey capsules become the forged, Meshy-RIGGED
 # hooded/elderly figures — feet at native y=0, scaled by target/native (NEVER
-# AABB-sized: a skinned mesh reads ~1/100). Per rank: a hooded bower, the weary
-# elder, a hooded idler; each still carries its pale candle so the procession
-# reads at night, and each falls back to the static GLB then a capsule if a rig
-# is ever absent. Presentation only — the mourner-sweep hazard reads MOURNER_Z +
-# the phase, never these node transforms, so the sim is untouched.
+# AABB-sized: a skinned mesh reads ~1/100). Per rank: a hooded mourner, the
+# weary elder, a second hooded mourner; each still carries its pale candle so
+# the procession reads at night, and each falls back to the static GLB then a
+# capsule if a rig is ever absent. RIGGING BATCH (c2b1d5e): the hooded "pay
+# respects" bow clip is RETIRED (cloth tears) — both hooded ranks now use the
+# calmer c243 idle only. Presentation only — the mourner-sweep hazard reads
+# MOURNER_Z + the phase, never these node transforms, so the sim is untouched.
 const MOURNER_RIGS := [
-	{"anim": ["res://assets/models/meshy/generated/npc_mourner_hooded_bow.glb",
-		"res://assets/models/meshy/generated/npc_mourner_hooded_idle.glb"],
+	{"anim": ["res://assets/models/meshy/generated/npc_mourner_hooded_idle_c243.glb"],
 		"native": 1.75, "static": "res://assets/models/meshy/generated/npc_mourner_hooded.glb"},
 	{"anim": ["res://assets/models/meshy/generated/npc_mourner_elderly_idle.glb"],
 		"native": 1.65, "static": "res://assets/models/meshy/generated/npc_mourner_elderly.glb"},
-	{"anim": ["res://assets/models/meshy/generated/npc_mourner_hooded_idle.glb"],
+	{"anim": ["res://assets/models/meshy/generated/npc_mourner_hooded_idle_c243.glb"],
 		"native": 1.75, "static": "res://assets/models/meshy/generated/npc_mourner_hooded.glb"},
 ]
 
