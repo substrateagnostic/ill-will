@@ -71,6 +71,33 @@ const GUARD_RADIUS := 2.35         # distance from centre to plant the wall
 const GUARD_TRIGGER := 3.2         # bot: summon when a challenger is this close
 const APPROACHES := [Vector3(0, 0, 1), Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(-1, 0, 0)]
 
+# ---- THE ESTATE STIRS: the moving hill (producer ruling 2026-07-20) -----------
+# THE THRONE is a Halo-KOTH moving hill. On a TELEGRAPHED cadence the dais itself
+# HEAVES to a new site in the hall — "the estate objects to being sat upon" (doc
+# 28 §0a Estate Stirs). A seated king is BUCKED OFF by the move: NOT a kill, no
+# kingslayer — the ESTATE reset the board — and everyone scrambles to where the
+# throne is GOING. The next site announces itself a beat early, ZERO-ENGLISH
+# (glow ring + rumble + dust), so nobody is ambushed and the bots can repath.
+enum Hill { SETTLED, TELEGRAPH, MIGRATING }
+const SEAT_LOCAL := Vector3(0, DAIS_TOP_Y, 0.12)   # seat offset from the dais centre
+# Sites reuse the arena's OWN geometry: the home centre + four cardinal spots.
+# Cardinal offsets keep the r=3 bottom step clear of the 6m walls and the ±3.7
+# corner pillars (diagonal sites would clip the pillars; cardinals never do).
+const HILL_SITES := [
+	Vector3(0, 0, 0),       # HOME — the throne's birthplace, matches the spawn ring
+	Vector3(0, 0, 2.6),     # FRONT — down the runner, toward the camera
+	Vector3(0, 0, -2.6),    # BACK — under the stained-glass window (climax framing)
+	Vector3(-2.7, 0, 0),    # LEFT
+	Vector3(2.7, 0, 0),     # RIGHT
+]
+const HILL_DWELL := 18.0            # settled seconds before the next telegraph
+const HILL_DWELL_CRISIS := 11.0     # the estate stirs HARDER in the succession crisis
+const HILL_TELEGRAPH := 2.6         # pre-telegraph lead: the next site glows + rumbles
+const HILL_MIGRATE := 1.1           # the throne's heave/leap to the new site
+const HILL_ARC := 1.4               # peak lift of the dais during its leap (reads as a HEAVE)
+const HILL_MIN_TAIL := 4.0          # don't start a relocation without >=4s of play left
+const BUCK_FORCE := 9.5             # the estate's toss — softer than a dethrone launch
+
 # ---- match state
 var game_time := 0.0
 var phase := Phase.PRE
@@ -94,6 +121,19 @@ var guard_cd := 0.0
 var active_guard: StaticBody3D = null
 var reign_start := 0.0
 var _last_dethrone_t := -99.0     # keeps the DETHRONES banner its beat vs a fast re-seat
+
+# ---- moving-hill state (THE ESTATE STIRS)
+var dais_rig: Node3D               # the movable dais: steps + throne model, one unit
+var dais_pos := HILL_SITES[0]      # current floor-plane centre of the hill
+var _hill := Hill.SETTLED
+var _hill_t := 0.0                 # seconds elapsed in the current hill phase
+var _hill_site := 0                # index into HILL_SITES of the settled site
+var _hill_next := 0                # index of the telegraphed destination
+var _hill_from := HILL_SITES[0]    # migration endpoints (floor plane)
+var _hill_to := HILL_SITES[0]
+var _hill_count := 0               # relocations completed this match (balance receipt)
+var _hill_rng := RandomNumberGenerator.new()   # dedicated so fast == fx site order
+var _tele_ring: MeshInstance3D = null          # the ZERO-ENGLISH destination marker
 
 # ---- scoring / stats
 var score_accum: Dictionary = {}   # index -> float (crisis-weighted points)
@@ -136,6 +176,7 @@ var _guard_ring: CooldownRing = null    # secondary (thin inner) — SUMMON GUAR
 var _decree_cd_max := DECREE_CD_BASE
 var _last_hitstop := -99.0              # HIT KIT global 0.14s hitstop throttle
 var _hitkit_cap := false               # verify: stage the HIT KIT / ring shots
+var _stircap := false                  # verify: film one full relocation sequence
 var _freeze := false                   # verify: hold gameplay to film a moment
 var _cap_dir := "verify_out"
 
@@ -209,9 +250,14 @@ func _parse_args() -> void:
 		elif arg == "--hitkitcap":
 			_hitkit_cap = true
 			_all_bots = true
+		elif arg == "--stircap":
+			# windowed: film one full THE ESTATE STIRS relocation (pre-telegraph ->
+			# buck-off leap -> resettle). All bots so the scramble is self-driving.
+			_stircap = true
+			_all_bots = true
 		elif arg.begins_with("--outdir="):
 			_cap_dir = arg.trim_prefix("--outdir=")
-	if _hitkit_cap:
+	if _hitkit_cap or _stircap:
 		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://" + _cap_dir))
 
 func _seed_from_args() -> int:
@@ -272,6 +318,9 @@ func _begin(config: Dictionary) -> void:
 	_started = true
 	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.get("rng_seed", 1))
+	# dedicated hill rng: the relocation site ORDER stays identical across the
+	# fx / no-fx probe variants (the match rng is perturbed by fx jitter).
+	_hill_rng.seed = int(config.get("rng_seed", 1)) ^ 0x510B
 	if _fx or _mirror:
 		_stretch = FinalStretch.attach(self, timer_label)
 	if _balance and not _mirror:
@@ -340,10 +389,12 @@ func _begin(config: Dictionary) -> void:
 	print("THRONE_BEGIN players=%d seed=%d bots=%s balance=%s" % [
 		players.size(), int(config.get("rng_seed", 1)), str(bot_enabled), str(_balance)])
 	# NIT 7: intro card at load; headless balance/capture keep the sync start.
-	if _balance or _hitkit_cap:
+	if _balance or _hitkit_cap or _stircap:
 		_start_match()
 		if _hitkit_cap:
 			_run_hitkit_cap()
+		elif _stircap:
+			_run_stir_cap()
 	else:
 		_intro_then(_start_match)
 
@@ -437,6 +488,9 @@ func _physics_process(delta: float) -> void:
 	if guard_cd > 0.0: guard_cd -= delta
 	_tick_guard(delta)
 
+	# THE ESTATE STIRS: advance the moving-hill cadence (may buck the king)
+	_update_hill(delta)
+
 	# drive every player (bots or humans)
 	for i in players.size():
 		var r: Royal = _royals[i]
@@ -491,6 +545,8 @@ func _apply_intent(i: int, r: Royal, mv: Vector2, a: bool, b: bool) -> void:
 # seating / coronation
 # =====================================================================
 func _update_seating(delta: float) -> void:
+	if _hill == Hill.MIGRATING:
+		return   # the seat is in transit — no coronation mid-flight
 	if seating_index >= 0:
 		ceremony_t -= delta
 		var sr: Royal = _royals[seating_index]
@@ -565,6 +621,186 @@ func _update_reign(delta: float) -> void:
 			grip_regen_t = 0.0
 			grip += 1
 			_update_throne_hud()
+
+# =====================================================================
+# THE ESTATE STIRS — the moving hill
+# =====================================================================
+# A telegraphed KOTH relocation cadence. The dais HEAVES to a new site; a seated
+# king is bucked off (not a kill); everyone scrambles to where it lands. The
+# state machine runs in the balance sim too (fairness is MEASURED under motion);
+# only the glow/dust/shake are FX-gated.
+
+func _refresh_seat_pos() -> void:
+	SEAT_POS = dais_pos + SEAT_LOCAL
+
+## Where the bots should converge: the live seat when settled, or the ANNOUNCED
+## destination the instant the estate telegraphs a move (so bots repath early).
+func bot_target_pos() -> Vector3:
+	if _hill == Hill.SETTLED:
+		return SEAT_POS
+	return HILL_SITES[_hill_next] + SEAT_LOCAL
+
+## True while a relocation is telegraphed or in flight — bots drop everything and
+## race to the new hill (throne_bots.gd reads this).
+func hill_moving() -> bool:
+	return _hill != Hill.SETTLED
+
+func _update_hill(delta: float) -> void:
+	_hill_t += delta
+	match _hill:
+		Hill.SETTLED:
+			# no new relocation in overtime (the court settles it on a fixed hill),
+			# and none without enough tail left to make the scramble worthwhile.
+			if _overtime:
+				return
+			if game_time + HILL_TELEGRAPH + HILL_MIGRATE + HILL_MIN_TAIL >= _match_time:
+				return
+			var dwell := HILL_DWELL_CRISIS if (_match_time - game_time <= CRISIS_TIME) else HILL_DWELL
+			if _hill_t >= dwell:
+				_begin_telegraph()
+		Hill.TELEGRAPH:
+			if _fx:
+				_pulse_telegraph()
+				# a rumble that builds into the leap (ZERO-ENGLISH warning)
+				_shake = maxf(_shake, 0.08 + 0.16 * (_hill_t / HILL_TELEGRAPH))
+			if _hill_t >= HILL_TELEGRAPH:
+				_begin_migration()
+		Hill.MIGRATING:
+			var u := clampf(_hill_t / HILL_MIGRATE, 0.0, 1.0)
+			var e := u * u * (3.0 - 2.0 * u)          # smoothstep ease
+			var flat: Vector3 = _hill_from.lerp(_hill_to, e)
+			flat.y = HILL_ARC * sin(PI * u)            # the leap arc
+			dais_pos = flat
+			if dais_rig != null:
+				dais_rig.position = dais_pos
+			_refresh_seat_pos()
+			if u >= 1.0:
+				_settle_hill()
+
+func _begin_telegraph() -> void:
+	# pick a NEW site (never the current one), seeded so fast == fx site order
+	var n := HILL_SITES.size()
+	var pick := _hill_site
+	if n > 1:
+		pick = _hill_rng.randi_range(0, n - 2)
+		if pick >= _hill_site:
+			pick += 1
+	_hill_next = pick
+	_hill = Hill.TELEGRAPH
+	_hill_t = 0.0
+	_show_telegraph(HILL_SITES[_hill_next])
+	print("THRONE_STIR t=%.1f telegraph site=%d->%d king=%s" % [
+		game_time, _hill_site, _hill_next, (players[king].name if king >= 0 else "vacant")])
+	if _fx:
+		Sfx.play("creak", 1.0)
+		Sfx.play("thunder_far", -3.0)
+
+func _begin_migration() -> void:
+	_hill = Hill.MIGRATING
+	_hill_t = 0.0
+	_hill_from = HILL_SITES[_hill_site]
+	_hill_to = HILL_SITES[_hill_next]
+	_hide_telegraph()
+	# the estate BUCKS whoever holds the seat — reigning OR mid-coronation — NOT a
+	# kill, no kingslayer credit. Bucking releases the frozen body (launch() calls
+	# stop_being_king), so a mid-ceremony occupant is freed too, never stuck king.
+	if king >= 0:
+		_buck_king()
+	seating_index = -1
+	ceremony_t = 0.0
+	king = -1
+	_clear_guard()
+	_set_gold_stream(false)
+	print("THRONE_STIR t=%.1f migrate from=%d to=%d" % [game_time, _hill_site, _hill_next])
+	if _fx:
+		Sfx.play("chain", 0.0)
+		Sfx.play("whoosh_big", -2.0)
+		_shake = maxf(_shake, 0.5)
+		_spawn_dust(HILL_SITES[_hill_site] + Vector3(0, 0.2, 0), 22)
+
+func _settle_hill() -> void:
+	_hill_site = _hill_next
+	dais_pos = HILL_SITES[_hill_site]
+	if dais_rig != null:
+		dais_rig.position = dais_pos
+	_refresh_seat_pos()
+	_hill = Hill.SETTLED
+	_hill_t = 0.0
+	_hill_count += 1
+	print("THRONE_STIR t=%.1f settle site=%d pos=(%.1f,%.1f) count=%d" % [
+		game_time, _hill_site, dais_pos.x, dais_pos.z, _hill_count])
+	if _fx:
+		Sfx.play("thud_coffin", 0.0)
+		Sfx.play("crush", -4.0)
+		_shake = maxf(_shake, 0.7)
+		_spawn_dust(dais_pos + Vector3(0, 0.1, 0), 30)
+
+## The estate throws the seated king off when the hill moves. Fair because it was
+## telegraphed: the ex-king loses the head start (flung AWAY from the destination)
+## but takes no grip damage and grants no kingslayer — the ESTATE did this.
+func _buck_king() -> void:
+	var fallen := king
+	longest_reign[fallen] = maxf(longest_reign[fallen], game_time - reign_start)
+	var r: Royal = _royals[fallen]
+	var away := _hill_from - _hill_to
+	away.y = 0.0
+	var dir := away.normalized() if away.length() > 0.05 else Vector3(0, 0, 1)
+	if _fx:
+		_detach_crown_to_physics(r, dir)
+	elif r.crown_anchor:
+		for c in r.crown_anchor.get_children():
+			c.queue_free()
+	r.launch(dir, BUCK_FORCE)
+	if _fx:
+		r.flash_pop()
+		Sfx.play("bumper", 0.5)
+	print("THRONE_STIR_BUCK t=%.1f estate bucked %s (reign %.1fs)" % [
+		game_time, players[fallen].name, game_time - reign_start])
+
+func _show_telegraph(site: Vector3) -> void:
+	if not _fx or _tele_ring == null:
+		return
+	_tele_ring.global_position = site + Vector3(0, 0.06, 0)
+	_tele_ring.visible = true
+
+func _hide_telegraph() -> void:
+	if _tele_ring != null:
+		_tele_ring.visible = false
+
+func _pulse_telegraph() -> void:
+	if _tele_ring == null or not _tele_ring.visible:
+		return
+	var pulse := 1.0 + 0.10 * sin(_hill_t * 16.0)
+	_tele_ring.scale = Vector3(pulse, 1.0, pulse)
+	var m := _tele_ring.material_override as StandardMaterial3D
+	if m != null:
+		m.emission_energy_multiplier = 2.0 + 1.6 * (0.5 + 0.5 * sin(_hill_t * 9.0))
+
+## A one-shot ground burst of estate dust (grey-brown, unshaded). FX flourish.
+func _spawn_dust(pos: Vector3, amount: int) -> void:
+	if not _fx:
+		return
+	var p := CPUParticles3D.new()
+	spawn_root.add_child(p)
+	p.global_position = pos
+	p.one_shot = true
+	p.emitting = true
+	p.amount = amount
+	p.lifetime = 0.7
+	p.explosiveness = 0.9
+	p.spread = 80.0
+	p.direction = Vector3.UP
+	p.initial_velocity_min = 1.5
+	p.initial_velocity_max = 4.0
+	p.gravity = Vector3(0, -4.0, 0)
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.14, 0.14, 0.14)
+	p.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.42, 0.36, 0.3)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	p.material_override = mat
+	get_tree().create_timer(1.0).timeout.connect(p.queue_free)
 
 # =====================================================================
 # court powers
@@ -908,6 +1144,7 @@ func _print_balance() -> void:
 	print("THRONE_BALANCE seed=%d max_share=%.1f%% cap=55%% %s" % [rng.seed, maxpct, verdict])
 	var ot_len := maxf(0.0, game_time - _match_time)
 	print("THRONE_OT seed=%d entered=%s len=%.1fs end=%s" % [rng.seed, str(_overtime), ot_len, _ot_end])
+	print("THRONE_STIR_COUNT seed=%d relocations=%d final_site=%d" % [rng.seed, _hill_count, _hill_site])
 	var dcounts: Array = []
 	for i in players.size():
 		dcounts.append("%s=%d" % [players[i].name, dethronings[i]])
@@ -1068,8 +1305,7 @@ func _build_stage() -> void:
 
 	_build_floor()
 	_build_carpet()
-	_build_dais()
-	_build_throne()
+	_build_dais_rig()   # the movable hill: dais steps + throne model, one moving unit
 	_build_pillars_and_torches()
 	_build_walls()
 	_build_stained_glass()   # W3: kill the dead black over the back wall
@@ -1121,9 +1357,48 @@ func _build_carpet() -> void:
 	runner.material_override = run_mat
 	arena.add_child(runner)
 
+# THE MOVING HILL: dais steps + throne model live under one movable rig so the
+# whole hill HEAVES to a new site as a unit (the estate stirs). The carpet,
+# pillars, walls and window stay put — only the dais is restless.
+func _build_dais_rig() -> void:
+	dais_rig = Node3D.new()
+	dais_rig.name = "DaisRig"
+	arena.add_child(dais_rig)
+	_build_dais()
+	_build_throne()
+	# the ZERO-ENGLISH destination marker: a flat amber ring that blooms at the
+	# next site during the pre-telegraph. Built only with FX (probe/mirror share).
+	if _fx:
+		_tele_ring = MeshInstance3D.new()
+		_tele_ring.name = "TelegraphRing"
+		var tm := TorusMesh.new()
+		tm.inner_radius = 2.3
+		tm.outer_radius = 3.0
+		_tele_ring.mesh = tm
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = Color(1.0, 0.7, 0.2)
+		mat.emission_enabled = true
+		mat.emission = Color(1.0, 0.62, 0.15)
+		mat.emission_energy_multiplier = 2.4
+		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.albedo_color.a = 0.85
+		_tele_ring.material_override = mat
+		_tele_ring.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_tele_ring.visible = false
+		arena.add_child(_tele_ring)
+	# seat the rig at HOME and publish the seat position
+	_hill_site = 0
+	dais_pos = HILL_SITES[0]
+	dais_rig.position = dais_pos
+	_refresh_seat_pos()
+
 func _build_dais() -> void:
-	# three concentric cylinder steps: challengers climb them, the flung crown
-	# bounces down them. All on the environment layer.
+	# three concentric cylinder steps under the movable rig. VISUAL-ONLY (no
+	# collider): a MOVING StaticBody teleporting through the challengers' physics
+	# bodies faults the physics server (intermittent native crash on relocation),
+	# and the collision was never load-bearing — the king is hard-pinned to the
+	# seat, shoves flatten Y (royal.gd:32), coronation is proximity-based, and the
+	# flung crown now tumbles on the floor. The throne model is likewise visual.
 	var steps := [
 		{"r": 3.0, "h": 0.17, "y": 0.085},
 		{"r": 2.5, "h": 0.17, "y": 0.255},
@@ -1131,19 +1406,8 @@ func _build_dais() -> void:
 	]
 	var idx := 0
 	for s in steps:
-		var body := StaticBody3D.new()
-		body.name = "Step%d" % idx
-		body.collision_layer = 1
-		body.collision_mask = 0
-		arena.add_child(body)
-		var cs := CollisionShape3D.new()
-		var cyl := CylinderShape3D.new()
-		cyl.radius = float(s["r"])
-		cyl.height = float(s["h"])
-		cs.shape = cyl
-		cs.position = Vector3(0, float(s["y"]), 0)
-		body.add_child(cs)
 		var mi := MeshInstance3D.new()
+		mi.name = "Step%d" % idx
 		var cm := CylinderMesh.new()
 		cm.top_radius = float(s["r"])
 		cm.bottom_radius = float(s["r"])
@@ -1155,7 +1419,7 @@ func _build_dais() -> void:
 		mat.albedo_color = Color(shade, shade * 0.9, shade * 0.85)
 		mat.roughness = 0.85
 		mi.material_override = mat
-		body.add_child(mi)
+		dais_rig.add_child(mi)
 		idx += 1
 
 const THRONE_GLB := "res://assets/models/meshy/throne.glb"
@@ -1170,8 +1434,8 @@ func _build_throne() -> void:
 	var base_y := DAIS_TOP_Y
 	var throne := MeshyProp.instance(THRONE_GLB, THRONE_HEIGHT, THRONE_YAW)
 	throne.name = "ThroneModel"
-	throne.position = Vector3(0, base_y, -0.5)
-	arena.add_child(throne)
+	throne.position = Vector3(0, base_y, -0.5)   # LOCAL to the dais rig — moves with it
+	dais_rig.add_child(throne)
 
 func _build_pillars_and_torches() -> void:
 	var stone := StandardMaterial3D.new()
@@ -1666,6 +1930,64 @@ func _run_hitkit_cap() -> void:
 	print("THRONE_HITKIT_CAP_DONE")
 	get_tree().quit()
 
+# ---------------------------------------------------------------------------
+# THE ESTATE STIRS capture (--stircap, windowed): crowns a king, forces one full
+# relocation, and films the beat — pre-telegraph, buck-off leap, mid-flight, the
+# slam-down resettle, and the fresh scramble-in reign. Live (NOT frozen) so the
+# bots' repositioning shows. Verify-only; quits when done.
+# ---------------------------------------------------------------------------
+func _run_stir_cap() -> void:
+	while phase != Phase.PLAY:
+		await get_tree().physics_frame
+	# park + freeze the three challengers during setup so nobody dethrones our
+	# king before the ESTATE gets to buck him. Re-woken the moment the hill leaps.
+	var king_i := 2   # GOLD — a high-contrast body on the red carpet
+	var ring := [Vector3(4.6, 0.1, 3.4), Vector3(-4.6, 0.1, 3.4), Vector3(0, 0.1, 4.8)]
+	var others: Array = []
+	for i in _royals.size():
+		if i != king_i:
+			others.append(i)
+	for j in others.size():
+		var oi: int = others[j]
+		bot_enabled[oi] = false
+		(_royals[oi] as Royal).global_position = ring[j % ring.size()]
+		(_royals[oi] as Royal).linear_velocity = Vector3.ZERO
+	# force a clean king so the buck-off reads in frame 2
+	_begin_coronation(king_i)
+	seating_index = -1
+	ceremony_t = 0.0
+	_royals[king_i].global_position = SEAT_POS
+	banner.visible = false
+	await _settle(1.2)
+	# 1) PRE-TELEGRAPH — the next site glows + rumbles, king still enthroned
+	_hill_t = HILL_DWELL + 1.0     # trip the dwell on the next tick
+	while _hill != Hill.TELEGRAPH:
+		await get_tree().physics_frame
+	await _settle(1.3)
+	banner.visible = false
+	await _cap_shot("stir_1_telegraph")
+	# 2) BUCK-OFF LEAP — the estate heaves the throne and flings the king
+	while _hill != Hill.MIGRATING:
+		await get_tree().physics_frame
+	for oi in others:            # wake the challengers — they scramble to the new hill
+		bot_enabled[oi] = true
+	await _settle(0.16)
+	await _cap_shot("stir_2_buck_leap")
+	# 3) MID-FLIGHT — the dais arcs across the hall at its peak
+	await _settle(0.42)
+	await _cap_shot("stir_3_migrate_mid")
+	# 4) RESETTLE — the slam-down, dust, everyone converging
+	while _hill != Hill.SETTLED:
+		await get_tree().physics_frame
+	await _settle(0.22)
+	await _cap_shot("stir_4_settle")
+	# 5) NEW REIGN — the scramble crowns a fresh king at the new site
+	await _settle(2.0)
+	banner.visible = false
+	await _cap_shot("stir_5_new_reign")
+	print("THRONE_STIRCAP_DONE count=%d final_site=%d" % [_hill_count, _hill_site])
+	get_tree().quit()
+
 func _spawn_shockwave(pos: Vector3, color: Color) -> void:
 	var ring := MeshInstance3D.new()
 	var tm := TorusMesh.new()
@@ -1745,6 +2067,12 @@ func _net_state() -> Dictionary:
 		"ban": [banner.text, _banner_col, banner.visible],
 		"sc": _scores_pack(),
 		"dn": _decree_n, "kn": _dethrone_n, "sn": _shove_n,
+		# THE ESTATE STIRS: the moving-hill mirror facts. Position is continuous
+		# (interpolated client-side); phase + count drive the telegraph/leap/slam
+		# juice off deltas.
+		"hphase": _hill, "hnext": _hill_next, "hcount": _hill_count,
+		"hx": snappedf(dais_pos.x, 0.01), "hy": snappedf(dais_pos.y, 0.01),
+		"hz": snappedf(dais_pos.z, 0.01),
 	}
 	if active_guard != null and is_instance_valid(active_guard):
 		st["guard"] = [snappedf(active_guard.global_position.x, 0.01),
@@ -1776,6 +2104,8 @@ func _net_apply(state: Dictionary) -> void:
 	decree_cd = float(state.get("dcd", 0.0))
 	guard_cd = float(state.get("gcd", 0.0))
 	_decree_cd_max = float(state.get("dcdmax", DECREE_CD_BASE))
+	# --- THE ESTATE STIRS: move the mirror dais + fire the relocation juice
+	_mir_apply_hill(state, prev)
 	# --- royal interp targets (motion smoothed in _mirror_tick)
 	var roy: Array = state.get("roy", [])
 	for i in mini(roy.size(), _mir_roy.size()):
@@ -1873,7 +2203,45 @@ func _mirror_tick(delta: float) -> void:
 		var np: Vector3 = r.global_position.lerp(t[0] as Vector3, k)
 		var ny: float = lerp_angle(r.model_yaw(), float(t[1]), k)
 		r.net_render(np, ny, str(t[2]), bool(t[3]))
+	# pulse the destination marker while a relocation is telegraphed
+	if _tele_ring != null and _tele_ring.visible:
+		_hill_t += delta
+		_pulse_telegraph()
 	_update_throne_hud()
+
+## CLIENT: drive the mirror dais to the host's hill state, and fire the telegraph
+## glow / leap whoosh / slam thud off phase + count deltas.
+func _mir_apply_hill(state: Dictionary, prev: Dictionary) -> void:
+	dais_pos = Vector3(float(state.get("hx", 0.0)), float(state.get("hy", 0.0)),
+		float(state.get("hz", 0.0)))
+	if dais_rig != null:
+		dais_rig.position = dais_pos
+	_refresh_seat_pos()
+	var cur_hill := int(state.get("hphase", Hill.SETTLED))
+	var prev_hill := int(prev.get("hphase", Hill.SETTLED))
+	_hill = cur_hill
+	_hill_next = int(state.get("hnext", 0))
+	if cur_hill == Hill.TELEGRAPH:
+		if prev_hill != Hill.TELEGRAPH:
+			_hill_t = 0.0
+			_show_telegraph(HILL_SITES[_hill_next])
+			Sfx.play("creak", 1.0)
+			Sfx.play("thunder_far", -3.0)
+	else:
+		_hide_telegraph()
+	if cur_hill == Hill.MIGRATING and prev_hill != Hill.MIGRATING:
+		Sfx.play("chain", 0.0)
+		Sfx.play("whoosh_big", -2.0)
+		_shake = maxf(_shake, 0.5)
+		_spawn_dust(dais_pos + Vector3(0, 0.2, 0), 22)
+	if int(state.get("hcount", 0)) > int(prev.get("hcount", 0)):
+		Sfx.play("thud_coffin", 0.0)
+		Sfx.play("crush", -4.0)
+		_shake = maxf(_shake, 0.7)
+		_spawn_dust(dais_pos + Vector3(0, 0.1, 0), 30)
+		if not _mir_snapped.has("mirror_stir"):
+			_mir_snapped["mirror_stir"] = true
+			VerifyCapture.snap("mirror_stir")   # a relocation mirrored
 
 func _apply_mir_banner(arr: Array, parr: Array) -> void:
 	if arr.size() < 3:

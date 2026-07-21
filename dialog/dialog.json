@@ -250,7 +250,7 @@
       "greed": "One pot of gold, four sets of hands. Bank it down your chute; tackle whoever is richer.",
       "swap": "Kart race where your weapon TRADES PLACES with whoever it hits. The lead is a rumor.",
       "deadweight": "Sumo where the dead never leave — they possess the furniture and fling it at the living.",
-      "throne": "One throne, four claimants. Reigning scores. Decrees blast, guards defend, gravity votes last.",
+      "throne": "One throne, four claimants — and a throne that won't sit still. Reigning scores. Decrees blast, guards defend, and the estate heaves the seat across the hall when it tires of you.",
       "lastwill": "A funeral procession race: first to the crypt inherits. Every death freezes the world while the deceased writes a curse into the road.",
       "widowsgaze": "Rob the wake. Creep the parlor for relics while the Widow weeps — FREEZE when she turns, or her gaze flings you back to the rope. A shove as the sting plays is a murder.",
       "seance": "A co-op séance: guide the planchette to the spirit's word — but one of you was paid in pennies to make it fail without getting caught. The Executor is the medium.",
@@ -316,10 +316,11 @@
     },
     "throne": {
       "name": "THE THRONE",
-      "goal": "Whoever SITS scores every second but can't move. Gang up, drain their GRIP, fling them off.",
+      "goal": "Whoever SITS scores every second but can't move. Gang up, drain their GRIP, fling them off — and the throne itself won't hold still.",
       "tips": [
         "On the throne: DECREE blasts the room and SUMMON a guard — but you're rooted.",
         "Off the throne: dash in, shove the king off, and take the seat.",
+        "THE ESTATE STIRS: the throne heaves to a new spot. It glows before it goes — beat everyone there.",
         "Longest total reign wins, not whoever sits last."
       ]
     },

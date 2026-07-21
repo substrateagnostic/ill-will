@@ -54,6 +54,18 @@ func decide(p: int, g, delta: float) -> Dictionary:
 			out["b"] = true
 		return out
 
+	# ----------------------------------------- THE ESTATE STIRS: hill is moving
+	# A relocation is telegraphed or in flight — drop everything and race to where
+	# the throne is GOING (Halo KOTH repositioning). The bucked ex-king (re_sit_cd)
+	# funnels here too and re-enters the scramble at the new site.
+	if g.hill_moving():
+		var dst: Vector3 = g.bot_target_pos()
+		var to_dst := Vector2(dst.x, dst.z) - my_pos
+		out["move"] = to_dst.normalized() if to_dst.length() > 0.12 else Vector2.ZERO
+		if to_dst.length() > 2.4 and me._dash_cd <= 0.0:
+			out["b"] = true
+		return out
+
 	# ------------------------------------------------------- throne is empty
 	if g.king < 0:
 		if me.re_sit_cd > 0.0:
