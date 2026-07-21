@@ -1,0 +1,21 @@
+[
+  {
+    "name": "executor_butler_v2", "height_meters": 1.9,
+    "anims": [
+      { "label": "idle_c243", "action": 243, "action_name": "Idle 3" },
+      { "label": "idle_c47", "action": 47, "action_name": "Listening Gesture" }
+    ]
+  },
+  {
+    "name": "npc_mourner_elderly_v2", "height_meters": 1.65,
+    "anims": [
+      { "label": "idle_c243", "action": 243, "action_name": "Idle 3" }
+    ]
+  },
+  {
+    "name": "npc_mourner_forhire", "height_meters": 1.7,
+    "anims": [
+      { "label": "idle_c243", "action": 243, "action_name": "Idle 3" }
+    ]
+  }
+]

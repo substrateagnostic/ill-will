@@ -1,0 +1,8 @@
+[
+  {
+    "id": "npc_mourner_elderly_v3",
+    "category": "RIGGING_BATCH_REGEN_RETRY",
+    "prompt": "A stooped elderly mourner standing upright unaided on both feet, both empty hands clasped together in front at chest height, absolutely no cane, no walking stick, no staff, no props of any kind held or nearby, hunched shoulders but supporting own weight with no aid, dark somber Victorian mourning clothes, standing neutral pose, both legs together not mid-stride, slightly oversized head for readability",
+    "target_height_hint": 1.65
+  }
+]

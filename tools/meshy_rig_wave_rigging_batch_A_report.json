@@ -1,0 +1,93 @@
+{
+    "generated_at":  "2026-07-20T22:15:27.4903795-05:00",
+    "experiment":  "RIGGING WAVE: rig graveyard troupe + apply preset animations",
+    "gen_dir":  "assets/models/meshy/generated/",
+    "models":  [
+                   {
+                       "name":  "npc_ferryman",
+                       "native_height_meters":  1.85,
+                       "rig_task_id":  "019f82a7-b830-7e45-9045-bfdbc00831e9",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle_c243",
+                                              "action_id":  243,
+                                              "action_name":  "Idle 3",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_ferryman_idle_c243.glb",
+                                              "error":  ""
+                                          },
+                                          {
+                                              "label":  "idle_c47",
+                                              "action_id":  47,
+                                              "action_name":  "Listening Gesture",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_ferryman_idle_c47.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   },
+                   {
+                       "name":  "npc_mourner_hooded",
+                       "native_height_meters":  1.75,
+                       "rig_task_id":  "019f82a8-f395-7e76-ae3e-d47ce135aa47",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle_c243",
+                                              "action_id":  243,
+                                              "action_name":  "Idle 3",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_mourner_hooded_idle_c243.glb",
+                                              "error":  ""
+                                          },
+                                          {
+                                              "label":  "idle_c245",
+                                              "action_id":  245,
+                                              "action_name":  "Idle 5",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_mourner_hooded_idle_c245.glb",
+                                              "error":  ""
+                                          },
+                                          {
+                                              "label":  "bow_c42",
+                                              "action_id":  42,
+                                              "action_name":  "Gentlemans Bow",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_mourner_hooded_bow_c42.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   },
+                   {
+                       "name":  "npc_widow",
+                       "native_height_meters":  1.6,
+                       "rig_task_id":  "019f82aa-97b2-7829-ae3d-d3a0318b1f04",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle_c243",
+                                              "action_id":  243,
+                                              "action_name":  "Idle 3",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_widow_idle_c243.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   }
+               ],
+    "totals":  {
+                   "rig_credits":  15,
+                   "anim_credits":  18,
+                   "total_credits":  33
+               }
+}

@@ -1,0 +1,75 @@
+{
+    "generated_at":  "2026-07-20T22:19:25.6610914-05:00",
+    "experiment":  "RIGGING WAVE: rig graveyard troupe + apply preset animations",
+    "gen_dir":  "assets/models/meshy/generated/",
+    "models":  [
+                   {
+                       "name":  "executor_butler_v2",
+                       "native_height_meters":  1.9,
+                       "rig_task_id":  "019f82ac-dce1-7f2a-8137-dd05f8e1d10f",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle_c243",
+                                              "action_id":  243,
+                                              "action_name":  "Idle 3",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/executor_butler_v2_idle_c243.glb",
+                                              "error":  ""
+                                          },
+                                          {
+                                              "label":  "idle_c47",
+                                              "action_id":  47,
+                                              "action_name":  "Listening Gesture",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/executor_butler_v2_idle_c47.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   },
+                   {
+                       "name":  "npc_mourner_elderly_v2",
+                       "native_height_meters":  1.65,
+                       "rig_task_id":  "019f82ad-dd9b-7114-8eea-aa8b49e1a8c0",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle_c243",
+                                              "action_id":  243,
+                                              "action_name":  "Idle 3",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_mourner_elderly_v2_idle_c243.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   },
+                   {
+                       "name":  "npc_mourner_forhire",
+                       "native_height_meters":  1.7,
+                       "rig_task_id":  "019f82ae-8cdf-72ed-8b14-d4b0646d5284",
+                       "rig_credits":  5,
+                       "rig_reused":  false,
+                       "animations":  [
+                                          {
+                                              "label":  "idle_c243",
+                                              "action_id":  243,
+                                              "action_name":  "Idle 3",
+                                              "status":  "SUCCEEDED",
+                                              "anim_credits":  3,
+                                              "output_glb":  "assets/models/meshy/generated/npc_mourner_forhire_idle_c243.glb",
+                                              "error":  ""
+                                          }
+                                      ]
+                   }
+               ],
+    "totals":  {
+                   "rig_credits":  15,
+                   "anim_credits":  12,
+                   "total_credits":  27
+               }
+}

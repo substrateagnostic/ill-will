@@ -1,0 +1,100 @@
+{
+    "generated_at":  "2026-07-20T22:16:26.3565825-05:00",
+    "model":  "meshy-6",
+    "preview_only":  false,
+    "batch_size":  6,
+    "items":  [
+                  {
+                      "id":  "executor_butler_v2",
+                      "category":  "RIGGING_BATCH_REGEN",
+                      "status":  "ok",
+                      "preview_task_id":  "019f82a7-b57b-7fdc-8adf-1a67c0fd1feb",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f82ab-8ae7-70b9-8468-fbc47e9a30df",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "C:\\Users\\agall\\projects\\un_party_game\\assets\\models\\meshy\\generated\\executor_butler_v2.glb",
+                      "error":  null
+                  },
+                  {
+                      "id":  "npc_mourner_elderly_v2",
+                      "category":  "RIGGING_BATCH_REGEN",
+                      "status":  "ok",
+                      "preview_task_id":  "019f82a7-bdc3-71ef-a319-27ed5f34d8c0",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f82ab-8d43-7287-9125-4ada0d48aad3",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "C:\\Users\\agall\\projects\\un_party_game\\assets\\models\\meshy\\generated\\npc_mourner_elderly_v2.glb",
+                      "error":  null
+                  },
+                  {
+                      "id":  "prop_cane_wooden",
+                      "category":  "RIGGING_BATCH_PROP",
+                      "status":  "ok",
+                      "preview_task_id":  "019f82a7-c71a-71fd-a6bd-0aac3db38a5b",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f82ab-8fb1-70ba-b734-15b39552352b",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "C:\\Users\\agall\\projects\\un_party_game\\assets\\models\\meshy\\generated\\prop_cane_wooden.glb",
+                      "error":  null
+                  },
+                  {
+                      "id":  "prop_serving_tray_silver",
+                      "category":  "RIGGING_BATCH_PROP",
+                      "status":  "ok",
+                      "preview_task_id":  "019f82a7-cfda-7e46-8006-2e9fcfc5cff8",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f82ab-91f3-785d-a63a-0669743d1e89",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "C:\\Users\\agall\\projects\\un_party_game\\assets\\models\\meshy\\generated\\prop_serving_tray_silver.glb",
+                      "error":  null
+                  },
+                  {
+                      "id":  "npc_magpie",
+                      "category":  "RIGGING_BATCH_NEW_NPC",
+                      "status":  "ok",
+                      "preview_task_id":  "019f82a7-d93e-77c9-8b29-839cfbc82573",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f82ab-9430-70bb-a430-eadf844a05ad",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "C:\\Users\\agall\\projects\\un_party_game\\assets\\models\\meshy\\generated\\npc_magpie.glb",
+                      "error":  null
+                  },
+                  {
+                      "id":  "npc_mourner_forhire",
+                      "category":  "RIGGING_BATCH_NEW_NPC",
+                      "status":  "ok",
+                      "preview_task_id":  "019f82a7-e419-7200-9946-c83c516132a4",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f82ab-9663-7ef2-987a-3776fb2caae1",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "C:\\Users\\agall\\projects\\un_party_game\\assets\\models\\meshy\\generated\\npc_mourner_forhire.glb",
+                      "error":  null
+                  }
+              ],
+    "summary":  {
+                    "total":  6,
+                    "ok":  6,
+                    "preview_only":  0,
+                    "failed":  0,
+                    "resumed_skip":  0,
+                    "total_credits":  180
+                }
+}

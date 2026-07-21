@@ -1,0 +1,38 @@
+[
+  {
+    "id": "executor_butler_v2",
+    "category": "RIGGING_BATCH_REGEN",
+    "prompt": "A distinguished elderly butler standing upright in a formal black tailcoat with a white bow tie and white waistcoat, wearing white formal gloves, both hands empty and resting down at his sides, dignified neutral standing pose, both legs together not mid-stride, slightly oversized head for readability",
+    "target_height_hint": 1.9
+  },
+  {
+    "id": "npc_mourner_elderly_v2",
+    "category": "RIGGING_BATCH_REGEN",
+    "prompt": "A stooped elderly mourner standing with both hands clasped together in front at the waist, empty hands, no cane, no props, hunched posture, dark somber Victorian mourning clothes, standing neutral pose, both legs together not mid-stride, slightly oversized head for readability",
+    "target_height_hint": 1.65
+  },
+  {
+    "id": "prop_cane_wooden",
+    "category": "RIGGING_BATCH_PROP",
+    "prompt": "A simple wooden walking cane with a curved handle, dark polished wood, slim shaft, isolated single object, no figure, no hand",
+    "target_height_hint": 0.9
+  },
+  {
+    "id": "prop_serving_tray_silver",
+    "category": "RIGGING_BATCH_PROP",
+    "prompt": "A small round silver serving tray with a raised decorative rim, empty, plain, isolated single object, no figure, no hand",
+    "target_height_hint": 0.35
+  },
+  {
+    "id": "npc_magpie",
+    "category": "RIGGING_BATCH_NEW_NPC",
+    "prompt": "A magpie bird perched upright on a small stone, glossy black and white plumage with iridescent blue-green tail feathers, alert perched pose, wings folded, isolated single object",
+    "target_height_hint": 0.28
+  },
+  {
+    "id": "npc_mourner_forhire",
+    "category": "RIGGING_BATCH_NEW_NPC",
+    "prompt": "A theatrical professional mourner-for-hire woman standing upright, a dramatic oversized dark veil draped fully over her face and shoulders, one gloved hand raised holding an ornate lace handkerchief up to her veiled face, the other hand clasped at her waist, exaggerated flowing dramatic black mourning gown, both legs together not mid-stride, slightly oversized head for readability",
+    "target_height_hint": 1.75
+  }
+]

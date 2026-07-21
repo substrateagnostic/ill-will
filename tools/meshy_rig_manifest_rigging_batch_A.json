@@ -1,0 +1,23 @@
+[
+  {
+    "name": "npc_ferryman", "height_meters": 1.85,
+    "anims": [
+      { "label": "idle_c243", "action": 243, "action_name": "Idle 3" },
+      { "label": "idle_c47", "action": 47, "action_name": "Listening Gesture" }
+    ]
+  },
+  {
+    "name": "npc_mourner_hooded", "height_meters": 1.75,
+    "anims": [
+      { "label": "idle_c243", "action": 243, "action_name": "Idle 3" },
+      { "label": "idle_c245", "action": 245, "action_name": "Idle 5" },
+      { "label": "bow_c42", "action": 42, "action_name": "Gentlemans Bow" }
+    ]
+  },
+  {
+    "name": "npc_widow", "height_meters": 1.6,
+    "anims": [
+      { "label": "idle_c243", "action": 243, "action_name": "Idle 3" }
+    ]
+  }
+]

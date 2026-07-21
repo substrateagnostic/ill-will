@@ -1,0 +1,30 @@
+{
+    "generated_at":  "2026-07-20T22:32:03.8456878-05:00",
+    "model":  "meshy-6",
+    "preview_only":  false,
+    "batch_size":  5,
+    "items":  [
+                  {
+                      "id":  "npc_mourner_elderly_v3",
+                      "category":  "RIGGING_BATCH_REGEN_RETRY",
+                      "status":  "ok",
+                      "preview_task_id":  "019f82b8-12ae-7331-a72a-3fd4998db144",
+                      "preview_status":  "SUCCEEDED",
+                      "preview_credits":  20,
+                      "refine_task_id":  "019f82ba-0f99-738d-adb6-3c7a38a9cadd",
+                      "refine_status":  "SUCCEEDED",
+                      "refine_credits":  10,
+                      "consumed_credits":  30,
+                      "glb_path":  "assets\\models\\meshy\\generated\\npc_mourner_elderly_v3.glb",
+                      "error":  null
+                  }
+              ],
+    "summary":  {
+                    "total":  1,
+                    "ok":  1,
+                    "preview_only":  0,
+                    "failed":  0,
+                    "resumed_skip":  0,
+                    "total_credits":  30
+                }
+}
