@@ -57,7 +57,8 @@ and Crow Murder weights.
   debuffs, and finish identity remain with the driver.
 - **PALLBEARER'S COFFIN** drops behind and persists until hit or race end. A hit
   causes an 0.85-second tumble. Oldest-first enforcement caps each seat at
-  three live coffins.
+  three live coffins and the whole race at six; a cap eviction puffs away the
+  globally oldest coffin.
 - **THE BELL** applies a 0.65 speed multiplier to every other unfinished kart
   for 2.5 seconds.
 - **CROW MURDER** targets the current leader for 3 seconds, applies a mild 0.78
@@ -67,10 +68,19 @@ and Crow Murder weights.
 Normal swap-orb pickups grant one lob, independent of item boxes. Golden orb
 spawn/claim/homing-leader behavior remains intact. Empty seats use `swap_bot.gd`
 pure pursuit, seeded item use, drift/shortcut decisions, and a mild placement
-speed scale from 0.98 (leader) to 1.08 (fourth). A progress watchdog ignores
-intended coffin tumbles and ramp airtime; after 2.5 seconds without meaningful
-forward track progress it reverses briefly, resamples the current next waypoint,
-and logs exactly one `BOT_UNSTUCK p=N t=S.S` line per escape. Bog slowdown is
+speed scale from 0.98 (leader) to 1.08 (fourth). Last place receives a further
+1.08 multiplier only while more than 12 seconds behind the unfinished leader's
+average pace.
+
+The bot watchdog measures net `kart.progress` gain over fixed 2.5-second
+windows; speed, displacement, bounces, and small forward crests do not reset
+it. A healthy window must gain at least 3.5 track units. Tumble/airtime can
+defer measurement for at most four accumulated seconds. A stall prints
+`BOT_STALL p=N t=S.S cp=N pos=(X,Z) net=D`, reverses briefly, then resamples the
+current next waypoint. After two recoveries fail within 15 seconds, the next
+stall returns the kart to its last credited checkpoint center with a small
+ghost flash. No progress is granted: uncheckpointed distance is discarded.
+Each reverse/nudge escape also prints `BOT_UNSTUCK p=N t=S.S`. Bog slowdown is
 recomputed from the kart's current surface every tick and clears on the dry
 plank/after leaving the water.
 
@@ -97,8 +107,17 @@ godot --headless --path . res://minigames/swap_meet/swap_meet.tscn -- --swaptall
 
 `--swaptally` forces all roster seats to seeded bots, enables the established
 8x tick-safe acceleration when no explicit `--fast` is supplied, auto-quits,
-and still runs the configured three laps. The final receipt line has this
-shape (values and digest depend on the seed):
+still runs the configured three laps, and raises only the soak safety cap from
+170 to 240 seconds. The design target remains a typical four-kart finish under
+about 170 seconds. `--timecap=N` still overrides either default.
+
+Every ten race seconds, each unfinished kart emits a location breadcrumb:
+
+```text
+SWAPBOT_POS p=0 t=80.0 cp=7 pos=(-12.3,24.5)
+```
+
+The final receipt line has this shape (values and digest depend on the seed):
 
 ```text
 SWAPTALLY seed=17 laps=3 item_density=1.00 order=[...] swaps=N boxes=N shells=N coffins=N bells=N crows=N digest=12_hex_chars PASS

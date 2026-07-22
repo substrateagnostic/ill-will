@@ -25,7 +25,7 @@ extends Minigame
 ##   --laps=N        override 3 laps
 ##   --itemdensity=N item-box/orb-pickup density multiplier (default 1.0)
 ##   --swaptally     deterministic all-bot soak receipt (pair with --seed=N)
-##   --timecap=N     override the 170s race cap
+##   --timecap=N     override the 170s play / 240s --swaptally race cap
 ##   --swaptest=immunity   scripted orb drops prove 1s swap immunity
 ##   --swaptest=moment     two parked karts + one throw: the swap money shot
 ##   --shotsec=a,b,..      capture PNGs at these WALL-clock seconds
@@ -38,6 +38,7 @@ enum Phase { WAIT, INTRO, PLAY, END }
 const KAYKIT_CHARS := ["Barbarian", "Knight", "Mage", "Rogue"]
 const LAPS_DEFAULT := 3
 const RACE_CAP := 170.0
+const SOAK_RACE_CAP: float = 240.0
 const FINISH_PTS := [5, 3, 2, 1]
 const ORB_CD := 3.0
 const SWAP_IMMUNITY := 1.0
@@ -75,6 +76,9 @@ const PICKUP_RESPAWN: float = 5.0
 const BELL_DURATION: float = 2.5
 const CROW_DURATION: float = 3.0
 const MAX_COFFINS_PER_SEAT: int = 3
+const MAX_COFFINS_GLOBAL: int = 6
+const SLIPSTREAM_GAP_SECONDS: float = 12.0
+const SLIPSTREAM_SPEED_MULT: float = 1.08
 const NET_KART_STRIDE: int = 17
 
 var config: Dictionary = {}
@@ -154,6 +158,8 @@ var _cli_players: int = 4
 var _fast: float = 1.0
 var _autoquit: bool = false
 var _swaptally: bool = false
+var _swaptally_next_pos_t: float = 10.0
+var _time_cap_explicit: bool = false
 var _test_mode: String = ""
 var _test_stage: int = 0
 var _shotsec: Array = []
@@ -237,6 +243,7 @@ func _parse_args() -> void:
 			laps_total = clampi(int(arg.trim_prefix("--laps=")), 1, 9)
 		elif arg.begins_with("--timecap="):
 			time_cap = float(arg.trim_prefix("--timecap="))
+			_time_cap_explicit = true
 		elif arg.begins_with("--itemdensity="):
 			item_density = clampf(float(arg.trim_prefix("--itemdensity=")), 0.25, 2.0)
 		elif arg == "--swaptally":
@@ -265,6 +272,8 @@ func _parse_args() -> void:
 			# the anti-trap unstick fires. Films swap_unstick.png and quits.
 			_stuck_test = true
 			bots_enabled = true
+	if _swaptally and not _time_cap_explicit:
+		time_cap = SOAK_RACE_CAP
 	if _swaptally and _fast <= 1.01:
 		_fast = 8.0
 	if _fast > 1.01:
@@ -890,14 +899,17 @@ func _drop_coffin(kart: SwapKart) -> void:
 	add_child(node)
 	_coffin_serial += 1
 	_coffins.append({"id": _coffin_serial, "owner": kart.index, "node": node,
-		"age": 0.0, "heading": kart.heading})
+		"age": 0.0, "heading": kart.heading, "color": kart.color})
 	var owner_records: Array[Dictionary] = []
 	for record: Dictionary in _coffins:
 		if int(record.get("owner", -1)) == kart.index:
 			owner_records.append(record)
 	while owner_records.size() > MAX_COFFINS_PER_SEAT:
 		var oldest: Dictionary = owner_records.pop_front()
-		_remove_coffin(oldest)
+		_remove_coffin(oldest, true, "seat_cap")
+	while _coffins.size() > MAX_COFFINS_GLOBAL:
+		var global_oldest: Dictionary = _coffins[0]
+		_remove_coffin(global_oldest, true, "global_cap")
 	_item_stats["coffins"] = int(_item_stats.get("coffins", 0)) + 1
 	_flash_event("%s DROPS THE PALLBEARER'S COFFIN" % kart.pname, ITEM_COLORS[ITEM_COFFIN])
 	Sfx.play("place", -2.0)
@@ -962,11 +974,17 @@ func _step_coffins(dt: float) -> void:
 	for record: Dictionary in hits:
 		_remove_coffin(record)
 
-func _remove_coffin(record: Dictionary) -> void:
+func _remove_coffin(record: Dictionary, puff: bool = false, reason: String = "") -> void:
 	var node: Node3D = record.get("node", null) as Node3D
 	if node != null and is_instance_valid(node):
+		if puff:
+			var puff_color: Color = record.get("color", Color(0.72, 0.25, 1.0))
+			_burst(node.global_position + Vector3.UP * 0.25, puff_color, 10)
 		node.queue_free()
 	_coffins.erase(record)
+	if reason != "":
+		print("COFFIN_DESPAWN t=%.1f owner=%d reason=%s alive=%d" % [
+			race_t, int(record.get("owner", -1)), reason, _coffins.size()])
 
 func _ring_bell(user: SwapKart) -> void:
 	for kart_value in karts:
@@ -1008,6 +1026,7 @@ func _physics_process(delta: float) -> void:
 		_intro_tick(sdt)
 	if phase == Phase.PLAY:
 		race_t += sdt
+		_swaptally_position_tick()
 		_stretch_tick()
 	if sdt > 0.0:
 		for bot in bots:
@@ -1018,8 +1037,7 @@ func _physics_process(delta: float) -> void:
 		var kart: SwapKart = k
 		if kart.index < bots.size() and bots[kart.index] != null and phase == Phase.PLAY:
 			var place: int = clampi(position_of(kart.index), 1, 4)
-			var rubber_scales: Array[float] = [0.98, 1.01, 1.045, 1.08]
-			kart.bot_speed_scale = rubber_scales[place - 1]
+			kart.bot_speed_scale = _bot_rubber_scale(kart, place)
 		else:
 			kart.bot_speed_scale = 1.0
 		var inp: Dictionary = _input_for(kart.index)
@@ -1077,6 +1095,34 @@ func _physics_process(delta: float) -> void:
 		_netdemo_fire_t = -1.0
 		_drop_orb_on(0, 1)
 		print("SWAP_NETDEMO scripted orb drop 0 -> 1 t=%.1f" % race_t)
+
+func _swaptally_position_tick() -> void:
+	if not _swaptally or race_t + 0.0001 < _swaptally_next_pos_t:
+		return
+	while race_t + 0.0001 >= _swaptally_next_pos_t:
+		for kart_value: Variant in karts:
+			var kart: SwapKart = kart_value
+			if kart.finished:
+				continue
+			var pos: Vector3 = kart.global_position
+			print("SWAPBOT_POS p=%d t=%.1f cp=%d pos=(%.1f,%.1f)" % [
+				kart.index, _swaptally_next_pos_t, kart.gates_credited, pos.x, pos.z])
+		_swaptally_next_pos_t += 10.0
+
+func _bot_rubber_scale(kart: SwapKart, place: int) -> float:
+	var rubber_scales: Array[float] = [0.98, 1.01, 1.045, 1.08]
+	var scale: float = float(rubber_scales[clampi(place - 1, 0, rubber_scales.size() - 1)])
+	if place != karts.size() or race_t <= 1.0:
+		return scale
+	var leader_index: int = leader_unfinished()
+	if leader_index < 0 or leader_index == kart.index:
+		return scale
+	var leader: SwapKart = karts[leader_index]
+	var leader_pace: float = clampf(maxf(leader.progress, 0.0) / maxf(race_t, 1.0), 4.0, 10.0)
+	var gap_seconds: float = maxf(leader.progress - kart.progress, 0.0) / leader_pace
+	if gap_seconds > SLIPSTREAM_GAP_SECONDS:
+		scale *= SLIPSTREAM_SPEED_MULT
+	return scale
 
 func _intro_tick(sdt: float) -> void:
 	_intro_t += sdt
@@ -1302,6 +1348,57 @@ func _gates_below(prog: float) -> int:
 		if rem >= gs:
 			c += 1
 	return c
+
+## Escalated bot recovery. The target is the center of the last checkpoint this
+## race position cleanly crossed. It grants no progress: only uncheckpointed
+## distance is discarded, while checkpoint/lap ownership and timing stay put.
+func bot_checkpoint_nudge(seat: int) -> bool:
+	if seat < 0 or seat >= karts.size() or track.gate_s.is_empty():
+		return false
+	var kart: SwapKart = karts[seat]
+	if kart.finished:
+		return false
+	var checkpoint: int = maxi(kart.gates_credited, 0)
+	var per_lap: int = track.gate_s.size()
+	var checkpoint_lap: int = int(checkpoint / per_lap)
+	var within_lap: int = checkpoint % per_lap
+	var target_s: float = 0.0
+	if within_lap > 0:
+		target_s = float(track.gate_s[within_lap - 1])
+	var checkpoint_progress: float = float(checkpoint_lap) * track.total_len + target_s
+	var sample: Dictionary = track.sample_at(target_s)
+	var target_pos: Vector3 = Vector3(sample.get("pos", Vector3.ZERO))
+	var target_heading: Vector3 = Vector3(sample.get("tangent", Vector3.FORWARD)).normalized()
+	var old_pos: Vector3 = kart.center()
+	_burst(old_pos, Color(0.72, 0.86, 1.0), 8)
+	kart.global_position = target_pos
+	kart.y = target_pos.y
+	kart.global_position.y = kart.y
+	kart.heading = target_heading
+	kart.vel_dir = target_heading
+	kart.speed = maxf(kart.speed, 3.5)
+	kart.knock_vel = Vector3.ZERO
+	kart.airborne = false
+	kart.on_shortcut = false
+	kart.sc_hint = -1
+	var nearest: Dictionary = track.nearest_main(kart.global_position, -1)
+	kart.hint = int(nearest.get("idx", -1))
+	kart.last_s_eff = float(nearest.get("s", target_s))
+	# Reset to already-earned checkpoint credit, never forward of it. This keeps
+	# the physical line crossing and the monotonic lap scalar in the same frame.
+	kart.progress = checkpoint_progress
+	kart.bog_speed_scale = 1.0
+	kart.tumble_t = 0.0
+	kart.drifting = false
+	kart.drift_t = 0.0
+	kart.knock_immune = maxf(kart.knock_immune, 1.2)
+	kart.swap_immune = maxf(kart.swap_immune, 1.0)
+	kart._orient(1000.0)
+	kart.flash_tag()
+	_burst(kart.center(), kart.color, 12)
+	print("BOT_NUDGE p=%d t=%.1f cp=%d pos=(%.1f,%.1f)" % [
+		seat, race_t, checkpoint, target_pos.x, target_pos.z])
+	return true
 
 ## FINAL STRETCH ticks (§7.3): once the leader enters the last 10% of the
 ## final lap, the remaining distance maps onto the kit's 10-step rising

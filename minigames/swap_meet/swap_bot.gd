@@ -8,12 +8,14 @@ const ITEM_SWAP_SHELL: int = 0
 const ITEM_COFFIN: int = 1
 const ITEM_BELL: int = 2
 const ITEM_CROWS: int = 3
-const STUCK_LIMIT: float = 2.5
-const STUCK_PROGRESS_STEP: float = 0.45
-const STUCK_BACKSTEP_RESET: float = 2.0
+const STUCK_WINDOW: float = 2.5
+const STUCK_NET_ADVANCE: float = 3.5
+const STUCK_MAX_PAUSE: float = 4.0
 const UNSTUCK_TOTAL: float = 1.75
 const UNSTUCK_RECOVER: float = 0.55
 const UNSTUCK_LOOK: float = 4.0
+const RECOVERY_ESCALATE_WINDOW: float = 15.0
+const RECOVERIES_BEFORE_NUDGE: int = 2
 
 var index: int = 0
 var world: Variant = null
@@ -28,10 +30,13 @@ var _take_shortcut: bool = false
 var _lap_seen: int = -1
 var _action_check_t: float = 0.0
 var _drift_hold: bool = false
-var _progress_seen: float = 0.0
+var _window_start_progress: float = 0.0
+var _window_elapsed: float = 0.0
+var _window_pause: float = 0.0
 var _progress_watch_ready: bool = false
-var _stuck_t: float = 0.0
 var _unstuck_t: float = 0.0
+var _recovery_attempts: int = 0
+var _recovery_window_start: float = -1.0
 
 func setup(w: Variant, seat: int, seed_value: int) -> void:
 	world = w
@@ -43,8 +48,11 @@ func setup(w: Variant, seat: int, seed_value: int) -> void:
 ## baseline so the new race position is never mistaken for a steering stall.
 func position_exchanged() -> void:
 	_progress_watch_ready = false
-	_stuck_t = 0.0
+	_window_elapsed = 0.0
+	_window_pause = 0.0
 	_unstuck_t = 0.0
+	_recovery_attempts = 0
+	_recovery_window_start = -1.0
 	_drift_hold = false
 
 func think(dt: float) -> void:
@@ -55,8 +63,11 @@ func think(dt: float) -> void:
 		move = Vector2.ZERO
 		b = false
 		_progress_watch_ready = false
-		_stuck_t = 0.0
+		_window_elapsed = 0.0
+		_window_pause = 0.0
 		_unstuck_t = 0.0
+		_recovery_attempts = 0
+		_recovery_window_start = -1.0
 		return
 	_update_stuck_watch(kart, dt)
 	if kart.laps_hw != _lap_seen:
@@ -162,37 +173,57 @@ func think(dt: float) -> void:
 			a = true
 			break
 
-## Greed's bot cure watches outcome rather than intent. Do the same here:
-## steering, speed, and wall contacts do not count as success; only forward
-## distance-along-track does. Intended pauses (coffin tumble / airborne ramp)
-## reset the timer, while bog slowdown still has ample forward progress.
+## Greed's bot cure watches outcome rather than intent. This uses fixed 2.5s
+## windows and NET arclength gain: little forward crests inside a wall-pocket
+## oscillation cannot reset it. Tumble/airtime may defer at most four seconds.
 func _update_stuck_watch(kart: SwapKart, dt: float) -> void:
 	if not _progress_watch_ready:
-		_progress_seen = kart.progress
-		_progress_watch_ready = true
-		return
-	if kart.tumble_t > 0.0 or kart.airborne:
-		_progress_seen = kart.progress
-		_stuck_t = 0.0
+		_reset_watch_window(kart.progress)
 		return
 	if _unstuck_t > 0.0:
 		_unstuck_t = maxf(0.0, _unstuck_t - dt)
-		_progress_seen = kart.progress
-		_stuck_t = 0.0
+		if _unstuck_t <= 0.0:
+			_reset_watch_window(kart.progress)
 		return
-	if kart.progress >= _progress_seen + STUCK_PROGRESS_STEP:
-		_progress_seen = kart.progress
-		_stuck_t = 0.0
+	_window_elapsed += dt
+	if kart.tumble_t > 0.0 or kart.airborne:
+		_window_pause = minf(STUCK_MAX_PAUSE, _window_pause + dt)
+	var measured_time: float = _window_elapsed - _window_pause
+	if measured_time < STUCK_WINDOW:
 		return
-	if kart.progress < _progress_seen - STUCK_BACKSTEP_RESET:
-		# A shove or external restage establishes a new honest baseline.
-		_progress_seen = kart.progress
-		_stuck_t = 0.0
+	var net_advance: float = kart.progress - _window_start_progress
+	if net_advance >= STUCK_NET_ADVANCE:
+		_reset_watch_window(kart.progress)
 		return
-	_stuck_t += dt
-	if _stuck_t < STUCK_LIMIT:
-		return
-	_stuck_t = 0.0
+	_trigger_stall(kart, net_advance)
+
+func _reset_watch_window(progress_value: float) -> void:
+	_window_start_progress = progress_value
+	_window_elapsed = 0.0
+	_window_pause = 0.0
+	_progress_watch_ready = true
+
+func _trigger_stall(kart: SwapKart, net_advance: float) -> void:
+	var event_t: float = float(world.race_t)
+	var pos: Vector3 = kart.global_position
+	print("BOT_STALL p=%d t=%.1f cp=%d pos=(%.1f,%.1f) net=%.1f" % [
+		index, event_t, kart.gates_credited, pos.x, pos.z, net_advance])
+	if _recovery_window_start < 0.0 \
+			or event_t - _recovery_window_start > RECOVERY_ESCALATE_WINDOW:
+		_recovery_window_start = event_t
+		_recovery_attempts = 0
+	if _recovery_attempts >= RECOVERIES_BEFORE_NUDGE:
+		var nudged: bool = bool(world.bot_checkpoint_nudge(index))
+		if nudged:
+			_recovery_attempts = 0
+			_recovery_window_start = -1.0
+			_unstuck_t = 0.0
+			_drift_hold = false
+			_reset_watch_window(kart.progress)
+			print("BOT_UNSTUCK p=%d t=%.1f" % [index, event_t])
+			return
+	_recovery_attempts += 1
 	_unstuck_t = UNSTUCK_TOTAL
 	_drift_hold = false
-	print("BOT_UNSTUCK p=%d t=%.1f" % [index, float(world.race_t)])
+	_reset_watch_window(kart.progress)
+	print("BOT_UNSTUCK p=%d t=%.1f" % [index, event_t])
