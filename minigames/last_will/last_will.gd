@@ -343,11 +343,12 @@ func begin(config: Dictionary) -> void:
 	_started = true
 	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.get("rng_seed", 1))
-	races_total = 3
+	# THE TIMING PASS (#84): config.rounds now dials races_total both ways
+	# (used to be floor-only — a board preset asking for MORE than 3 was
+	# silently ignored). Clamp matches --willrounds='s own 1..5 bound.
+	races_total = clampi(int(config.get("rounds", 3)), 1, 5)
 	if config.get("practice", false):
 		races_total = 1
-	if int(config.get("rounds", 3)) < 3:
-		races_total = maxi(1, int(config.get("rounds", 3)))
 	if _races_override > 0:
 		races_total = _races_override
 	roster = config.get("roster", [])

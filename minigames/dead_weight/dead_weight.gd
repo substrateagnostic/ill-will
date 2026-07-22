@@ -48,6 +48,7 @@ var _last_kill_color := Color.WHITE
 
 var round_index := 0                  # 0-based
 var rounds_total := 3
+var round_time := ROUND_TIME          # per-round clock; dial via config.round_time
 var round_elapsed := 0.0
 var _between_timer := 0.0             # counts down to the next round start
 var _round_resolving := false
@@ -270,6 +271,8 @@ func _parse_args() -> void:
 			_all_bots = true
 		elif arg.begins_with("--dwrounds="):
 			rounds_total = clampi(int(arg.trim_prefix("--dwrounds=")), 1, 9)
+		elif arg.begins_with("--dwroundtime="):
+			round_time = clampf(float(arg.trim_prefix("--dwroundtime=")), 15.0, ROUND_TIME)
 		elif arg.begins_with("--aimprobe="):
 			_aim_probe_on = true
 			_probe_shove = false
@@ -358,8 +361,8 @@ func _default_config() -> Dictionary:
 		roles[0] = "ghost"   # p0 rises as a poltergeist to fling furniture
 	if _dead_hint_demo:
 		roles[0] = "ghost"   # p0 (KBM human) starts dead so the ghost hint shows
-	return {"roster": roster, "rounds": rounds_total, "rng_seed": _seed_from_args(),
-		"practice": false, "roles": roles}
+	return {"roster": roster, "rounds": rounds_total, "round_time": round_time,
+		"rng_seed": _seed_from_args(), "practice": false, "roles": roles}
 
 # ui_kit intro card (doc 14 nit 7): shown at load, real key fallback, auto-starts
 # after 6s so bot soaks flow through.
@@ -397,6 +400,9 @@ func _begin(config: Dictionary) -> void:
 	if _balance_rounds == 0:
 		_stretch = FinalStretch.attach(self, timer_label)
 	rounds_total = clampi(int(config.get("rounds", 3)), 1, 9)
+	# THE TIMING PASS (#84): board context dials the per-round clock down
+	# (ROUND_TIME stays the standalone default when no override arrives).
+	round_time = clampf(float(config.get("round_time", ROUND_TIME)), 15.0, ROUND_TIME)
 	if _balance_rounds > 0:
 		rounds_total = _balance_rounds
 		Engine.time_scale = 6.0   # sim fast-forward; bot logic runs per physics tick
@@ -1000,7 +1006,7 @@ func _physics_process(delta: float) -> void:
 		_resolve_round()
 
 func _round_cap() -> float:
-	return 22.0 if _balance_rounds > 0 else ROUND_TIME
+	return 22.0 if _balance_rounds > 0 else round_time
 
 # ---------------------------------------------------------------- house awakens
 ## When the dead rise: the final HOUSE_AWAKENS_WINDOW (30s) of the live 75s

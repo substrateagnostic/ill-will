@@ -259,7 +259,12 @@ func begin(cfg: Dictionary) -> void:
 	config = cfg
 	_mirror = bool(cfg.get("net_mirror", false))
 	rng.seed = int(cfg.rng_seed)
-	match_len = _match_override if _match_override > 0.0 else (MATCH_LEN if not cfg.get("practice", false) else 90.0)
+	# THE TIMING PASS (#84): config.match_len dials the board length; the CLI
+	# --matchsec override keeps top precedence for manual testing, and
+	# "practice" keeps its existing 90s shorthand when neither is present.
+	var default_len: float = MATCH_LEN if not bool(cfg.get("practice", false)) else 90.0
+	var cfg_len: float = float(cfg.get("match_len", default_len))
+	match_len = _match_override if _match_override > 0.0 else cfg_len
 	time_left = match_len
 	var roster: Array = cfg.roster
 	for pl in roster:

@@ -13,7 +13,7 @@ extends Minigame
 ##   --mowbots            all players are seeded self-play bots
 ##   --seed=N             rng seed for standalone start (default 1)
 ##   --players=N          standalone roster size 2..4
-##   --roundtime=S        override the 120s round (min 12)
+##   --roundtime=S        override the round length (default 60s, min 12)
 ##   --covtest            headless: run a fast round, assert coverage sum,
 ##                        print PASS/FAIL, quit (spec "coverage math" test)
 ##   --shots=N,...        handled by the VerifyCapture autoload (PNGs)
@@ -27,7 +27,8 @@ const CHAR_FALLBACKS := [
 	"res://assets/models/kaykit/Rogue.glb",
 ]
 const GRAVE_SCENE := "res://scenes/gravestone.tscn"
-const ROUND_TIME := 45.0   # playtest (Andrew): 120s way too long — Mario Party pace
+const ROUND_TIME := 60.0   # playtest (Andrew): 120s way too long; 45s later read as
+                           # overcorrected LOW (timing pass #84 audit) — 60s standalone
 const OVERTIME_LEN := 20.0
 const RAM_HALF_ANGLE := 0.15     # dot threshold facing vs victim
 const STEAL_BURST := 6
@@ -147,6 +148,9 @@ func begin(config: Dictionary) -> void:
 	_mirror = bool(config.get("net_mirror", false))
 	rng.seed = int(config.rng_seed)
 	practice = bool(config.get("practice", false))
+	# THE TIMING PASS (#84): config.round_time is the board dial; CLI keeps
+	# top precedence for manual testing, practice keeps its existing shorthand.
+	round_time = maxf(12.0, float(config.get("round_time", ROUND_TIME)))
 	if _cli_roundtime > 0.0:
 		round_time = maxf(12.0, _cli_roundtime)
 	elif practice:

@@ -108,6 +108,56 @@ const MINIGAMES := {
 	"maskedball": {"name": "MASKED BALL", "scene": "res://minigames/masked_ball/masked_ball.tscn", "launch": "contract", "team": "ffa"},
 	"pallbearers": {"name": "PALLBEARERS", "scene": "res://minigames/pallbearers/pallbearers.tscn", "launch": "contract", "team": "2v2"},  # B7-HOOK
 }
+## THE TIMING PASS (#84): board-context dials, per game. The board never plays
+## a minigame's full standalone length — the procession has a pace to keep
+## (~75-90s target; the theater trio gets a looser 4-5min ceiling since they
+## only ever run in the overnight interlude, never the per-cycle draw). Games
+## not listed here keep the long-standing blanket board default (rounds=2,
+## unchanged from before this pass) — this preset table only overrides what
+## the wave-3E audit actually measured or the producer explicitly ruled on;
+## every other contract game's board experience is untouched by this pass.
+## PRESETS SET DIALS, NEVER HARDCODE: every value below is read by the target
+## game's own begin(config) — nothing here changes a minigame's defaults.
+const BOARD_PRESETS := {
+	# best-of-3 restored in both contexts (was silently forced to 2 rounds by
+	# the old blanket override below — doc/code drift, #84 rider a); shorter
+	# per-round clock closes the gap to the ~75-90s target (3x25s + overhead).
+	"deadweight": {"rounds": 3, "round_time": 25.0},
+	# ceiling was stuck at ROUNDS (3); ROUND_TIME wasn't config-reachable at
+	# all. 2x35s + overhead lands near the target.
+	"greed": {"rounds": 2, "round_time": 35.0},
+	# races_total was floor-only (config could shrink 3, never hold at 1) —
+	# one race is the practical board minimum; a full lap (~135-150s) still
+	# runs long against the target — see docs/verify/TIMING-PASS.md for why
+	# this one is judged NOT further shortenable without touching the course.
+	"lastwill": {"rounds": 1},
+	# theater game (#84 rider b): ROUND_TIME was hardcoded, no config path at
+	# all. ROUND_COUNT stays untouched (4 — the errand-guest/Coroner rotation
+	# must complete one lap per player); only the per-round clock is dialed.
+	"maskedball": {"round_time": 55.0},
+	# MATCH_LEN (180s) had no config path, only a CLI-only override.
+	"orbital": {"match_len": 80.0},
+	# theater game already well under its looser ceiling (~167s measured vs a
+	# 4-5min budget) — a light trim to the accusation window only.
+	"seance": {"talk_time": 18.0},
+	# legacy "gamestate" launcher (#84 rider c): same board rounds as every
+	# other game, now routed through this table instead of a bare literal so
+	# it participates in the same preset mechanism (see _run_legacy_minigame).
+	"par": {"rounds": 2},
+	# mower's own ROUND_TIME default just moved 45s -> 60s (audit: "overcorrected
+	# LOW", standalone gets a little more room) — pin the board length back to
+	# the pre-existing 45s so this pass doesn't silently lengthen the board copy.
+	"mower": {"round_time": 45.0},
+}
+const BOARD_DEFAULT := {"rounds": 2}   # unaudited games' long-standing board shape
+
+## Board-context config overrides for `id`, merging BOARD_DEFAULT under any
+## game-specific BOARD_PRESETS entry (game-specific keys win).
+func _board_config(id: String) -> Dictionary:
+	var cfg: Dictionary = BOARD_DEFAULT.duplicate()
+	cfg.merge(BOARD_PRESETS.get(id, {}) as Dictionary, true)
+	return cfg
+
 # The economy heartbeat (doc 28 §6): minigame settlement per cycle.
 const MINI_PENNIES := [10, 6, 3, 1]
 const MINI_WREATHS := [2, 1, 1, 0]
@@ -4512,7 +4562,10 @@ func _run_minigame(id: String) -> Array:
 	for pl in roster:
 		mroster.append({"index": pl.index, "name": pl.name, "color": pl.color,
 			"char_scene": pl.char_scene, "device": pl.device, "bot": pl.bot})
-	module.begin({"roster": mroster, "rounds": 2, "rng_seed": _event_rng.randi(), "practice": false})
+	var launch_cfg: Dictionary = {"roster": mroster, "rng_seed": _event_rng.randi(),
+		"practice": false, "context": "board"}
+	launch_cfg.merge(_board_config(id), true)
+	module.begin(launch_cfg)
 	while not _mini_done:
 		await get_tree().process_frame
 	if is_instance_valid(module):
@@ -4546,7 +4599,11 @@ func _run_legacy_minigame(id: String, meta: Dictionary) -> Array:
 	for pl in roster:
 		PlayerInput.set_bot(int(pl.index), bool(pl.bot))
 	GameState.player_count = roster.size()
-	GameState.rounds_total = 2   # one board cycle's worth (contract games run rounds=2)
+	# THE TIMING PASS (#84, rider c): Par's dial was unreachable — routed
+	# through the same board-preset table as every other game (still 2 by
+	# default, unchanged from before this pass).
+	var board_rounds: int = int(_board_config(id).get("rounds", 2))
+	GameState.rounds_total = board_rounds
 	GameState.reset_match()
 	board.visible = false
 	cam.current = false
