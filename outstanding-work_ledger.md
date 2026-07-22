@@ -35,7 +35,14 @@ has to dig in `.claude/tasks/`. Last updated: **thirteenth watch, landing 1**
 
 ## OPEN — online era
 
-- **Noray relay decision** (~half-day per RB-online) + live two-process NETPROBE re-cert. Stirs net-mirror already landed (197f32b, --stirnettest green).
+- ~~Noray relay decision + live two-process NETPROBE re-cert~~ — **LANDED
+  (#91, overnight lane 2026-07-22)**: two-process NETPROBE PASS (13,137
+  paired hashes, 0 mismatches, full 3-night mirror; found+fixed the missing
+  procession client-mirror boot and wreaths-off-the-wire), noray transport
+  code-complete + mock-certified both paths (VERIFY-BOARD §4-NET-2).
+  REMAINING (pending the world, not code): producer deploys the live relay
+  per doc 39, then one cross-network session on a second box; estate UI
+  knob for the relay address; per-seat item inventory on the wire.
 
 ## Housekeeping
 

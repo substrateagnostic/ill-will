@@ -219,6 +219,70 @@ must remain unchanged on the second apply. `PROCESSION_NET_STIR_OK` also
 requires the risen-ribs/cart settle checks (when selected) and burn-down FX
 check (when selected), so it is the grep gate.
 
+### 4-NET-2. THE ONLINE ERA (task #91) — two-process procession mirror, certified
+
+Everything before this was single-process self-probe. This section is the
+real thing: HOST estate + GUEST estate as two headless processes over
+loopback ENet, a full 3-night bot match at couch pace, the guest running a
+live procession MIRROR from the 20 Hz snapshot pump. One command:
+
+```powershell
+powershell -File tools\run_netprobe.ps1        # ~20 min (couch pace; deliberate)
+```
+
+Both sides print a fact digest per snapshot seq — positions, moved, PENNIES
+(grudge), WREATHS, arrivals, bell, pre-commit plan fields, and the LIVE
+graph adjacency checksum (Estate Stirs replays included). The host hashes
+its state as each snapshot leaves; the guest recomputes from its OWN
+post-apply state. The runner pairs them by seq and rules one line:
+
+```text
+PROCESSION_NETPROBE_HOST seq=<n> round=<r> night=<g> hash=<h8> t=<ms>
+PROCESSION_NETPROBE_CLIENT seq=<n> round=<r> night=<g> hash=<h8> t=<ms>
+NETPROBE VERDICT: PASS
+```
+
+**Certified 2026-07-22 (this lane): PASS — 13,137 paired hashes, 0
+mismatches**, guest mirrored nights 1→3 (incl. a live bone_bridge replay:
+`PROCESSION_NET_STIR_REPLAY id=bone_bridge nodes=78` on the guest board),
+host finale + clean exits both sides, `user://` saves restored by the
+runner's external backup. Two real mirror gaps found by this probe's early
+runs and fixed additively: guests previously could not boot the board
+mirror at all (no MODULES entry), and wreaths/night were absent from
+`_net_state` (a guest chyron read zeros — §8's P5 gap, now closed). Probe
+notes: the runner plays at `--slowsim` couch pace ON PURPOSE — a blitzed
+host compresses 3 nights into ~2 s, which fits inside the guest's ~3 s
+world build and truncates pairing (probe artifact, not transport truth).
+
+**noray transport (NAT punchthrough + relay, self-hosted):**
+
+```powershell
+powershell -File tools\run_noraytest.ps1       # ~4 min (blitz; MinPairs 10)
+```
+
+`transport = "noray"` in `core/net_session.gd` (the Steam seam shape:
+additive, one file, dark without `--relay=`). Certified against the
+faithful protocol mock `tools/noray_mock.gd` (register/registrar/connect/
+connect-relay + a REAL UDP relay forwarder), full estate probe both paths —
+**PASS: NAT punchthrough (35 paired mirror hashes, 0 mismatches, HEIR
+finale) and relay mode (33 pairs, 0 mismatches — the entire ENet session
+forwarded through the mock's relay port)**.
+
+**Certified vs NOT certified (keep honest):**
+
+- CERTIFIED: two-process seat grant → snapshot mirror law (hash-paired,
+  full match); noray handshake state machine + punch + relay fallback
+  against the mock on loopback; enet/steam paths untouched (receipts:
+  md5 `ccd25c2c...` + topology `b269c570` re-verified after the lane,
+  `tools/run_receipts.ps1` 3/3 PASS).
+- NOT certified (pending the producer's relay box — deploy recipe in
+  `docs/design/39-noray-deploy.md`): a LIVE noray instance, real NAT
+  traversal across real routers, cross-machine sessions (needs a second
+  box). Per-seat item inventory still isn't on the wire (§8).
+- Works TONIGHT with zero code (RB-online §2b): Tailscale — everyone
+  installs it once, host shares their 100.x address, `--net=host` /
+  `--net=join=100.x.y.z:8910` completely unmodified.
+
 **THE WRONG-WAY STILLS — solved (eleventh watch).** Tenth-watch ceremony
 captures could render facing the MANOR while the director provably stood
 posed at the site, `current=true`. Root cause: `executor_host.gd`'s
@@ -547,9 +611,12 @@ hub migration.
 
 - **Estate Stirs (doc 28 §4):** the topology-event pools + THE CRYPT; THE
   REAPER stands dormant on the grounds until that lane wakes him.
-- **P5 (online):** `_net_state` does not yet carry wreaths/inventory/match
-  fields; LAST BREATH mirror re-cert per landmine 9 (roll_id/start-tick,
-  reliable STOP intent).
+- **P5 (online):** ~~`_net_state` does not yet carry wreaths/match fields~~ —
+  CLOSED by the ONLINE ERA lane (§4-NET-2): wreaths + night ride the snapshot
+  and the guest boots a real procession mirror. Still open: per-seat item
+  inventory on the wire (guests see counts only via their own private cards),
+  and LAST BREATH mirror re-cert per landmine 9 (roll_id/start-tick, reliable
+  STOP intent).
 - pawn_putt.gd stays on disk untouched (Par receipts reference its constants).
 - CLASSIC NIGHTS is retired at the **UI level only** (P3): the PLAY panel no
   longer offers it, but its transition chain stays dormant on disk for the

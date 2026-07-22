@@ -3062,3 +3062,13 @@ The chyron exists; no wreath will ever move invisibly again.
 The widow stands in her corridor instead of inside a hedge.
 Andrew has the couch. His playtest notes built half this punch-list — good hands.
 Reviewable NOW on master: Coroner, Throne, DW dash, the PLAN tray (LB on any waiting seat), the chyron in procession.
+
+## THE ONLINE ERA OPENED OVERNIGHT (#91, 2026-07-22, before your coffee)
+
+Four friends who don't share a couch can now inherit the estate together — and I can prove it, not just say it.
+Two real processes, host and guest, played a full 3-night match at couch pace while the guest mirrored the board live.
+**13,137 paired snapshot hashes. Zero mismatches.** Positions, pennies, wreaths, arrivals, the bell, pre-commit plans, even a mid-match Estate Stirs bridge replayed onto the guest's board (76→78 nodes, byte-equal adjacency).
+The probe paid rent before it went green: guests could never actually boot the board mirror (the pump fanned into a void), and wreaths never crossed the wire — your chyron would have read zeros in a friend's house. Both fixed, receipts unmoved (`ccd25c2c` + `b269c570`, 3/3 PASS after).
+And the no-port-forwarding future is built: a `noray` transport in net_session.gd, same one-file seam Steam proved, certified against an in-repo mock relay on both paths (punchthrough AND relay-forwarded). Your part is a 5-minute docker deploy on the always-on box — doc 39 has the exact recipe, ports, and a SHA line to fill.
+Until then: Tailscale + HOST NIGHT works tonight, zero code — the player README now says so in player words.
+Runners: `tools\run_netprobe.ps1` (the 20-minute couch-pace certification) · `tools\run_noraytest.ps1` (4 minutes). VERIFY-BOARD §4-NET-2 is the ledger of what's certified vs what honestly isn't (live relay, second machine).

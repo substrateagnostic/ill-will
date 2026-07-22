@@ -40,8 +40,9 @@ var _bot_wander_timer := 0.0
 var _practice := false
 
 # ----- ONLINE PHASE 1 (doc 10): the estate IS the shared lobby -----
-var _netprobe := ""               # "" | "host" | "join" | "couch" (NETPROBE rig)
+var _netprobe := ""               # "" | "host" | "join" | "couch" | "hostmatch" | "joinmatch"
 var _np_last_trace := -2
+var _np_mirror_seen := false      # joinmatch: procession mirror booted at least once
 var _net_game_name := ""          # what the spectate card names mid-game
 var _net_state_accum := 0.0       # 5 Hz lobby-fact broadcast
 var _net_walker_accum := 0.0      # 15 Hz walker snapshot broadcast
@@ -474,6 +475,8 @@ func _enter_procession() -> void:
 		_net_mirror_id = "procession"
 		_net_module_seq = 0
 		_net_module_accum = 0.0
+		if _netprobe != "":
+			proc.set("_netprobe_armed", true)   # ONLINE ERA (#91): hash lines
 
 ## NEW GAME / slot management: each slot is a whole estate universe.
 func _build_slot_panel() -> void:
@@ -1468,6 +1471,8 @@ func _on_joy_connection_changed(device: int, connected: bool) -> void:
 func _process(delta: float) -> void:
 	if NetSession.is_client():
 		_client_process(delta)
+		if _netprobe != "":
+			_np_guest_pulse(delta)
 		return
 	if NetSession.is_host():
 		_net_host_broadcast(delta)
@@ -1923,6 +1928,41 @@ var _client_mirror_up := false   # guards teardown: never touch a HOST module
 func _client_ensure_mirror(id: String) -> void:
 	if _module != null:
 		return
+	# ONLINE ERA (#91): THE PROCESSION is not a MODULES entry (the board is the
+	# night, not an exhibition), so it gets its own mirror boot — the exact
+	# manual-shell recipe the --stirnettest probe proved: suppress the deferred
+	# self-boot, build world/HUD, and let the 20 Hz snapshots drive everything.
+	if id == "procession":
+		_client_mirror_up = true
+		_np_mirror_seen = true   # latched for the joinmatch probe (blitz-proof)
+		print("NET mirror boot: procession")
+		phase_panel.visible = false
+		banner.visible = false
+		Music.stop()
+		$Grounds.visible = false
+		$Grounds.process_mode = Node.PROCESS_MODE_DISABLED
+		plinths.visible = false
+		$GraffitiWall.visible = false
+		$Sun.visible = false
+		$WorldEnvironment.environment = null
+		var proc: Node = load("res://estate/procession/procession.tscn").instantiate()
+		proc.set("_started", true)   # snapshots drive it; no second simulation
+		proc.set("_mirror", true)
+		var roster: Array = []
+		for pl in EstateState.players:
+			roster.append({"index": pl.index, "name": pl.name, "color": pl.color,
+				"char_scene": CHAR_PATHS[pl.index], "device": -99, "bot": false})
+		proc.set("roster", roster)
+		get_tree().root.add_child(proc)   # root, exactly like the host's copy
+		proc.call("_init_arrays")
+		proc.call("_build_world")
+		proc.call("_build_hud")
+		proc.call("_choose_clauses")
+		if _netprobe != "":
+			proc.set("_netprobe_armed", true)   # hash lines pair with the host's
+		_module = proc
+		cam.current = false
+		return
 	if not MODULES.has(id):
 		return
 	_client_mirror_up = true
@@ -2095,6 +2135,23 @@ func _np_snap(tag: String) -> void:
 	if DisplayServer.get_name() != "headless":
 		await VerifyCapture.snap(tag)
 
+## Probe forensics: the guest's real frame rate, printed every ~2 s of wall
+## time so a crawling mirror is visible in the log instead of a mystery.
+var _np_pulse_frames := 0
+var _np_pulse_ms := 0
+
+func _np_guest_pulse(_delta: float) -> void:
+	_np_pulse_frames += 1
+	var now := Time.get_ticks_msec()
+	if _np_pulse_ms == 0:
+		_np_pulse_ms = now
+		return
+	if now - _np_pulse_ms >= 2000:
+		print("NETPROBE guestpulse frames=%d over_ms=%d t=%d" % [
+			_np_pulse_frames, now - _np_pulse_ms, now])
+		_np_pulse_frames = 0
+		_np_pulse_ms = now
+
 func _on_net_probe_first_input(seat: int) -> void:
 	if _netprobe == "" or seat != 1:
 		return
@@ -2114,13 +2171,19 @@ func _netprobe_run() -> void:
 	NetSession.code_selftest()
 	var ps := ProjectSettings.globalize_path("user://party_setup.json")
 	var pf := ProjectSettings.globalize_path("user://prefs.json")
-	if _netprobe != "join":
+	# Join-side probes never back up: both processes share this machine's
+	# user://, and a second copy would race the host's own .npbak.
+	if _netprobe != "join" and _netprobe != "joinmatch":
 		for f in [ps, pf]:
 			if FileAccess.file_exists(f):
 				DirAccess.copy_absolute(f, f + ".npbak")
 	await get_tree().create_timer(1.0).timeout
 	if _netprobe == "join":
 		await _netprobe_join_flow()
+	elif _netprobe == "joinmatch":
+		await _netprobe_joinmatch_flow()
+	elif _netprobe == "hostmatch":
+		await _netprobe_hostmatch_flow(ps, pf)
 	else:
 		await _netprobe_host_flow(ps, pf)
 
@@ -2176,14 +2239,97 @@ func _netprobe_host_flow(ps: String, pf: String) -> void:
 	print("NETPROBE_RESULTS procession_started=true")
 	await _netprobe_finish(ps, pf)
 
-func _netprobe_finish(ps: String, pf: String) -> void:
+func _netprobe_restore(ps: String, pf: String) -> void:
 	for f in [ps, pf]:
 		if FileAccess.file_exists(f + ".npbak"):
 			DirAccess.copy_absolute(f + ".npbak", f)
 			DirAccess.remove_absolute(f + ".npbak")
 	print("NETPROBE saves restored")
+
+func _netprobe_finish(ps: String, pf: String) -> void:
+	_netprobe_restore(ps, pf)
 	print("NETPROBE_DONE")
 	await get_tree().create_timer(0.8).timeout
+	get_tree().quit()
+
+## ===== ONLINE ERA (#91) — the full-match mirror probe (two processes) =====
+## host:  headless, --net=host --netprobe=hostmatch --autoplay=bots --seed=N --slot=3
+## guest: headless, --net=join=127.0.0.1:8910 --netprobe=joinmatch --slot=3
+## All four seats stay bots so the frozen sim drives the whole 3-night match
+## (headless prompts all take the bot path; _fast resolves every meter); the
+## guest claims whichever chair the shell offers and its process boots the
+## procession MIRROR. Both sides print PROCESSION_NETPROBE_* fact hashes keyed
+## by pump seq; tools/run_netprobe.ps1 pairs them and rules PASS/FAIL.
+func _netprobe_hostmatch_flow(ps: String, pf: String) -> void:
+	_hide_title()
+	for i in [0, 1, 2, 3]:
+		PlayerInput.set_bot(i, true)
+	# Async transports (steam/noray CLI hosting) open the wire on their own
+	# clock — give them the first word before falling back to plain ENet.
+	var opened := func() -> bool: return NetSession.is_host()
+	if not await _np_wait(opened, 15.0):
+		NetSession.host_night()
+	_enter_lobby()
+	var claimed := func() -> bool:
+		for s in 4:
+			if NetSession.is_seat_remote(s):
+				return true
+		return false
+	if not await _np_wait(claimed, 60.0):
+		print("NETPROBE FAIL: no remote claim")
+		await _netprobe_finish(ps, pf)
+		return
+	print("NETPROBE match: remote guest seated")
+	# The probe match is the CANONICAL dial shape (3 nights, cap 12) — never
+	# whatever the couch's PLAY panel left in prefs.json (which is backed up
+	# and restored around the whole probe, so this write is invisible after).
+	PartySetup.set_pref("proc_nights", 3)
+	PartySetup.set_pref("proc_turncap", 12)
+	await get_tree().create_timer(1.0).timeout
+	_start_night_from_lobby()
+	await get_tree().create_timer(1.5).timeout
+	_continue_to_night()
+	var in_game := func() -> bool: return phase == Phase.GAME
+	if not await _np_wait(in_game, 40.0):
+		print("NETPROBE FAIL: procession never reached GAME")
+		await _netprobe_finish(ps, pf)
+		return
+	print("NETPROBE match: procession running, hash pump armed")
+	# Nothing rereads the couch saves mid-match and nothing writes after this,
+	# so restore them NOW rather than racing the shutdown.
+	_netprobe_restore(ps, pf)
+	# In the estate shell the procession's own autoplay quit dies with its node
+	# (night_over frees it before the deferred quit resumes), so the probe owns
+	# the exit: wait for the fold, give the wire a breath to flush, then leave.
+	var folded := func() -> bool: return _module == null
+	if not await _np_wait(folded, 1740.0):
+		print("NETPROBE FAIL: the match never folded")
+	print("NETPROBE_DONE")
+	await get_tree().create_timer(2.0).timeout
+	get_tree().quit()
+
+## Guest side of the match probe: sit down, watch the procession mirror boot,
+## and stay seated until the host's finale closes the wire.
+func _netprobe_joinmatch_flow() -> void:
+	var seated := func() -> bool: return NetSession.my_seat() >= 0
+	if not await _np_wait(seated, 60.0):
+		print("NETPROBE FAIL: never granted a seat")
+		get_tree().quit()
+		return
+	print("NETPROBE granted seat %d" % NetSession.my_seat())
+	# The mirror's lifetime can be a blink (headless + _fast blitzes a whole
+	# match in well under a second), so poll the LATCHED flag, never _module.
+	var mirrored := func() -> bool: return _np_mirror_seen
+	if not await _np_wait(mirrored, 120.0):
+		print("NETPROBE FAIL: procession mirror never booted")
+		get_tree().quit()
+		return
+	print("NETPROBE match: mirror seen")
+	var closed := func() -> bool: return not NetSession.is_online()
+	if not await _np_wait(closed, 1740.0):
+		print("NETPROBE FAIL: host never closed the night")
+	print("NETPROBE_CLIENT_DONE")
+	await get_tree().create_timer(0.5).timeout
 	get_tree().quit()
 
 func _netprobe_join_flow() -> void:
