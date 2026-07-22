@@ -57,6 +57,56 @@ commit (360a81c), merges E+D auto-merged clean, post-merge import + receipts
 drama overlaps the roll (feature or chaos — couch decides); PLAN card words
 are a show-don't-tell glyph-pass candidate.
 
+## LANDING LOG 2 (late night — SUPERSEDES the fleet table above)
+
+**All five opening lanes + wave 2 LANDED AND PUSHED (master at c966c69+):**
+camera rework #77 (BoardOrbit + ViewportKit, PIP cadence-2, p50 13.9ms,
+merged b3535e0) · timing pass #84 (BOARD_PRESETS both launch sites, DW
+best-of-3 restored, TIMING-PASS.md) · pre-commit #80 (360a81c) · chyron+
+Ledger #87 (18ded78, live in-world, verified in snap_reading_totals) ·
+widow #90 (verified in-world post-fix) · SWAP MEET REBUILT #86 (codex ×3:
+build → progress-state-exchange fix ["swapping positions means swapping
+race positions" — the maxi() checkpoint bug] → watchdog/recovery hardening;
+4-seed soak PASS incl. fresh seed 26; merged c966c69) · ENVIRONMENT PASS
+#92 (fable lane, a9da4e1: layered cover/bog banks/relief/no-blue-box; +
+director tune 7a8bc6c per Alex's two nits — treeline wilder, tussocks
+moonlit, brambles read as briar; w6 draw record now 1607) · show-don't-tell
+AUDIT (doc 38, 0da1633) · TOPBAR EXCISION STRAGGLER fixed (7db40cd — every
+real windowed title boot wedged; Alex's live eyes caught it; ALSO explains
+the earlier "attract hijack" misreading AND the failed windowed night
+passes: bare flags without --procession just idle at title while THE HOUSE
+REHEARSES, which is intended attract behavior).
+
+**HOUSE LESSONS (violated then re-banked tonight):** the harness REAPS
+silent long bg tasks — heartbeat EVERY long background command, 25s stdout
+loop, codex lanes included (the "mystery pair-kills" were this, not the cat)
+· windowed procession runs need `--procession --autoplay=bots --seed --
+turncap --nights` (receipts-style flags), NOT bare --autoplay · codex
+companion cancel is broken from git-bash (MSYS taskkill mangling) — cancel
+via PowerShell tool or hand-patch state.json + jobs/*.json to failed ·
+codex worktree lanes: sandbox blocks .git metadata writes — director
+commits for it.
+
+**ALEX'S RED-PEN RULINGS (doc 38, tonight):** 3 KILLs approved · wrench
+approved (finale HUD refresh, ♠→¢, honest tolls, dead keys; vendetta stays
+dormant) · TRIM groups A/C/D approved, B approved minus debt_set (playtest)
++ cart.buy (director kept, same PIP-visibility logic) · KEEP: doormat_header,
+walkabout.near, HUD/intro dupes (his playtest) · SHOW-GAP + UNSURE = next
+run's agenda (#95). Kills+wrench+TRIMs lane IN FLIGHT (sonnet worktree).
+
+**THE SHIP PLAN (Alex's gate):** hold illwill-0.4.0.zip until the ONLINE
+PASS lands — Andrew gets the zip in the morning. Ship ritual (was being
+missed!): build/package.ps1 → build/illwill-X.Y.Z.zip, lineage 0.2.0→0.3.1,
+version = minor bump. ONLINE LANE IN FLIGHT (fable worktree, runbook =
+Claude's_Corner/handoff-online-era.md + deltas: netprobe two-process w/
+run_netprobe.ps1 verdict line; noray transport branch Steam-seam-shaped,
+mock-certified if bun timebox blows, deploy doc 39 for Alex's box;
+Tailscale documented in README-FOR-PLAYERS as the tonight answer).
+MERGE ORDER: polish lane → online lane → full receipts → SHIP 0.4.0 →
+letter. New-goal compass banked: SHIP-TO-STRANGERS polish over features
+(wider-audience playtest is near; feedback capture = the one missing
+last-mile piece).
+
 ## House practice (unchanged from twelfth watch)
 
 Receipts before AND after; eyes on stills before merge; one windowed godot
