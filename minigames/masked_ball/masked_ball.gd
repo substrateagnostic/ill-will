@@ -146,8 +146,8 @@ const REVEAL_TICK_DB := -6.0
 # waltz metronome (presentation only): oom-pah-pah at 0.62s a beat
 const WALTZ_BEAT := 0.62
 
-# name/goal/tips live in dialog.json ("intro.maskedball.*"), merged in at present
-# time. Only the non-prose skin — accent + control labels — stays here.
+# name/goal/tips live in dialog.json ("intro.maskedball_coroner.*"), merged in at
+# present time. Only the non-prose skin — accent + control labels — stays here.
 const GAME_INTRO := {
 	"accent": Color(0.92, 0.82, 1.0),
 	"controls": [
@@ -443,7 +443,6 @@ func _start_waltz_intro() -> void:
 	phase_label.text = "THE CORONER"
 	info_label.text = _info_line()
 	_flash_banner("THE CORONER", Color(0.92, 0.82, 1.0), 2.6)
-	_flash_sub(Dialog.text("maskedball_coroner.present"), Color(0.72, 0.62, 0.8), 2.6)
 	_say(Dialog.text("maskedball_coroner.open"))
 
 var _body_of: Array = []    # seat -> body id
@@ -1437,7 +1436,6 @@ func _waste_mark(accuser: int, npc_body: int, accuser_d: MBDancer) -> void:
 		_round_index + 1, accuser, npc_body, _waltz_e])
 	_flash_banner("✕  🗡", Color(0.95, 0.06, 0.08), 2.2)
 	_flash_sub("%s  4th" % PlayerBadge.glyph(accuser), p.color, 2.2)
-	_say(Dialog.text("maskedball_coroner.wrong"))
 	_play_seat_tick(accuser)
 	_shake = maxf(_shake, 0.22)
 	if not _tally:
@@ -1743,7 +1741,7 @@ func _finish_coroner_match() -> void:
 		get_tree().quit()
 		return
 	var winner := int(order[0])
-	_say(Dialog.text("maskedball_coroner.winner") % players[winner].name)
+	_say(Dialog.text("maskedball_coroner.winner"))
 	if not _tally:
 		Sfx.play("match_win")
 		_spawn_confetti(dancers[_body_of[winner]].position + Vector3(0, 2.0, 0),

@@ -18,24 +18,12 @@ extends Node
 # long as an edit keeps the same number of lines.
 static var GREETING: Array:
 	get: return Dialog.paras("executor.greeting")
-static var SHRINE: Array:
-	get: return Dialog.paras("executor.shrine")
 static var GRAVE: Array:
 	get: return Dialog.paras("executor.grave")
 static var GRAVE_TOLL: Array:
 	get: return Dialog.paras("executor.grave_toll")
-static var STALL: Array:
-	get: return Dialog.paras("executor.stall")
-static var CODICIL: Array:
-	get: return Dialog.paras("executor.codicil")
-static var CODICIL_SHORT: Array:
-	get: return Dialog.paras("executor.codicil_short")
 static var SEANCE: Array:
 	get: return Dialog.paras("executor.seance")
-static var TOLLGATE_TAKE: Array:
-	get: return Dialog.paras("executor.tollgate_take")
-static var TOLLGATE_PASS: Array:
-	get: return Dialog.paras("executor.tollgate_pass")
 static var VENDETTA: Array:
 	get: return Dialog.paras("executor.vendetta")
 static var VENDETTA_RESULT: Array:
@@ -56,12 +44,8 @@ static var CROSSROADS_LAND: Array:
 	get: return Dialog.paras("executor.crossroads_land")
 static var ARRIVAL: Array:
 	get: return Dialog.paras("executor.arrival")
-static var BELL: Array:
-	get: return Dialog.paras("executor.bell")
 static var HOUSE_AWAKENS: Array:
 	get: return Dialog.paras("executor.house_awakens")
-static var HOUSE_LOSER: Array:
-	get: return Dialog.paras("executor.house_loser")
 static var WILL_OPEN: Array:
 	get: return Dialog.paras("executor.will_open")
 # Dry commentary for the dead air at the top of a round (F9). Drawn from the
