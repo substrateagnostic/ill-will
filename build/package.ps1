@@ -137,12 +137,12 @@ QUICK START
      - Keyboard: Space (left half) or Enter (right half)
    Empty seats are filled by bots. Up to FOUR play at once.
 3. Press PLAY and choose how the estate settles its debts tonight:
-     - THE PROCESSION (the main event): a full board night. Putt your pawn
-       to move - the golf shot IS the dice. Buy deeds, survive the seance
-       wheel, endure the Executor's commentary. First to the required
-       deeds is crowned heir.
-     - CLASSIC NIGHT: bid your grudge at the auction, then play the
-       minigame that wins.
+     - THE PROCESSION (the main event): a full board night. Stop THE LAST
+       BREATH meter to move - the needle IS the dice. Gather wreaths, hoard
+       pennies, shop the peddler's cart, survive the estate's stirs and the
+       seance wheel, endure the Executor's commentary. When THE FINAL BELL
+       tolls, the most wreaths inherits the estate.
+     - Or pull any single game off the shelf for a quick match.
    Left alone for 45 seconds, the house rehearses without you (any button
    interrupts).
 
