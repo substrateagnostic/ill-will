@@ -537,7 +537,6 @@ func _enter_title() -> void:
 
 func _enter_title_swap() -> void:
 	Music.play_slot("lobby")
-	$UI/TopBar.visible = false
 	phase_panel.visible = false
 	banner.visible = false
 	if _title_layer != null:
@@ -698,7 +697,6 @@ func _enter_lobby() -> void:
 	_net_set_ceremony({})
 	_hide_title()
 	Music.play_slot("lobby")
-	$UI/TopBar.visible = false
 	_lobby_ready.clear()
 	_join_ready_lock.clear()
 	# NIT 4: the persistent "ILL WILL" title banner collided with the lobby
