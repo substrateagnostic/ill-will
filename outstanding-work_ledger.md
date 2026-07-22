@@ -1,55 +1,43 @@
 # THE OUTSTANDING-WORK LEDGER
 
-*Standing file, updated as we go — mirrors the session task list so Alex never
-has to dig in `.claude/tasks/`. Last updated: **thirteenth watch, landing 1**
-(2026-07-21 night). Receipts green (NG era, md5 ccd25c2c), master at 18ded78.*
+*Standing file, updated as we go. Last updated: **thirteenth watch, CLOSED**
+(2026-07-22 pre-dawn). Master pushed at 265d916, full battery 3/3, and
+**illwill-0.4.0.zip (854.59 MB) is on the shelf for Andrew** — the packaged
+exe re-ran the canonical night exactly (HEIR RED [16,7,15,6]).*
 
 ---
 
-## OPEN — needs Alex's voice
+## OPEN — needs Alex
 
-| # | Item | The question |
-|---|---|---|
-| 84 | **Timing pass ruling** | 6× length spread across the 15 games (mower 45s ↔ orbital 180s), dial gaps, DW doc/code drift. Five options on the table — see tonight's question card. |
-| 63 | **DW dash verdict** | Couch feel check (verb budget now 4). |
-| — | **Coroner + Throne couch verdicts** | Feel + dialog red-pen on both (built + merged last night, receipts clean). |
-| 88 | **Meshy web session** | Doc 36 shopping list: elderly-sans-cane regen spins + Auto Split experiments. Alex's hands only (regen isn't on the API). |
-| — | **stinger_win tracks** | Music is Alex's domain; we wire sfx.gd:49 when tracks exist. |
-| 87 | **Brainstorm queue** | Scoreboard RULED + **BUILT (18ded78)**: chyron + Ledger, hidden in minigames. Remaining: show-don't-tell dialog pass (Alex red-pen session; PLAN-card words now a candidate too). |
+| What | The ask |
+|---|---|
+| **Couch verdicts** | Coroner feel + Throne feel + DW dash (#63) + NEW tonight: PLAN tray feel, chyron in-world, Smite cam zoom/orbit in hand, Swap Meet kart feel (his expert domain), NPC beats flavor. Detailed notes drive the next polish night. |
+| **Relay deploy** | docs/design/39-noray-deploy.md — 5-min docker on his box, whenever. Then one cross-network session certifies live punchthrough. |
+| **Meshy web session (#88/#74 tail)** | Doc 36: elderly-sans-cane spins, Auto Split experiments. |
+| **stinger_win tracks** | His music domain; we wire sfx.gd. |
+| **Env tuning session** | All dials named in grounds.gd ENV-PASS block; his Fable-3 screenshots as comp. |
+| **Someday-ruling** | Table-wide magpie (bots patronize NPCs too) = re-freeze; evidence banked in #82. |
 
-## OPEN — ready to build (director's lanes)
+## OPEN — next runs (none urgent)
 
-| # | Item | State |
-|---|---|---|
-| 77 | **CAMERA REWORK** — Smite-style high third-person, zoom+rotate, quarter PIP on the acting seat | **UNBLOCKED** (G4 + grounds fill both landed). Doc 34 constitution RATIFIED. PIP perf probe is the gate (16.6ms frame time; ≤300 PIP draws canary). |
-| 80 | ~~PRE-COMMIT IN PARALLEL~~ | **LANDED 360a81c** — full SHIP-FIRST subset, codex-built, verified in-house. Couch: tray feel + item-drama-overlaps-roll question. |
-| 86 | **SWAP MEET FULL BUILD** — MK64-style: bigger track, 4-way split, boosts, swap-projectiles | Camera/viewport architecture SHARED with #77 (design once, use twice). Track+item design can start with Alex cosign; build after #77's ViewportKit exists. |
-| 79 | **RUNDIRECTOR** — doc 28 §15 ADOPTED, zero code; save `schema` tag rides with it | Post-excision path clear; wants a quiet tree (heavy estate/procession churn). Recommend: own codex lane on a calmer night. |
-| 90 | ~~Widow in the maze~~ | **LANDED 0c5218d** — offset 3.2m→1.2m, corridor-safe. In-world eyeball rides the next windowed pass. |
-| 82 | **NPC beats** — Magpie + Mourner-for-Hire gameplay beats (models exist since c2b1d5e) | Design-light build; bundle with presence layer or dressing lane. |
-| 74 | **Rigging batch tail** — elderly-sans-cane awaits Alex's web spins (doc 36); butler v2 wired | Mostly done; close after web session. |
+- **#95 doc-38 agenda**: 9 SHOW-GAP visuals, 7 UNSURE confirmations, dual goal-text unification, 5 deferred TRIMs post-playtest, totals_header kill (refresh fixed), 5 uncuttable TRIMs needing Alex prose.
+- **#93** minigame scoreboard standardization (design with #94 in view).
+- **#94** chyron v2 headshot bar (gated on Alex's playtest notes).
+- **Online remainder**: estate UI knob for relay address · per-seat item inventory on the wire · live cross-network cert.
+- **Small fry**: Swap Meet board-preset wiring (laps/item_density into BOARD_PRESETS) · stall-cluster polish at chicane/overpass (BOT_STALL data banked) · windowed frame-time check at w6 with PIP + new cover (1607 draws) · _ribbon generate_normals nit · saves/saves/ nested debris (Jul 7, harmless) · Par ghost-putt (hunt doc warm; F9 bookmark is the trap).
 
-## OPEN — punch-list remainder (#84 umbrella)
+## THE THIRTEENTH WATCH LANDED (all pushed, receipts green throughout)
 
-- Par ball-in-hole (needs repro) · Swap Meet split-screen (→ #86/#77) · Greed bots CURED (4c075bf) · spike trap DONE (ae0b99c) · timing audit DONE (awaiting ruling above).
+Camera rework #77 (BoardOrbit + ViewportKit + PIP) · pre-commit #80 ·
+chyron + Ledger #87 · timing context modes #84 · widow #90 · SWAP MEET
+rebuilt #86 (3 codex rounds, 4-seed soak) · ENVIRONMENT PASS #92 + tune
+(blue box dead) · show-don't-tell audit + red-pen execution (3 kills, ~30
+trims, wrench, −97 lines) · TopBar title-wedge fix · NIGHT: feedback
+capture (version stamps + F9/BACK bookmarks) · NPC beats #82 (magpie +
+mourner-for-hire, hash-safe) · RUNDIRECTOR #79 (doc 28 §15, behavior-free
+by full battery; save schema:2 + migration) · Par hunt (honest miss, doc) ·
+**ONLINE ERA #91**: two-process NETPROBE certified (13,137 hashes, 0
+mismatches), guest board-mirror + wreaths-on-wire desyncs fixed, noray
+transport mock-certified both paths · **SHIP: illwill-0.4.0.zip**.
 
-## OPEN — online era
-
-- ~~Noray relay decision + live two-process NETPROBE re-cert~~ — **LANDED
-  (#91, overnight lane 2026-07-22)**: two-process NETPROBE PASS (13,137
-  paired hashes, 0 mismatches, full 3-night mirror; found+fixed the missing
-  procession client-mirror boot and wreaths-off-the-wire), noray transport
-  code-complete + mock-certified both paths (VERIFY-BOARD §4-NET-2).
-  REMAINING (pending the world, not code): producer deploys the live relay
-  per doc 39, then one cross-network session on a second box; estate UI
-  knob for the relay address; per-seat item inventory on the wire.
-
-## Housekeeping
-
-- Untracked: `executor_butler_v3r_*` textures (provenance check → wire or park in verify_out) · `tools/_*.log` debris (gitignore/delete) — folded into tonight's dressing lane.
-
----
-
-## LANDED (the twelfth watch, all pushed — details in Claude's_Corner/resume-the-twelfth-watch.md)
-
-Classic excision · living-lawn shader grass · spike-trap nerf · rigging batch (12 assets) · Coroner (masked ball redesign) · Throne moving hill · bog water + forest floor · stirs net-mirror · G4 reaper hero pose · Greed bots cured · NPC wiring (magpie, mourner-for-hire, wake dignity) · NIGHT GAMES overnight slot restored + sanctioned re-freeze (NG era: ccd25c2c, RED 44/42/39/40) · docs 34/35/36 ratified · timing audit filed.
+Details: Claude's_Corner/resume-the-thirteenth-watch.md.

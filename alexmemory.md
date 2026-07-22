@@ -3077,3 +3077,18 @@ Oldest ticket on the punch-list: Andrew's "I put the ball in and it made me go a
 **It's clean.** Either the ball sinks correctly on the very next physics tick after it starts falling, or it never dips below resting height at all. One genuine lip-out bounce (grazes the rim at speed, hops, rolls away) — real minigolf behavior, not a bug, never reads as "in."
 Full sweep table + what I didn't get to (widow's walk elevation, a gutter-delivered ball, a trap re-striking right at the lip, actual network jitter) is in `docs/verify/par-ball-in-hole-hunt.md`. Zero source touched — `.import` cache churn only from the mandatory cold-import gate, board receipts still PASS 2/2.
 This one needs the couch. If it happens again live: course, seed if you have it, rough stroke count, whether traps/gutters were involved. Any one of those turns "search the whole space cold" into "replay the exact conditions" — the difference between this run and the next one landing it.
+
+---
+
+## THE WATCH CLOSES (2026-07-22, pre-dawn)
+
+Wave three came home whole.
+RunDirector exists — the last big gap between the constitution and the tree is closed, provably behavior-free.
+The magpie steals from the rich and gifts the passer. The mourner grieves for two pennies, professionally.
+Testers get F9: one press bookmarks the moment, timestamped, for your morning correlation.
+The Par ghost putt refused to appear for 200 scripted putts — the hunt doc leaves the next search warm, and Andrew's F9 is the trap now.
+
+One honest note: RunDirector's save migration ran against your real slot_1 during verification (user:// is shared across worktrees — lesson banked).
+It performed flawlessly — zero keys lost, your five nights intact, backup at slot_1.pre-schema-v1.json — and then you ruled migrations unimportant anyway. Still: you should hear it from me, not find it.
+
+The morning shape: hand Andrew the zip. Play when you can. Bring notes. The estate has never been more worth them.
