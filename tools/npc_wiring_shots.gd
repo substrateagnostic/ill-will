@@ -84,7 +84,8 @@ func _run() -> void:
 	# 3) THE WIDOW — re-rigged c243 idle, garden troupe post.
 	var wid_id := board._route_mid_id("garden")
 	var w_out := board._outward(wid_id)
-	var w_pos := board.space_pos(wid_id) + w_out * 3.2
+	# matches the corridor-safe 1.2m offset board_graph.gd uses since #90
+	var w_pos := board.space_pos(wid_id) + w_out * 1.2
 	print("NPC_WIRING_POS widow ", w_pos, " in_maze=", ProcessionGrounds.in_maze(w_pos.x, w_pos.z))
 	await _npc_shot(w_pos, w_out, "03_widow_troupe")
 	# her elevated 3/4 view got walled in by the hedge maze corridor (pre-
