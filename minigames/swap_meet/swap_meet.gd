@@ -7,8 +7,9 @@ extends Minigame
 ## LEADER from anywhere.
 ##
 ## Controls (PlayerInput): move.x steer, auto-throttle forward, move.y
-## (pull back) brake/reverse. A = throw swap orb (3s cd). B = hold to
-## drift, release for a boost proportional to drift time (2s cd).
+## (pull back) brake/reverse. A uses a held item first, otherwise throws a
+## collected swap orb. B holds drift; release cashes the charged boost.
+## Human seats render through ViewportKit chase views; bots never get a view.
 ##
 ## Standalone: if the shell hasn't called begin() within 0.5s, the game
 ## begins itself with a default roster from GameState consts, KayKit
@@ -22,6 +23,8 @@ extends Minigame
 ##                   exactly 1/60 - see orbital's determinism notes)
 ##   --autoquit      quit after the results report / test verdict
 ##   --laps=N        override 3 laps
+##   --itemdensity=N item-box/orb-pickup density multiplier (default 1.0)
+##   --swaptally     deterministic all-bot soak receipt (pair with --seed=N)
 ##   --timecap=N     override the 170s race cap
 ##   --swaptest=immunity   scripted orb drops prove 1s swap immunity
 ##   --swaptest=moment     two parked karts + one throw: the swap money shot
@@ -44,79 +47,119 @@ const PHOTO_MARGIN_UNITS := 1.2  # doc 09 §7.1: arm only when P2 is within 1.2 
 const OVERTAKE_STING_CD := 1.5   # throttle so drafting duels don't machine-gun the sting
 const GOLD_EVERY := 40.0
 const GOLD_SPOT_FRACS := [0.16, 0.38, 0.60, 0.84]
-const BOOM_LEN := 4.9
-const BOOM_SPEED := 0.75
-const BOOM_PIVOT_Z := 3.9        # pinch center pulled toward the infield
+const BOOM_LEN := 7.8
+const BOOM_SPEED := 0.72
 const KNOCK_POWER := 7.0
 const KART_R := 0.55
-const CAM_POS := Vector3(0, 28.5, 22.0)
-const CAM_LOOK := Vector3(0, 0, 0.9)
-const CAM_FOV := 45.0
+const CAM_POS := Vector3(-5.0, 82.0, 62.0)
+const CAM_LOOK := Vector3(-6.0, 0, 5.0)
+const CAM_FOV := 52.0
+const CHASE_FOV := 60.0
+const ITEM_SWAP_SHELL: int = 0
+const ITEM_COFFIN: int = 1
+const ITEM_BELL: int = 2
+const ITEM_CROWS: int = 3
+const ITEM_NONE: int = -1
+const ITEM_NAMES: Array[String] = ["SWAP-SHELL", "PALLBEARER'S COFFIN", "THE BELL", "CROW MURDER"]
+const ITEM_COLORS: Array[Color] = [
+	Color(0.18, 1.0, 0.68), Color(0.72, 0.25, 1.0),
+	Color(1.0, 0.72, 0.12), Color(0.3, 0.18, 0.45),
+]
+const EDGE_BOX_COLORS: Array[Color] = [
+	Color(1.0, 0.18, 0.5), Color(0.1, 0.9, 1.0),
+	Color(0.75, 1.0, 0.12), Color(1.0, 0.62, 0.08),
+]
+const BASE_ITEM_BOXES: int = 12
+const BASE_ORB_PICKUPS: int = 6
+const PICKUP_RESPAWN: float = 5.0
+const BELL_DURATION: float = 2.5
+const CROW_DURATION: float = 3.0
+const MAX_COFFINS_PER_SEAT: int = 3
+const NET_KART_STRIDE: int = 17
 
-var config := {}
-var rng := RandomNumberGenerator.new()
-var phase := Phase.WAIT
-var now := 0.0                   # sim clock (stops during hit-stop)
-var race_t := 0.0                # race clock (starts at GO)
-var laps_total := LAPS_DEFAULT
-var time_cap := RACE_CAP
+var config: Dictionary = {}
+var rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var phase: int = Phase.WAIT
+var now: float = 0.0                   # sim clock (stops during hit-stop)
+var race_t: float = 0.0                # race clock (starts at GO)
+var laps_total: int = LAPS_DEFAULT
+var time_cap: float = RACE_CAP
+var item_density: float = 1.0
 
 var track: SwapTrack
 var karts: Array = []            # SwapKart, array pos == player index
 var bots: Array = []             # per player index: SwapBot or null (human seat)
 var bot_enabled: Array = []      # per player index: bool, decided at begin()
 var orbs: Array = []
-var bots_enabled := false        # legacy --swapbots flag: force ALL seats to bots
+var bots_enabled: bool = false        # legacy --swapbots flag: force ALL seats to bots
 
-var _points := {}
+## MK64-style pickup layer. Records are dictionaries because both host and
+## render mirror share the same compact visibility sync.
+var _item_boxes: Array[Dictionary] = []
+var _orb_pickups: Array[Dictionary] = []
+var _coffins: Array[Dictionary] = []
+var _coffin_serial: int = 0
+var _item_stats: Dictionary = {"boxes": 0, "shells": 0, "coffins": 0, "bells": 0, "crows": 0}
+
+## Human-only chase views. ViewportKit owns every SubViewport/camera; this
+## module only stores seat -> kit id and asks the kit to pose/display them.
+var _viewport_kit: ViewportKit = null
+var _view_ids: Dictionary = {}
+var _view_rects: Dictionary = {}
+var _view_size: Vector2 = Vector2.ZERO
+var _split_back: ColorRect = null
+var _crow_mask: Control = null
+
+var _points: Dictionary = {}
 var _currency: Array = []
 var _kill_events: Array = []     # {killer:int, victim:int, cause:String}; a swap heist "wrecks" the victim's race
 var _names: Array = []
 var _colors: Array = []
-var _finish_count := 0
-var _swaps_total := 0
-var _swaps_blocked := 0
-var _golden_swaps := 0
-var _gaining_swaps := {}         # player -> count (thrower gained >=1)
-var _gold_victims := {}          # player -> times golden-orbed
-var _cruel_delta := 0
-var _cruel_txt := ""
-var _bounces := 0
-var _reported := false
+var _finish_count: int = 0
+var _swaps_total: int = 0
+var _swaps_blocked: int = 0
+var _golden_swaps: int = 0
+var _gaining_swaps: Dictionary = {}         # player -> count (thrower gained >=1)
+var _gold_victims: Dictionary = {}          # player -> times golden-orbed
+var _cruel_delta: int = 0
+var _cruel_txt: String = ""
+var _bounces: int = 0
+var _reported: bool = false
 
-var _intro_t := 0.0
-var _intro_stage := -1
-var _freeze_ticks := 0
+var _intro_t: float = 0.0
+var _intro_stage: int = -1
+var _freeze_ticks: int = 0
 
-var _stuck_test := false          # dev --swapstuck: jam kart 0 to film the unstick
-var _stuck_fired := false
-var _stuck_cap_delay := 8
-var _stuck_captured := false
-var _gold_t := 0.0
+var _stuck_test: bool = false          # dev --swapstuck: jam kart 0 to film the unstick
+var _stuck_fired: bool = false
+var _stuck_cap_delay: int = 8
+var _stuck_captured: bool = false
+var _gold_t: float = 0.0
 var _gold_pickup: Node3D = null
-var _gold_spot := Vector3.ZERO
+var _gold_spot: Vector3 = Vector3.ZERO
 var _booms: Array = []           # {pivot: Node3D, pos, angle, speed, glb_blades}
 var _crown: Node3D = null
-var _crown_on := -1
-var _final_lap_called := false
-var _end_t := -1.0
+var _crown_on: int = -1
+var _final_lap_called: bool = false
+var _end_t: float = -1.0
 # THE FINAL STRETCH kit (doc 09 §Q1/§7.3): the FINAL LAP is swap's stretch —
 # tense music + the lighting nudge at the call, and a distance-driven tick
 # ladder once the leader enters the last 10%. No lap timer, so no timer-label
 # pulse. Never attached under --swaptest, so scripted receipts hold.
 var _stretch: FinalStretch = null
 
-var _begun := false
-var _cli_seed := 1
-var _cli_players := 4
-var _fast := 1.0
-var _autoquit := false
-var _test_mode := ""
-var _test_stage := 0
+var _begun: bool = false
+var _cli_seed: int = 1
+var _cli_players: int = 4
+var _fast: float = 1.0
+var _autoquit: bool = false
+var _swaptally: bool = false
+var _test_mode: String = ""
+var _test_stage: int = 0
 var _shotsec: Array = []
-var _vis_t := 0.0
-var _shot_i := 0
-var _shake := 0.0
+var _vis_t: float = 0.0
+var _shot_i: int = 0
+var _shake: float = 0.0
 
 var _cam: Camera3D
 var _fx_root: Node3D
@@ -127,16 +170,16 @@ var _lap_label: Label
 var _hint_label: Label
 var _score_rows: VBoxContainer
 var _row_labels: Array = []
-var _event_until := 0.0
-var _banner_gen := 0
+var _event_until: float = 0.0
+var _banner_gen: int = 0
 
 # --- overtake sting + photo finish (doc 09 §7.1-2, presentation only) ---
 var _sting_player: AudioStreamPlayer = null   # dedicated pitched 'sink' = lead-change identity
-var _overtake_next := 0.0                      # sim-clock gate for the sting cooldown
+var _overtake_next: float = 0.0                      # sim-clock gate for the sting cooldown
 var _crown_flash_tw: Tween = null
 var _flash_rect: ColorRect = null              # flashbulb overlay (paparazzi frame)
-var _photofin := false                         # verify demo: forced close finish
-var _photo_shots := false                      # capture the photo-finish frames (demo)
+var _photofin: bool = false                         # verify demo: forced close finish
+var _photo_shots: bool = false                      # capture the photo-finish frames (demo)
 
 # --- ONLINE PHASE 2 (docs/design/10 §4.3): the render mirror -----------------
 # House pattern (online-seance-VERIFY.md PATTERN NOTES): host runs this ENTIRE
@@ -146,28 +189,29 @@ var _photo_shots := false                      # capture the photo-finish frames
 # (racing NEEDS smooth). Every ritual (SWAP beams, PHOTO FINISH freeze-flash,
 # overtake sting, knocks) fires from counter deltas; banners/event lines ride
 # as [gen, text] and replay the couch's own flashers. No hidden info anywhere.
-var _mirror := false
-var _netdemo := false                # --swapnetdemo: probe rig, stages a 1-lap
+var _mirror: bool = false
+var _netdemo: bool = false                # --swapnetdemo: probe rig, stages a 1-lap
                                      # photo dash between the two bots at GO
-var _netdemo_fire_t := -1.0          # sim-clock time of the rig's one scripted
+var _netdemo_fire_t: float = -1.0          # sim-clock time of the rig's one scripted
                                      # orb drop (0 -> 1), the guaranteed SWAP beat
-var _mir := {}                       # last applied snapshot (delta source)
-var _net_oid := 0                    # host: orb wire ids
-var _net_ban := [0, "", 0.0]         # host: [banner gen, bbcode, duration]
-var _net_ev_gen := 0                 # host: event-line gen
-var _net_ev := [0, "", "ffffff"]     # host: [gen, text, color]
-var _net_swap := [0, 0, 0, 0, Vector3.ZERO, Vector3.ZERO]  # [n, a, b, golden, posA, posB]
-var _net_pf := [0, -1, -1, 0.0]      # [n, winner, chaser, est_delta]
-var _net_knock := [0, -1]            # [n, victim] windmill boom hits
-var _net_bounce := [0, -1]           # [n, kart] wall thuds (latest per snap)
-var _net_gp := [0, 0, "ffffff"]      # [n, gate idx, color] scoring-gate pulses
-var _net_gc := [0, -1]               # [n, claimant] golden-orb claims
-var _net_ov := 0                     # overtake stings
-var _net_champ := -1                 # pre-announced at END, 1.8 s before finished()
+var _mir: Dictionary = {}                       # last applied snapshot (delta source)
+var _net_oid: int = 0                    # host: orb wire ids
+var _net_ban: Array = [0, "", 0.0]         # host: [banner gen, bbcode, duration]
+var _net_ev_gen: int = 0                 # host: event-line gen
+var _net_ev: Array = [0, "", "ffffff"]     # host: [gen, text, color]
+var _net_swap: Array = [0, 0, 0, 0, Vector3.ZERO, Vector3.ZERO]  # [n, a, b, golden, posA, posB]
+var _net_pf: Array = [0, -1, -1, 0.0]      # [n, winner, chaser, est_delta]
+var _net_knock: Array = [0, -1]            # [n, victim] windmill boom hits
+var _net_bounce: Array = [0, -1]           # [n, kart] wall thuds (latest per snap)
+var _net_gp: Array = [0, 0, "ffffff"]      # [n, gate idx, color] scoring-gate pulses
+var _net_gc: Array = [0, -1]               # [n, claimant] golden-orb claims
+var _net_ov: int = 0                     # overtake stings
+var _net_champ: int = -1                 # pre-announced at END, 1.8 s before finished()
 var _net_snapped: Dictionary = {}    # host-side probe evidence latches
 # client mirror scratch
 var _mir_karts: Array = []           # per kart [pos target, yaw target]
 var _mir_orbs: Dictionary = {}       # oid -> {"node", "pos"}
+var _mir_coffins: Dictionary = {}    # coffin id -> {"node", "pos", "yaw"}
 var _mir_snapped: Dictionary = {}    # mirror-side probe evidence latches
 
 func _ready() -> void:
@@ -193,6 +237,12 @@ func _parse_args() -> void:
 			laps_total = clampi(int(arg.trim_prefix("--laps=")), 1, 9)
 		elif arg.begins_with("--timecap="):
 			time_cap = float(arg.trim_prefix("--timecap="))
+		elif arg.begins_with("--itemdensity="):
+			item_density = clampf(float(arg.trim_prefix("--itemdensity=")), 0.25, 2.0)
+		elif arg == "--swaptally":
+			_swaptally = true
+			bots_enabled = true
+			_autoquit = true
 		elif arg.begins_with("--swaptest="):
 			_test_mode = arg.trim_prefix("--swaptest=")
 		elif arg == "--photofin":
@@ -215,6 +265,8 @@ func _parse_args() -> void:
 			# the anti-trap unstick fires. Films swap_unstick.png and quits.
 			_stuck_test = true
 			bots_enabled = true
+	if _swaptally and _fast <= 1.01:
+		_fast = 8.0
 	if _fast > 1.01:
 		# Faster-than-realtime with dt pinned to exactly 1/60 (the sim is
 		# tick-identical to live play): scale BOTH time_scale and tick rate.
@@ -235,7 +287,8 @@ func _default_config() -> Dictionary:
 			"device": PlayerInput.device_of(i),
 			"bot": PlayerInput.standalone_bot_default(i),
 		})
-	return {"roster": roster, "rounds": 1, "rng_seed": _cli_seed, "practice": false}
+	return {"roster": roster, "rounds": 1, "rng_seed": _cli_seed, "practice": false,
+		"laps": laps_total, "item_density": item_density}
 
 func begin(cfg: Dictionary) -> void:
 	if _begun:
@@ -243,10 +296,13 @@ func begin(cfg: Dictionary) -> void:
 	_begun = true
 	config = cfg
 	_mirror = bool(cfg.get("net_mirror", false))
-	rng.seed = int(cfg.rng_seed)
+	var seed_value: int = int(cfg.get("rng_seed", 1))
+	rng.seed = seed_value
+	laps_total = clampi(int(cfg.get("laps", laps_total)), 1, 9)
+	item_density = clampf(float(cfg.get("item_density", item_density)), 0.25, 2.0)
 	if cfg.get("practice", false):
 		laps_total = mini(laps_total, 2)
-	var roster: Array = cfg.roster
+	var roster: Array = cfg.get("roster", [])
 	for pl in roster:
 		var idx: int = pl.index
 		_names.resize(maxi(_names.size(), idx + 1))
@@ -257,15 +313,15 @@ func begin(cfg: Dictionary) -> void:
 		_gaining_swaps[idx] = 0
 	for i in roster.size():
 		var pl: Dictionary = roster[i]
-		var kart := SwapKart.new()
+		var kart: SwapKart = SwapKart.new()
 		kart.world = self
 		kart.track = track
 		kart.index = pl.index
 		add_child(kart)
 		kart.setup(load(String(pl.char_scene)), pl.color, pl.name)
 		# staggered grid just before the finish line
-		var row := i / 2
-		var col := i % 2
+		var row: int = i / 2
+		var col: int = i % 2
 		kart.place_at(track.total_len - 2.2 - row * 1.9, -1.05 + 2.1 * col)
 		karts.append(kart)
 	# Per-player bots: a seat is bot-driven if the roster marks it a bot (shell
@@ -276,16 +332,22 @@ func begin(cfg: Dictionary) -> void:
 	bot_enabled.resize(roster.size())
 	bots.resize(roster.size())
 	for i in roster.size():
-		bot_enabled[i] = bots_enabled or bool(roster[i].get("bot", false))
+		var roster_entry: Dictionary = roster[i]
+		var device: int = int(roster_entry.get("device", -99))
+		var empty_seat_bot: bool = device == -3 or device == -99
+		var roster_bot: bool = bool(roster_entry.get("bot", empty_seat_bot))
+		bot_enabled[i] = bots_enabled or roster_bot
 		if bot_enabled[i] and _test_mode == "" and not _mirror:
-			var bot := SwapBot.new()
-			bot.setup(self, i, int(cfg.rng_seed) * 977 + i * 131)
+			var bot: SwapBot = SwapBot.new()
+			bot.setup(self, i, seed_value * 977 + i * 131)
 			bots[i] = bot
 	# Personalize the persistent hint bar with each human seat's REAL keys, once
 	# per match now that the roster/bot map is known (docs/verify/realkeys-VERIFY.md).
 	if _hint_label != null:
 		_hint_label.text = _controls_bar()
 	_build_crown()
+	_build_pickups()
+	_setup_player_views()
 	if _test_mode == "":
 		_stretch = FinalStretch.attach(self, null)
 	if _mirror:
@@ -318,18 +380,31 @@ func _build_static() -> void:
 	add_child(_cam)
 	_cam.look_at(CAM_LOOK)
 	_cam.current = true
+	_viewport_kit = ViewportKit.new()
+	_viewport_kit.name = "PlayerViewportKit"
+	add_child(_viewport_kit)
+	_viewport_kit.setup(-1)
+	var back_layer: CanvasLayer = CanvasLayer.new()
+	back_layer.layer = -2
+	add_child(back_layer)
+	_split_back = ColorRect.new()
+	_split_back.color = Color(0.015, 0.018, 0.035)
+	_split_back.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_split_back.visible = false
+	back_layer.add_child(_split_back)
+	_build_crow_mask()
 	# THE HOUSE LOOK -- MOONLIT night market (core/env_kit.gd). The kart race runs
 	# after dark: a cool moon key rakes the track, a strong WARM fill stands in for
 	# the market's lamp strings, thin ground fog gives the far side depth, and the
 	# high-threshold glow blooms the swap-orb + boost trails without touching the
 	# UI. Replaces the old flat FILMIC day-env + hand-rolled sun.
-	var rig := EnvKit.apply(self, EnvKit.MOONLIT, {
+	var rig: Dictionary = EnvKit.apply(self, EnvKit.MOONLIT, {
 		"key_energy": 1.15,      # a touch brighter so asphalt + rumble strips read
 		"fill_energy": 0.42,     # warm market-lamp fill washing the whole track
 		"fog_density": 0.006,    # thin -- keep the far side of the track legible
 	})
 	# the track is large: keep the old shadow throw so karts cast across it
-	(rig["key"] as DirectionalLight3D).directional_shadow_max_distance = 70.0
+	(rig["key"] as DirectionalLight3D).directional_shadow_max_distance = 140.0
 	track = SwapTrack.new()
 	add_child(track)
 	track.build()
@@ -338,6 +413,145 @@ func _build_static() -> void:
 	_build_booms()
 	_build_ui()
 	_build_sting_player()
+
+func _build_crow_mask() -> void:
+	var crow_layer: CanvasLayer = CanvasLayer.new()
+	crow_layer.layer = 0
+	add_child(crow_layer)
+	_crow_mask = Control.new()
+	_crow_mask.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_crow_mask.visible = false
+	crow_layer.add_child(_crow_mask)
+	for rect_data: Array in [
+		[Vector2(0.0, 0.0), Vector2(1.0, 0.20)],
+		[Vector2(0.0, 0.20), Vector2(0.15, 0.80)],
+		[Vector2(0.82, 0.32), Vector2(0.18, 0.68)],
+	]:
+		var anchor_pos: Vector2 = Vector2(rect_data[0])
+		var anchor_size: Vector2 = Vector2(rect_data[1])
+		var veil: ColorRect = ColorRect.new()
+		veil.color = Color(0.015, 0.008, 0.03, 0.56)
+		veil.anchor_left = anchor_pos.x
+		veil.anchor_top = anchor_pos.y
+		veil.anchor_right = veil.anchor_left + anchor_size.x
+		veil.anchor_bottom = veil.anchor_top + anchor_size.y
+		veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_crow_mask.add_child(veil)
+	var label: Label = Label.new()
+	label.text = "CROW MURDER\nCAW!  CAW!  CAW!"
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	label.add_theme_font_override("font", load("res://assets/fonts/LuckiestGuy-Regular.ttf"))
+	label.add_theme_font_size_override("font_size", 30)
+	label.add_theme_color_override("font_color", Color(0.7, 0.45, 1.0, 0.78))
+	label.add_theme_color_override("font_outline_color", Color(0.01, 0.0, 0.02, 0.9))
+	label.add_theme_constant_override("outline_size", 10)
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_crow_mask.add_child(label)
+
+func _setup_player_views() -> void:
+	if _viewport_kit == null:
+		return
+	var human_seats: Array[int] = []
+	for i: int in karts.size():
+		if i < bot_enabled.size() and not bool(bot_enabled[i]):
+			human_seats.append(i)
+	if human_seats.is_empty():
+		_cam.current = true
+		_split_back.visible = false
+		return
+	_cam.current = false
+	_split_back.visible = true
+	_view_size = get_viewport().get_visible_rect().size
+	var rects: Array[Rect2] = _split_rects(human_seats.size(), _view_size)
+	for i: int in human_seats.size():
+		var seat: int = human_seats[i]
+		var rect: Rect2 = rects[i]
+		var view_id: int = _viewport_kit.add_view({
+			"world": get_viewport().find_world_3d(), "res_scale": 1.0,
+			"far": 180.0, "near": 0.08, "fov": CHASE_FOV,
+			"cull_mask": 0, "shadow_atlas": 1024, "cadence": 1,
+			"rect": rect, "msaa": Viewport.MSAA_2X,
+		})
+		if view_id < 0:
+			continue
+		_view_ids[seat] = view_id
+		_view_rects[seat] = rect
+		var kart: SwapKart = karts[seat]
+		var desired: Vector3 = kart.center() - kart.heading * 7.5 + Vector3.UP * 4.2
+		_viewport_kit.aim_view(view_id, desired, kart.center() + kart.heading * 3.0)
+
+func _split_rects(count: int, size: Vector2) -> Array[Rect2]:
+	var gap: float = 3.0
+	if count <= 1:
+		return [Rect2(Vector2.ZERO, size)]
+	if count == 2:
+		var half_h: float = (size.y - gap) * 0.5
+		return [Rect2(0, 0, size.x, half_h), Rect2(0, half_h + gap, size.x, half_h)]
+	var half_w: float = (size.x - gap) * 0.5
+	var half_h: float = (size.y - gap) * 0.5
+	var rects: Array[Rect2] = [
+		Rect2(0, 0, half_w, half_h), Rect2(half_w + gap, 0, half_w, half_h),
+		Rect2(0, half_h + gap, half_w, half_h),
+	]
+	if count >= 4:
+		rects.append(Rect2(half_w + gap, half_h + gap, half_w, half_h))
+	return rects
+
+func _layout_player_views() -> void:
+	if _view_ids.is_empty():
+		return
+	var size: Vector2 = get_viewport().get_visible_rect().size
+	if size.is_equal_approx(_view_size):
+		return
+	_view_size = size
+	var seats: Array = _view_ids.keys()
+	seats.sort()
+	var rects: Array[Rect2] = _split_rects(seats.size(), size)
+	for i: int in seats.size():
+		var seat: int = int(seats[i])
+		var view_id: int = int(_view_ids.get(seat, -1))
+		var rect: Rect2 = rects[i]
+		_view_rects[seat] = rect
+		_viewport_kit.set_display_rect(view_id, rect)
+
+func _update_chase_views(delta: float) -> void:
+	if _view_ids.is_empty():
+		return
+	_layout_player_views()
+	for seat_value in _view_ids.keys():
+		var seat: int = int(seat_value)
+		if seat < 0 or seat >= karts.size():
+			continue
+		var view_id: int = int(_view_ids.get(seat, -1))
+		var kart: SwapKart = karts[seat]
+		var right: Vector3 = kart.heading.cross(Vector3.UP).normalized()
+		var drift_offset: float = kart.steer * (0.7 if kart.drifting else 0.25)
+		var desired: Vector3 = kart.center() - kart.heading * 7.6 + Vector3.UP * 4.25 + right * drift_offset
+		var look: Vector3 = kart.center() + kart.heading * 3.1 + Vector3.UP * 0.45
+		var camera: Camera3D = _viewport_kit.view_camera(view_id)
+		if camera == null:
+			continue
+		var blend: float = 1.0 - exp(-9.0 * delta)
+		var camera_pos: Vector3 = camera.global_position.lerp(desired, blend)
+		_viewport_kit.aim_view(view_id, camera_pos, look)
+		var lean: float = -kart.steer * (0.045 if kart.drifting else 0.018)
+		camera.rotation.z = lerp_angle(camera.rotation.z, lean, 1.0 - exp(-7.0 * delta))
+	_update_crow_mask()
+
+func _update_crow_mask() -> void:
+	if _crow_mask == null:
+		return
+	var target: int = leader_unfinished()
+	if target < 0 or target >= karts.size() or (karts[target] as SwapKart).crow_t <= 0.0 \
+			or not _view_rects.has(target):
+		_crow_mask.visible = false
+		return
+	var rect: Rect2 = _view_rects.get(target, Rect2())
+	_crow_mask.position = rect.position
+	_crow_mask.size = rect.size
+	_crow_mask.visible = true
 
 ## A dedicated one-shot for the overtake sting: the same 'sink' asset the
 ## Sfx bank uses, but pitched up to 1.3 (doc 09 §7.2) so a lead change has
@@ -353,77 +567,62 @@ func _build_sting_player() -> void:
 ## sweeps across the track; getting clipped knocks you sideways
 ## (non-lethal). The Par windmill model stands at each pivot for flavor.
 func _build_booms() -> void:
-	var pinches := [Vector3(0, 0, -BOOM_PIVOT_Z), Vector3(0, 0, BOOM_PIVOT_Z)]
-	var phases := [0.0, PI]
+	var gate: Dictionary = track.windmill_gate()
+	var center: Vector3 = Vector3(gate.get("pos", Vector3.ZERO))
+	var tangent: Vector3 = Vector3(gate.get("tangent", Vector3.FORWARD))
+	var right: Vector3 = tangent.cross(Vector3.UP).normalized()
+	var width: float = float(gate.get("hw", 3.0))
+	var pivot_pos: Vector3 = center - right * (width + 0.55)
+	var phase_angle: float = atan2(right.z, right.x)
 	var wm_scene: PackedScene = load("res://assets/models/minigolf/windmill.glb")
-	for i in 2:
-		var pivot := Node3D.new()
-		pivot.position = pinches[i] + Vector3(0, 0.35, 0)
-		add_child(pivot)
-		var base := MeshInstance3D.new()
-		var basem := CylinderMesh.new()
-		basem.top_radius = 0.42
-		basem.bottom_radius = 0.55
-		basem.height = 0.4
-		base.mesh = basem
-		var bmat2 := StandardMaterial3D.new()
-		bmat2.albedo_color = Color(0.35, 0.33, 0.38)
-		base.material_override = bmat2
-		base.position = pinches[i] + Vector3(0, 0.1, 0)
-		add_child(base)
-		var hub := MeshInstance3D.new()
-		var hm := CylinderMesh.new()
-		hm.top_radius = 0.30
-		hm.bottom_radius = 0.36
-		hm.height = 0.5
-		hub.mesh = hm
-		var hmat := StandardMaterial3D.new()
-		hmat.albedo_color = Color(0.25, 0.24, 0.28)
-		hub.material_override = hmat
-		pivot.add_child(hub)
-		for seg in 4:
-			var bar := MeshInstance3D.new()
-			var bm := BoxMesh.new()
-			bm.size = Vector3(BOOM_LEN / 4.0, 0.24, 0.30)
-			bar.mesh = bm
-			var mat := StandardMaterial3D.new()
-			mat.albedo_color = SwapTrack.COL_RAILRED if seg % 2 == 0 else Color(0.96, 0.93, 0.88)
-			bar.material_override = mat
-			bar.position = Vector3(BOOM_LEN / 4.0 * (0.5 + seg), 0.0, 0.0)
-			pivot.add_child(bar)
-		var tip := MeshInstance3D.new()
-		var tm := SphereMesh.new()
-		tm.radius = 0.2
-		tm.height = 0.4
-		tip.mesh = tm
-		var tmat := StandardMaterial3D.new()
-		tmat.albedo_color = Color(1.0, 0.8, 0.2)
-		tmat.emission_enabled = true
-		tmat.emission = Color(0.9, 0.65, 0.1)
-		tip.material_override = tmat
-		tip.position = Vector3(BOOM_LEN, 0.0, 0.0)
-		pivot.add_child(tip)
-		var blades: Node3D = null
-		if wm_scene != null:
-			var wm: Node3D = wm_scene.instantiate()
-			# tucked into the infield beside its pinch, clear of the sweep
-			wm.position = Vector3(5.8 * (1.0 if i == 1 else -1.0), 0.0, pinches[i].z * 0.62)
-			wm.scale = Vector3.ONE * 2.6
-			wm.rotation.y = 0.0 if i == 0 else PI
-			add_child(wm)
-			blades = wm.find_child("blades", true, false)
-		_booms.append({"pivot": pivot, "pos": pinches[i], "angle": phases[i],
-			"speed": BOOM_SPEED * (1.0 if i == 0 else -1.0), "blades": blades})
+	var pivot: Node3D = Node3D.new()
+	pivot.position = pivot_pos + Vector3(0, 0.48, 0)
+	add_child(pivot)
+	var base: MeshInstance3D = MeshInstance3D.new()
+	var base_mesh: CylinderMesh = CylinderMesh.new()
+	base_mesh.top_radius = 0.44
+	base_mesh.bottom_radius = 0.62
+	base_mesh.height = 0.55
+	base.mesh = base_mesh
+	base.material_override = _make_flat_material(Color(0.26, 0.24, 0.34))
+	base.position = pivot_pos + Vector3(0, 0.2, 0)
+	add_child(base)
+	for seg: int in 6:
+		var bar: MeshInstance3D = MeshInstance3D.new()
+		var bar_mesh: BoxMesh = BoxMesh.new()
+		bar_mesh.size = Vector3(BOOM_LEN / 6.0, 0.28, 0.34)
+		bar.mesh = bar_mesh
+		bar.material_override = _make_flat_material(SwapTrack.COL_RAILRED if seg % 2 == 0 else Color(0.98, 0.91, 0.72), 0.18)
+		bar.position = Vector3(BOOM_LEN / 6.0 * (0.5 + seg), 0.0, 0.0)
+		pivot.add_child(bar)
+	var tip: MeshInstance3D = MeshInstance3D.new()
+	var tip_mesh: SphereMesh = SphereMesh.new()
+	tip_mesh.radius = 0.25
+	tip_mesh.height = 0.5
+	tip.mesh = tip_mesh
+	tip.material_override = _make_flat_material(Color(1.0, 0.78, 0.1), 1.8)
+	tip.position = Vector3(BOOM_LEN, 0, 0)
+	pivot.add_child(tip)
+	var blades: Node3D = null
+	if wm_scene != null:
+		var windmill: Node3D = wm_scene.instantiate()
+		windmill.position = pivot_pos - right * 1.8
+		windmill.scale = Vector3.ONE * 3.2
+		windmill.rotation.y = atan2(tangent.x, tangent.z)
+		add_child(windmill)
+		blades = windmill.find_child("blades", true, false) as Node3D
+	_booms.append({"pivot": pivot, "pos": pivot_pos, "angle": phase_angle,
+		"speed": BOOM_SPEED, "blades": blades})
 
 func _build_crown() -> void:
 	_crown = Node3D.new()
-	var band := MeshInstance3D.new()
-	var bm := CylinderMesh.new()
+	var band: MeshInstance3D = MeshInstance3D.new()
+	var bm: CylinderMesh = CylinderMesh.new()
 	bm.top_radius = 0.26
 	bm.bottom_radius = 0.30
 	bm.height = 0.16
 	band.mesh = bm
-	var gold := StandardMaterial3D.new()
+	var gold: StandardMaterial3D = StandardMaterial3D.new()
 	gold.albedo_color = Color(1.0, 0.82, 0.2)
 	gold.metallic = 0.8
 	gold.roughness = 0.25
@@ -433,17 +632,17 @@ func _build_crown() -> void:
 	band.material_override = gold
 	_crown.add_child(band)
 	for i in 4:
-		var spike := MeshInstance3D.new()
-		var sm := CylinderMesh.new()
+		var spike: MeshInstance3D = MeshInstance3D.new()
+		var sm: CylinderMesh = CylinderMesh.new()
 		sm.top_radius = 0.0
 		sm.bottom_radius = 0.07
 		sm.height = 0.22
 		spike.mesh = sm
 		spike.material_override = gold
-		var a := TAU * i / 4.0
+		var a: float = TAU * float(i) / 4.0
 		spike.position = Vector3(cos(a) * 0.26, 0.17, sin(a) * 0.26)
 		_crown.add_child(spike)
-	var sparkle := CPUParticles3D.new()
+	var sparkle: CPUParticles3D = CPUParticles3D.new()
 	sparkle.amount = 14
 	sparkle.lifetime = 0.7
 	sparkle.initial_velocity_min = 0.4
@@ -451,11 +650,11 @@ func _build_crown() -> void:
 	sparkle.direction = Vector3.UP
 	sparkle.spread = 70.0
 	sparkle.gravity = Vector3(0, -1.5, 0)
-	var mesh := SphereMesh.new()
+	var mesh: SphereMesh = SphereMesh.new()
 	mesh.radius = 0.05
 	mesh.height = 0.1
 	sparkle.mesh = mesh
-	var mat := StandardMaterial3D.new()
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = Color(1.0, 0.9, 0.4)
 	sparkle.material_override = mat
@@ -463,12 +662,12 @@ func _build_crown() -> void:
 	_crown.add_child(sparkle)
 	# gold ground halo: the "shoot me" bullseye reads even when the crown
 	# itself hides behind the name tag
-	var halo := MeshInstance3D.new()
-	var ht := TorusMesh.new()
+	var halo: MeshInstance3D = MeshInstance3D.new()
+	var ht: TorusMesh = TorusMesh.new()
 	ht.inner_radius = 0.52
 	ht.outer_radius = 0.62
 	halo.mesh = ht
-	var hmat := StandardMaterial3D.new()
+	var hmat: StandardMaterial3D = StandardMaterial3D.new()
 	hmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	hmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	hmat.albedo_color = Color(1.0, 0.82, 0.2, 0.85)
@@ -481,6 +680,315 @@ func _build_crown() -> void:
 	_crown.visible = false
 	add_child(_crown)
 
+func item_color(item: int) -> Color:
+	if item < 0 or item >= ITEM_COLORS.size():
+		return Color.WHITE
+	return ITEM_COLORS[item]
+
+func item_name(item: int) -> String:
+	if item < 0 or item >= ITEM_NAMES.size():
+		return ""
+	return ITEM_NAMES[item]
+
+func _build_pickups() -> void:
+	var box_count: int = maxi(4, int(roundf(float(BASE_ITEM_BOXES) * item_density)))
+	for i: int in box_count:
+		var frac: float = fposmod(0.08 + float(i) / float(box_count), 1.0)
+		var sample: Dictionary = track.sample_at(frac * track.total_len)
+		var tangent: Vector3 = Vector3(sample.get("tangent", Vector3.FORWARD))
+		var right: Vector3 = tangent.cross(Vector3.UP).normalized()
+		var lane: float = (-0.95 if i % 2 == 0 else 0.95)
+		var pos: Vector3 = Vector3(sample.get("pos", Vector3.ZERO)) + right * lane + Vector3.UP * 0.7
+		var node: Node3D = _make_item_box(EDGE_BOX_COLORS[i % EDGE_BOX_COLORS.size()])
+		node.position = pos
+		add_child(node)
+		_item_boxes.append({"node": node, "active": true, "respawn": 0.0,
+			"base_y": pos.y, "phase": float(i) * 0.71})
+	var orb_count: int = maxi(3, int(roundf(float(BASE_ORB_PICKUPS) * item_density)))
+	for i: int in orb_count:
+		var frac: float = fposmod(0.16 + float(i) / float(orb_count), 1.0)
+		var sample: Dictionary = track.sample_at(frac * track.total_len)
+		var tangent: Vector3 = Vector3(sample.get("tangent", Vector3.FORWARD))
+		var right: Vector3 = tangent.cross(Vector3.UP).normalized()
+		var lane: float = 0.45 if i % 2 == 0 else -0.45
+		var pos: Vector3 = Vector3(sample.get("pos", Vector3.ZERO)) + right * lane + Vector3.UP * 0.72
+		var node: Node3D = _make_orb_pickup()
+		node.position = pos
+		add_child(node)
+		_orb_pickups.append({"node": node, "active": true, "respawn": 0.0,
+			"base_y": pos.y, "phase": float(i) * 0.93})
+
+func _make_item_box(color: Color) -> Node3D:
+	var root: Node3D = Node3D.new()
+	var box: MeshInstance3D = MeshInstance3D.new()
+	var mesh: BoxMesh = BoxMesh.new()
+	mesh.size = Vector3.ONE * 0.82
+	box.mesh = mesh
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(color.r, color.g, color.b, 0.82)
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.emission_enabled = true
+	mat.emission = color
+	mat.emission_energy_multiplier = 1.7
+	box.material_override = mat
+	box.rotation = Vector3(0.45, 0.35, 0.2)
+	root.add_child(box)
+	var label: Label3D = Label3D.new()
+	label.text = "?"
+	label.font = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
+	label.font_size = 78
+	label.pixel_size = 0.008
+	label.modulate = Color.WHITE
+	label.outline_size = 16
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	root.add_child(label)
+	return root
+
+func _make_orb_pickup() -> Node3D:
+	var root: Node3D = Node3D.new()
+	var orb: MeshInstance3D = MeshInstance3D.new()
+	var mesh: SphereMesh = SphereMesh.new()
+	mesh.radius = 0.34
+	mesh.height = 0.68
+	orb.mesh = mesh
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.62, 0.84, 1.0)
+	mat.emission_enabled = true
+	mat.emission = Color(0.25, 0.65, 1.0)
+	mat.emission_energy_multiplier = 1.8
+	orb.material_override = mat
+	root.add_child(orb)
+	var ring: MeshInstance3D = MeshInstance3D.new()
+	var ring_mesh: TorusMesh = TorusMesh.new()
+	ring_mesh.inner_radius = 0.42
+	ring_mesh.outer_radius = 0.5
+	ring.mesh = ring_mesh
+	ring.material_override = mat
+	root.add_child(ring)
+	return root
+
+func _step_pickups(dt: float) -> void:
+	for record: Dictionary in _item_boxes:
+		_step_pickup_record(record, dt, true)
+	for record: Dictionary in _orb_pickups:
+		_step_pickup_record(record, dt, false)
+
+func _step_pickup_record(record: Dictionary, dt: float, item_box: bool) -> void:
+	var node: Node3D = record.get("node", null) as Node3D
+	if node == null or not is_instance_valid(node):
+		return
+	var active: bool = bool(record.get("active", false))
+	if not active:
+		var respawn: float = maxf(0.0, float(record.get("respawn", 0.0)) - dt)
+		record["respawn"] = respawn
+		if respawn <= 0.0:
+			record["active"] = true
+			node.visible = true
+		return
+	node.rotate_y(dt * (2.2 if item_box else 1.7))
+	node.position.y = float(record.get("base_y", node.position.y)) \
+		+ 0.12 * sin(now * 3.0 + float(record.get("phase", 0.0)))
+	if phase != Phase.PLAY:
+		return
+	for kart_value in karts:
+		var kart: SwapKart = kart_value
+		if kart.finished or kart.airborne:
+			continue
+		if item_box and kart.held_item != ITEM_NONE:
+			continue
+		if not item_box and (kart.orb_charges > 0 or kart.has_golden):
+			continue
+		if kart.center().distance_to(node.global_position) > 1.15:
+			continue
+		record["active"] = false
+		record["respawn"] = PICKUP_RESPAWN
+		node.visible = false
+		if item_box:
+			kart.held_item = _draw_item(kart)
+			_item_stats["boxes"] = int(_item_stats.get("boxes", 0)) + 1
+			_flash_event("%s DRAWS %s" % [kart.pname, item_name(kart.held_item)], item_color(kart.held_item))
+		else:
+			kart.orb_charges = 1
+			_flash_event("%s GRABS A SWAP ORB" % kart.pname, kart.color)
+		Sfx.play("card", -3.0)
+		_burst(kart.center(), item_color(kart.held_item) if item_box else Color(0.4, 0.75, 1.0), 10)
+		break
+
+func _draw_item(kart: SwapKart) -> int:
+	var place: int = clampi(position_of(kart.index), 1, 4)
+	var weights: Array[int]
+	match place:
+		1:
+			weights = [8, 48, 12, 8]
+		2:
+			weights = [24, 34, 22, 18]
+		3:
+			weights = [42, 22, 30, 28]
+		_:
+			weights = [58, 15, 38, 36]
+	var total: int = 0
+	for weight: int in weights:
+		total += weight
+	var roll: int = rng.randi_range(1, total)
+	for item: int in weights.size():
+		roll -= weights[item]
+		if roll <= 0:
+			return item
+	return ITEM_SWAP_SHELL
+
+func kart_ahead_of(seat: int) -> int:
+	var order: Array = _positions_list()
+	var rank: int = order.find(seat)
+	if rank <= 0:
+		return -1
+	return int(order[rank - 1])
+
+func _use_item(kart: SwapKart) -> void:
+	var item: int = kart.held_item
+	if item == ITEM_NONE or kart.finished or kart.locked:
+		return
+	if item == ITEM_SWAP_SHELL and kart_ahead_of(kart.index) < 0:
+		_flash_event("NO KART AHEAD FOR THE SWAP-SHELL", kart.color)
+		return
+	kart.held_item = ITEM_NONE
+	match item:
+		ITEM_SWAP_SHELL:
+			_fire_swap_shell(kart)
+		ITEM_COFFIN:
+			_drop_coffin(kart)
+		ITEM_BELL:
+			_ring_bell(kart)
+		ITEM_CROWS:
+			_release_crows(kart)
+
+func _fire_swap_shell(kart: SwapKart) -> void:
+	var target: int = kart_ahead_of(kart.index)
+	if target < 0:
+		return
+	var shell: SwapOrb = SwapOrb.new()
+	shell.setup(self, kart.index, kart.color, false, true)
+	_net_oid += 1
+	shell.oid = _net_oid
+	shell.target_idx = target
+	shell.global_position = kart.center() + kart.heading * 1.0 + Vector3.UP * 0.25
+	shell.vel = kart.heading * 9.0
+	_fx_root.add_child(shell)
+	orbs.append(shell)
+	kart.play_anim("Throw", 0.7)
+	_item_stats["shells"] = int(_item_stats.get("shells", 0)) + 1
+	_flash_event("%s SENDS A SWAP-SHELL AT %s" % [kart.pname, _names[target]], ITEM_COLORS[ITEM_SWAP_SHELL])
+	Sfx.play("putt", -1.0)
+	print("ITEM_SHELL t=%.1f p=%d target=%d" % [race_t, kart.index, target])
+
+func _drop_coffin(kart: SwapKart) -> void:
+	var node: Node3D = _make_coffin(kart.color)
+	var drop_pos: Vector3 = kart.global_position - kart.heading * 1.7
+	var near: Dictionary = track.nearest_main(drop_pos, kart.hint)
+	drop_pos.y = float(near.get("floor", 0.0)) + 0.32
+	node.position = drop_pos
+	node.rotation.y = atan2(kart.heading.x, kart.heading.z)
+	add_child(node)
+	_coffin_serial += 1
+	_coffins.append({"id": _coffin_serial, "owner": kart.index, "node": node,
+		"age": 0.0, "heading": kart.heading})
+	var owner_records: Array[Dictionary] = []
+	for record: Dictionary in _coffins:
+		if int(record.get("owner", -1)) == kart.index:
+			owner_records.append(record)
+	while owner_records.size() > MAX_COFFINS_PER_SEAT:
+		var oldest: Dictionary = owner_records.pop_front()
+		_remove_coffin(oldest)
+	_item_stats["coffins"] = int(_item_stats.get("coffins", 0)) + 1
+	_flash_event("%s DROPS THE PALLBEARER'S COFFIN" % kart.pname, ITEM_COLORS[ITEM_COFFIN])
+	Sfx.play("place", -2.0)
+	print("ITEM_COFFIN t=%.1f p=%d alive=%d" % [race_t, kart.index, _coffins.size()])
+
+func _make_coffin(color: Color) -> Node3D:
+	var root: Node3D = Node3D.new()
+	var body: MeshInstance3D = MeshInstance3D.new()
+	var mesh: BoxMesh = BoxMesh.new()
+	mesh.size = Vector3(1.05, 0.48, 1.85)
+	body.mesh = mesh
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = Color(0.14, 0.08, 0.2)
+	mat.metallic = 0.35
+	mat.emission_enabled = true
+	mat.emission = color
+	mat.emission_energy_multiplier = 0.35
+	body.material_override = mat
+	root.add_child(body)
+	var cross: MeshInstance3D = MeshInstance3D.new()
+	var cross_mesh: BoxMesh = BoxMesh.new()
+	cross_mesh.size = Vector3(0.15, 0.08, 1.05)
+	cross.mesh = cross_mesh
+	cross.material_override = _make_flat_material(Color(0.78, 0.63, 0.25), 0.5)
+	cross.position.y = 0.29
+	root.add_child(cross)
+	return root
+
+func _make_flat_material(color: Color, emission: float = 0.0) -> StandardMaterial3D:
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = color
+	if emission > 0.0:
+		mat.emission_enabled = true
+		mat.emission = color
+		mat.emission_energy_multiplier = emission
+	return mat
+
+func _step_coffins(dt: float) -> void:
+	var hits: Array[Dictionary] = []
+	for record: Dictionary in _coffins:
+		var age: float = float(record.get("age", 0.0)) + dt
+		record["age"] = age
+		var node: Node3D = record.get("node", null) as Node3D
+		if node == null or not is_instance_valid(node):
+			hits.append(record)
+			continue
+		for kart_value in karts:
+			var kart: SwapKart = kart_value
+			if kart.finished or kart.airborne or kart.knock_immune > 0.0:
+				continue
+			if kart.index == int(record.get("owner", -1)) and age < 1.25:
+				continue
+			if kart.center().distance_to(node.global_position) < 1.05:
+				kart.tumble()
+				kart.play_anim("Hit_A", 0.7)
+				_burst(kart.center(), ITEM_COLORS[ITEM_COFFIN], 16)
+				_flash_event("%s HITS THE COFFIN" % kart.pname, kart.color)
+				Sfx.play("crush")
+				print("COFFIN_HIT t=%.1f owner=%d victim=%d" % [race_t, int(record.get("owner", -1)), kart.index])
+				hits.append(record)
+				break
+	for record: Dictionary in hits:
+		_remove_coffin(record)
+
+func _remove_coffin(record: Dictionary) -> void:
+	var node: Node3D = record.get("node", null) as Node3D
+	if node != null and is_instance_valid(node):
+		node.queue_free()
+	_coffins.erase(record)
+
+func _ring_bell(user: SwapKart) -> void:
+	for kart_value in karts:
+		var kart: SwapKart = kart_value
+		if kart.index != user.index and not kart.finished:
+			kart.bell_slow_t = maxf(kart.bell_slow_t, BELL_DURATION)
+	_item_stats["bells"] = int(_item_stats.get("bells", 0)) + 1
+	_flash_banner("[color=#ffd24a]THE BELL TOLLS![/color]\n[font_size=26]EVERYONE BUT %s SLOWS[/font_size]" % user.pname, 1.5)
+	Sfx.play("round_over", -1.0)
+	print("ITEM_BELL t=%.1f p=%d" % [race_t, user.index])
+
+func _release_crows(user: SwapKart) -> void:
+	var leader: int = leader_unfinished()
+	if leader < 0:
+		return
+	var victim: SwapKart = karts[leader]
+	victim.crow_t = maxf(victim.crow_t, CROW_DURATION)
+	_item_stats["crows"] = int(_item_stats.get("crows", 0)) + 1
+	_flash_banner("[color=#9f6cff]CROW MURDER![/color]\n[font_size=26]%s CAN'T SHAKE THE FLOCK[/font_size]" % victim.pname, 1.5)
+	Sfx.play("grudge", -2.0)
+	print("ITEM_CROWS t=%.1f p=%d leader=%d" % [race_t, user.index, leader])
+
 ## --- simulation loop -----------------------------------------------------------
 
 func _physics_process(delta: float) -> void:
@@ -490,7 +998,7 @@ func _physics_process(delta: float) -> void:
 		return
 	if phase == Phase.WAIT:
 		return
-	var sdt := delta
+	var sdt: float = delta
 	if _freeze_ticks > 0:
 		# the swap hit-stop: tick-counted, never touches Engine.time_scale
 		_freeze_ticks -= 1
@@ -508,17 +1016,30 @@ func _physics_process(delta: float) -> void:
 	# karts
 	for k in karts:
 		var kart: SwapKart = k
-		var inp := _input_for(kart.index)
+		if kart.index < bots.size() and bots[kart.index] != null and phase == Phase.PLAY:
+			var place: int = clampi(position_of(kart.index), 1, 4)
+			var rubber_scales: Array[float] = [0.98, 1.01, 1.045, 1.08]
+			kart.bot_speed_scale = rubber_scales[place - 1]
+		else:
+			kart.bot_speed_scale = 1.0
+		var inp: Dictionary = _input_for(kart.index)
 		if sdt > 0.0:
-			kart.step(sdt, inp.move, inp.b)
+			kart.step(sdt, Vector2(inp.get("move", Vector2.ZERO)), bool(inp.get("b", false)))
 			if _stuck_test and kart.index == 0 and phase == Phase.PLAY and not _stuck_fired:
 				_force_stuck(kart)
 			_constrain(kart, sdt)
-			if phase == Phase.PLAY and inp.a:
-				_throw_orb(kart)
+			if phase == Phase.PLAY and bool(inp.get("a", false)):
+				if kart.has_golden:
+					_throw_orb(kart)
+				elif kart.held_item != ITEM_NONE:
+					_use_item(kart)
+				else:
+					_throw_orb(kart)
 	if sdt > 0.0:
 		_kart_bumps()
 		_step_booms(sdt)
+		_step_pickups(sdt)
+		_step_coffins(sdt)
 	# orbs (after karts so hits use final positions)
 	if sdt > 0.0:
 		var hits: Array = []
@@ -559,7 +1080,7 @@ func _physics_process(delta: float) -> void:
 
 func _intro_tick(sdt: float) -> void:
 	_intro_t += sdt
-	var stage := -1
+	var stage: int = -1
 	if _intro_t < 1.1:
 		stage = 0
 	elif _intro_t < 1.7:
@@ -613,11 +1134,12 @@ func _input_for(p: int) -> Dictionary:
 
 ## Corridor walls + floor + shortcut transitions + progress s for one kart.
 func _constrain(kart: SwapKart, dt: float) -> void:
-	var s_eff := 0.0
+	var s_eff: float = 0.0
+	var previous_bog_scale: float = kart.bog_speed_scale
 	if kart.on_shortcut:
 		var q: Dictionary = track.nearest_sc(kart.global_position, kart.sc_hint)
 		kart.sc_hint = int(q.idx)
-		var s_sc := float(q.s)
+		var s_sc: float = float(q.get("s", 0.0))
 		if s_sc > track.sc_len - 0.9:
 			kart.on_shortcut = false
 			print("SC_EXIT t=%.1f p=%d" % [race_t, kart.index])
@@ -627,6 +1149,7 @@ func _constrain(kart: SwapKart, dt: float) -> void:
 			_apply_walls(kart, qm, 0.0, dt)
 		else:
 			_apply_walls(kart, q, track.sc_floor(s_sc), dt)
+			kart.bog_speed_scale = 1.0
 			s_eff = track.sc_entry_s + (s_sc / track.sc_len) * fposmod(track.sc_exit_s - track.sc_entry_s, track.total_len)
 			_ramp_unstick(kart, q, s_sc, dt)
 	else:
@@ -639,22 +1162,29 @@ func _constrain(kart: SwapKart, dt: float) -> void:
 		if not kart.finished and not kart.airborne \
 				and float(q2.lat) < -1.1 \
 				and kart.global_position.distance_to(track.sc_entry_pos) < 2.4:
-			var into := Vector3(track.sc_sample_at(2.5).pos) - kart.global_position
+			var shortcut_sample: Dictionary = track.sc_sample_at(2.5)
+			var into: Vector3 = Vector3(shortcut_sample.get("pos", Vector3.ZERO)) - kart.global_position
 			into.y = 0.0
 			if into.length() > 0.3 and kart.heading.dot(into.normalized()) > 0.3:
 				kart.on_shortcut = true
 				kart.sc_hint = 0
 				print("SC_ENTER t=%.1f p=%d" % [race_t, kart.index])
-		_apply_walls(kart, q2, 0.0, dt)
+		var track_floor: float = float(q2.get("floor", 0.0))
+		_apply_walls(kart, q2, track_floor, dt)
+		kart.bog_speed_scale = track.bog_speed_scale(float(q2.get("s", 0.0)), float(q2.get("lat", 0.0)))
 	# progress (wrap-aware delta on the effective main-loop arclength)
-	var l := track.total_len
-	var ds := s_eff - kart.last_s_eff
+	var l: float = track.total_len
+	var ds: float = s_eff - kart.last_s_eff
 	if ds < -l * 0.5:
 		ds += l
 	elif ds > l * 0.5:
 		ds -= l
 	kart.progress += ds
 	kart.last_s_eff = s_eff
+	if kart.bog_speed_scale < 0.99 and previous_bog_scale >= 0.99:
+		_burst(kart.global_position + Vector3.UP * 0.25, SwapTrack.COL_WATER, 12)
+		Sfx.play("place", -5.0)
+		print("BOG_SPLASH t=%.1f p=%d" % [race_t, kart.index])
 	if phase == Phase.PLAY:
 		_check_gates(kart)
 		_check_laps(kart)
@@ -676,9 +1206,10 @@ func _ramp_unstick(kart: SwapKart, q: Dictionary, s_sc: float, dt: float) -> voi
 		return
 	kart.stuck_t = 0.0
 	# nudge a step further along the shortcut centre-line (toward the exit)
-	var fwd := Vector3(q.tangent)
+	var fwd: Vector3 = Vector3(q.get("tangent", Vector3.FORWARD))
 	var ahead: float = minf(s_sc + 1.2, track.sc_len)
-	var centre := Vector3(track.sc_sample_at(ahead).pos)
+	var ahead_sample: Dictionary = track.sc_sample_at(ahead)
+	var centre: Vector3 = Vector3(ahead_sample.get("pos", Vector3.ZERO))
 	kart.global_position = Vector3(centre.x, kart.y, centre.z)
 	kart.heading = fwd
 	kart.vel_dir = fwd
@@ -710,23 +1241,23 @@ func _grab_stuck_shot() -> void:
 		get_tree().quit()
 		return
 	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
+	var img: Image = get_viewport().get_texture().get_image()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
-	var path := "res://verify_out/swap_unstick.png"
+	var path: String = "res://verify_out/swap_unstick.png"
 	img.save_png(path)
 	print("SWAP_STUCK_CAP ", path)
 	await get_tree().create_timer(0.2).timeout
 	get_tree().quit()
 
 func _apply_walls(kart: SwapKart, q: Dictionary, floor_y: float, dt: float) -> void:
-	var hw := float(q.hw) - KART_R
-	var lat := float(q.lat)
-	var right := Vector3(q.tangent).cross(Vector3.UP)
+	var hw: float = float(q.get("hw", 0.0)) - KART_R
+	var lat: float = float(q.get("lat", 0.0))
+	var right: Vector3 = Vector3(q.get("tangent", Vector3.FORWARD)).cross(Vector3.UP).normalized()
 	if absf(lat) > hw:
-		var side := signf(lat)
-		var proj := Vector3(q.proj)
+		var side: float = signf(lat)
+		var proj: Vector3 = Vector3(q.get("proj", Vector3.ZERO))
 		kart.global_position = Vector3(proj.x, kart.global_position.y, proj.z) + right * hw * side
-		var impact := kart.bounce(-right * side)
+		var impact: float = kart.bounce(-right * side)
 		if impact > 1.5:
 			_bounces += 1
 			_net_bounce = [int(_net_bounce[0]) + 1, kart.index]
@@ -748,13 +1279,13 @@ func _apply_walls(kart: SwapKart, q: Dictionary, floor_y: float, dt: float) -> v
 	kart.global_position.y = kart.y
 
 func _check_gates(kart: SwapKart) -> void:
-	var g := _gates_below(kart.progress)
+	var g: int = _gates_below(kart.progress)
 	if g > kart.gates_credited:
-		var earned := g - kart.gates_credited
+		var earned: int = g - kart.gates_credited
 		kart.gates_credited = g
 		if not kart.finished:
 			_points[kart.index] += earned
-			var gi := (g - 1) % track.gate_s.size()
+			var gi: int = (g - 1) % track.gate_s.size()
 			track.pulse_gate(gi, kart.color)
 			Sfx.play("card", -5.0)
 			_net_gp = [int(_net_gp[0]) + 1, gi, kart.color.to_html(false)]
@@ -763,10 +1294,10 @@ func _check_gates(kart: SwapKart) -> void:
 func _gates_below(prog: float) -> int:
 	if prog <= 0.0:
 		return 0
-	var per := track.gate_s.size()
-	var full := int(prog / track.total_len)
-	var rem := prog - full * track.total_len
-	var c := full * per
+	var per: int = track.gate_s.size()
+	var full: int = int(prog / track.total_len)
+	var rem: float = prog - full * track.total_len
+	var c: int = full * per
 	for gs in track.gate_s:
 		if rem >= gs:
 			c += 1
@@ -778,21 +1309,21 @@ func _gates_below(prog: float) -> int:
 func _stretch_tick() -> void:
 	if _stretch == null or not _stretch.escalated or _finish_count > 0:
 		return
-	var lead := _leader_all()
+	var lead: int = _leader_all()
 	if lead < 0:
 		return
-	var window := track.total_len * 0.1
+	var window: float = track.total_len * 0.1
 	var remain: float = laps_total * track.total_len - (karts[lead] as SwapKart).progress
 	if remain > window or remain < 0.0:
 		return
 	_stretch.tick(10.0 * remain / window)
 
 func _check_laps(kart: SwapKart) -> void:
-	var laps_done := int(floorf(kart.progress / track.total_len))
+	var laps_done: int = int(floorf(kart.progress / track.total_len))
 	if laps_done <= kart.laps_hw:
 		return
 	kart.laps_hw = laps_done
-	var lt := race_t - kart.last_cross_time
+	var lt: float = race_t - kart.last_cross_time
 	kart.last_cross_time = race_t
 	if kart.laps_hw > 0:
 		kart.lap_times.append(lt)
@@ -819,7 +1350,7 @@ func _finish_kart(kart: SwapKart) -> void:
 	# The race winner crossing with P2 a kart-length behind gets the money
 	# shot instead of a plain banner (doc 09 §7.1). Everything below is
 	# presentation - placements/points/physics are already decided above.
-	var photo := kart.finish_place == 1 and _try_photo_finish(kart)
+	var photo: bool = kart.finish_place == 1 and _try_photo_finish(kart)
 	if not photo:
 		Sfx.play("round_over")
 		_confetti(kart.center(), kart.color)
@@ -844,7 +1375,7 @@ func _try_photo_finish(winner: SwapKart) -> bool:
 			break
 	if chaser == null:
 		return false
-	var line := laps_total * track.total_len
+	var line: float = laps_total * track.total_len
 	var margin_units: float = maxf(line - chaser.progress, 0.0)
 	if margin_units > PHOTO_MARGIN_UNITS:
 		return false
@@ -866,13 +1397,13 @@ func _photo_finish(winner: SwapKart, chaser: SwapKart, margin_units: float, est_
 	_flashbulb()
 	Sfx.play("bumper", -2.0)
 	_flash_banner("[color=#ffd84d]PHOTO FINISH![/color]", 3.4)
-	var line_pos := winner.center()
+	var line_pos: Vector3 = winner.center()
 	_confetti(line_pos, winner.color)                          # double confetti (doc §7.1)
 	_confetti(line_pos + Vector3(1.4, 0.6, 0.0), chaser.color)
 	# staged winner reveal on a process-always timer, so it still fires
 	# while the physics tick loop is frozen
-	var wname := winner.pname
-	var wcol := winner.color.to_html(false)
+	var wname: String = winner.pname
+	var wcol: String = winner.color.to_html(false)
 	get_tree().create_timer(0.55, true, false, true).timeout.connect(func() -> void:
 		_flashbulb()
 		Sfx.play("match_win", -3.0)
@@ -894,7 +1425,7 @@ func _photo_finish(winner: SwapKart, chaser: SwapKart, margin_units: float, est_
 func _fov_punch(target_fov: float, dur: float) -> void:
 	if _cam == null:
 		return
-	var tw := create_tween()
+	var tw: Tween = create_tween()
 	tw.tween_property(_cam, "fov", target_fov, dur * 0.32).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	tw.tween_property(_cam, "fov", CAM_FOV, dur * 0.68).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 
@@ -904,7 +1435,7 @@ func _flashbulb() -> void:
 		return
 	_flash_rect.color = Color(1, 1, 1, 0.0)
 	_flash_rect.visible = true
-	var tw := create_tween()
+	var tw: Tween = create_tween()
 	tw.tween_property(_flash_rect, "color:a", 0.85, 0.03)
 	tw.tween_property(_flash_rect, "color:a", 0.0, 0.32)
 	tw.tween_callback(func() -> void:
@@ -921,9 +1452,9 @@ func _schedule_photo_shots() -> void:
 
 func _capture_photo(n: int) -> void:
 	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
+	var img: Image = get_viewport().get_texture().get_image()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
-	var path := "res://verify_out/photofinish_%02d.png" % n
+	var path: String = "res://verify_out/photofinish_%02d.png" % n
 	img.save_png(path)
 	print("PHOTOFINISH_SHOT ", path)
 
@@ -936,18 +1467,18 @@ func _kart_bumps() -> void:
 			var b: SwapKart = karts[j]
 			if absf(a.y - b.y) > 0.8:
 				continue
-			var d := b.global_position - a.global_position
+			var d: Vector3 = b.global_position - a.global_position
 			d.y = 0.0
-			var dist := d.length()
+			var dist: float = d.length()
 			if dist > KART_R * 2.0 + 0.14 or dist < 0.001:
 				continue
-			var n := d / dist
-			var overlap := KART_R * 2.0 + 0.14 - dist
+			var n: Vector3 = d / dist
+			var overlap: float = KART_R * 2.0 + 0.14 - dist
 			a.global_position -= n * overlap * 0.5
 			b.global_position += n * overlap * 0.5
-			var va := a.vel_dir * a.speed + a.knock_vel
-			var vb := b.vel_dir * b.speed + b.knock_vel
-			var closing := (va - vb).dot(n)
+			var va: Vector3 = a.vel_dir * a.speed + a.knock_vel
+			var vb: Vector3 = b.vel_dir * b.speed + b.knock_vel
+			var closing: float = (va - vb).dot(n)
 			if closing > 0.0:
 				a.knock_vel -= n * closing * 0.55
 				b.knock_vel += n * closing * 0.55
@@ -957,26 +1488,29 @@ func _kart_bumps() -> void:
 ## --- windmill booms ----------------------------------------------------------------
 
 func _step_booms(dt: float) -> void:
-	for boom in _booms:
-		boom.angle = fposmod(float(boom.angle) + float(boom.speed) * dt, TAU)
-		var pivot: Node3D = boom.pivot
-		pivot.rotation.y = -float(boom.angle)
-		if boom.blades != null:
-			(boom.blades as Node3D).rotate_object_local(Vector3(0, 0, 1), dt * 1.4)
+	for boom_value in _booms:
+		var boom: Dictionary = boom_value
+		boom["angle"] = fposmod(float(boom.get("angle", 0.0)) + float(boom.get("speed", 0.0)) * dt, TAU)
+		var pivot: Node3D = boom.get("pivot", null) as Node3D
+		pivot.rotation.y = -float(boom.get("angle", 0.0))
+		var blades: Node3D = boom.get("blades", null) as Node3D
+		if blades != null:
+			blades.rotate_object_local(Vector3(0, 0, 1), dt * 1.4)
 		if phase != Phase.PLAY:
 			continue
-		var origin := Vector3(boom.pos)
-		var dir := Vector3(cos(float(boom.angle)), 0, sin(float(boom.angle)))
+		var origin: Vector3 = Vector3(boom.get("pos", Vector3.ZERO))
+		var angle: float = float(boom.get("angle", 0.0))
+		var dir: Vector3 = Vector3(cos(angle), 0, sin(angle))
 		for k in karts:
 			var kart: SwapKart = k
 			if kart.finished or kart.knock_immune > 0.0 or kart.y > 0.6:
 				continue
-			var rel := kart.global_position - origin
+			var rel: Vector3 = kart.global_position - origin
 			rel.y = 0.0
-			var along := clampf(rel.dot(dir), 0.0, BOOM_LEN)
-			var closest := origin + dir * along
+			var along: float = clampf(rel.dot(dir), 0.0, BOOM_LEN)
+			var closest: Vector3 = origin + dir * along
 			if kart.global_position.distance_to(Vector3(closest.x, kart.global_position.y, closest.z)) < 0.78:
-				var swing := Vector3.UP.cross(dir).normalized() * signf(float(boom.speed))
+				var swing: Vector3 = Vector3.UP.cross(dir).normalized() * signf(float(boom.get("speed", 0.0)))
 				kart.knock(swing, KNOCK_POWER)
 				kart.play_anim("Hit_A", 0.5)
 				Sfx.play("crush")
@@ -997,16 +1531,20 @@ func _throw_orb(kart: SwapKart) -> void:
 		return
 	if kart.orb_cd > 0.0:
 		return
+	if not kart.has_golden and kart.orb_charges <= 0:
+		return
 	kart.orb_cd = ORB_CD
-	var was_golden := kart.has_golden
-	var golden := was_golden
-	var target := -1
+	var was_golden: bool = kart.has_golden
+	var golden: bool = was_golden
+	var target: int = -1
 	if golden:
 		kart.has_golden = false
 		target = leader_unfinished()
 		if target == kart.index or target < 0:
 			golden = false  # leader threw the golden: it flies as a normal orb
-	var orb := SwapOrb.new()
+	else:
+		kart.orb_charges = maxi(0, kart.orb_charges - 1)
+	var orb: SwapOrb = SwapOrb.new()
 	orb.setup(self, kart.index, kart.color, was_golden)
 	_net_oid += 1
 	orb.oid = _net_oid
@@ -1049,11 +1587,11 @@ func on_swap_blocked(_orb: SwapOrb, victim: SwapKart) -> void:
 ## full ritual: 0.08s hit-stop, dual teleport beams in both colors,
 ## camera shake, name-tag flashes, SWAPPED! banner.
 func _do_swap(a: SwapKart, b: SwapKart, golden: bool) -> void:
-	var pre := _positions_list()
-	var pre_pos_a := pre.find(a.index) + 1
-	var pre_pos_b := pre.find(b.index) + 1
-	var pos_a := a.center()
-	var pos_b := b.center()
+	var pre: Array = _positions_list()
+	var pre_pos_a: int = pre.find(a.index) + 1
+	var pre_pos_b: int = pre.find(b.index) + 1
+	var pos_a: Vector3 = a.center()
+	var pos_b: Vector3 = b.center()
 	# the atomic trade
 	var soul_a: Dictionary = a.soul()
 	a.apply_soul(b.soul())
@@ -1078,13 +1616,13 @@ func _do_swap(a: SwapKart, b: SwapKart, golden: bool) -> void:
 	Sfx.play("bumper", -4.0)
 	# accounting
 	_swaps_total += 1
-	var post := _positions_list()
-	var post_pos_a := post.find(a.index) + 1
-	var post_pos_b := post.find(b.index) + 1
-	var gain_a := pre_pos_a - post_pos_a
-	var gain_b := pre_pos_b - post_pos_b
-	var ca := a.color.to_html(false)
-	var cb := b.color.to_html(false)
+	var post: Array = _positions_list()
+	var post_pos_a: int = post.find(a.index) + 1
+	var post_pos_b: int = post.find(b.index) + 1
+	var gain_a: int = pre_pos_a - post_pos_a
+	var gain_b: int = pre_pos_b - post_pos_b
+	var ca: String = a.color.to_html(false)
+	var cb: String = b.color.to_html(false)
 	if golden:
 		_golden_swaps += 1
 		_gold_victims[b.index] = int(_gold_victims.get(b.index, 0)) + 1
@@ -1133,7 +1671,7 @@ func _golden_tick(dt: float) -> void:
 		_gold_pickup.rotate_y(dt * 2.0)
 		var bob: Node3D = _gold_pickup.get_node("Bob")
 		bob.position.y = 1.0 + 0.18 * sin(now * 3.0)
-		var lead := leader_unfinished()
+		var lead: int = leader_unfinished()
 		for k in karts:
 			var kart: SwapKart = k
 			# the leader can't claim it - the golden orb IS the bullseye
@@ -1144,7 +1682,7 @@ func _golden_tick(dt: float) -> void:
 				_claim_golden(kart)
 				break
 		return
-	var holder := false
+	var holder: bool = false
 	for k in karts:
 		if (k as SwapKart).has_golden:
 			holder = true
@@ -1162,7 +1700,7 @@ func _spawn_golden() -> void:
 	# The comeback verb: spawn AHEAD of the trailing kart so the player
 	# who needs it most reaches it first. Seeded pick among qualifying
 	# spots; falls back to the nearest spot ahead of the trailer.
-	var order := _positions_list()
+	var order: Array = _positions_list()
 	var trailer: SwapKart = null
 	for i in range(order.size() - 1, -1, -1):
 		if not (karts[order[i]] as SwapKart).finished:
@@ -1170,22 +1708,22 @@ func _spawn_golden() -> void:
 			break
 	if trailer == null:
 		return
-	var t_s := fposmod(trailer.progress, track.total_len)
+	var t_s: float = fposmod(trailer.progress, track.total_len)
 	var candidates: Array = []
-	var best_frac := -1.0
-	var best_ahead := 1e9
+	var best_frac: float = -1.0
+	var best_ahead: float = 1e9
 	for f in GOLD_SPOT_FRACS:
-		var ahead := fposmod(float(f) * track.total_len - t_s, track.total_len)
+		var ahead: float = fposmod(float(f) * track.total_len - t_s, track.total_len)
 		if ahead > 6.0 and ahead < 45.0:
 			candidates.append(f)
 		if ahead > 6.0 and ahead < best_ahead:
 			best_ahead = ahead
 			best_frac = float(f)
-	var frac := best_frac if best_frac > 0.0 else float(GOLD_SPOT_FRACS[0])
+	var frac: float = best_frac if best_frac > 0.0 else float(GOLD_SPOT_FRACS[0])
 	if candidates.size() > 0:
 		frac = float(candidates[rng.randi_range(0, candidates.size() - 1)])
 	var sm: Dictionary = track.sample_at(frac * track.total_len)
-	_build_gold_pickup(Vector3(sm.pos))
+	_build_gold_pickup(Vector3(sm.get("pos", Vector3.ZERO)))
 	Sfx.play("confirm", -2.0)
 	_flash_event("GOLDEN ORB ON THE TRACK - SWAPS YOU WITH THE LEADER (leaders can't grab it)", Color(1.0, 0.85, 0.25))
 	print("GOLD_SPAWN t=%.1f s=%.1f" % [race_t, frac * track.total_len])
@@ -1197,16 +1735,16 @@ func _build_gold_pickup(spot: Vector3) -> void:
 	_gold_spot = spot
 	_gold_pickup = Node3D.new()
 	_gold_pickup.position = _gold_spot
-	var bob := Node3D.new()
+	var bob: Node3D = Node3D.new()
 	bob.name = "Bob"
 	bob.position.y = 1.0
 	_gold_pickup.add_child(bob)
-	var orb := MeshInstance3D.new()
-	var om := SphereMesh.new()
+	var orb: MeshInstance3D = MeshInstance3D.new()
+	var om: SphereMesh = SphereMesh.new()
 	om.radius = 0.42
 	om.height = 0.84
 	orb.mesh = om
-	var mat := StandardMaterial3D.new()
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
 	mat.albedo_color = Color(1.0, 0.82, 0.2)
 	mat.metallic = 0.7
 	mat.roughness = 0.2
@@ -1215,13 +1753,13 @@ func _build_gold_pickup(spot: Vector3) -> void:
 	mat.emission_energy_multiplier = 1.4
 	orb.material_override = mat
 	bob.add_child(orb)
-	var pillar := MeshInstance3D.new()
-	var pm := CylinderMesh.new()
+	var pillar: MeshInstance3D = MeshInstance3D.new()
+	var pm: CylinderMesh = CylinderMesh.new()
 	pm.top_radius = 0.5
 	pm.bottom_radius = 0.7
 	pm.height = 9.0
 	pillar.mesh = pm
-	var pmat := StandardMaterial3D.new()
+	var pmat: StandardMaterial3D = StandardMaterial3D.new()
 	pmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	pmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	pmat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -1280,9 +1818,9 @@ func leader_unfinished() -> int:
 	return -1
 
 func _update_crown() -> void:
-	var lead := leader_unfinished()
+	var lead: int = leader_unfinished()
 	if lead != _crown_on:
-		var prev := _crown_on
+		var prev: int = _crown_on
 		_crown_on = lead
 		if lead >= 0 and phase == Phase.PLAY:
 			_flash_event("%s LEADS - AIM AT THE CROWN" % _names[lead], _colors[lead])
@@ -1310,7 +1848,7 @@ func _overtake_sting() -> void:
 		_sting_player.pitch_scale = 1.3
 		_sting_player.play()
 	# crown flash x1.5 for 0.4s
-	var base := Vector3.ONE * 2.1
+	var base: Vector3 = Vector3.ONE * 2.1
 	if _crown_flash_tw != null and _crown_flash_tw.is_valid():
 		_crown_flash_tw.kill()
 	_crown.scale = base * 1.5
@@ -1325,7 +1863,9 @@ func _end_race() -> void:
 	if phase == Phase.END:
 		return
 	phase = Phase.END
-	var order := _positions_list()
+	for coffin: Dictionary in _coffins.duplicate():
+		_remove_coffin(coffin)
+	var order: Array = _positions_list()
 	# DNF karts still collect their placement points (transparent, kind)
 	for pi in order.size():
 		var kart: SwapKart = karts[order[pi]]
@@ -1346,19 +1886,19 @@ func _end_race() -> void:
 	var highlights: Array = []
 	if _cruel_txt != "":
 		highlights.append(_cruel_txt)
-	var worst_gold := 0
-	var worst_gold_i := -1
+	var worst_gold: int = 0
+	var worst_gold_i: int = -1
 	for i in _gold_victims:
 		if int(_gold_victims[i]) > worst_gold:
 			worst_gold = int(_gold_victims[i])
 			worst_gold_i = int(i)
 	if worst_gold_i >= 0:
-		var times_txt := "at the worst moment"
+		var times_txt: String = "at the worst moment"
 		if worst_gold >= 2:
 			times_txt = "%d times" % worst_gold
 		highlights.append("%s ate the golden orb %s" % [_names[worst_gold_i], times_txt])
-	var fast_t := 1e9
-	var fast_i := -1
+	var fast_t: float = 1e9
+	var fast_i: int = -1
 	for k in karts:
 		var kart: SwapKart = k
 		for lt in kart.lap_times:
@@ -1372,7 +1912,7 @@ func _end_race() -> void:
 		if int(_gaining_swaps[i]) >= 5:
 			monuments.append({"player": int(i), "kind": "pickpocket",
 				"label": "%s, The Pickpocket (%d liftings)" % [_names[int(i)], int(_gaining_swaps[i])]})
-	var results := {
+	var results: Dictionary = {
 		"placements": order,
 		"points": _points.duplicate(),
 		"currency_events": _currency.duplicate(),
@@ -1392,8 +1932,8 @@ func _end_race() -> void:
 			get_tree().create_timer(1.5, true, false, true).timeout.connect(func() -> void: get_tree().quit()))
 
 func _print_sim_summary() -> void:
-	var all_finished := true
-	var laps_txt := ""
+	var all_finished: bool = true
+	var laps_txt: String = ""
 	for k in karts:
 		var kart: SwapKart = k
 		if not kart.finished:
@@ -1406,9 +1946,26 @@ func _print_sim_summary() -> void:
 		[race_t, _swaps_total, _swaps_blocked, _golden_swaps, _bounces, str(_gaining_swaps)])
 	print("SWAPMEET_LAPS%s" % laps_txt)
 	if bots_enabled:
-		var ok := all_finished and race_t < 180.0 and _swaps_total >= 3
+		var ok: bool = all_finished and race_t < 180.0 and _swaps_total >= 3
 		print("SWAPMEET_ASSERT all_finished=%s race_t=%.1fs(<180) swaps=%d(>=3): %s" %
 			[str(all_finished), race_t, _swaps_total, "PASS" if ok else "FAIL"])
+	if _swaptally:
+		var order: Array = _positions_list()
+		var seed_value: int = int(config.get("rng_seed", _cli_seed))
+		var payload: String = "%d|%d|%.2f|%s|%d|%d|%d|%d|%d|%d" % [
+			seed_value, laps_total, item_density, str(order), _swaps_total,
+			int(_item_stats.get("boxes", 0)), int(_item_stats.get("shells", 0)),
+			int(_item_stats.get("coffins", 0)), int(_item_stats.get("bells", 0)),
+			int(_item_stats.get("crows", 0)),
+		]
+		var digest: String = payload.sha256_text().substr(0, 12)
+		var passed: bool = all_finished and _finish_count == karts.size() \
+			and int(_item_stats.get("boxes", 0)) > 0 and int(_item_stats.get("shells", 0)) > 0
+		print("SWAPTALLY seed=%d laps=%d item_density=%.2f order=%s swaps=%d boxes=%d shells=%d coffins=%d bells=%d crows=%d digest=%s %s" % [
+			seed_value, laps_total, item_density, str(order), _swaps_total,
+			int(_item_stats.get("boxes", 0)), int(_item_stats.get("shells", 0)),
+			int(_item_stats.get("coffins", 0)), int(_item_stats.get("bells", 0)),
+			int(_item_stats.get("crows", 0)), digest, "PASS" if passed else "FAIL"])
 
 ## --- scripted tests ----------------------------------------------------------------------
 
@@ -1418,7 +1975,8 @@ func _setup_test() -> void:
 		var kart: SwapKart = k
 		kart.locked = false
 		kart.parked = true
-	var l := track.total_len
+		kart.orb_charges = 1
+	var l: float = track.total_len
 	if _test_mode == "immunity" or _test_mode == "moment":
 		karts[0].place_at(l * 0.26, -0.5)
 		karts[1].place_at(l * 0.34, -0.5)
@@ -1441,7 +1999,7 @@ func _setup_test() -> void:
 	print("SWAPTEST %s armed" % _test_mode)
 
 func _drop_orb_on(owner_i: int, target_i: int) -> void:
-	var orb := SwapOrb.new()
+	var orb: SwapOrb = SwapOrb.new()
 	orb.setup(self, owner_i, _colors[owner_i], false)
 	_net_oid += 1
 	orb.oid = _net_oid
@@ -1468,7 +2026,7 @@ func _test_tick() -> void:
 			_drop_orb_on(2, 1)  # immunity expired -> swap 2
 		elif _test_stage == 3 and now >= 4.6:
 			_test_stage = 4
-			var ok := _swaps_total == 2 and _swaps_blocked >= 1
+			var ok: bool = _swaps_total == 2 and _swaps_blocked >= 1
 			print("SWAPMEET_TEST immunity swaps=%d blocked=%d: %s" %
 				[_swaps_total, _swaps_blocked, "PASS" if ok else "FAIL"])
 			if _autoquit:
@@ -1487,9 +2045,9 @@ func _test_tick() -> void:
 func _setup_photofin() -> void:
 	laps_total = 1
 	phase = Phase.PLAY
-	var line := track.total_len
-	var setups := [[2.2, -0.5], [3.0, 0.5]]   # [distance before line, lateral]
-	var n := mini(karts.size(), 2)
+	var line: float = track.total_len
+	var setups: Array = [[2.2, -0.5], [3.0, 0.5]]   # [distance before line, lateral]
+	var n: int = mini(karts.size(), 2)
 	for i in n:
 		var kart: SwapKart = karts[i]
 		var s0: float = line - float(setups[i][0])
@@ -1513,13 +2071,13 @@ func _setup_photofin() -> void:
 func _swap_fx(pos: Vector3, col_arriving: Color, col_departing: Color) -> void:
 	for cfg in [[col_departing, 0.85, 0.55], [col_arriving, 0.45, 0.95]]:
 		var col: Color = cfg[0]
-		var beam := MeshInstance3D.new()
-		var cm := CylinderMesh.new()
+		var beam: MeshInstance3D = MeshInstance3D.new()
+		var cm: CylinderMesh = CylinderMesh.new()
 		cm.top_radius = float(cfg[1])
 		cm.bottom_radius = float(cfg[1])
 		cm.height = 7.0
 		beam.mesh = cm
-		var mat := StandardMaterial3D.new()
+		var mat: StandardMaterial3D = StandardMaterial3D.new()
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 		mat.blend_mode = BaseMaterial3D.BLEND_MODE_ADD
@@ -1527,7 +2085,7 @@ func _swap_fx(pos: Vector3, col_arriving: Color, col_departing: Color) -> void:
 		beam.material_override = mat
 		_fx_root.add_child(beam)
 		beam.global_position = Vector3(pos.x, 3.2, pos.z)
-		var tw := create_tween()
+		var tw: Tween = create_tween()
 		tw.set_parallel(true)
 		tw.tween_property(beam, "scale", Vector3(0.15, 1.15, 0.15), 0.55).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
 		tw.tween_property(mat, "albedo_color:a", 0.0, 0.55)
@@ -1535,26 +2093,26 @@ func _swap_fx(pos: Vector3, col_arriving: Color, col_departing: Color) -> void:
 	_burst(pos, col_arriving, 18)
 	_burst(pos + Vector3(0, 0.5, 0), col_departing, 12)
 	# ground shock ring
-	var ring := MeshInstance3D.new()
-	var tm := TorusMesh.new()
+	var ring: MeshInstance3D = MeshInstance3D.new()
+	var tm: TorusMesh = TorusMesh.new()
 	tm.inner_radius = 0.5
 	tm.outer_radius = 0.62
 	ring.mesh = tm
-	var rmat := StandardMaterial3D.new()
+	var rmat: StandardMaterial3D = StandardMaterial3D.new()
 	rmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	rmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	rmat.albedo_color = Color(col_arriving.r, col_arriving.g, col_arriving.b, 0.8)
 	ring.material_override = rmat
 	_fx_root.add_child(ring)
 	ring.global_position = Vector3(pos.x, 0.1, pos.z)
-	var tw2 := create_tween()
+	var tw2: Tween = create_tween()
 	tw2.set_parallel(true)
 	tw2.tween_property(ring, "scale", Vector3(3.2, 1.0, 3.2), 0.45).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	tw2.tween_property(rmat, "albedo_color:a", 0.0, 0.45)
 	tw2.chain().tween_callback(ring.queue_free)
 
 func _burst(pos: Vector3, color: Color, amount: int) -> void:
-	var part := CPUParticles3D.new()
+	var part: CPUParticles3D = CPUParticles3D.new()
 	_fx_root.add_child(part)
 	part.global_position = pos
 	part.one_shot = true
@@ -1568,11 +2126,11 @@ func _burst(pos: Vector3, color: Color, amount: int) -> void:
 	part.gravity = Vector3(0, -4, 0)
 	part.damping_min = 1.0
 	part.damping_max = 2.5
-	var mesh := SphereMesh.new()
+	var mesh: SphereMesh = SphereMesh.new()
 	mesh.radius = 0.055
 	mesh.height = 0.11
 	part.mesh = mesh
-	var mat := StandardMaterial3D.new()
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = color
 	part.material_override = mat
@@ -1581,7 +2139,7 @@ func _burst(pos: Vector3, color: Color, amount: int) -> void:
 
 func _confetti(pos: Vector3, color: Color) -> void:
 	for c in [color, Color(1, 0.9, 0.4), Color.WHITE]:
-		var p := CPUParticles3D.new()
+		var p: CPUParticles3D = CPUParticles3D.new()
 		_fx_root.add_child(p)
 		p.global_position = pos + Vector3(0, 0.5, 0)
 		p.one_shot = true
@@ -1593,10 +2151,10 @@ func _confetti(pos: Vector3, color: Color) -> void:
 		p.initial_velocity_min = 4.0
 		p.initial_velocity_max = 7.5
 		p.gravity = Vector3(0, -9, 0)
-		var mesh := BoxMesh.new()
+		var mesh: BoxMesh = BoxMesh.new()
 		mesh.size = Vector3(0.09, 0.02, 0.09)
 		p.mesh = mesh
-		var mat := StandardMaterial3D.new()
+		var mat: StandardMaterial3D = StandardMaterial3D.new()
 		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 		mat.albedo_color = c
 		p.material_override = mat
@@ -1607,6 +2165,9 @@ func _confetti(pos: Vector3, color: Color) -> void:
 
 func _process(delta: float) -> void:
 	_vis_t += delta
+	_update_chase_views(delta)
+	if _mirror:
+		_animate_mirror_pickups(delta)
 	if phase == Phase.WAIT:
 		return
 	if _event_label.visible and now > _event_until:
@@ -1614,7 +2175,7 @@ func _process(delta: float) -> void:
 	# M2 CONTROL HINTS: the controls bar stays up the whole game (the "always on"
 	# house policy) — the 9s auto-declutter is gone.
 	if _shake > 0.002:
-		var jx := randf_range(-1.0, 1.0)
+		var jx: float = randf_range(-1.0, 1.0)
 		_cam.h_offset = jx * _shake * 0.35
 		_cam.v_offset = randf_range(-1.0, 1.0) * _shake * 0.35
 		ShakeKit.roll(_cam, _shake, jx)   # rotational force, reusing the jitter above
@@ -1624,10 +2185,25 @@ func _process(delta: float) -> void:
 		_cam.v_offset = 0.0
 		ShakeKit.clear(_cam)
 	# shortcut arrow bob
-	var arrow := track.get_node_or_null("ScArrow")
+	var arrow: Node3D = track.get_node_or_null("ScArrow") as Node3D
 	if arrow != null:
 		(arrow as Node3D).position.y = 1.7 + 0.22 * sin(_vis_t * 3.2)
 	_shotsec_tick()
+
+func _animate_mirror_pickups(delta: float) -> void:
+	_animate_pickup_records(_item_boxes, delta)
+	_animate_pickup_records(_orb_pickups, delta)
+
+func _animate_pickup_records(records: Array[Dictionary], delta: float) -> void:
+	for record: Dictionary in records:
+		if not bool(record.get("active", false)):
+			continue
+		var node: Node3D = record.get("node", null) as Node3D
+		if node == null or not is_instance_valid(node):
+			continue
+		node.rotate_y(delta * 2.0)
+		node.position.y = float(record.get("base_y", node.position.y)) \
+			+ 0.12 * sin(_vis_t * 3.0 + float(record.get("phase", 0.0)))
 
 func _shotsec_tick() -> void:
 	if _shotsec.is_empty():
@@ -1636,14 +2212,14 @@ func _shotsec_tick() -> void:
 		return
 	_shotsec.pop_front()
 	_shot_i += 1
-	var idx := _shot_i
+	var idx: int = _shot_i
 	_capture_shot(idx)
 
 func _capture_shot(idx: int) -> void:
 	await RenderingServer.frame_post_draw
-	var img := get_viewport().get_texture().get_image()
+	var img: Image = get_viewport().get_texture().get_image()
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("res://verify_out"))
-	var path := "res://verify_out/shotsec_%02d.png" % idx
+	var path: String = "res://verify_out/shotsec_%02d.png" % idx
 	img.save_png(path)
 	print("SHOTSEC ", path)
 	if _shotsec.is_empty() and _autoquit:
@@ -1654,7 +2230,8 @@ func _capture_shot(idx: int) -> void:
 func _build_ui() -> void:
 	var lg: Font = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
 	var baloo: Font = load("res://assets/fonts/Baloo2.ttf")
-	var ui := CanvasLayer.new()
+	var ui: CanvasLayer = CanvasLayer.new()
+	ui.layer = 2
 	add_child(ui)
 	_timer_label = _mk_label(lg, 38, 9)
 	_timer_label.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1705,12 +2282,12 @@ func _build_ui() -> void:
 	_hint_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint_label.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 	_hint_label.offset_bottom = -8
-	_hint_label.text = "STEER move · A = THROW SWAP ORB (trades places!) · hold B = DRIFT, release = BOOST"
+	_hint_label.text = "STEER move · A = USE ITEM / THROW ORB · hold B = DRIFT, release = BOOST"
 	_hint_label.add_theme_color_override("font_color", Color(0.9, 0.88, 0.8))
 	ui.add_child(_hint_label)
 
 func _mk_label(font: Font, size: int, outline: int) -> Label:
-	var l := Label.new()
+	var l: Label = Label.new()
 	if font != null:
 		l.add_theme_font_override("font", font)
 	l.add_theme_font_size_override("font_size", size)
@@ -1725,7 +2302,7 @@ func _mk_label(font: Font, size: int, outline: int) -> Label:
 ## Seats driven by a HUMAN with a real device (not a bot, not unassigned). The
 ## bar personalizes only these.
 func _human_seats() -> Array:
-	var out := []
+	var out: Array = []
 	for i in bot_enabled.size():
 		if not bot_enabled[i] and PlayerInput.device_of(i) != -99:
 			out.append(i)
@@ -1735,23 +2312,23 @@ func _human_seats() -> Array:
 ## representative when a bot-only demo has no humans — so the bar always shows
 ## a REAL key, never an abstract "A =" verb (doc 14 nit 3, notation consistency).
 func _hint_seats() -> Array:
-	var seats := _human_seats()
+	var seats: Array = _human_seats()
 	return seats if not seats.is_empty() else [0]
 
 ## One button's live legend: "KEY = LABEL" when every hint seat shares the key
 ## (all pads -> "(A) = ..."), else the per-seat "LABEL: KEY/NAME · KEY/NAME" form.
 func _btn_hint(action: String, label: String) -> String:
-	var seats := _hint_seats()
-	var keys := []
-	var same := true
+	var seats: Array = _hint_seats()
+	var keys: Array[String] = []
+	var same: bool = true
 	for i in seats:
-		var k := PlayerInput.describe_binding(int(i), action)
+		var k: String = PlayerInput.describe_binding(int(i), action)
 		if not keys.is_empty() and k != keys[0]:
 			same = false
 		keys.append(k)
 	if same:
 		return "%s = %s" % [keys[0], label]
-	var parts := []
+	var parts: Array[String] = []
 	for j in seats.size():
 		parts.append("%s/%s" % [keys[j], GameState.PLAYER_NAMES[int(seats[j])]])
 	return "%s: %s" % [label, " · ".join(parts)]
@@ -1759,7 +2336,7 @@ func _btn_hint(action: String, label: String) -> String:
 ## The main hint bar, always real keys via describe_binding (matches the card).
 func _controls_bar() -> String:
 	return "STEER move   ·   %s   ·   %s" % [
-		_btn_hint("a", "THROW SWAP ORB"), _btn_hint("b", "DRIFT hold / BOOST release")]
+		_btn_hint("a", "USE ITEM / THROW ORB"), _btn_hint("b", "DRIFT hold / BOOST release")]
 
 func _update_score_rows() -> void:
 	if _row_labels.is_empty():
@@ -1767,35 +2344,39 @@ func _update_score_rows() -> void:
 		for i in karts.size():
 			# Row is an HBox: [PlayerBadge, Label]. Slots are ranked by race
 			# position, so the badge's player is reassigned each frame below.
-			var hb := HBoxContainer.new()
+			var hb: HBoxContainer = HBoxContainer.new()
 			hb.add_theme_constant_override("separation", 6)
 			hb.add_child(PlayerBadge.make(0, 24))
-			var l := _mk_label(lg, 24, 7)
+			var l: Label = _mk_label(lg, 24, 7)
 			hb.add_child(l)
 			_score_rows.add_child(hb)
 			_row_labels.append(l)
-	var order := _positions_list()
+	var order: Array = _positions_list()
 	for pi in order.size():
 		var kart: SwapKart = karts[order[pi]]
 		var l: Label = _row_labels[pi]
-		var badge := l.get_parent().get_child(0) as PlayerBadge
+		var badge: PlayerBadge = l.get_parent().get_child(0) as PlayerBadge
 		badge.player_index = kart.index
 		badge.color = kart.color
 		badge.dim = 1.0 if not kart.finished else 0.6
-		var extra := ""
+		var extra: String = ""
 		if kart.finished:
 			extra = "  FIN"
 		elif kart.has_golden:
 			extra = "  [GOLD ORB]"
+		elif kart.held_item != ITEM_NONE:
+			extra = "  [%s]" % item_name(kart.held_item)
+		elif kart.orb_charges > 0:
+			extra = "  [SWAP ORB]"
 		l.text = "P%d %s · %d%s" % [pi + 1, kart.pname, int(_points[kart.index]), extra]
 		l.add_theme_color_override("font_color", kart.color)
 
 func _update_timer_label() -> void:
-	var t := int(race_t)
+	var t: int = int(race_t)
 	_timer_label.text = "%d:%02d" % [t / 60, t % 60]
 	_timer_label.add_theme_color_override("font_color",
 		Color(1.0, 0.4, 0.35) if time_cap - race_t < 20.0 and phase == Phase.PLAY else Color.WHITE)
-	var lead := _leader_all()
+	var lead: int = _leader_all()
 	var lead_lap: int = clampi((karts[lead] as SwapKart).laps_hw + 1, 1, laps_total)
 	if phase == Phase.END:
 		_lap_label.text = "RACE OVER"
@@ -1806,15 +2387,15 @@ func _flash_banner(bb: String, duration: float) -> void:
 	_banner_gen += 1
 	if not _mirror:
 		_net_ban = [_banner_gen, bb, duration]   # mirror replays this flasher
-	var gen := _banner_gen
+	var gen: int = _banner_gen
 	_banner.text = "[center]%s[/center]" % bb
 	_banner.visible = true
 	_banner.pivot_offset = _banner.size / 2.0
 	_banner.scale = Vector2(0.5, 0.5)
-	var pop := create_tween()
+	var pop: Tween = create_tween()
 	pop.tween_property(_banner, "scale", Vector2.ONE, 0.26).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	if duration < 100.0:
-		var tw := create_tween()
+		var tw: Tween = create_tween()
 		tw.tween_interval(duration)
 		tw.tween_callback(func() -> void:
 			if _banner_gen == gen:
@@ -1831,19 +2412,18 @@ func _flash_event(text: String, color: Color) -> void:
 
 ## --- ONLINE (phase 2): the render mirror ----------------------------------------------------------
 # Physics stays HOST-SIDE; the client renders. Karts ride a PackedInt32Array
-# (stride 12: pos cm / yaw mrad / speed / steer / progress / flags / drift /
-# place / one-shot anim id+counter); orbs are keyed by wire id; the crown,
-# golden pickup and windmill booms are driven from facts and animated locally.
+# (NET_KART_STRIDE: motion + inventory + debuff facts); projectiles/coffins are
+# keyed by wire id; pickup visibility, crown, gold and windmill ride facts.
 # Progress + finished flags make _positions_list(), the ladder HUD and the
 # FINAL STRETCH distance ticks work on the client through the SAME functions
 # the host runs.
 
 ## HOST, pumped by the estate at 20 Hz. Compact PUBLIC facts only.
 func _net_state() -> Dictionary:
-	var kd := PackedInt32Array()
+	var kd: PackedInt32Array = PackedInt32Array()
 	for k in karts:
 		var kart: SwapKart = k
-		var fl := 0
+		var fl: int = 0
 		if kart.drifting:
 			fl |= 1
 		if kart.boost_t > 0.0:
@@ -1873,34 +2453,62 @@ func _net_state() -> Dictionary:
 			fl,
 			int(roundf(kart.drift_t * 100.0)),
 			kart.finish_place,
-			kart.net_anim_id, kart.net_anim_n]))
+			kart.net_anim_id, kart.net_anim_n,
+			kart.held_item, kart.orb_charges,
+			int(roundf(kart.bell_slow_t * 100.0)),
+			int(roundf(kart.crow_t * 100.0)),
+			int(roundf(kart.tumble_t * 100.0))]))
 	var ob: Array = []
 	for o in orbs:
 		var orb: SwapOrb = o
 		if orb.dead or not is_instance_valid(orb):
 			continue
+		var orb_type: int = 1 if orb.golden else (2 if orb.shell else 0)
 		ob.append([orb.oid,
 			int(roundf(orb.global_position.x * 100.0)),
 			int(roundf(orb.global_position.y * 100.0)),
 			int(roundf(orb.global_position.z * 100.0)),
-			1 if orb.golden else 0, orb.owner_idx])
-	var pts := PackedInt32Array()
+			orb_type, orb.owner_idx])
+	var coffin_facts: Array = []
+	for record: Dictionary in _coffins:
+		var coffin_node: Node3D = record.get("node", null) as Node3D
+		if coffin_node == null or not is_instance_valid(coffin_node):
+			continue
+		coffin_facts.append([int(record.get("id", 0)), int(record.get("owner", -1)),
+			int(roundf(coffin_node.global_position.x * 100.0)),
+			int(roundf(coffin_node.global_position.y * 100.0)),
+			int(roundf(coffin_node.global_position.z * 100.0)),
+			int(roundf(coffin_node.rotation.y * 1000.0))])
+	var item_bits: PackedByteArray = PackedByteArray()
+	for record: Dictionary in _item_boxes:
+		item_bits.append(1 if bool(record.get("active", false)) else 0)
+	var orb_bits: PackedByteArray = PackedByteArray()
+	for record: Dictionary in _orb_pickups:
+		orb_bits.append(1 if bool(record.get("active", false)) else 0)
+	var pts: PackedInt32Array = PackedInt32Array()
 	for k in karts:
 		pts.append(int(_points[(k as SwapKart).index]))
-	var st := {
+	var st: Dictionary = {
 		"ph": phase, "rt": snappedf(race_t, 0.05), "lmax": laps_total,
 		"fl": _final_lap_called,
-		"kd": kd, "ob": ob, "pts": pts,
+		"kd": kd, "ob": ob, "cof": coffin_facts, "ib": item_bits,
+		"op": orb_bits, "pts": pts,
 		"ban": _net_ban, "ev": _net_ev,
 		"sw": _net_swap, "pf": _net_pf,
 		"kn": _net_knock, "bo": _net_bounce, "gp": _net_gp, "gc": _net_gc,
 		"ov": _net_ov, "cr": _crown_on, "champ": _net_champ,
-		"bm": [int(roundf(float(_booms[0].angle) * 1000.0)),
-			int(roundf(float(_booms[1].angle) * 1000.0))],
+		"bm": _boom_wire_angles(),
 	}
 	if _gold_pickup != null:
-		st["gold"] = [int(roundf(_gold_spot.x * 100.0)), int(roundf(_gold_spot.z * 100.0))]
+		st["gold"] = [int(roundf(_gold_spot.x * 100.0)), int(roundf(_gold_spot.y * 100.0)),
+			int(roundf(_gold_spot.z * 100.0))]
 	return st
+
+func _boom_wire_angles() -> PackedInt32Array:
+	var angles: PackedInt32Array = PackedInt32Array()
+	for boom: Dictionary in _booms:
+		angles.append(int(roundf(float(boom.get("angle", 0.0)) * 1000.0)))
+	return angles
 
 
 ## CLIENT. Latest-state-wins; all juice fires from DELTAS. Continuous motion
@@ -1908,7 +2516,7 @@ func _net_state() -> Dictionary:
 func _net_apply(st: Dictionary) -> void:
 	if not _mirror:
 		return
-	var prev := _mir
+	var prev: Dictionary = _mir
 	_mir = st
 	phase = int(st.get("ph", Phase.WAIT))
 	race_t = float(st.get("rt", race_t))
@@ -1922,10 +2530,10 @@ func _net_apply(st: Dictionary) -> void:
 	# --- karts: interp targets + instant facts; edges vs the PREVIOUS snapshot
 	var kd: PackedInt32Array = st.get("kd", PackedInt32Array())
 	var pkd: PackedInt32Array = prev.get("kd", PackedInt32Array())
-	var fin_n := 0
-	for i in karts.size():
-		var o := i * 12
-		if o + 12 > kd.size():
+	var fin_n: int = 0
+	for i: int in karts.size():
+		var o: int = i * NET_KART_STRIDE
+		if o + NET_KART_STRIDE > kd.size():
 			break
 		var kart: SwapKart = karts[i]
 		_mir_karts[i][0] = Vector3(kd[o] / 100.0, kd[o + 1] / 100.0, kd[o + 2] / 100.0)
@@ -1937,19 +2545,19 @@ func _net_apply(st: Dictionary) -> void:
 		kart.laps_hw = int(floorf(kart.progress / track.total_len))   # lap HUD
 		kart.drift_t = kd[o + 8] / 100.0
 		kart.finish_place = kd[o + 9]
-		var fl := kd[o + 7]
-		var pfl := pkd[o + 7] if o + 12 <= pkd.size() else 0
+		var fl: int = kd[o + 7]
+		var pfl: int = pkd[o + 7] if o + NET_KART_STRIDE <= pkd.size() else 0
 		kart.drifting = (fl & 1) != 0
 		kart.boost_t = 1.0 if (fl & 6) != 0 else 0.0
 		if (fl & 6) != 0 and (pfl & 6) == 0:
-			var tier := 2 if (fl & 4) != 0 else 1
+			var tier: int = 2 if (fl & 4) != 0 else 1
 			Sfx.play("bumper", -6.0 if tier == 1 else -1.0)
 			if tier == 2:
 				_burst(kart.global_position + Vector3(0, 0.3, 0), Color(0.8, 0.5, 1.0), 10)
 		kart.has_golden = (fl & 16) != 0
 		kart.swap_immune = 1.0 if (fl & 32) != 0 else 0.0
 		kart.locked = (fl & 64) != 0
-		var air := (fl & 128) != 0
+		var air: bool = (fl & 128) != 0
 		if air and (pfl & 128) == 0:
 			Sfx.play("putt", -4.0)             # ramp launch
 		elif not air and (pfl & 128) != 0:
@@ -1958,7 +2566,7 @@ func _net_apply(st: Dictionary) -> void:
 		kart.airborne = air
 		kart.on_shortcut = (fl & 256) != 0
 		kart.orb_cd = 0.0 if (fl & 512) != 0 else 1.0
-		var fin := (fl & 8) != 0
+		var fin: bool = (fl & 8) != 0
 		if fin and (pfl & 8) == 0:
 			Sfx.play("round_over", -6.0)
 			kart.cheer_forever()
@@ -1966,23 +2574,33 @@ func _net_apply(st: Dictionary) -> void:
 		if fin:
 			fin_n += 1
 		# one-shot anims off the counter delta (Throw includes its whoosh)
-		var an := kd[o + 11]
-		var pan := pkd[o + 11] if o + 12 <= pkd.size() else an
+		var an: int = kd[o + 11]
+		var pan: int = pkd[o + 11] if o + NET_KART_STRIDE <= pkd.size() else an
 		if an != pan:
-			var throw := kd[o + 10] == 1
+			var throw: bool = kd[o + 10] == 1
 			kart.play_anim("Throw" if throw else "Hit_A", 0.7 if throw else 0.5)
 			if throw:
 				Sfx.play("putt")
+		kart.held_item = kd[o + 12]
+		kart.orb_charges = kd[o + 13]
+		kart.bell_slow_t = float(kd[o + 14]) / 100.0
+		kart.crow_t = float(kd[o + 15]) / 100.0
+		kart.tumble_t = float(kd[o + 16]) / 100.0
 	_finish_count = fin_n
 	# --- orbs: keyed by wire id; vanish = fizzle/hit burst at last known spot
-	var seen := {}
-	for e in st.get("ob", []):
-		var oid := int(e[0])
-		var opos := Vector3(int(e[1]) / 100.0, int(e[2]) / 100.0, int(e[3]) / 100.0)
+	var seen: Dictionary = {}
+	var orb_facts: Array = st.get("ob", [])
+	for fact_value in orb_facts:
+		var e: Array = fact_value
+		if e.size() < 6:
+			continue
+		var oid: int = int(e[0])
+		var opos: Vector3 = Vector3(int(e[1]) / 100.0, int(e[2]) / 100.0, int(e[3]) / 100.0)
 		seen[oid] = true
 		if not _mir_orbs.has(oid):
-			var orb := SwapOrb.new()
-			orb.setup(self, int(e[5]), _colors[int(e[5])], int(e[4]) == 1)
+			var orb: SwapOrb = SwapOrb.new()
+			var orb_type: int = int(e[4])
+			orb.setup(self, int(e[5]), _colors[int(e[5])], orb_type == 1, orb_type == 2)
 			_fx_root.add_child(orb)
 			orb.global_position = opos
 			_mir_orbs[oid] = {"node": orb, "pos": opos}
@@ -1995,19 +2613,29 @@ func _net_apply(st: Dictionary) -> void:
 				_burst(node.global_position, Color(0.7, 0.8, 0.95, 0.7), 6)
 				node.queue_free()
 			_mir_orbs.erase(oid)
+	var coffin_facts: Array = st.get("cof", [])
+	var item_bits: PackedByteArray = st.get("ib", PackedByteArray())
+	var orb_bits: PackedByteArray = st.get("op", PackedByteArray())
+	_apply_mirror_coffins(coffin_facts)
+	_apply_pickup_visibility(_item_boxes, item_bits)
+	_apply_pickup_visibility(_orb_pickups, orb_bits)
 	# --- golden pickup lifecycle (claim burst rides the gc counter)
 	if st.has("gold"):
 		if _gold_pickup == null:
 			var g: Array = st["gold"]
-			_build_gold_pickup(Vector3(int(g[0]) / 100.0, 0.0, int(g[1]) / 100.0))
+			if g.size() >= 3:
+				_build_gold_pickup(Vector3(int(g[0]) / 100.0, int(g[1]) / 100.0, int(g[2]) / 100.0))
+			else:
+				_build_gold_pickup(Vector3(int(g[0]) / 100.0, 0.0, int(g[1]) / 100.0))
 			Sfx.play("confirm", -2.0)
 	elif _gold_pickup != null:
 		_gold_pickup.queue_free()
 		_gold_pickup = null
 	# --- windmill booms: resync the sweep (advanced locally in _mirror_tick)
-	var bm: Array = st.get("bm", [])
-	for i2 in mini(bm.size(), _booms.size()):
-		_booms[i2].angle = fposmod(float(int(bm[i2])) / 1000.0, TAU)
+	var bm: PackedInt32Array = st.get("bm", PackedInt32Array())
+	for i2: int in mini(bm.size(), _booms.size()):
+		var boom: Dictionary = _booms[i2]
+		boom["angle"] = fposmod(float(int(bm[i2])) / 1000.0, TAU)
 	# --- crown owner (position glued in _mirror_tick; sting rides ov)
 	_crown_on = int(st.get("cr", -1))
 	# --- juice counters
@@ -2017,9 +2645,9 @@ func _net_apply(st: Dictionary) -> void:
 	var sw: Array = st.get("sw", [0])
 	var psw: Array = prev.get("sw", [0])
 	if sw.size() >= 6 and int(sw[0]) > int(psw[0]):
-		var ai := int(sw[1])
-		var bi := int(sw[2])
-		var gold := int(sw[3]) == 1
+		var ai: int = int(sw[1])
+		var bi: int = int(sw[2])
+		var gold: bool = int(sw[3]) == 1
 		_swap_fx(sw[4], _colors[ai], _colors[bi])
 		_swap_fx(sw[5], _colors[bi], _colors[ai])
 		_shake = maxf(_shake, 0.55 if gold else 0.4)
@@ -2035,7 +2663,7 @@ func _net_apply(st: Dictionary) -> void:
 		_mir_photo_finish(int(pf[1]), int(pf[2]))
 	var kn: Array = st.get("kn", [0])
 	if kn.size() >= 2 and int(kn[0]) > int(prev.get("kn", [0])[0]):
-		var vic := int(kn[1])
+		var vic: int = int(kn[1])
 		Sfx.play("crush")
 		_shake = maxf(_shake, 0.22)
 		if vic >= 0 and vic < karts.size():
@@ -2049,12 +2677,12 @@ func _net_apply(st: Dictionary) -> void:
 		Sfx.play("card", -5.0)
 	var gc: Array = st.get("gc", [0])
 	if gc.size() >= 2 and int(gc[0]) > int(prev.get("gc", [0])[0]):
-		var who := int(gc[1])
+		var who: int = int(gc[1])
 		Sfx.play("sink", -3.0)
 		if who >= 0 and who < karts.size():
 			_burst((karts[who] as SwapKart).center(), Color(1.0, 0.85, 0.25), 20)
 	# --- champion (minted at END, 1.8 s before finished(); banner rides ban)
-	var champ := int(st.get("champ", -1))
+	var champ: int = int(st.get("champ", -1))
 	if champ >= 0 and int(prev.get("champ", -1)) < 0:
 		Sfx.play("match_win")
 		_confetti((karts[champ] as SwapKart).center(), _colors[champ])
@@ -2070,7 +2698,7 @@ func _net_apply(st: Dictionary) -> void:
 		_flash_event(str(ev[1]), Color(str(ev[2])))
 	# --- HUD + the stretch's distance ladder (same functions the host runs)
 	var pts: PackedInt32Array = st.get("pts", PackedInt32Array())
-	for i3 in mini(pts.size(), karts.size()):
+	for i3: int in mini(pts.size(), karts.size()):
 		_points[(karts[i3] as SwapKart).index] = pts[i3]
 	_update_score_rows()
 	_update_timer_label()
@@ -2078,6 +2706,45 @@ func _net_apply(st: Dictionary) -> void:
 		_stretch_tick()
 		if race_t >= 8.0:
 			_mir_latch("mirror_midrace")
+
+func _apply_mirror_coffins(facts: Array) -> void:
+	var seen: Dictionary = {}
+	for fact_value in facts:
+		var fact: Array = fact_value
+		if fact.size() < 6:
+			continue
+		var coffin_id: int = int(fact[0])
+		var owner: int = int(fact[1])
+		var pos: Vector3 = Vector3(float(fact[2]) / 100.0, float(fact[3]) / 100.0, float(fact[4]) / 100.0)
+		var yaw: float = float(fact[5]) / 1000.0
+		seen[coffin_id] = true
+		if not _mir_coffins.has(coffin_id):
+			var color: Color = _colors[owner] if owner >= 0 and owner < _colors.size() else Color.WHITE
+			var node: Node3D = _make_coffin(color)
+			add_child(node)
+			_mir_coffins[coffin_id] = {"node": node}
+		var record: Dictionary = _mir_coffins[coffin_id]
+		var coffin_node: Node3D = record.get("node", null) as Node3D
+		if coffin_node != null:
+			coffin_node.global_position = pos
+			coffin_node.rotation.y = yaw
+	for id_value in _mir_coffins.keys():
+		var coffin_id: int = int(id_value)
+		if seen.has(coffin_id):
+			continue
+		var record: Dictionary = _mir_coffins[coffin_id]
+		var node: Node3D = record.get("node", null) as Node3D
+		if node != null and is_instance_valid(node):
+			node.queue_free()
+		_mir_coffins.erase(coffin_id)
+
+func _apply_pickup_visibility(records: Array[Dictionary], bits: PackedByteArray) -> void:
+	for i: int in mini(records.size(), bits.size()):
+		var active: bool = bits[i] != 0
+		records[i]["active"] = active
+		var node: Node3D = records[i].get("node", null) as Node3D
+		if node != null and is_instance_valid(node):
+			node.visible = active
 
 
 ## The photo-finish ceremony, mirror side: flash + punch + double confetti now,
@@ -2113,19 +2780,20 @@ func _mirror_tick(delta: float) -> void:
 		return
 	if phase == Phase.PLAY:
 		race_t += delta   # smooth timer between snaps; resynced every apply
-	var k := 1.0 - exp(-18.0 * delta)
-	for i in mini(_mir_karts.size(), karts.size()):
+	var k: float = 1.0 - exp(-18.0 * delta)
+	for i: int in mini(_mir_karts.size(), karts.size()):
 		var kart: SwapKart = karts[i]
 		var tgt: Vector3 = _mir_karts[i][0]
 		if kart.global_position.distance_to(tgt) > 4.0:
 			kart.global_position = tgt   # SWAP teleports snap, never glide
 		else:
 			kart.global_position = kart.global_position.lerp(tgt, k)
-		var ny := lerp_angle(atan2(kart.heading.x, kart.heading.z), float(_mir_karts[i][1]), k)
+		var ny: float = lerp_angle(atan2(kart.heading.x, kart.heading.z), float(_mir_karts[i][1]), k)
 		kart.heading = Vector3(sin(ny), 0.0, cos(ny))
 		kart.vel_dir = kart.heading
 		kart._orient(delta)
-	for oid in _mir_orbs:
+	for oid_value in _mir_orbs:
+		var oid: int = int(oid_value)
 		var rec: Dictionary = _mir_orbs[oid]
 		var node: SwapOrb = rec["node"]
 		if not is_instance_valid(node):
@@ -2148,11 +2816,14 @@ func _mirror_tick(delta: float) -> void:
 		_gold_pickup.rotate_y(delta * 2.0)
 		(_gold_pickup.get_node("Bob") as Node3D).position.y = 1.0 + 0.18 * sin(now * 3.0)
 	# windmill sweep: constant local advance, resynced by every snapshot
-	for boom in _booms:
-		boom.angle = fposmod(float(boom.angle) + float(boom.speed) * delta, TAU)
-		(boom.pivot as Node3D).rotation.y = -float(boom.angle)
-		if boom.blades != null:
-			(boom.blades as Node3D).rotate_object_local(Vector3(0, 0, 1), delta * 1.4)
+	for boom_value in _booms:
+		var boom: Dictionary = boom_value
+		boom["angle"] = fposmod(float(boom.get("angle", 0.0)) + float(boom.get("speed", 0.0)) * delta, TAU)
+		var pivot: Node3D = boom.get("pivot", null) as Node3D
+		pivot.rotation.y = -float(boom.get("angle", 0.0))
+		var blades: Node3D = boom.get("blades", null) as Node3D
+		if blades != null:
+			blades.rotate_object_local(Vector3(0, 0, 1), delta * 1.4)
 
 
 ## Mirror-side latched evidence snaps (inert unless the probe harness is up).
@@ -2179,8 +2850,8 @@ func _net_snap(tag: String) -> void:
 ## short lap, so the whole night still reaches finished().
 func _netdemo_stage() -> void:
 	laps_total = 1
-	var line := track.total_len
-	var setups := {2: [12.0, -0.5], 3: [12.4, 0.5], 0: [26.0, 1.2], 1: [30.0, -1.2]}
+	var line: float = track.total_len
+	var setups: Dictionary = {2: [12.0, -0.5], 3: [12.4, 0.5], 0: [26.0, 1.2], 1: [30.0, -1.2]}
 	for i in karts.size():
 		if not setups.has(i):
 			continue

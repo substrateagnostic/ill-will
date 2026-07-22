@@ -1,629 +1,593 @@
 class_name SwapTrack
 extends Node3D
-## SWAP MEET track: toy-scale tabletop circuit. Pure geometry + meshes -
-## no physics bodies. The world queries nearest-point on the center
-## polyline (main loop or shortcut branch) and clamps karts to the
-## corridor; walls are math, not colliders.
+## Purpose-built estate circuit for SWAP MEET. The route quotes the estate in
+## one readable lap order: finish straight, hedge chicane, forest S-curves,
+## bog/plank split, windmill crossing, graveyard overpass, then home.
 ##
-## Geometry: control points -> closed Catmull-Rom loop, densely sampled
-## with per-point half-widths (the two pinches are narrow points where
-## the windmill booms sweep). One shortcut branch cuts the left end cap
-## with a plank ramp + jump gap.
+## Everything is hand-integrated against sampled centre lines. The late-lap
+## bridge is genuine topology: its samples rise above the start straight and
+## nearest-point queries include height so the two branches never collapse.
 
-## Uniform blow-up of the circuit (world units); lap length ~90u.
-const TRACK_SCALE := 1.18
+const SEG_SAMPLES: int = 16
+const SC_HW: float = 1.75
+const SC_RAMP_START: float = 2.2
+const SC_RAMP_LIP: float = 6.2
+const SC_LAND: float = 11.0
+const RAMP_H: float = 1.55
 
-## (x, z, halfwidth). Travel order = array order (counter-clockwise on
-## screen); index 0 is the START/FINISH line on the bottom straight.
-const CTRL := [
-	[10.5, 6.9, 2.3],    # 0 finish line, heading +x
-	[13.6, 5.1, 2.3],    # bottom-right sweeper
-	[15.8, 0.0, 2.5],    # right apex
-	[13.6, -5.1, 2.3],   # top-right
-	[7.0, -7.6, 2.3],    # top straight (right)
-	[0.0, -5.7, 1.55],   # TOP PINCH (windmill A)
-	[-7.0, -7.6, 2.3],   # top straight (left)
-	[-13.6, -5.1, 2.3],  # top-left
-	[-15.8, 0.0, 2.5],   # left apex
-	[-13.6, 5.1, 2.3],   # bottom-left
-	[-7.0, 7.6, 2.3],    # bottom straight (left)
-	[0.0, 5.7, 1.55],    # BOTTOM PINCH (windmill B)
+const COL_ASPHALT: Color = Color(0.19, 0.20, 0.29)
+const COL_CREAM: Color = Color(0.94, 0.86, 0.69)
+const COL_RAILRED: Color = Color(0.94, 0.18, 0.25)
+const COL_WOOD: Color = Color(0.34, 0.19, 0.12)
+const COL_PLANK: Color = Color(0.68, 0.42, 0.18)
+const COL_WATER: Color = Color(0.08, 0.48, 0.58, 0.72)
+const EDGE_COLORS: Array[Color] = [
+	Color(0.1, 0.95, 1.0), Color(1.0, 0.18, 0.72), Color(0.65, 1.0, 0.18),
 ]
-const SEG_SAMPLES := 14
 
-## Shortcut: branch across the left cap. Open Catmull chain.
-const SC_CTRL := [
-	[-7.6, -6.9],
-	[-8.7, -4.0],
-	[-9.1, 0.0],
-	[-8.7, 4.0],
-	[-7.6, 6.9],
+## x, z, half-width, height. Travel order is binding design order. Index 0 is
+## the finish line. Indices 15-17 make the high bridge across the index 0-1
+## straight; 18-19 descend behind it before closing the loop.
+const CTRL: Array = [
+	[-38.0, 24.0, 3.25, 0.0], # 0 start/finish straight
+	[-18.0, 24.0, 3.25, 0.0], # 1 straight end
+	[-10.0, 15.5, 2.65, 0.0], # 2 hedge chicane L
+	[-1.5, 28.0, 2.55, 0.0],  # 3 hedge chicane R
+	[7.5, 15.0, 2.65, 0.0],   # 4 hedge chicane L
+	[18.0, 22.0, 3.1, 0.0],   # 5 forest entry
+	[32.0, 13.0, 3.0, 0.0],   # 6 tree apex
+	[20.0, 4.0, 2.9, 0.0],    # 7 tree apex
+	[34.0, -6.0, 3.1, 0.0],   # 8 forest exit
+	[25.0, -19.0, 3.45, 0.0], # 9 bog entry
+	[7.0, -24.0, 3.6, 0.0],   # 10 bog pool
+	[-10.0, -16.5, 3.5, 0.0], # 11 bog exit
+	[-27.0, -21.0, 3.15, 0.0],# 12 windmill approach
+	[-39.0, -11.0, 3.0, 0.0], # 13 blade crossing
+	[-29.0, -2.0, 3.0, 0.0],  # 14 graveyard climb
+	[-28.0, 9.0, 2.85, 1.4],  # 15 bridge ramp
+	[-28.0, 24.0, 2.8, 5.6],  # 16 OVER start straight
+	[-28.0, 34.0, 2.8, 5.6],  # 17 bridge deck
+	[-42.0, 36.0, 3.0, 1.5],  # 18 descent
+	[-49.0, 30.0, 3.2, 0.0],  # 19 home bend
 ]
-const SC_HW := 1.6
-const SC_RAMP_START := 2.0    # s_sc where the plank ramp starts rising
-const SC_RAMP_LIP := 4.6      # s_sc of the launch lip (height RAMP_H)
-const SC_LAND := 9.2          # s_sc where landing planks resume
-const RAMP_H := 1.35
 
-## Scoring gates as loop fractions (finish line itself is not a gate).
-## Chosen so neither route bypasses one (shortcut spans ~0.47..0.72 L).
-const GATE_FRAC := [0.14, 0.30, 0.44, 0.79]
+## Risk/reward launch cutting the middle forest S. It is shorter but narrow,
+## airborne, and aimed between tree apexes.
+const SC_CTRL: Array = [
+	[17.0, 21.4], [21.5, 15.0], [24.0, 8.0], [27.0, 1.0], [33.0, -5.2],
+]
 
-const COL_ASPHALT := Color(0.32, 0.31, 0.36)
-const COL_CREAM := Color(0.93, 0.88, 0.78)
-const COL_RAILRED := Color(0.78, 0.17, 0.14)
-const COL_WOOD := Color(0.42, 0.27, 0.16)
-const COL_PLANK := Color(0.52, 0.36, 0.20)
+const GATE_FRAC: Array[float] = [0.20, 0.43, 0.64, 0.84]
 
-var pts := PackedVector3Array()      # dense main loop samples (y = 0)
-var tans := PackedVector3Array()     # unit tangents per sample
-var hws := PackedFloat32Array()      # half-width per sample
-var cum := PackedFloat32Array()      # arclength at sample i
-var total_len := 0.0
+var pts: PackedVector3Array = PackedVector3Array()
+var tans: PackedVector3Array = PackedVector3Array()
+var hws: PackedFloat32Array = PackedFloat32Array()
+var cum: PackedFloat32Array = PackedFloat32Array()
+var total_len: float = 0.0
 
-var sc_pts := PackedVector3Array()   # shortcut samples (y = 0, floor separate)
-var sc_tans := PackedVector3Array()
-var sc_cum := PackedFloat32Array()
-var sc_len := 0.0
-var sc_entry_s := 0.0                # s on MAIN of the branch point
-var sc_exit_s := 0.0
-var sc_entry_pos := Vector3.ZERO
-var sc_exit_pos := Vector3.ZERO
+var sc_pts: PackedVector3Array = PackedVector3Array()
+var sc_tans: PackedVector3Array = PackedVector3Array()
+var sc_cum: PackedFloat32Array = PackedFloat32Array()
+var sc_len: float = 0.0
+var sc_entry_s: float = 0.0
+var sc_exit_s: float = 0.0
+var sc_entry_pos: Vector3 = Vector3.ZERO
+var sc_exit_pos: Vector3 = Vector3.ZERO
 
-var gate_s := PackedFloat32Array()   # sorted s of the scoring gates
-var gate_pos: Array = []             # Vector3 per gate
-var _gate_bars: Array = []           # MeshInstance3D glow bar per gate
-var _vc_mat: StandardMaterial3D     # shared vertex-color material
+var gate_s: PackedFloat32Array = PackedFloat32Array()
+var gate_pos: Array[Vector3] = []
+var windmill_s: float = 0.0
+var bog_start_s: float = 0.0
+var bog_end_s: float = 0.0
+var bridge_start_s: float = 0.0
+var bridge_end_s: float = 0.0
+
+var _gate_bars: Array[MeshInstance3D] = []
+var _vc_mat: StandardMaterial3D = null
 
 func build() -> void:
 	_vc_mat = StandardMaterial3D.new()
 	_vc_mat.vertex_color_use_as_albedo = true
-	_vc_mat.roughness = 0.85
+	_vc_mat.roughness = 0.82
 	_vc_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_sample_main()
 	_sample_shortcut()
-	for f in GATE_FRAC:
-		var s := float(f) * total_len
+	bog_start_s = _control_s(9)
+	bog_end_s = _control_s(12)
+	windmill_s = _control_s(13)
+	bridge_start_s = _control_s(14)
+	bridge_end_s = _control_s(18)
+	for frac: float in GATE_FRAC:
+		var s: float = frac * total_len
+		var sample: Dictionary = sample_at(s)
 		gate_s.append(s)
-		gate_pos.append(sample_at(s).pos)
-	_build_table()
+		gate_pos.append(Vector3(sample.get("pos", Vector3.ZERO)))
+	_build_ground()
 	_build_ribbon()
-	_build_rails()
+	_build_rails_and_markers()
 	_build_dashes()
 	_build_finish()
 	_build_gates()
 	_build_shortcut_visual()
-	_build_decor()
-	_build_b8_horizon()  # B8-HOOK: estate grounds ringing the night market (arena_dressing.gd)
-
-## --- geometry ---------------------------------------------------------------
+	_build_bog()
+	_build_biomes()
+	_build_bridge_supports()
 
 static func _cr(p0: Vector3, p1: Vector3, p2: Vector3, p3: Vector3, t: float) -> Vector3:
-	var t2 := t * t
-	var t3 := t2 * t
+	var t2: float = t * t
+	var t3: float = t2 * t
 	return 0.5 * ((2.0 * p1) + (-p0 + p2) * t \
 		+ (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 \
 		+ (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3)
 
+func _ctrl_vec(index: int) -> Vector3:
+	var c: Array = CTRL[index]
+	return Vector3(float(c[0]), float(c[3]), float(c[1]))
+
+func _control_s(index: int) -> float:
+	return float(cum[clampi(index * SEG_SAMPLES, 0, cum.size() - 1)])
+
 func _sample_main() -> void:
-	var n := CTRL.size()
-	var cp: Array = []
-	var chw: Array = []
-	for c in CTRL:
-		cp.append(Vector3(float(c[0]) * TRACK_SCALE, 0.0, float(c[1]) * TRACK_SCALE))
-		chw.append(float(c[2]) * TRACK_SCALE)
-	for i in n:
-		var p0: Vector3 = cp[(i - 1 + n) % n]
-		var p1: Vector3 = cp[i]
-		var p2: Vector3 = cp[(i + 1) % n]
-		var p3: Vector3 = cp[(i + 2) % n]
-		for k in SEG_SAMPLES:
-			var t := float(k) / SEG_SAMPLES
+	var n: int = CTRL.size()
+	for i: int in n:
+		var p0: Vector3 = _ctrl_vec((i - 1 + n) % n)
+		var p1: Vector3 = _ctrl_vec(i)
+		var p2: Vector3 = _ctrl_vec((i + 1) % n)
+		var p3: Vector3 = _ctrl_vec((i + 2) % n)
+		var c1: Array = CTRL[i]
+		var c2: Array = CTRL[(i + 1) % n]
+		for k: int in SEG_SAMPLES:
+			var t: float = float(k) / float(SEG_SAMPLES)
+			var smooth: float = t * t * (3.0 - 2.0 * t)
 			pts.append(_cr(p0, p1, p2, p3, t))
-			var st := t * t * (3.0 - 2.0 * t)
-			hws.append(lerpf(float(chw[i]), float(chw[(i + 1) % n]), st))
-	var m := pts.size()
+			hws.append(lerpf(float(c1[2]), float(c2[2]), smooth))
+	var m: int = pts.size()
 	cum.resize(m)
-	var acc := 0.0
-	for i in m:
+	var acc: float = 0.0
+	for i: int in m:
 		cum[i] = acc
 		acc += pts[i].distance_to(pts[(i + 1) % m])
 	total_len = acc
 	tans.resize(m)
-	for i in m:
+	for i: int in m:
 		tans[i] = (pts[(i + 1) % m] - pts[i]).normalized()
 
 func _sample_shortcut() -> void:
-	var n := SC_CTRL.size()
-	var cp: Array = []
-	for c in SC_CTRL:
-		cp.append(Vector3(float(c[0]) * TRACK_SCALE, 0.0, float(c[1]) * TRACK_SCALE))
-	for i in n - 1:
+	var cp: Array[Vector3] = []
+	for raw: Array in SC_CTRL:
+		cp.append(Vector3(float(raw[0]), 0.0, float(raw[1])))
+	var n: int = cp.size()
+	for i: int in n - 1:
 		var p0: Vector3 = cp[maxi(i - 1, 0)]
 		var p1: Vector3 = cp[i]
 		var p2: Vector3 = cp[i + 1]
 		var p3: Vector3 = cp[mini(i + 2, n - 1)]
-		for k in SEG_SAMPLES:
-			var t := float(k) / SEG_SAMPLES
+		for k: int in SEG_SAMPLES:
+			var t: float = float(k) / float(SEG_SAMPLES)
 			sc_pts.append(_cr(p0, p1, p2, p3, t))
 	sc_pts.append(cp[n - 1])
-	var m := sc_pts.size()
+	var m: int = sc_pts.size()
 	sc_cum.resize(m)
-	var acc := 0.0
-	for i in m:
+	var acc: float = 0.0
+	for i: int in m:
 		sc_cum[i] = acc
 		if i < m - 1:
 			acc += sc_pts[i].distance_to(sc_pts[i + 1])
 	sc_len = acc
 	sc_tans.resize(m)
-	for i in m:
-		var j := mini(i, m - 2)
+	for i: int in m:
+		var j: int = mini(i, m - 2)
 		sc_tans[i] = (sc_pts[j + 1] - sc_pts[j]).normalized()
 	sc_entry_pos = sc_pts[0]
 	sc_exit_pos = sc_pts[m - 1]
-	sc_entry_s = nearest_main(sc_entry_pos, -1).s
-	sc_exit_s = nearest_main(sc_exit_pos, -1).s
+	var entry: Dictionary = nearest_main(sc_entry_pos, -1)
+	var exit: Dictionary = nearest_main(sc_exit_pos, -1)
+	sc_entry_s = float(entry.get("s", 0.0))
+	sc_exit_s = float(exit.get("s", 0.0))
 
-## Nearest point on the MAIN loop. hint = last segment index (or -1).
 func nearest_main(pos: Vector3, hint: int) -> Dictionary:
 	return _nearest(pos, hint, pts, tans, cum, hws, true)
 
 func nearest_sc(pos: Vector3, hint: int) -> Dictionary:
 	return _nearest(pos, hint, sc_pts, sc_tans, sc_cum, PackedFloat32Array(), false)
 
-func _nearest(pos: Vector3, hint: int, p: PackedVector3Array, tn: PackedVector3Array,
-		cm: PackedFloat32Array, hw: PackedFloat32Array, closed: bool) -> Dictionary:
-	var m := p.size()
-	var last := m if closed else m - 1
-	var lo := 0
-	var hi := last
+func _nearest(pos: Vector3, hint: int, path: PackedVector3Array,
+		path_tans: PackedVector3Array, path_cum: PackedFloat32Array,
+		path_hw: PackedFloat32Array, closed: bool) -> Dictionary:
+	var m: int = path.size()
+	var last: int = m if closed else m - 1
+	var lo: int = 0
+	var hi: int = last
 	if hint >= 0:
-		lo = hint - 8
-		hi = hint + 9
-	var best_d2 := 1e18
-	var bi := 0
-	var bt := 0.0
-	var bproj := Vector3.ZERO
-	var flat := Vector3(pos.x, 0.0, pos.z)
-	for ii in range(lo, hi):
-		var i := ((ii % last) + last) % last
-		var a := p[i]
-		var b := p[(i + 1) % m]
-		var ab := b - a
-		var len2 := ab.length_squared()
+		lo = hint - 12
+		hi = hint + 13
+	var best_d2: float = INF
+	var best_i: int = 0
+	var best_t: float = 0.0
+	var best_proj: Vector3 = Vector3.ZERO
+	for raw_i: int in range(lo, hi):
+		var i: int = posmod(raw_i, last)
+		var a: Vector3 = path[i]
+		var b: Vector3 = path[(i + 1) % m]
+		var ab: Vector3 = b - a
+		var len2: float = ab.length_squared()
 		if len2 < 0.000001:
 			continue
-		var t := clampf((flat - a).dot(ab) / len2, 0.0, 1.0)
-		var proj := a + ab * t
-		var d2 := flat.distance_squared_to(proj)
+		var t: float = clampf((pos - a).dot(ab) / len2, 0.0, 1.0)
+		var proj: Vector3 = a + ab * t
+		var d2: float = pos.distance_squared_to(proj)
 		if d2 < best_d2:
 			best_d2 = d2
-			bi = i
-			bt = t
-			bproj = proj
-	var tangent := tn[bi]
-	var right := tangent.cross(Vector3.UP)
-	var seg_len: float = (cm[(bi + 1) % m] if bi + 1 < m else total_len) - cm[bi]
-	if bi + 1 >= m and closed:
-		seg_len = total_len - cm[bi]
-	var s: float = cm[bi] + bt * maxf(seg_len, 0.0001)
-	var w: float = hws[bi] if hw.size() > 0 else SC_HW
-	return {"idx": bi, "s": s, "lat": (flat - bproj).dot(right),
-		"tangent": tangent, "proj": bproj, "hw": w}
+			best_i = i
+			best_t = t
+			best_proj = proj
+	var tangent: Vector3 = path_tans[best_i]
+	var right: Vector3 = tangent.cross(Vector3.UP).normalized()
+	var seg_len: float = 0.0
+	if best_i + 1 < m:
+		seg_len = float(path_cum[best_i + 1] - path_cum[best_i])
+	elif closed:
+		seg_len = total_len - float(path_cum[best_i])
+	var s: float = float(path_cum[best_i]) + best_t * maxf(seg_len, 0.0001)
+	var width: float = float(path_hw[best_i]) if not path_hw.is_empty() else SC_HW
+	return {"idx": best_i, "s": s, "lat": (pos - best_proj).dot(right),
+		"tangent": tangent, "proj": best_proj, "hw": width, "floor": best_proj.y}
 
-## Sample the MAIN loop at arclength s -> {pos, tangent, hw}.
 func sample_at(s: float) -> Dictionary:
-	s = fposmod(s, total_len)
-	var i := cum.bsearch(s) - 1
-	i = clampi(i, 0, pts.size() - 1)
-	var nxt := (i + 1) % pts.size()
-	var seg: float = (cum[nxt] if nxt > 0 else total_len) - cum[i]
-	var t: float = clampf((s - cum[i]) / maxf(seg, 0.0001), 0.0, 1.0)
-	return {"pos": pts[i].lerp(pts[nxt], t), "tangent": tans[i], "hw": hws[i]}
+	var wrapped: float = fposmod(s, total_len)
+	var i: int = clampi(cum.bsearch(wrapped) - 1, 0, pts.size() - 1)
+	var next_i: int = (i + 1) % pts.size()
+	var seg: float = (float(cum[next_i]) if next_i > 0 else total_len) - float(cum[i])
+	var t: float = clampf((wrapped - float(cum[i])) / maxf(seg, 0.0001), 0.0, 1.0)
+	return {"pos": pts[i].lerp(pts[next_i], t), "tangent": tans[i], "hw": hws[i]}
 
 func sc_sample_at(s: float) -> Dictionary:
-	s = clampf(s, 0.0, sc_len)
-	var i := sc_cum.bsearch(s) - 1
-	i = clampi(i, 0, sc_pts.size() - 2)
-	var seg: float = sc_cum[i + 1] - sc_cum[i]
-	var t: float = clampf((s - sc_cum[i]) / maxf(seg, 0.0001), 0.0, 1.0)
+	var clamped: float = clampf(s, 0.0, sc_len)
+	var i: int = clampi(sc_cum.bsearch(clamped) - 1, 0, sc_pts.size() - 2)
+	var seg: float = float(sc_cum[i + 1] - sc_cum[i])
+	var t: float = clampf((clamped - float(sc_cum[i])) / maxf(seg, 0.0001), 0.0, 1.0)
 	return {"pos": sc_pts[i].lerp(sc_pts[i + 1], t), "tangent": sc_tans[i], "hw": SC_HW}
 
-## Floor height along the shortcut (plank ramp -> gap -> landing).
-## Linear incline - matches the single slab the visual builds.
 func sc_floor(s: float) -> float:
 	if s < SC_RAMP_START or s >= SC_RAMP_LIP:
 		return 0.0
 	return RAMP_H * (s - SC_RAMP_START) / (SC_RAMP_LIP - SC_RAMP_START)
 
-## --- meshes -------------------------------------------------------------------
+## Water is deliberately off the fast centre plank. The returned multiplier is
+## consumed by SwapKart on the next deterministic tick.
+func bog_speed_scale(s: float, lateral: float) -> float:
+	if s >= bog_start_s and s <= bog_end_s and absf(lateral) > 0.72:
+		return 0.60
+	return 1.0
 
-func _mmi(mm: MultiMesh) -> MultiMeshInstance3D:
-	var inst := MultiMeshInstance3D.new()
-	inst.multimesh = mm
-	inst.material_override = _vc_mat
-	add_child(inst)
-	return inst
+func windmill_gate() -> Dictionary:
+	return sample_at(windmill_s)
 
-static func _seg_xform(a: Vector3, b: Vector3, size_scale: Vector3) -> Transform3D:
-	var fwd := (b - a).normalized()
-	var basis := Basis.looking_at(-fwd, Vector3.UP) * Basis.from_scale(size_scale)
+static func _seg_xform(a: Vector3, b: Vector3, scale_v: Vector3) -> Transform3D:
+	var fwd: Vector3 = (b - a).normalized()
+	var basis: Basis = Basis.looking_at(-fwd, Vector3.UP) * Basis.from_scale(scale_v)
 	return Transform3D(basis, (a + b) * 0.5)
 
-func _build_ribbon() -> void:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var m := pts.size()
-	for i in m:
-		var j := (i + 1) % m
-		var r0 := tans[i].cross(Vector3.UP)
-		var r1 := tans[j].cross(Vector3.UP)
-		var y := Vector3(0, 0.02, 0)
-		var a0 := pts[i] - r0 * hws[i] + y
-		var b0 := pts[i] + r0 * hws[i] + y
-		var a1 := pts[j] - r1 * hws[j] + y
-		var b1 := pts[j] + r1 * hws[j] + y
-		var shade := 1.0 + 0.045 * sin(float(i) * 12.9898)
-		var c := Color(COL_ASPHALT.r * shade, COL_ASPHALT.g * shade, COL_ASPHALT.b * shade)
-		for v in [a0, b0, a1, b0, b1, a1]:
-			st.set_color(c)
-			st.set_normal(Vector3.UP)
-			st.add_vertex(v)
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	mi.material_override = _vc_mat
-	add_child(mi)
+func _material(color: Color, emission: float = 0.0) -> StandardMaterial3D:
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.roughness = 0.8
+	if emission > 0.0:
+		mat.emission_enabled = true
+		mat.emission = color
+		mat.emission_energy_multiplier = emission
+	return mat
 
-func _build_rails() -> void:
-	var m := pts.size()
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	var box := BoxMesh.new()
-	box.size = Vector3(0.26, 0.34, 1.0)
-	mm.mesh = box
-	var xforms: Array = []
-	var cols: Array = []
+func _add_multimesh(mesh: Mesh, transforms: Array[Transform3D], colors: Array[Color],
+		material: Material) -> void:
+	var multimesh: MultiMesh = MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.use_colors = true
+	multimesh.mesh = mesh
+	multimesh.instance_count = transforms.size()
+	for i: int in transforms.size():
+		multimesh.set_instance_transform(i, transforms[i])
+		multimesh.set_instance_color(i, colors[i])
+	var instance: MultiMeshInstance3D = MultiMeshInstance3D.new()
+	instance.multimesh = multimesh
+	instance.material_override = material
+	add_child(instance)
+
+func _build_ground() -> void:
+	var ground: MeshInstance3D = MeshInstance3D.new()
+	var plane: PlaneMesh = PlaneMesh.new()
+	plane.size = Vector2(118.0, 92.0)
+	ground.mesh = plane
+	ground.material_override = _material(Color(0.035, 0.075, 0.075))
+	ground.position.y = -0.12
+	add_child(ground)
+
+func _build_ribbon() -> void:
+	var tool: SurfaceTool = SurfaceTool.new()
+	tool.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var m: int = pts.size()
+	for i: int in m:
+		var j: int = (i + 1) % m
+		var r0: Vector3 = tans[i].cross(Vector3.UP).normalized()
+		var r1: Vector3 = tans[j].cross(Vector3.UP).normalized()
+		var lift: Vector3 = Vector3(0.0, 0.025, 0.0)
+		var a0: Vector3 = pts[i] - r0 * hws[i] + lift
+		var b0: Vector3 = pts[i] + r0 * hws[i] + lift
+		var a1: Vector3 = pts[j] - r1 * hws[j] + lift
+		var b1: Vector3 = pts[j] + r1 * hws[j] + lift
+		var shade: float = 0.94 + 0.05 * sin(float(i) * 2.71)
+		var color: Color = Color(COL_ASPHALT.r * shade, COL_ASPHALT.g * shade, COL_ASPHALT.b * shade)
+		for vertex: Vector3 in [a0, b0, a1, b0, b1, a1]:
+			tool.set_color(color)
+			tool.set_normal(Vector3.UP)
+			tool.add_vertex(vertex)
+	var ribbon: MeshInstance3D = MeshInstance3D.new()
+	ribbon.mesh = tool.commit()
+	ribbon.material_override = _vc_mat
+	add_child(ribbon)
+
+func _build_rails_and_markers() -> void:
+	var rail_mat: StandardMaterial3D = StandardMaterial3D.new()
+	rail_mat.vertex_color_use_as_albedo = true
+	rail_mat.roughness = 0.85
+	var rail_mesh: BoxMesh = BoxMesh.new()
+	rail_mesh.size = Vector3(0.24, 0.38, 1.0)
+	var rail_transforms: Array[Transform3D] = []
+	var rail_colors: Array[Color] = []
+	var m: int = pts.size()
 	for side: float in [-1.0, 1.0]:
-		for i in m:
-			var j := (i + 1) % m
-			var r0 := tans[i].cross(Vector3.UP)
-			var r1 := tans[j].cross(Vector3.UP)
-			var a: Vector3 = pts[i] + r0 * (hws[i] + 0.13) * side + Vector3(0, 0.19, 0)
-			var b: Vector3 = pts[j] + r1 * (hws[j] + 0.13) * side + Vector3(0, 0.19, 0)
-			var seg_len: float = a.distance_to(b)
-			xforms.append(_seg_xform(a, b, Vector3(1, 1, seg_len * 1.12)))
-			cols.append(COL_RAILRED if int(cum[i] / 2.6) % 4 == 0 else COL_CREAM)
-	mm.instance_count = xforms.size()
-	for i in xforms.size():
-		mm.set_instance_transform(i, xforms[i])
-		mm.set_instance_color(i, cols[i])
-	_mmi(mm)
+		for i: int in range(0, m, 2):
+			var j: int = (i + 2) % m
+			var r0: Vector3 = tans[i].cross(Vector3.UP).normalized()
+			var r1: Vector3 = tans[j].cross(Vector3.UP).normalized()
+			var a: Vector3 = pts[i] + r0 * (hws[i] + 0.16) * side + Vector3(0, 0.23, 0)
+			var b: Vector3 = pts[j] + r1 * (hws[j] + 0.16) * side + Vector3(0, 0.23, 0)
+			rail_transforms.append(_seg_xform(a, b, Vector3(1, 1, a.distance_to(b) * 1.05)))
+			rail_colors.append(Color(0.18, 0.16, 0.24))
+	_add_multimesh(rail_mesh, rail_transforms, rail_colors, rail_mat)
+	var marker_mesh: CylinderMesh = CylinderMesh.new()
+	marker_mesh.top_radius = 0.10
+	marker_mesh.bottom_radius = 0.16
+	marker_mesh.height = 0.72
+	for wanted_color: int in EDGE_COLORS.size():
+		var marker_mat: StandardMaterial3D = _material(EDGE_COLORS[wanted_color], 2.2)
+		marker_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		var marker_transforms: Array[Transform3D] = []
+		var marker_colors: Array[Color] = []
+		for s: float in rangef(0.0, total_len, 4.5):
+			var color_index: int = posmod(int(s / 4.5), EDGE_COLORS.size())
+			if color_index != wanted_color:
+				continue
+			var sample: Dictionary = sample_at(s)
+			var pos: Vector3 = Vector3(sample.get("pos", Vector3.ZERO))
+			var tangent: Vector3 = Vector3(sample.get("tangent", Vector3.FORWARD))
+			var right: Vector3 = tangent.cross(Vector3.UP).normalized()
+			var width: float = float(sample.get("hw", 3.0))
+			for side: float in [-1.0, 1.0]:
+				var marker_pos: Vector3 = pos + right * (width + 0.42) * side + Vector3(0, 0.36, 0)
+				marker_transforms.append(Transform3D(Basis.IDENTITY, marker_pos))
+				marker_colors.append(Color.WHITE)
+		_add_multimesh(marker_mesh, marker_transforms, marker_colors, marker_mat)
 
 func _build_dashes() -> void:
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	var box := BoxMesh.new()
-	box.size = Vector3(0.13, 0.012, 1.15)
-	mm.mesh = box
-	var n := int(total_len / 2.8)
-	mm.instance_count = n
-	for i in n:
-		var sm := sample_at(float(i) * 2.8)
-		var basis := Basis.looking_at(-Vector3(sm.tangent), Vector3.UP)
-		mm.set_instance_transform(i, Transform3D(basis, Vector3(sm.pos) + Vector3(0, 0.033, 0)))
-		mm.set_instance_color(i, Color(0.92, 0.92, 0.88, 1.0))
-	_mmi(mm)
+	var mat: StandardMaterial3D = StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var mesh: BoxMesh = BoxMesh.new()
+	mesh.size = Vector3(0.15, 0.035, 1.35)
+	var transforms: Array[Transform3D] = []
+	var colors: Array[Color] = []
+	for s: float in rangef(1.5, total_len, 5.0):
+		var sample: Dictionary = sample_at(s)
+		var pos: Vector3 = Vector3(sample.get("pos", Vector3.ZERO)) + Vector3(0, 0.055, 0)
+		var tangent: Vector3 = Vector3(sample.get("tangent", Vector3.FORWARD))
+		transforms.append(Transform3D(Basis.looking_at(-tangent, Vector3.UP), pos))
+		colors.append(Color(0.82, 0.83, 0.9))
+	_add_multimesh(mesh, transforms, colors, mat)
 
 func _build_finish() -> void:
-	var sm := sample_at(0.0)
-	var tangent := Vector3(sm.tangent)
-	var right := tangent.cross(Vector3.UP)
-	var c := Vector3(sm.pos)
-	var hw := float(sm.hw)
-	# checker strip: 2 rows across the track
-	var mm := MultiMesh.new()
-	mm.transform_format = MultiMesh.TRANSFORM_3D
-	mm.use_colors = true
-	var box := BoxMesh.new()
-	var cell := 0.46
-	box.size = Vector3(cell, 0.013, cell)
-	mm.mesh = box
-	var cols_n := int(hw * 2.0 / cell)
-	mm.instance_count = cols_n * 2
-	var k := 0
-	for row in 2:
-		for i in cols_n:
-			var p := c + right * (-hw + cell * (0.5 + i)) + tangent * (cell * (row - 0.5)) + Vector3(0, 0.035, 0)
-			var basis := Basis.looking_at(-tangent, Vector3.UP)
-			mm.set_instance_transform(k, Transform3D(basis, p))
-			mm.set_instance_color(k, Color(0.1, 0.1, 0.12) if (i + row) % 2 == 0 else Color(0.95, 0.95, 0.95))
-			k += 1
-	_mmi(mm)
-	# striped posts either side + overhead banner bar
-	for side in [-1.0, 1.0]:
-		_candy_pole(c + right * (hw + 0.55) * side, 2.6)
-	var bar := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = Vector3(hw * 2.0 + 1.5, 0.22, 0.3)
-	bar.mesh = bm
-	var bmat := StandardMaterial3D.new()
-	bmat.albedo_color = COL_RAILRED
-	bar.material_override = bmat
-	bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	# bar length axis = local x; align x across the track
-	add_child(bar)
-	bar.global_transform = Transform3D(Basis(right, Vector3.UP, tangent), c + Vector3(0, 2.6, 0))
-	var lbl := Label3D.new()
-	lbl.text = "FINISH"
-	lbl.font = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
-	lbl.font_size = 120
-	lbl.pixel_size = 0.008
-	lbl.modulate = Color(0.98, 0.95, 0.86)
-	lbl.outline_size = 26
-	lbl.outline_modulate = Color(0.1, 0.08, 0.1)
-	lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	lbl.position = c + Vector3(0, 3.35, 0)
-	add_child(lbl)
-	var flag: PackedScene = load("res://assets/models/minigolf/flag-red.glb")
-	if flag != null:
-		var f: Node3D = flag.instantiate()
-		f.name = "FinishFlag"
-		f.position = c + right * (hw + 1.5)
-		add_child(f)
-
-func _candy_pole(pos: Vector3, h: float) -> void:
-	var segs := 6
-	for i in segs:
-		var mi := MeshInstance3D.new()
-		var cm := CylinderMesh.new()
-		cm.top_radius = 0.11
-		cm.bottom_radius = 0.11
-		cm.height = h / segs
-		mi.mesh = cm
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = COL_RAILRED if i % 2 == 0 else Color(0.96, 0.94, 0.9)
-		mi.material_override = mat
-		mi.position = pos + Vector3(0, h / segs * (0.5 + i), 0)
-		add_child(mi)
+	var sample: Dictionary = sample_at(0.0)
+	var center: Vector3 = Vector3(sample.get("pos", Vector3.ZERO))
+	var tangent: Vector3 = Vector3(sample.get("tangent", Vector3.RIGHT))
+	var right: Vector3 = tangent.cross(Vector3.UP).normalized()
+	var width: float = float(sample.get("hw", 3.0))
+	var cell: float = 0.5
+	var columns: int = int(width * 2.0 / cell)
+	for row: int in 2:
+		for i: int in columns:
+			var tile: MeshInstance3D = MeshInstance3D.new()
+			var mesh: BoxMesh = BoxMesh.new()
+			mesh.size = Vector3(cell, 0.04, cell)
+			tile.mesh = mesh
+			tile.material_override = _material(Color(0.96, 0.96, 1.0) if (i + row) % 2 else Color(0.05, 0.05, 0.09))
+			tile.position = center + right * (-width + cell * (0.5 + i)) + tangent * cell * (float(row) - 0.5) + Vector3(0, 0.06, 0)
+			add_child(tile)
+	for side: float in [-1.0, 1.0]:
+		var post: MeshInstance3D = MeshInstance3D.new()
+		var mesh: CylinderMesh = CylinderMesh.new()
+		mesh.top_radius = 0.14
+		mesh.bottom_radius = 0.2
+		mesh.height = 3.2
+		post.mesh = mesh
+		post.material_override = _material(COL_RAILRED, 0.35)
+		post.position = center + right * (width + 0.65) * side + Vector3(0, 1.6, 0)
+		add_child(post)
+	var label: Label3D = Label3D.new()
+	label.text = "SWAP MEET"
+	label.font = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
+	label.font_size = 118
+	label.pixel_size = 0.009
+	label.modulate = Color(1.0, 0.83, 0.2)
+	label.outline_size = 24
+	label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	label.position = center + Vector3(0, 3.45, 0)
+	add_child(label)
 
 func _build_gates() -> void:
-	for gi in gate_s.size():
-		var sm := sample_at(gate_s[gi])
-		var tangent := Vector3(sm.tangent)
-		var right := tangent.cross(Vector3.UP)
-		var c := Vector3(sm.pos)
-		var hw := float(sm.hw)
-		for side in [-1.0, 1.0]:
-			_gate_pole(c + right * (hw + 0.45) * side, 1.9)
-		var bar := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(hw * 2.0 + 1.2, 0.14, 0.14)
-		bar.mesh = bm
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(0.35, 0.75, 0.95)
-		mat.emission_enabled = true
-		mat.emission = Color(0.2, 0.5, 0.8)
-		mat.emission_energy_multiplier = 0.6
-		bar.material_override = mat
-		bar.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	for gate_index: int in gate_s.size():
+		var sample: Dictionary = sample_at(gate_s[gate_index])
+		var center: Vector3 = Vector3(sample.get("pos", Vector3.ZERO))
+		var tangent: Vector3 = Vector3(sample.get("tangent", Vector3.FORWARD))
+		var right: Vector3 = tangent.cross(Vector3.UP).normalized()
+		var width: float = float(sample.get("hw", 3.0))
+		var bar: MeshInstance3D = MeshInstance3D.new()
+		var mesh: BoxMesh = BoxMesh.new()
+		mesh.size = Vector3(width * 2.0 + 1.2, 0.14, 0.14)
+		bar.mesh = mesh
+		bar.material_override = _material(Color(0.14, 0.8, 1.0), 1.4)
 		add_child(bar)
-		bar.global_transform = Transform3D(Basis(right, Vector3.UP, tangent), c + Vector3(0, 1.9, 0))
+		bar.global_transform = Transform3D(Basis(right, Vector3.UP, tangent), center + Vector3(0, 2.05, 0))
 		_gate_bars.append(bar)
 
-func _gate_pole(pos: Vector3, h: float) -> void:
-	var mi := MeshInstance3D.new()
-	var cm := CylinderMesh.new()
-	cm.top_radius = 0.09
-	cm.bottom_radius = 0.13
-	cm.height = h
-	mi.mesh = cm
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.35, 0.75, 0.95)
-	mi.material_override = mat
-	mi.position = pos + Vector3(0, h * 0.5, 0)
-	add_child(mi)
-
-## Gate credit flash (called by the world).
-func pulse_gate(gi: int, col: Color) -> void:
-	if gi < 0 or gi >= _gate_bars.size():
+func pulse_gate(index: int, color: Color) -> void:
+	if index < 0 or index >= _gate_bars.size():
 		return
-	var bar: MeshInstance3D = _gate_bars[gi]
-	var mat: StandardMaterial3D = bar.material_override
-	mat.emission = col
-	mat.emission_energy_multiplier = 3.0
-	var tw := create_tween()
-	tw.tween_property(mat, "emission_energy_multiplier", 0.6, 0.6)
+	var bar: MeshInstance3D = _gate_bars[index]
+	var mat: StandardMaterial3D = bar.material_override as StandardMaterial3D
+	mat.emission = color
+	mat.emission_energy_multiplier = 4.0
+	var tween: Tween = create_tween()
+	tween.tween_property(mat, "emission_energy_multiplier", 1.4, 0.6)
 
 func _build_shortcut_visual() -> void:
-	# flat deck sections (entry apron + landing runway) as smooth ribbons;
-	# alternating plank shades via vertex colors
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for span in [[0.0, SC_RAMP_START + 0.1], [SC_LAND - 0.8, sc_len]]:
-		var s := float(span[0])
-		var step := 0.55
-		while s < float(span[1]):
-			var s2: float = minf(s + step, float(span[1]))
-			var a := sc_sample_at(s)
-			var b := sc_sample_at(s2)
-			var ra := Vector3(a.tangent).cross(Vector3.UP)
-			var rbv := Vector3(b.tangent).cross(Vector3.UP)
-			var y := Vector3(0, 0.025, 0)
-			var a0 := Vector3(a.pos) - ra * SC_HW + y
-			var b0 := Vector3(a.pos) + ra * SC_HW + y
-			var a1 := Vector3(b.pos) - rbv * SC_HW + y
-			var b1 := Vector3(b.pos) + rbv * SC_HW + y
-			var shade := 1.0 + (0.12 if int(s / step) % 2 == 0 else -0.08)
-			var c := Color(COL_PLANK.r * shade, COL_PLANK.g * shade, COL_PLANK.b * shade)
-			for v in [a0, b0, a1, b0, b1, a1]:
-				st.set_color(c)
-				st.set_normal(Vector3.UP)
-				st.add_vertex(v)
-			s += step
-	var mi := MeshInstance3D.new()
-	mi.mesh = st.commit()
-	mi.material_override = _vc_mat
-	add_child(mi)
-	# the launch ramp: ONE smooth inclined slab up to the lip
-	var ra := Vector3(sc_sample_at(SC_RAMP_START).pos) + Vector3(0, -0.08, 0)
-	var rb := Vector3(sc_sample_at(SC_RAMP_LIP).pos) + Vector3(0, RAMP_H - 0.08, 0)
-	var slab := MeshInstance3D.new()
-	var sb := BoxMesh.new()
-	sb.size = Vector3(SC_HW * 2.0, 0.16, 1.0)
-	slab.mesh = sb
-	var smat := StandardMaterial3D.new()
-	smat.albedo_color = COL_PLANK
-	smat.roughness = 0.85
-	slab.material_override = smat
-	add_child(slab)
-	slab.global_transform = _seg_xform(ra, rb, Vector3(1, 1, ra.distance_to(rb) * 1.02))
-	# white chevron painted on the slab so it reads JUMP from above
-	var wmat := StandardMaterial3D.new()
-	wmat.albedo_color = Color(0.95, 0.94, 0.9)
-	var slope_basis := Basis.looking_at(-(rb - ra).normalized(), Vector3.UP)
-	var slab_up := slope_basis.y
-	var mid := (ra + rb) * 0.5 + slab_up * 0.12
-	for sx: float in [-1.0, 1.0]:
-		var stripe := MeshInstance3D.new()
-		var stm := BoxMesh.new()
-		stm.size = Vector3(0.16, 0.06, 1.1)
-		stripe.mesh = stm
-		stripe.material_override = wmat
-		add_child(stripe)
-		stripe.global_transform = Transform3D(
-			slope_basis.rotated(slab_up, -0.55 * sx),
-			mid + slope_basis.x * 0.42 * sx)
-	# cream side rails along the whole incline
-	var rail_dir := (rb - ra).normalized()
-	var rail_right := Vector3(rail_dir.x, 0, rail_dir.z).normalized().cross(Vector3.UP)
-	for side: float in [-1.0, 1.0]:
-		var wa := ra + rail_right * (SC_HW + 0.05) * side + Vector3(0, 0.2, 0)
-		var wb := rb + rail_right * (SC_HW + 0.05) * side + Vector3(0, 0.2, 0)
-		var rmesh := MeshInstance3D.new()
-		var rbm := BoxMesh.new()
-		rbm.size = Vector3(0.2, 0.28, 1.0)
-		rmesh.mesh = rbm
-		var rmat := StandardMaterial3D.new()
-		rmat.albedo_color = COL_CREAM
-		rmesh.material_override = rmat
-		add_child(rmesh)
-		rmesh.global_transform = _seg_xform(wa, wb, Vector3(1, 1, wa.distance_to(wb) * 1.05))
-	# trestle legs under the lip (the ramp reads as a built thing)
-	var lip := Vector3(sc_sample_at(SC_RAMP_LIP).pos)
-	for side: float in [-1.0, 1.0]:
-		var leg := MeshInstance3D.new()
-		var lm := BoxMesh.new()
-		lm.size = Vector3(0.22, RAMP_H, 0.22)
-		leg.mesh = lm
-		var lmat := StandardMaterial3D.new()
-		lmat.albedo_color = COL_WOOD
-		leg.material_override = lmat
-		leg.position = lip + rail_right * (SC_HW - 0.2) * side + Vector3(0, RAMP_H * 0.5 - 0.1, 0)
-		add_child(leg)
-	# bouncing arrow sign at the entrance
-	var arrow := MeshInstance3D.new()
+	var deck_mat: StandardMaterial3D = _material(COL_PLANK)
+	var s: float = 0.0
+	while s < sc_len:
+		var next_s: float = minf(s + 0.65, sc_len)
+		if s < SC_RAMP_LIP or s >= SC_LAND:
+			var a_sample: Dictionary = sc_sample_at(s)
+			var b_sample: Dictionary = sc_sample_at(next_s)
+			var a: Vector3 = Vector3(a_sample.get("pos", Vector3.ZERO))
+			var b: Vector3 = Vector3(b_sample.get("pos", Vector3.ZERO))
+			var floor_a: float = sc_floor(s)
+			var floor_b: float = sc_floor(next_s)
+			a.y = floor_a + 0.03
+			b.y = floor_b + 0.03
+			var plank: MeshInstance3D = MeshInstance3D.new()
+			var mesh: BoxMesh = BoxMesh.new()
+			mesh.size = Vector3(SC_HW * 2.0, 0.14, 1.0)
+			plank.mesh = mesh
+			plank.material_override = deck_mat
+			add_child(plank)
+			plank.global_transform = _seg_xform(a, b, Vector3(1, 1, a.distance_to(b) * 1.08))
+		s = next_s
+	var arrow: MeshInstance3D = MeshInstance3D.new()
 	arrow.name = "ScArrow"
-	var pm := PrismMesh.new()
-	pm.size = Vector3(0.9, 0.9, 0.25)
-	arrow.mesh = pm
-	var amat := StandardMaterial3D.new()
-	amat.albedo_color = Color(1.0, 0.85, 0.2)
-	amat.emission_enabled = true
-	amat.emission = Color(0.9, 0.7, 0.1)
-	amat.emission_energy_multiplier = 0.8
-	arrow.material_override = amat
-	var dir := Vector3(sc_tans[0])
-	arrow.position = sc_entry_pos + Vector3(0, 1.7, 0)
-	arrow.rotation.z = -PI / 2.0 if dir.z > 0.0 else PI / 2.0
-	arrow.rotation.y = atan2(dir.x, dir.z)
+	var prism: PrismMesh = PrismMesh.new()
+	prism.size = Vector3(1.0, 1.0, 0.3)
+	arrow.mesh = prism
+	arrow.material_override = _material(Color(1.0, 0.75, 0.05), 2.2)
+	arrow.position = sc_entry_pos + Vector3(0, 1.8, 0)
 	add_child(arrow)
 
-func _build_table() -> void:
-	# wooden table + striped felt top (the diorama surface)
-	var wood := MeshInstance3D.new()
-	var wm := CylinderMesh.new()
-	wm.top_radius = 25.0
-	wm.bottom_radius = 24.2
-	wm.height = 1.6
-	wood.mesh = wm
-	var wmat := StandardMaterial3D.new()
-	wmat.albedo_color = COL_WOOD
-	wmat.roughness = 0.6
-	wood.material_override = wmat
-	wood.position.y = -0.82
-	add_child(wood)
-	var felt := MeshInstance3D.new()
-	var fm := CylinderMesh.new()
-	fm.top_radius = 24.2
-	fm.bottom_radius = 24.2
-	fm.height = 0.1
-	felt.mesh = fm
-	var fmat := StandardMaterial3D.new()
-	fmat.albedo_texture = load("res://assets/textures/grass_stripes.png")
-	fmat.uv1_triplanar = true
-	fmat.uv1_scale = Vector3(0.1, 0.1, 0.1)
-	fmat.roughness = 1.0
-	felt.material_override = fmat
-	felt.position.y = -0.05
-	add_child(felt)
-	# room floor far below (catches the table shadow)
-	var floor_mi := MeshInstance3D.new()
-	var pl := PlaneMesh.new()
-	pl.size = Vector2(240, 240)
-	floor_mi.mesh = pl
-	var flm := StandardMaterial3D.new()
-	flm.albedo_color = Color(0.23, 0.17, 0.16)
-	flm.roughness = 1.0
-	floor_mi.material_override = flm
-	floor_mi.position.y = -7.5
-	add_child(floor_mi)
+func _build_bog() -> void:
+	var water_mat: StandardMaterial3D = _material(COL_WATER, 0.55)
+	water_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var plank_mat: StandardMaterial3D = _material(Color(0.9, 0.55, 0.16), 0.2)
+	var s: float = bog_start_s
+	while s < bog_end_s:
+		var next_s: float = minf(s + 1.4, bog_end_s)
+		var a_sample: Dictionary = sample_at(s)
+		var b_sample: Dictionary = sample_at(next_s)
+		var a: Vector3 = Vector3(a_sample.get("pos", Vector3.ZERO))
+		var b: Vector3 = Vector3(b_sample.get("pos", Vector3.ZERO))
+		var width: float = maxf(float(a_sample.get("hw", 3.4)) * 2.0 - 0.25, 1.0)
+		var water: MeshInstance3D = MeshInstance3D.new()
+		var water_mesh: BoxMesh = BoxMesh.new()
+		water_mesh.size = Vector3(width, 0.08, 1.0)
+		water.mesh = water_mesh
+		water.material_override = water_mat
+		add_child(water)
+		water.global_transform = _seg_xform(a + Vector3(0, 0.08, 0), b + Vector3(0, 0.08, 0), Vector3(1, 1, a.distance_to(b) * 1.08))
+		var plank: MeshInstance3D = MeshInstance3D.new()
+		var plank_mesh: BoxMesh = BoxMesh.new()
+		plank_mesh.size = Vector3(1.45, 0.12, 1.0)
+		plank.mesh = plank_mesh
+		plank.material_override = plank_mat
+		add_child(plank)
+		plank.global_transform = _seg_xform(a + Vector3(0, 0.17, 0), b + Vector3(0, 0.17, 0), Vector3(1, 1, a.distance_to(b) * 0.98))
+		s = next_s
 
-## B8 ARENA DRESSING — the night market currently ends at a bare brown table
-## rim (24.2u) past the track's outer edge (~21.5u). A lamppost ring + a
-## market gate + a couple hedges, all sitting ON the existing felt tabletop
-## (radius ~21-23, so nothing floats) between the track and the table's edge,
-## reads as the estate's own grounds hosting the market after dark instead of
-## a kart circuit floating in a brown void. Positions dodge the castle
-## (11.8,0.4) and obstacle spots already placed by _build_decor().
-##
-## The fixed camera (pos 0,28.5,22.0 -> look_at 0,0,0.9, fov 45) is pitched
-## steep enough that the NEAR side (z beyond roughly +12, toward the camera's
-## own z=22) drops below the bottom of frame — verified against the camera
-## basis; every position below lands within the visible frustum. Static,
-## outside the track corridor, no collision, one light per lamppost.
-func _build_b8_horizon() -> void:
-	var lamp_light := {"color": Color(1.0, 0.8, 0.5), "energy": 1.1, "range": 6.0}
-	for spot in [Vector3(23.0, 0, 0), Vector3(-23.0, 0, 3.0), Vector3(0, 0, -23.0), Vector3(14.0, 0, -15.0)]:
-		ArenaDressing.prop(self, "estate_lamppost", 2.7, spot, 0.0, lamp_light)
-	ArenaDressing.prop(self, "estate_iron_gate", 2.2, Vector3(-19.0, 0, 9.0), 100.0)
-	for hs in [Vector3(16.5, 0, -16.0), Vector3(-16.5, 0, -16.5)]:
-		ArenaDressing.prop(self, "estate_hedge_topiary", 1.4, hs, 0.0)
-	# W3: the estate's crow perched on the lamppost heads — the night market gets
-	# its motif bird looking down over the karts (silhouette only, unlit). Sized up
-	# a touch: this arena's camera is a steep y=28.5 top-down, so a smaller bird
-	# would vanish to a speck.
-	ArenaDressing.crow(self, Vector3(23.0, 2.64, 0), 200.0, 0.66)
-	ArenaDressing.crow(self, Vector3(-23.0, 2.64, 3.0), 150.0, 0.66)
-	ArenaDressing.crow(self, Vector3(14.0, 2.64, -15.0), 120.0, 0.6)
+func _build_biomes() -> void:
+	# Hedge-maze chicane: continuous clipped walls just outside the corridor,
+	# plus estate topiary heroes at the three directional beats.
+	var hedge_mat: StandardMaterial3D = _material(Color(0.08, 0.38, 0.19), 0.12)
+	for s: float in rangef(_control_s(1) + 3.0, _control_s(5) - 2.0, 3.0):
+		var sample: Dictionary = sample_at(s)
+		var center: Vector3 = Vector3(sample.get("pos", Vector3.ZERO))
+		var tangent: Vector3 = Vector3(sample.get("tangent", Vector3.FORWARD))
+		var right: Vector3 = tangent.cross(Vector3.UP).normalized()
+		var width: float = float(sample.get("hw", 2.6))
+		for side: float in [-1.0, 1.0]:
+			var wall: MeshInstance3D = MeshInstance3D.new()
+			var mesh: BoxMesh = BoxMesh.new()
+			mesh.size = Vector3(0.72, 2.35, 3.35)
+			wall.mesh = mesh
+			wall.material_override = hedge_mat
+			wall.position = center + right * (width + 0.58) * side + Vector3.UP * 1.17
+			wall.rotation.y = atan2(tangent.x, tangent.z)
+			add_child(wall)
+	for index: int in [2, 3, 4]:
+		var center: Vector3 = _ctrl_vec(index)
+		var sample: Dictionary = sample_at(_control_s(index))
+		var tangent: Vector3 = Vector3(sample.get("tangent", Vector3.FORWARD))
+		var right: Vector3 = tangent.cross(Vector3.UP).normalized()
+		var width: float = float(sample.get("hw", 2.6))
+		for side: float in [-1.0, 1.0]:
+			ArenaDressing.prop(self, "estate_hedge_topiary", 2.5, center + right * (width + 1.15) * side, float(index * 37))
+	# Forest S: trees are visible apex calls, not hidden collision.
+	for index: int in [5, 6, 7, 8]:
+		var center: Vector3 = _ctrl_vec(index)
+		var sample: Dictionary = sample_at(_control_s(index))
+		var tangent: Vector3 = Vector3(sample.get("tangent", Vector3.FORWARD))
+		var right: Vector3 = tangent.cross(Vector3.UP).normalized()
+		var side: float = -1.0 if index % 2 == 0 else 1.0
+		ArenaDressing.prop(self, "estate_dead_tree", 5.2, center + right * (float(sample.get("hw", 3.0)) + 1.6) * side, float(index * 53))
+	# Graveyard bridge approach and deck.
+	for raw: Array in [[-36.0, 0.0, 3.5], [-21.0, 8.0, 2.0], [-37.0, 31.0, 1.5], [-19.0, 31.5, 1.5]]:
+		ArenaDressing.prop(self, "grave_headstone_cracked", 1.45, Vector3(float(raw[0]), float(raw[2]), float(raw[1])), float(raw[0]) * 3.0)
+	ArenaDressing.prop(self, "grave_mausoleum_front", 4.5, Vector3(-18.0, 0.0, 19.0), -90.0)
+	# Moonlit estate rim: sparse saturated lamp pools keep the course festive.
+	var lamp: Dictionary = {"color": Color(1.0, 0.45, 0.18), "energy": 1.7, "range": 9.0}
+	for pos: Vector3 in [Vector3(-48, 0, 17), Vector3(4, 0, 35), Vector3(40, 0, -12), Vector3(-4, 0, -34)]:
+		ArenaDressing.prop(self, "estate_lamppost", 3.4, pos, 0.0, lamp)
 
-func _build_decor() -> void:
-	var castle: PackedScene = load("res://assets/models/minigolf/castle.glb")
-	if castle != null:
-		var c := castle.instantiate()
-		c.position = Vector3(11.8, 0.0, 0.4)
-		c.scale = Vector3.ONE * 3.0
-		add_child(c)
-	var block: PackedScene = load("res://assets/models/minigolf/obstacle-block.glb")
-	var diamond: PackedScene = load("res://assets/models/minigolf/obstacle-diamond.glb")
-	var spots := [Vector3(-20.5, 0, 6.5), Vector3(20.0, 0, -7.0), Vector3(-19.0, 0, -8.0), Vector3(3.0, 0, -11.5)]
-	for i in spots.size():
-		var ps: PackedScene = block if i % 2 == 0 else diamond
-		if ps == null:
-			continue
-		var d := ps.instantiate()
-		d.position = spots[i]
-		d.rotation.y = float(i) * 1.3
-		d.scale = Vector3.ONE * 1.4
-		add_child(d)
+func _build_bridge_supports() -> void:
+	var stone: StandardMaterial3D = _material(Color(0.27, 0.29, 0.38))
+	var deck: MeshInstance3D = MeshInstance3D.new()
+	var deck_mesh: BoxMesh = BoxMesh.new()
+	deck_mesh.size = Vector3(6.5, 0.62, 14.0)
+	deck.mesh = deck_mesh
+	deck.material_override = stone
+	deck.position = Vector3(-28.0, 5.23, 24.0)
+	add_child(deck)
+	# Four abutment columns sit outside the ground-level straight's 3.25u
+	# half-width, leaving the underpass visibly and mechanically clear.
+	for z: float in [19.6, 28.4]:
+		for x: float in [-31.0, -25.0]:
+			var pillar: MeshInstance3D = MeshInstance3D.new()
+			var mesh: BoxMesh = BoxMesh.new()
+			mesh.size = Vector3(0.9, 5.2, 0.9)
+			pillar.mesh = mesh
+			pillar.material_override = stone
+			pillar.position = Vector3(x, 2.45, z)
+			add_child(pillar)
+	var arch_label: Label3D = Label3D.new()
+	arch_label.text = "GRAVEYARD OVERPASS"
+	arch_label.font = load("res://assets/fonts/LuckiestGuy-Regular.ttf")
+	arch_label.font_size = 72
+	arch_label.pixel_size = 0.008
+	arch_label.modulate = Color(0.7, 0.65, 1.0)
+	arch_label.outline_size = 18
+	arch_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	arch_label.position = Vector3(-28.0, 7.4, 27.0)
+	add_child(arch_label)
+
+## GDScript has no floating-point range helper.
+func rangef(from: float, to: float, step: float) -> Array[float]:
+	var values: Array[float] = []
+	var value: float = from
+	while value < to:
+		values.append(value)
+		value += step
+	return values
