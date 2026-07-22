@@ -2260,7 +2260,6 @@ func _night_settlement() -> void:
 	await _arrival_wreaths()
 	await _award_payouts()
 	await _will_reading()
-	await _standings_reveal()
 	# LAST RITES lands after this night's GENEROUS award has already been read —
 	# its spending seeds the NEXT night's race instead of vanishing in the reset.
 	var spent_before: Array[int] = []
@@ -2311,21 +2310,6 @@ func _award_payouts() -> void:
 		_hide_announce()
 	else:
 		_refresh_hud()
-
-## The wreath standings, revealed plainly at each night's end (doc 28 §2).
-func _standings_reveal() -> void:
-	if _fast:
-		return
-	var order := _roll_order()
-	var lines: Array[String] = []
-	for rank in order.size():
-		var p := int(order[rank])
-		lines.append(Dialog.text("procession.standings.line") % [rank + 1, roster[p].name,
-			wreaths[p], Spaces.WREATH_GLYPH, grudge[p], Spaces.PENNY_GLYPH])
-	_announce_text(Dialog.text("procession.standings.header") + "\n\n" + "\n".join(lines),
-		Color(1, 0.88, 0.5))
-	await _beat(3.0)
-	_hide_announce()
 
 ## LAST RITES — the night-interlude store beat: every mourner visits the cart,
 ## trailers first (the rubber-band shops before the leaders do).
@@ -2405,6 +2389,11 @@ func _finale() -> void:
 		var lw := grudge[i] / 10
 		wreaths[i] += lw
 		wreath_src[i].liquid += lw
+	# WRENCH (doc 38): the per-seat chip must go live with the true total the
+	# instant liquidation lands — nothing else in this function ever called
+	# _refresh_hud(), so the chip sat stale (pre-liquidation) through the whole
+	# finale and the totals card below was the only accurate number on screen.
+	_refresh_hud()
 	if not _fast:
 		_reveal_seat = -1
 		executor.say(Dialog.text("procession.finale.opener"), Color(0.85, 0.75, 1.0))
@@ -2667,7 +2656,7 @@ func _round() -> void:
 	executor.begin_round()   # B2-HOOK: page-turn the ledger between rounds (F7)
 	if not _fast:
 		_reveal_seat = -1
-		executor.aside(Executor.ROUND_OPENER, Color(0.82, 0.80, 0.92), [round_num])   # B2-HOOK: dead-air aside (F9)
+		executor.aside(Executor.ROUND_OPENER, Color(0.82, 0.80, 0.92))   # B2-HOOK: dead-air aside (F9)
 		await _beat(0.9)
 	for seat in _roll_order():
 		if bool(arrived[seat]):
@@ -3403,8 +3392,8 @@ func _check_debt_trap(seat: int) -> void:
 	stats[seat].lost += pay
 	stats[seat].hazards += 1
 	_pop_transfer(seat, owner, pay)
-	_flash_line(Dialog.text("procession.items.debt_paid") % [roster[seat].name, pay,
-		Spaces.PENNY_GLYPH, roster[owner].name], roster[owner].color, seat)
+	_flash_line(Dialog.text("procession.items.debt_paid") % [roster[seat].name,
+		roster[owner].name], roster[owner].color, seat)
 	_refresh_hud()
 
 # ---- inventory primitives ----
@@ -4034,8 +4023,7 @@ func _resolve_ferry(seat: int, name: String, col: Color) -> void:
 func _resolve_arrival(seat: int, name: String, col: Color) -> void:
 	var rank := arrival_order.find(seat) + 1
 	Sfx.play("match_win", -6.0)
-	executor.say(Executor.pick(Executor.ARRIVAL, _voice_rng, [name])
-		+ "  (HOME #%d)" % rank, col)
+	executor.say(Executor.pick(Executor.ARRIVAL, _voice_rng, [name]), col)
 	MomentScribe.capture("gate_arrival", "%s REACHES THE MANOR GATE (#%d)" % [name, rank],
 		2, [seat], "procession")
 
@@ -4084,7 +4072,7 @@ func _resolve_seance(seat: int, name: String, col: Color) -> void:
 	# chip so the whole table sees who the circle favoured.
 	for i in roster.size():
 		_pop_grudge(i, grudge[i] - _before[i])
-	executor.say(Executor.pick(Executor.SEANCE, _voice_rng) + "  [%s — %s]" % [w.title, w.rule],
+	executor.say(Executor.pick(Executor.SEANCE, _voice_rng) + "  [%s]" % w.rule,
 		Color(0.78, 0.6, 0.95))
 
 ## Kept for data-driven boards that declare VENDETTA stones — the base
@@ -4126,7 +4114,7 @@ func _resolve_vendetta(seat: int, name: String, col: Color) -> void:
 	stats[lose].lost += moved_g
 	_pop_transfer(lose, win, moved_g)   # F11: the spoils fly from loser to winner
 	executor.say(Executor.pick(Executor.VENDETTA_RESULT, _voice_rng, [roster[win].name, roster[lose].name]) \
-		+ "  (%d♠, stakes %d vs %d)" % [moved_g, s_a, s_b], roster[win].color)
+		+ "  (%d¢, stakes %d vs %d)" % [moved_g, s_a, s_b], roster[win].color)
 	# A decisive vendetta is a deciding beat for the newsreel (F5).
 	MomentScribe.capture("vendetta", "%s BREAKS %s (%d♠)" % [
 		roster[win].name, roster[lose].name, moved_g], 2, [win, lose], "procession")
@@ -4580,8 +4568,7 @@ func _settle_minigame(mid: String, placements: Array) -> void:
 			for i in roster.size():
 				if int(book.bets[i]) == i and not winners.has(i):
 					_reveal_seat = i
-					executor.say(Dialog.text("procession.book.selfbet_ribbing") \
-						% [roster[i].name, roster[i].name], roster[i].color)
+					executor.say(Dialog.text("procession.book.selfbet_ribbing"), roster[i].color)
 					await _beat(2.0)
 					executor.clear_banner()
 					break   # the joke lands once per settlement
@@ -4599,7 +4586,7 @@ func _settle_minigame(mid: String, placements: Array) -> void:
 			stats[p].mini_wins += 1
 			mini_wins_match[p] += 1
 		lines.append(Dialog.text("procession.reckoning.line") % [
-			roster[p].name, k + 1, pd, Spaces.PENNY_GLYPH, wd, Spaces.WREATH_GLYPH])
+			roster[p].name, k + 1, wd, Spaces.WREATH_GLYPH])
 		_pop_grudge(p, pd)
 	_announce_text(Dialog.text("procession.reckoning.header") + "\n\n" + "\n".join(lines), Color(0.95, 0.85, 0.6))
 	_refresh_hud()
@@ -4888,7 +4875,7 @@ func _will_reading() -> void:
 			wreath_src[winner_seat].award += WILL_WREATHS
 			_pop_grudge(winner_seat, WILL_WREATHS, Spaces.WREATH_GLYPH)   # F10: the wreath flies to the chip
 			lines.append(Dialog.text("procession.will_reading.line") % [
-				c.title, roster[winner_seat].name, c.desc, wreaths[winner_seat]])
+				c.title, roster[winner_seat].name, c.desc])
 		else:
 			lines.append(Dialog.text("procession.will_reading.unclaimed") % c.title)
 	# Clear the executor's opening line so it does not sit behind the card.
@@ -4955,11 +4942,9 @@ func _heir_crowned() -> void:
 	# The seed is verification plumbing — real heirs get a clean crown.
 	var crown: String
 	if joint:
-		crown = Dialog.text("procession.heir.crown_joint") % [crown_name, wreaths[winner],
-			Spaces.WREATH_GLYPH]
+		crown = Dialog.text("procession.heir.crown_joint") % [wreaths[winner], Spaces.WREATH_GLYPH]
 	else:
-		crown = Dialog.text("procession.heir.crown_wreaths") % [crown_name, wreaths[winner],
-			Spaces.WREATH_GLYPH]
+		crown = Dialog.text("procession.heir.crown_wreaths") % [wreaths[winner], Spaces.WREATH_GLYPH]
 	if _autoplay:
 		crown += " · SEED %d" % seed_value
 	_announce_text(crown, Color(pl.color))

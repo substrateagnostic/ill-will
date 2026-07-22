@@ -170,7 +170,7 @@ static func _format_desc(desc: String, seat: int, roster: Array, stats: Array,
 	match desc:
 		"bloody": return String(_pick(L_BLOODY, prng)) % [name, _count_phrase(int(st.get("duels", 0)), "score", "scores")]
 		"betrayed": return String(_pick(L_BETRAYED, prng)) % [name, int(st.get("lost", 0))]
-		"hoarder": return String(_pick(L_HOARDER, prng)) % [name, int(grudge[seat])]
+		"hoarder": return String(_pick(L_HOARDER, prng)) % [name]
 		"mourner": return String(_pick(L_MOURNER, prng)) % [name, _graves_phrase(int(st.get("graves", 0)))]
 		"pious": return String(_pick(L_PIOUS, prng)) % [name, _shrines_phrase(int(st.get("shrines", 0)))]
 	return String(_pick(L_IDLE, prng)) % [name]
