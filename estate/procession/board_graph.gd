@@ -960,9 +960,20 @@ func _build_npc_troupe() -> void:
 	var dig_id := _route_mid_id("hollow")
 	_place_facing(_rigged_npc(ZF_GRAVEDIGGER, 1.7, 1.7),
 		_gsnap(space_pos(dig_id) + _outward(dig_id) * 3.4), space_pos(dig_id))
+	# #90 WIDOW-IN-MAZE: garden_a (this route's first half) IS the hedge maze
+	# corridor (doc 33 G1 — "the garden_a points walk the true solution of the
+	# hedge maze", grounds.gd). Her mid-route stone always lands inside a maze
+	# cell, where the clear span to the nearest hedge face is only ~1.75m
+	# (MAZE_CELL 4.5 minus HEDGE_T 1.0, halved) — the generic 3.2m outboard
+	# offset used elsewhere overshoots that by a wide margin and plants her
+	# against/through the hedge (confirmed via tools/npc_wiring_shots.gd's
+	# 03_widow_troupe framing, wave-3 NPC lane). 1.2m matches the offset this
+	# same file already uses for on-path furniture inside the maze (OFFERING/
+	# OPEN_GRAVE below), proven clear of the hedge — she stands at the
+	# corridor's edge, mourning, not clipped into hedge geometry.
 	var wid_id := _route_mid_id("garden")
 	_place_facing(_rigged_npc(ZF_WIDOW, 1.6, 1.6),
-		_gsnap(space_pos(wid_id) + _outward(wid_id) * 3.2), space_pos(wid_id))
+		_gsnap(space_pos(wid_id) + _outward(wid_id) * 1.2), space_pos(wid_id))
 	# NEW NPC (RIGGING BATCH, c2b1d5e): THE MOURNER-FOR-HIRE — beside the
 	# broken angel where the valley road begins (doc 33 §5b claims are all
 	# z<=8; this post sits at z=30, clear). Ambient only tonight (doc 28 §10's
