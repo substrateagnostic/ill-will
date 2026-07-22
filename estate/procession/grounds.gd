@@ -564,21 +564,21 @@ func _build_outskirts() -> void:
 	# — from the board overview the line must read FOREST, never a picket of
 	# identical scallops (first framing pass caught exactly that).
 	for ring in [
-			{"off": 10.0, "step": 6.0, "smin": 7.0, "smax": 14.5, "tint": 1.0},
-			{"off": 27.0, "step": 8.5, "smin": 10.0, "smax": 17.5, "tint": 0.48}]:
+			{"off": 10.0, "step": 6.0, "smin": 6.0, "smax": 16.5, "tint": 1.0},
+			{"off": 27.0, "step": 8.5, "smin": 8.5, "smax": 20.0, "tint": 0.48}]:
 		var rd := ring as Dictionary
 		var off := float(rd.off)
 		var count := int(4.0 * (hx + hz + 2.0 * off) / float(rd.step))
 		for i in count:
-			if _h01(float(i) * 7.7, off * 3.1, 611) < 0.28:
+			if _h01(float(i) * 7.7, off * 3.1, 611) < 0.38:
 				continue
 			var th := TAU * (float(i) + 0.5) / float(count)
 			var p := _ring_pt(cx, cz, hx, hz,
-				off + 14.0 * (_h01(float(i) * 2.3, off, 613) - 0.5), th)
+				off + 22.0 * (_h01(float(i) * 2.3, off, 613) - 0.5), th)
 			var sc := float(rd.smin) + (float(rd.smax) - float(rd.smin)) * _h01(p.x, p.y, 617)
 			var basis := Basis(Vector3.UP, TAU * _h01(p.x, p.y, 619)) \
-				* Basis.from_scale(Vector3(sc * (0.75 + 0.6 * _h01(p.x, p.y, 621)), sc, sc))
-			var tint := float(rd.tint) * (0.70 + 0.45 * _h01(p.x, p.y, 623))
+				* Basis.from_scale(Vector3(sc * (0.6 + 0.9 * _h01(p.x, p.y, 621)), sc, sc))
+			var tint := float(rd.tint) * (0.55 + 0.6 * _h01(p.x, p.y, 623))
 			trees.append({"t": Transform3D(basis,
 				Vector3(p.x, _apron_h(p.x, p.y, off) - 0.6, p.y)),
 				"c": Color(TREELINE_TINT.r * tint, TREELINE_TINT.g * tint, TREELINE_TINT.b * tint)})
@@ -1926,10 +1926,10 @@ func _emit_brambles(placements: Array[Transform3D]) -> void:
 	mat.shader = load(GRASS_SHADER)
 	mat.set_shader_parameter("fade_start", GRASS_FADE_START)
 	mat.set_shader_parameter("fade_end", GRASS_FADE_END)
-	mat.set_shader_parameter("root_color", Color(0.040, 0.048, 0.032))  # dark woody base
-	mat.set_shader_parameter("tip_color", Color(0.088, 0.106, 0.066))   # muted olive (NOT grass-green)
-	mat.set_shader_parameter("dry_tip", Color(0.195, 0.112, 0.072))     # dry red-brown thorn tips
-	mat.set_shader_parameter("moon_gain", 0.05)
+	mat.set_shader_parameter("root_color", Color(0.058, 0.062, 0.044))  # dark woody base
+	mat.set_shader_parameter("tip_color", Color(0.130, 0.148, 0.092))   # muted olive (NOT grass-green)
+	mat.set_shader_parameter("dry_tip", Color(0.250, 0.150, 0.095))     # dry red-brown thorn tips
+	mat.set_shader_parameter("moon_gain", 0.18)
 	mat.set_shader_parameter("wind_strength", 0.05)                     # brambles are stiff
 	mmi.material_override = mat
 	add_child(mmi)
@@ -2214,11 +2214,11 @@ func _dress_shore_tussocks() -> void:
 			z += 1.0
 		x += 1.0
 	_emit_cover("ShoreTussocks", _make_tuft_mesh(7, 0.72, true), pl, cd, {
-		"root_color": Color(0.042, 0.056, 0.040),
-		"tip_color": Color(0.095, 0.200, 0.150),
-		"dry_tip": Color(0.185, 0.190, 0.095),
+		"root_color": Color(0.060, 0.085, 0.062),
+		"tip_color": Color(0.140, 0.300, 0.220),
+		"dry_tip": Color(0.240, 0.245, 0.120),
 		"wind_strength": 0.12,
-		"moon_gain": 0.09,
+		"moon_gain": 0.26,
 	})
 
 ## One clover sprig clump: n sprigs, each three rounded leaflets (diamond fans)
