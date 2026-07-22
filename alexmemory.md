@@ -3034,3 +3034,24 @@ ALL FIVE fail the same way — `shots/exec_idle_audition_fail.png` — any prese
 The tray is modeled into his glove. No retargeted clip can respect a held prop. That is the whole disease.
 The real path (G4 lane, ~25cr): regenerate him WITHOUT the tray, rig that, pick a calm clip, attach the tray to a hand bone as a separate prop.
 The failed candidates are parked at `verify_out/exec_candidates/` if you ever want to watch him vamp like Dracula. It is very funny.
+
+---
+
+## MENU #12 — THE THIRTEENTH WATCH OPENS (2026-07-21, evening)
+
+**Your rulings tonight, banked in four minutes flat:**
+- **Timing (#84):** context modes + per-game presets. Board mode targets ~75-90s so the procession never stalls; standalone keeps full length. DW drift fixed to the doc (best-of-3). Dial gaps close.
+- **Swap Meet (#86):** fires tonight, wave 2. Track = biome-quoting circuit (hedge chicane, bog splash, forest S-curves, graveyard overpass, windmill crossing). Items = swap-shell anchor + Pallbearer's Coffin + The Bell + Crow Murder.
+- **Scoreboard (#87):** chyron + Ledger. Slim always-on strip during the procession; flying numbers LAND in your slot. Round end unfurls the full parchment Ledger. Hidden in minigames — one screen, one voice.
+- **Online era:** becomes the overnight handoff. I draft the fresh-instance prompt before you sleep; it waits for lanes to clear, runs into your workday if it needs to.
+
+**The fleet (five lanes):**
+- **A — CAMERA REWORK (#77), opus, worktree, owns the window.** PIP perf probe first (16.6ms binding), then the Smite cam per doc 34. Merges LAST.
+- **B — PRE-COMMIT (#80), codex xhigh, main tree.** Doc 35 §7 rulings, never-required law, react-glyphs-on-roll rider. Merges FIRST.
+- **C — TIMING PASS (#84), sonnet, worktree.** The preset table, context plumbing, DW best-of-3. Skips swap_meet (being rebuilt).
+- **D — SCOREBOARD (#87), opus, worktree.** The chyron you approved, to the pixel.
+- **E — DRESSING, sonnet, worktree.** Widow nudge (#90), butler v3r provenance, small hygiene.
+
+**Yours while the lanes run:** Coroner couch + red pen · Throne couch · DW dash (#63) · doc 36 Meshy web session (elderly spins, Auto Split) · stinger tracks whenever the muse allows.
+
+Merge order B → C → D → E → A, receipts before and after every landing.

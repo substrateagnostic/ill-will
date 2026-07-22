@@ -7,3 +7,6 @@ verify_out/
 .env
 scratch_*.log
 verify_out/stirs_*/
+
+tools/_*.log
+tools/_*_log.txt
