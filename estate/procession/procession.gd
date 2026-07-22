@@ -41,6 +41,8 @@ const LastBreath := preload("res://estate/procession/last_breath.gd")
 const Executor := preload("res://estate/procession/executor_host.gd")
 const Spaces := preload("res://estate/procession/board_spaces.gd")
 const BoardCamera := preload("res://estate/procession/board_camera.gd")
+const BoardOrbitScript := preload("res://estate/procession/board_orbit.gd")
+const ViewportKitScript := preload("res://estate/procession/viewport_kit.gd")
 const RoadPrompt := preload("res://estate/procession/crossroads_prompt.gd")
 const CartPrompt := preload("res://estate/procession/cart_prompt.gd")
 const BoardFx := preload("res://estate/procession/board_fx.gd")
@@ -210,7 +212,11 @@ var board: ProcessionBoardGraph
 var breath: ProcessionLastBreath
 var executor: ProcessionExecutor
 var cam: Camera3D
-var board_camera: ProcessionCamera    # F1: the named-shot camera director
+var board_camera: ProcessionCamera    # F1: the named-shot camera director (ceremony)
+var board_orbit: BoardOrbit           # #77: the player-owned follow/survey camera (downtime)
+var viewport_kit: ViewportKit         # doc 34 §4: the PIP render-target pool (windowed only)
+var _pip_id := -1                     # the board PIP's ViewportKit view id (-1 = none)
+var _pip_seat := -1                   # the seat the PIP currently follows
 var fx: ProcessionFx                  # F10/F11/F17: flying numbers + the Deed token
 var _fx_host: Control
 var seance_wheel: SeanceWheel         # F13: the visible four-slot planchette dial
@@ -571,12 +577,39 @@ func _build_world() -> void:
 	cam.look_at(board.CENTER, Vector3.UP)
 	cam.current = true
 
-	# The camera director owns the named-shot spine (F1/F2/F3). It stays inert
-	# under the fast soak (no rendering) and only drives the cam once activated.
+	# The camera director owns the named-shot spine (F1/F2/F3) — now APPOINTMENT
+	# TELEVISION only (doc 34). It stays inert under the fast soak (no rendering)
+	# and only drives the cam once activated.
 	board_camera = BoardCamera.new()
 	add_child(board_camera)
 	board_camera.setup(cam, board, _fast)
 	board_camera.trace = _capture   # stills-lane forensics (CAMTRACE lines)
+
+	# #77: the PLAYER-OWNED camera. A high Smite-pitch follow of the acting seat
+	# with player zoom + orbit, owning downtime (roll + between turns) — the
+	# whole-board resting overhead is dead. It shares the main camera with the
+	# director under the three-clause law; only one is CURRENT at a time.
+	board_orbit = BoardOrbitScript.new()
+	add_child(board_orbit)
+	board_orbit.setup(cam, board, _fast)
+	board_orbit.set_director(board_camera)
+	board_camera.set_orbit(board_orbit)
+
+	# The quarter PIP (doc 34 §3/§4) — a SEPARATE Camera3D in its own SubViewport
+	# sharing the main World3D, following the acting seat when the main camera is
+	# elsewhere. A second scene render, so windowed ONLY: the headless receipt
+	# never builds it (no DisplayServer, and the perf gate is a couch concern).
+	# Perf gate (doc 34 §3, this hardware): the PIP's per-render cost is a hard
+	# ~4.4ms floor, so it renders on a STRIDE (cadence 2, half-rate) to hold the
+	# forecourt's typical frame time at ~13.9ms, under the 16.6ms gate.
+	if not _fast:
+		viewport_kit = ViewportKitScript.new()
+		add_child(viewport_kit)
+		viewport_kit.setup(90)
+		_pip_id = viewport_kit.add_view({
+			"res_scale": 0.25, "far": 26.0, "fov": 50.0, "cadence": 2,
+			"rect": _pip_rect()})
+		viewport_kit.set_view_visible(_pip_id, false)   # armed, shown per turn
 
 	# THE LAST BREATH (P2): the sequential roll meter. It owns its own
 	# CanvasLayer (never occludable, RD §5), so it needs no HUD host.
@@ -2226,7 +2259,7 @@ func _round() -> void:
 		await _take_turn(seat)
 	executor.clear_banner()
 	executor.settle_body()   # B2-HOOK: host eases home after the cascade (F7)
-	board_camera.whole_board(0.5)   # camera belongs to the director (F1-F3)
+	_cam_survey()   # #77: between-round survey (player-owned) — no whole-board resting
 	_refresh_hud()
 
 ## Roll order = CURRENT WREATH STANDINGS, leader first (doc 28 §8 law 1).
@@ -2298,6 +2331,9 @@ func _take_turn(seat: int) -> void:
 			_crow_court_strike(seat, path)
 		# P3: on release, CUT to the landing area — the figurine hops through frame
 		# toward its stone (doc 28 §9: the camera frames the DECISION, not the walk).
+		# The roll is over: the acting seat now rides the MAIN frame (director beat),
+		# so the PIP thumbnail stands down (#77 / doc 34 §5).
+		_pip_show(false)
 		var land := int(path.back())
 		board_camera.travel_cut(board.reveal_shot(land, board.type_at(land)))
 		# ZERO-ENGLISH: the ONE space-name a normal turn shows — the destination
@@ -2329,7 +2365,7 @@ func _take_turn(seat: int) -> void:
 	# P3 still (a): the figurines strung out on the stones MID-MATCH — low over
 	# the last roller's shoulder, the trailing toys on the road behind it.
 	if _capture and round_num == 2 and seat == _roll_order().back():
-		board_camera.hold()
+		_cam_manual()   # hold BOTH director + orbit for the manual pose (#77)
 		executor.clear_banner()   # a clean frame — the toys are the subject
 		var pp := board.space_pos(positions[seat])
 		if board.pawns.has(seat):
@@ -2394,11 +2430,11 @@ func _roll_breath(seat: int, n_faces: int) -> int:
 	_heat_seat = seat
 	breath.begin_night_roll([seat], _turn_targets(seat, n_faces), turn_rng, n_faces)
 	while _breath_faces.is_empty():
-		# P3: after the first showing, a waiting human can skip a BOT's over-
-		# shoulder cinematic with B — camera falls back to the whole board while
-		# the meter resolves untouched (sim never sees the skip).
+		# #77: the roll frame is the player orbit now, not a forced cinematic —
+		# but B still pulls the orbit back to a wide SURVEY while a bot's meter
+		# resolves (the acting seat stays in the PIP; sim never sees the skip).
 		if not _fast and _os_shown > 1 and bool(roster[seat].bot) and _any_human_pressed_b():
-			board_camera.whole_board(0.3)
+			board_orbit.survey()
 		await get_tree().process_frame
 	_heat_seat = -1
 	board.clear_heatmap()
@@ -2442,21 +2478,79 @@ func _turn_targets(seat: int, n_faces: int) -> Array:
 	out[seat] = best_n
 	return out
 
-## Frame the active roller (P3): over the FIGURINE's shoulder, looking down its
-## road — the heatmap stones glow ahead while the meter owns bottom-center. The
-## first showing eases in (0.45s); every later roll hard-cuts, and a waiting
-## human can skip a bot's cinematic with B (_roll_breath polls it). Budget-safe:
-## the shot adds zero seconds to the roll act.
-func _frame_roller(seat: int) -> void:
+# --------------------------------------------------------------------------
+# CAMERA OWNERSHIP (#77 / doc 34 §2) — the handoff between the player ORBIT
+# (downtime) and the ceremony DIRECTOR (appointment TV). One master at a time:
+# every director named shot auto-yields the orbit (board_camera.activate), and
+# these hand player-owned time back. The whole-board RESTING state is dead.
+# --------------------------------------------------------------------------
+
+## Hand the main frame to the player ORBIT, following `seat`'s live pawn — the
+## default roll/downtime owner (doc 34 §1, "your own roll phase").
+func _cam_follow(seat: int) -> void:
+	if board_orbit == null:
+		return
+	board_orbit.follow_seat(seat)
+	board_orbit.activate()
+
+## Hand the frame to the orbit for a between-turn SURVEY (read the award races,
+## price the next fork). Pulls back on the current standings leader.
+func _cam_survey() -> void:
+	if board_orbit == null:
+		return
+	var order := _roll_order()
+	board_orbit.follow_seat(order[0] if not order.is_empty() else 0)
+	board_orbit.survey()
+	board_orbit.activate()
+	_pip_show(false)   # no single acting seat between turns
+
+## Release BOTH owners so a one-shot manual pose (a capture still) holds the cam
+## without a driver overwriting it next frame (clause 1). Windowed capture only.
+func _cam_manual() -> void:
+	if board_camera != null:
+		board_camera.hold()
+	if board_orbit != null:
+		board_orbit.hold()
+
+## The PIP's corner footprint — a quarter of the screen, top-right with a margin.
+func _pip_rect() -> Rect2:
+	var vs := get_viewport().get_visible_rect().size
+	var w := vs.x * 0.25
+	var h := vs.y * 0.25
+	return Rect2(Vector2(vs.x - w - 24.0, 24.0), Vector2(w, h))
+
+## Aim the PIP at a seat's over-shoulder framing (a tight low shot, distinct from
+## the main orbit's high wide follow). No-op with no PIP (the headless soak).
+func _pip_track(seat: int) -> void:
+	if viewport_kit == null or _pip_id < 0 or seat < 0:
+		return
+	_pip_seat = seat
 	var here := board.space_pos(positions[seat])
-	var ahead := board.space_pos(_preview_dest(seat, 4))
 	var pawn_pos := here
 	if board.pawns.has(seat):
 		pawn_pos = (board.pawns[seat] as Node3D).global_position
-	# Gate clearance: at the LYCHGATE the hero arch swallows a tight shoulder
-	# frame — swing outside its posts, angled down the road instead.
-	board_camera.over_shoulder(pawn_pos, ahead - here, _os_shown == 0,
-		positions[seat] == 0)
+	var to_gate := board.gate_pos() - pawn_pos
+	to_gate.y = 0.0
+	var d := to_gate.normalized() if to_gate.length() > 0.1 else Vector3.FORWARD
+	var right := d.cross(Vector3.UP).normalized()
+	viewport_kit.aim_view(_pip_id,
+		pawn_pos - d * 3.2 + right * 1.0 + Vector3(0, 2.6, 0),
+		pawn_pos + d * 6.0 + Vector3(0, 0.5, 0))
+
+func _pip_show(v: bool) -> void:
+	if viewport_kit == null or _pip_id < 0:
+		return
+	viewport_kit.set_view_visible(_pip_id, v)
+
+## Frame the active roller (#77): hand the main frame to the PLAYER ORBIT, which
+## follows the acting seat down its road (Smite pitch, the road ahead in frame,
+## the heatmap stones glowing up-frame while the meter owns bottom-center — the
+## player owns zoom + orbit here). The PIP mirrors the acting seat for the couch
+## so the table plans while it watches. Budget-safe: zero seconds added.
+func _frame_roller(seat: int) -> void:
+	_cam_follow(seat)
+	_pip_track(seat)
+	_pip_show(true)
 	_os_shown += 1
 
 ## Windowed capture only: pose the meter mid-sweep with the crit band telegraphed
@@ -2482,7 +2576,7 @@ func _pose_breath_shot(seat: int) -> void:
 	# Pose the camera in the P3 OVER-SHOULDER frame: behind the figurine's
 	# shoulder, the glowing road + percent tags running up-frame over the meter.
 	executor.clear_banner()   # the round aside must not sit over the road
-	board_camera.hold()
+	_cam_manual()   # #77: hold the orbit too, or it re-follows before the snap
 	var here := board.space_pos(positions[seat])
 	var ahead := board.space_pos(_preview_dest(seat, 4))
 	var dir := ahead - here
@@ -3750,7 +3844,7 @@ func _render_epitaph(seat: int, epitaph: String) -> void:
 func _snap_epitaph(loser: int) -> void:
 	if not _capture or board == null or not board.pawns.has(loser):
 		return
-	board_camera.hold()
+	_cam_manual()   # #77: hold BOTH owners for the manual epitaph pose
 	var pawn: Node3D = board.pawns[loser]
 	var p := pawn.global_position
 	var out := p - board.CENTER

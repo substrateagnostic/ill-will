@@ -1,10 +1,17 @@
 class_name ProcessionCamera
 extends Node
 ## THE CAMERA DIRECTOR — a named-shot spine for THE PROCESSION's broadcast layer
-## (doc 24 F1/F2/F3). One vocabulary of shots — ESTABLISH, WHOLE_BOARD,
-## MOVE_TRAVEL, LANDING_PUSH, TWO_SHOT, BEACON_HERO, STANDINGS — each a
-## position+look-at pair the director eases between, with a low-amplitude
-## handheld sway layered on top so the frame never reads as a locked tripod.
+## (doc 24 F1/F2/F3). One vocabulary of shots — ESTABLISH, WHOLE_BOARD (now a
+## director beat only), LANDING_PUSH, TWO_SHOT, BEACON_HERO, STANDINGS,
+## OVER_SHOULDER, TRAVEL_CUT — each a position+look-at pair the director eases
+## between, with a low-amplitude handheld sway layered on top so the frame never
+## reads as a locked tripod.
+##
+## POST-RULING #77 (doc 34): this director now owns APPOINTMENT TELEVISION only
+## — ceremonies, stirs, vendettas, FINAL BELL, eulogy, the money-shots. Player-
+## owned DOWNTIME (the between-turn/roll follow + survey) belongs to board_orbit.
+## The two share the main camera under the three-clause law; only one is CURRENT
+## (activate/hold hands the frame across). MOVE_TRAVEL is retired (see §5 below).
 ##
 ## PRESENTATION ONLY. The director never reads or writes sim state and never
 ## draws from the sim rng. The handheld micro-motion is a deterministic layered-
@@ -24,6 +31,13 @@ const SWAY_LOOK := 0.03                          # metres of aim drift
 var cam: Camera3D = null
 var board: ProcessionBoardGraph = null
 var fast := false
+
+# THE OTHER OWNER (doc 34 §2). The player orbit (board_orbit.gd) and this
+# director share the main camera; only one is CURRENT. Every named shot below
+# activate()s, and activate() yields the orbit — so any director beat auto-
+# reclaims the frame from the player, and the orbit reclaims it back when
+# procession hands player-owned time to board_orbit.activate().
+var _orbit: BoardOrbit = null
 
 var _driving := false                 # when false, procession poses the cam directly
 ## Stills-lane forensics: every named shot logs itself + its caller, so a frame
@@ -49,11 +63,18 @@ func setup(camera: Camera3D, board_graph: ProcessionBoardGraph, is_fast: bool) -
 	_base_pos = _home_pos
 	_base_look = _home_look
 
+## Wire the player orbit for mutual exclusion (doc 34 §2). Set once at build.
+func set_orbit(orbit: BoardOrbit) -> void:
+	_orbit = orbit
+
 ## Begin driving: the director owns the camera each frame until hold() is called.
-## No-op under fast (the soak never renders, so the director stays inert).
+## No-op under fast (the soak never renders, so the director stays inert). Taking
+## the frame yields the player orbit — one master at a time.
 func activate() -> void:
 	if fast:
 		return
+	if _orbit != null:
+		_orbit.hold()
 	_driving = true
 
 ## Release the camera so procession can pose it directly (capture hero shots,
@@ -153,36 +174,21 @@ func flyover(skip: Callable) -> void:
 			seg_t += get_process_delta_time()
 	_snap(_home_pos, _home_look)
 
-## WHOLE_BOARD — ease back to the raked overview (the objective read).
+## WHOLE_BOARD — ease back to the raked overview (the objective read). Doc 34
+## §5: whole_board the RESTING STATE is dead (the between-turn overhead showed
+## nothing to plan against — board_orbit owns downtime now); whole_board the
+## SHOT lives on here as a DIRECTOR beat only, e.g. a deliberate reveal after an
+## Estate Stir reroute.
 func whole_board(dur := 0.6) -> void:
 	_trace("whole_board")
 	activate()
 	_ease_to(_home_pos, _home_look, dur)
 
-## MOVE_TRAVEL (F2) — a low raking dolly that TRAVELS along the drive while all
-## four pawns hop at once, so the procession reads as a procession, not a static
-## overhead diagram. A gentle lateral push in the direction of travel.
-func move_travel(dur := 0.9) -> void:
-	_trace("move_travel")
-	activate()
-	if fast:
-		_snap(_home_pos, _home_look)
-		return
-	var c: Vector3 = board.CENTER
-	var start := c + Vector3(-4.0, 12.0, 32.0)
-	var end := c + Vector3(4.0, 11.2, 31.0)
-	var look := c + Vector3(0, 1.1, 0)
-	_kill_tween()
-	# Ease DOWN from wherever we were (usually the whole-board overview) into the
-	# low raking start, THEN push laterally along the drive — no hard cut into the
-	# dolly (the old code snapped _base_pos to `start`, a visible jump each round).
-	_tw = create_tween()
-	_tw.tween_method(_set_base_pos, _base_pos, start, 0.35) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_tw.parallel().tween_method(_set_base_look, _base_look, look, 0.35) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	_tw.tween_method(_set_base_pos, start, end, dur) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+## MOVE_TRAVEL (F2) — RETIRED (doc 34 §5). The all-four-at-once raking group
+## dolly is demoted: the procession now moves one seat at a time, followed by the
+## player orbit (board_orbit.gd) / the PIP, never a simultaneous-move dolly. No
+## simultaneous-move beat survives that needs it, so the shot is gone. Its former
+## caller (the between-turn resting state) is now board_orbit's, not a dolly.
 
 ## LANDING_PUSH (F3) — type-aware close-up on a landing with a short overshoot
 ## "punch-in" (past the target, settle back) — the single most reliable camera-
