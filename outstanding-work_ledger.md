@@ -1,8 +1,8 @@
 # THE OUTSTANDING-WORK LEDGER
 
 *Standing file, updated as we go — mirrors the session task list so Alex never
-has to dig in `.claude/tasks/`. Last updated: **thirteenth watch, open**
-(2026-07-21 evening). Receipts green (NG era, md5 ccd25c2c), master at aea63a1.*
+has to dig in `.claude/tasks/`. Last updated: **thirteenth watch, landing 1**
+(2026-07-21 night). Receipts green (NG era, md5 ccd25c2c), master at 18ded78.*
 
 ---
 
@@ -15,17 +15,17 @@ has to dig in `.claude/tasks/`. Last updated: **thirteenth watch, open**
 | — | **Coroner + Throne couch verdicts** | Feel + dialog red-pen on both (built + merged last night, receipts clean). |
 | 88 | **Meshy web session** | Doc 36 shopping list: elderly-sans-cane regen spins + Auto Split experiments. Alex's hands only (regen isn't on the API). |
 | — | **stinger_win tracks** | Music is Alex's domain; we wire sfx.gd:49 when tracks exist. |
-| 87 | **Brainstorm queue** | Live standings scoreboard + show-don't-tell dialog pass — co-design, ~15 min. |
+| 87 | **Brainstorm queue** | Scoreboard RULED + **BUILT (18ded78)**: chyron + Ledger, hidden in minigames. Remaining: show-don't-tell dialog pass (Alex red-pen session; PLAN-card words now a candidate too). |
 
 ## OPEN — ready to build (director's lanes)
 
 | # | Item | State |
 |---|---|---|
 | 77 | **CAMERA REWORK** — Smite-style high third-person, zoom+rotate, quarter PIP on the acting seat | **UNBLOCKED** (G4 + grounds fill both landed). Doc 34 constitution RATIFIED. PIP perf probe is the gate (16.6ms frame time; ≤300 PIP draws canary). |
-| 80 | **PRE-COMMIT IN PARALLEL** — waiting seats pre-pick forks / pre-buy during rolls | Fully spec'd + RATIFIED (doc 35 §7: 1d/2a/3a/4c/5a/6a + never-required law). Ready for a codex lane. Rider: react glyphs on the roll phase (one call site today). |
+| 80 | ~~PRE-COMMIT IN PARALLEL~~ | **LANDED 360a81c** — full SHIP-FIRST subset, codex-built, verified in-house. Couch: tray feel + item-drama-overlaps-roll question. |
 | 86 | **SWAP MEET FULL BUILD** — MK64-style: bigger track, 4-way split, boosts, swap-projectiles | Camera/viewport architecture SHARED with #77 (design once, use twice). Track+item design can start with Alex cosign; build after #77's ViewportKit exists. |
 | 79 | **RUNDIRECTOR** — doc 28 §15 ADOPTED, zero code; save `schema` tag rides with it | Post-excision path clear; wants a quiet tree (heavy estate/procession churn). Recommend: own codex lane on a calmer night. |
-| 90 | **Widow in the maze** — placement nudge | Small; next dressing pass. |
+| 90 | ~~Widow in the maze~~ | **LANDED 0c5218d** — offset 3.2m→1.2m, corridor-safe. In-world eyeball rides the next windowed pass. |
 | 82 | **NPC beats** — Magpie + Mourner-for-Hire gameplay beats (models exist since c2b1d5e) | Design-light build; bundle with presence layer or dressing lane. |
 | 74 | **Rigging batch tail** — elderly-sans-cane awaits Alex's web spins (doc 36); butler v2 wired | Mostly done; close after web session. |
 

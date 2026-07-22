@@ -3055,3 +3055,10 @@ The failed candidates are parked at `verify_out/exec_candidates/` if you ever wa
 **Yours while the lanes run:** Coroner couch + red pen · Throne couch · DW dash (#63) · doc 36 Meshy web session (elderly spins, Auto Split) · stinger tracks whenever the muse allows.
 
 Merge order B → C → D → E → A, receipts before and after every landing.
+
+**LANDING 1 (night):** Three lanes down, receipts green twice over.
+Pre-commit shipped whole — codex read the constitution and built to it, first try.
+The chyron exists; no wreath will ever move invisibly again.
+The widow stands in her corridor instead of inside a hedge.
+Andrew has the couch. His playtest notes built half this punch-list — good hands.
+Reviewable NOW on master: Coroner, Throne, DW dash, the PLAN tray (LB on any waiting seat), the chyron in procession.
