@@ -15,8 +15,8 @@ extends Node
 ##
 ## API (all by player index):
 ##   get_move(p) -> Vector2      analog move, y = forward(-1)/back(+1)
-##   is_down(p, "a"|"b"|"jump") -> bool
-##   just_pressed(p, "a"|"b"|"jump") -> bool   (edge, valid within the frame)
+##   is_down(p, "a"|"b"|"jump"|"plan"|"plan_y") -> bool
+##   just_pressed(p, action) -> bool   (edge, valid within the frame)
 ##   assign(p, device) / device_of(p)
 ##   auto_assign(n) -> assigns gamepads first, then keyboard halves,
 ##                     remainder get -3 (shared/mouse)
@@ -28,12 +28,18 @@ extends Node
 ## like a/b, with the same press-counter edge rescue, so a remote guest hops
 ## with couch parity. Old builds without the fields decode as jump=false.
 
-const KEY_LEFT_MAP := {"up": KEY_W, "down": KEY_S, "left": KEY_A, "right": KEY_D, "a": KEY_SPACE, "b": KEY_E, "jump": KEY_Q}
-const KEY_RIGHT_MAP := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT, "a": KEY_ENTER, "b": KEY_SHIFT, "jump": KEY_CTRL}
+const KEY_LEFT_MAP := {"up": KEY_W, "down": KEY_S, "left": KEY_A, "right": KEY_D,
+	"a": KEY_SPACE, "b": KEY_E, "jump": KEY_Q, "plan": KEY_TAB, "plan_y": KEY_R}
+const KEY_RIGHT_MAP := {"up": KEY_UP, "down": KEY_DOWN, "left": KEY_LEFT, "right": KEY_RIGHT,
+	"a": KEY_ENTER, "b": KEY_SHIFT, "jump": KEY_CTRL, "plan": KEY_BACKSPACE,
+	"plan_y": KEY_SLASH}
 ## KB+MOUSE (-4) shares LEFT's WASD move, but "a"/"b" are mouse buttons (see
 ## is_down/describe_binding, both special-case device -4 before consulting a
 ## keymap at all) — Space is otherwise unused on this device, so jump gets it.
-const KEY_KBM_MAP := {"up": KEY_W, "down": KEY_S, "left": KEY_A, "right": KEY_D, "a": KEY_SPACE, "b": KEY_E, "jump": KEY_SPACE}
+const KEY_KBM_MAP := {"up": KEY_W, "down": KEY_S, "left": KEY_A, "right": KEY_D,
+	"a": KEY_SPACE, "b": KEY_E, "jump": KEY_SPACE, "plan": KEY_TAB, "plan_y": KEY_R}
+const EDGE_ACTIONS := ["a", "b", "jump", "plan", "plan_y"]
+const TRACKED_ACTIONS := ["a", "b", "jump", "plan", "plan_y", "up", "down", "left", "right"]
 
 const SETUP_PATH := "user://party_setup.json"
 
@@ -58,8 +64,9 @@ var _dbg_aim_screen := {}   # p -> Vector2  (x = screen right, y = screen UP)
 # §4.2). NetSession injects remote peers' 30 Hz input packets here; every query
 # below consults _remote FIRST, so a remote human is architecturally identical
 # to a local device. Empty in all couch play — zero behavior change offline.
-# Packet shape per seat: {move:Vector2, a:bool, b:bool, jump:bool,
-#   presses_a:int, presses_b:int, presses_jump:int,
+# Packet shape per seat: {move:Vector2, a:bool, b:bool, jump:bool, plan:bool,
+#   plan_y:bool, presses_a:int, presses_b:int, presses_jump:int,
+#   presses_plan:int, presses_plan_y:int,
 #   aim:Vector3, aim_screen:Vector2, stick:Vector2, seq:int}
 var _remote := {}         # p -> latest injected packet state
 var _remote_edge := {}    # p -> press-counter bookkeeping (dropped-tap rescue)
@@ -167,6 +174,10 @@ func describe_binding(p: int, action: String) -> String:
 	if d >= 0:
 		if action == "move":
 			return "LEFT STICK"
+		if action == "plan":
+			return "(LB)"
+		if action == "plan_y":
+			return "(Y)"
 		if action == "jump":
 			return "(X)"   # not part of the A/B swap pair — always X, per the ruling
 		var swapped := pad_swapped(d)
@@ -174,6 +185,8 @@ func describe_binding(p: int, action: String) -> String:
 			return "(B)" if swapped else "(A)"
 		return "(A)" if swapped else "(B)"
 	if d == -3:
+		if action == "plan":
+			return "MIDDLE CLICK"
 		return "—" if action == "jump" else "MOUSE"   # shared/mouse seat has no discrete jump
 	if d == -4 and action == "a":
 		return "LEFT CLICK"
@@ -215,13 +228,17 @@ func set_remote_state(p: int, state: Dictionary) -> void:
 			"a_credited": maxi(0, int(state.get("presses_a", 0)) - (1 if bool(state.get("a", false)) else 0)),
 			"b_credited": maxi(0, int(state.get("presses_b", 0)) - (1 if bool(state.get("b", false)) else 0)),
 			"jump_credited": maxi(0, int(state.get("presses_jump", 0)) - (1 if bool(state.get("jump", false)) else 0)),
+			"plan_credited": maxi(0, int(state.get("presses_plan", 0)) - (1 if bool(state.get("plan", false)) else 0)),
+			"plan_y_credited": maxi(0, int(state.get("presses_plan_y", 0)) - (1 if bool(state.get("plan_y", false)) else 0)),
 			"a_eff": false, "b_eff": false, "jump_eff": false,
+			"plan_eff": false, "plan_y_eff": false,
 			"a_prev": false, "b_prev": false, "jump_prev": false,
+			"plan_prev": false, "plan_y_prev": false,
 		}
 		return
 	# Cap the synthesized-press backlog so a network stall can't burst-fire.
 	var e: Dictionary = _remote_edge[p]
-	for act in ["a", "b", "jump"]:
+	for act in EDGE_ACTIONS:
 		var total := int(state.get("presses_" + act, 0))
 		if total - int(e[act + "_credited"]) > 3:
 			e[act + "_credited"] = total - 3
@@ -241,7 +258,7 @@ func _tick_remote_edges() -> void:
 	for p in _remote:
 		var st: Dictionary = _remote[p]
 		var e: Dictionary = _remote_edge[p]
-		for act in ["a", "b", "jump"]:
+		for act in EDGE_ACTIONS:
 			var raw := bool(st.get(act, false))
 			var eff := raw
 			if raw and not bool(e[act + "_prev"]):
@@ -274,17 +291,41 @@ func get_move(p: int) -> Vector2:
 
 func is_down(p: int, action: String) -> bool:
 	if _remote.has(p):
+		var remote_move: Vector2 = _remote[p].get("move", Vector2.ZERO)
+		match action:
+			"up": return remote_move.y < -0.55
+			"down": return remote_move.y > 0.55
+			"left": return remote_move.x < -0.55
+			"right": return remote_move.x > 0.55
 		# a/b/jump are all edge-tracked in _tick_remote_edges (the "_eff" fold);
 		# any other action falls through to the raw packet bool (absent = false).
 		var e: Dictionary = _remote_edge.get(p, {})
 		return bool(e.get(action + "_eff", bool(_remote[p].get(action, false))))
 	var d := device_of(p)
 	if d >= 0:
+		if action == "plan":
+			return Input.is_joy_button_pressed(d, JOY_BUTTON_LEFT_SHOULDER)
+		if action == "plan_y":
+			return Input.is_joy_button_pressed(d, JOY_BUTTON_Y)
+		if action == "up":
+			return Input.is_joy_button_pressed(d, JOY_BUTTON_DPAD_UP) \
+				or Input.get_joy_axis(d, JOY_AXIS_LEFT_Y) < -0.55
+		if action == "down":
+			return Input.is_joy_button_pressed(d, JOY_BUTTON_DPAD_DOWN) \
+				or Input.get_joy_axis(d, JOY_AXIS_LEFT_Y) > 0.55
+		if action == "left":
+			return Input.is_joy_button_pressed(d, JOY_BUTTON_DPAD_LEFT) \
+				or Input.get_joy_axis(d, JOY_AXIS_LEFT_X) < -0.55
+		if action == "right":
+			return Input.is_joy_button_pressed(d, JOY_BUTTON_DPAD_RIGHT) \
+				or Input.get_joy_axis(d, JOY_AXIS_LEFT_X) > 0.55
 		if action == "jump":
 			return Input.is_joy_button_pressed(d, JOY_BUTTON_X)   # left face button (Godot 4 mapping)
 		var want_a := (action == "a") != pad_swapped(d)
 		return Input.is_joy_button_pressed(d, JOY_BUTTON_A if want_a else JOY_BUTTON_B)
-	if d == -4 and action != "jump":
+	if d == -3:
+		return action == "plan" and Input.is_mouse_button_pressed(MOUSE_BUTTON_MIDDLE)
+	if d == -4 and action in ["a", "b"]:
 		return Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT if action == "a" else MOUSE_BUTTON_RIGHT)
 	var m := _keymap(d)
 	return not m.is_empty() and m.has(action) and Input.is_physical_key_pressed(m[action])
@@ -415,11 +456,11 @@ func _physics_process(_delta: float) -> void:
 	_tick_remote_edges()
 	_prev_down = _down.duplicate()
 	for p in _devices:
-		for action in ["a", "b", "jump"]:
+		for action in TRACKED_ACTIONS:
 			_down["%d_%s" % [p, action]] = is_down(p, action)
 	for p in _remote:
 		if not _devices.has(p):
-			for action in ["a", "b", "jump"]:
+			for action in TRACKED_ACTIONS:
 				_down["%d_%s" % [p, action]] = is_down(p, action)
 
 func _keymap(d: int) -> Dictionary:
@@ -430,6 +471,11 @@ func _keymap(d: int) -> Dictionary:
 			# (an older party_setup.json) defaults to the house key instead of
 			# silently never jumping until the player reopens remap.
 			m["jump"] = (KEY_RIGHT_MAP if d == -2 else (KEY_KBM_MAP if d == -4 else KEY_LEFT_MAP))["jump"]
+		var defaults: Dictionary = KEY_RIGHT_MAP if d == -2 else (KEY_KBM_MAP if d == -4 else KEY_LEFT_MAP)
+		if not m.has("plan"):
+			m["plan"] = defaults["plan"]
+		if not m.has("plan_y"):
+			m["plan_y"] = defaults["plan_y"]
 		return m
 	if d == -1:
 		return KEY_LEFT_MAP

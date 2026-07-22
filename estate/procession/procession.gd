@@ -191,6 +191,18 @@ var _stakes_ui: VendettaStakes = null   # sealed-stakes overlay (lazy; windowed 
 var _phase := "boot"
 var _react_last: Array[int] = []   # F24: per-seat last-reaction wall-clock (cooldown)
 var _reacted_demo := false         # F24: capture fires the reaction demo once
+## PRE-COMMIT IN PARALLEL (doc 35 §7): presentation/input-only intent buffers.
+## Each seat may bank one exact fork, one fixed-cart ware, and one item+target.
+## Nothing here draws rng or applies early; the existing resolution seams consume
+## validated intents, and invalid facts fall through to their normal prompts.
+var _precommit: Array[Dictionary] = []
+var _plan_open: Array[bool] = []
+var _plan_mode: Array[String] = []
+var _plan_cursor: Array[int] = []
+var _plan_draft: Array[Dictionary] = []
+var _actor_seat: int = -1
+var _decision_prompt_open: bool = false
+var _parallel_input_frame: int = -1
 var _prompt_demoed := false        # capture poses the crossroads prompt once (screenshot b)
 var _breath_posed := false         # capture poses the meter + heatmap once (P2 screenshot a)
 var _arrived_this_round: Array = []   # seats whose walk crossed the gate THIS round
@@ -268,6 +280,12 @@ func _ready() -> void:
 ## frame) is plenty — the read is for a couch, not a scope. Presentation only:
 ## never consumes any stream, never mutates sim state.
 func _process(_delta: float) -> void:
+	# Waiting seats own their standings-chip PLAN cards during the actor's roll and
+	# travel. This stays live after THE FINAL BELL; only actor ownership and modal
+	# decision prompts gate it. Reactions share the same poll and yield to PLAN.
+	if not _fast and not _mirror and _actor_seat >= 0 \
+			and _phase in ["roll", "move"] and not _decision_prompt_open:
+		_poll_parallel_inputs(_actor_seat)
 	if _fast or board == null or breath == null:
 		return
 	if _heat_seat < 0:
@@ -523,6 +541,17 @@ func _init_arrays() -> void:
 	_react_last.resize(n)
 	for i in n:
 		_react_last[i] = -100000
+	_precommit.clear(); _precommit.resize(n)
+	_plan_open.clear(); _plan_open.resize(n)
+	_plan_mode.clear(); _plan_mode.resize(n)
+	_plan_cursor.clear(); _plan_cursor.resize(n)
+	_plan_draft.clear(); _plan_draft.resize(n)
+	for i in n:
+		_precommit[i] = {}
+		_plan_open[i] = false
+		_plan_mode[i] = "root"
+		_plan_cursor[i] = 0
+		_plan_draft[i] = {}
 	items.clear(); stats.clear()
 	trail.clear(); arrived.clear(); arrival_order.clear()
 	_arrived_this_round.clear()
@@ -665,10 +694,17 @@ func _build_hud() -> void:
 		var items_l := _chip_label("", 15, Color(0.93, 0.82, 0.52))
 		items_l.visible = false
 		col.add_child(items_l)
+		# Ruling 1(d): the couch tray belongs to the seat's own standings chip.
+		# It expands this panel only; no modal and no second 3D frame can steal the roll.
+		var plan_l: Label = _chip_label("", 13, Color(0.76, 0.86, 1.0))
+		plan_l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		plan_l.custom_minimum_size = Vector2(210, 0)
+		plan_l.visible = false
+		col.add_child(plan_l)
 		panel.size_flags_vertical = Control.SIZE_SHRINK_END
 		chiprow.add_child(panel)
 		_chips.append({"grudge": stat_l, "panel": panel, "name": name_l,
-			"route": route_l, "items": items_l})
+			"route": route_l, "items": items_l, "plan": plan_l})
 		if i == 1:
 			# The meter gap: seats 0-1 ride left of the LAST BREATH meter,
 			# seats 2-3 right of it. The instrument's lane stays clear.
@@ -947,6 +983,7 @@ func _refresh_hud() -> void:
 			var items_l: Label = _chips[i].items
 			items_l.text = " · ".join(glyphs)
 			items_l.visible = not glyphs.is_empty()
+		_refresh_plan_card(i)
 	_refresh_award_tracker()
 	_sync_minimap()
 
@@ -992,6 +1029,293 @@ func _sync_minimap() -> void:
 	_minimap.visible = show
 	if show:
 		_minimap.set_state(positions)
+
+# --------------------------------------------------------------------------
+# PRE-COMMIT IN PARALLEL (doc 35 §7) — waiting-seat PLAN cards
+# --------------------------------------------------------------------------
+## Book-of-the-Dead uses this public read to yield B/A while the same seat owns
+## its PLAN context. PLAN and REACT/BET are mutually exclusive waiting contexts.
+func _is_plan_open(seat: int) -> bool:
+	return seat >= 0 and seat < _plan_open.size() and _plan_open[seat]
+
+## The second reaction-poll site requested by the rider: roll/movement frames.
+## PLAN is polled first so a shoulder-open on this frame suppresses face-button
+## reactions from that seat immediately.
+func _poll_parallel_inputs(actor: int) -> void:
+	var physics_frame: int = Engine.get_physics_frames()
+	if physics_frame == _parallel_input_frame:
+		return
+	_parallel_input_frame = physics_frame
+	_poll_precommit_inputs(actor)
+	_poll_reactions(actor)
+
+func _poll_precommit_inputs(actor: int) -> void:
+	for seat in roster.size():
+		if seat == actor or bool(roster[seat].bot) or bool(arrived[seat]):
+			continue
+		if PlayerInput.just_pressed(seat, "plan"):
+			_plan_open[seat] = not _plan_open[seat]
+			_plan_mode[seat] = "root"
+			_plan_cursor[seat] = 0
+			_plan_draft[seat] = {}
+			_refresh_plan_card(seat)
+			continue
+		if not _plan_open[seat]:
+			continue
+		if _plan_mode[seat] == "root":
+			_poll_plan_root(seat)
+		else:
+			_poll_plan_picker(seat)
+
+## Four face verbs in PLAN: X fork, Y cart, B item, A confirm/close. Inside a
+## picker the d-pad/stick chooses, A banks, B cancels that category and returns.
+func _poll_plan_root(seat: int) -> void:
+	if PlayerInput.just_pressed(seat, "jump"):
+		_open_plan_picker(seat, "fork")
+	elif PlayerInput.just_pressed(seat, "plan_y"):
+		_open_plan_picker(seat, "cart")
+	elif PlayerInput.just_pressed(seat, "b"):
+		_open_plan_picker(seat, "item")
+	elif PlayerInput.just_pressed(seat, "a"):
+		_plan_open[seat] = false
+		_refresh_plan_card(seat)
+
+func _open_plan_picker(seat: int, mode: String) -> void:
+	_plan_mode[seat] = mode
+	_plan_cursor[seat] = 0
+	_plan_draft[seat] = {}
+	_refresh_plan_card(seat)
+
+func _poll_plan_picker(seat: int) -> void:
+	var mode: String = _plan_mode[seat]
+	if PlayerInput.just_pressed(seat, "b"):
+		_clear_precommit_category(seat, "item" if mode == "item_target" else mode)
+		_plan_mode[seat] = "root"
+		_plan_cursor[seat] = 0
+		_plan_draft[seat] = {}
+		_refresh_plan_card(seat)
+		return
+	var choices: Array = _plan_choices(seat, mode)
+	if choices.is_empty():
+		return
+	var delta: int = 0
+	if PlayerInput.just_pressed(seat, "left") or PlayerInput.just_pressed(seat, "up"):
+		delta = -1
+	elif PlayerInput.just_pressed(seat, "right") or PlayerInput.just_pressed(seat, "down"):
+		delta = 1
+	if delta != 0:
+		_plan_cursor[seat] = posmod(_plan_cursor[seat] + delta, choices.size())
+		Sfx.play("ui_move", -18.0)
+		_refresh_plan_card(seat)
+	if PlayerInput.just_pressed(seat, "a"):
+		var choice: Dictionary = choices[clampi(_plan_cursor[seat], 0, choices.size() - 1)]
+		_commit_plan_choice(seat, mode, choice)
+
+func _commit_plan_choice(seat: int, mode: String, choice: Dictionary) -> void:
+	var intent: Dictionary = _precommit[seat]
+	match mode:
+		"fork":
+			intent["fork_id"] = int(choice.fork_id)
+			intent["fork_node"] = int(choice.value)
+			intent["fork_label"] = String(choice.label)
+		"cart":
+			intent["cart_id"] = String(choice.value)
+			intent["cart_label"] = String(choice.label)
+		"item":
+			var id: String = String(choice.value)
+			if id in ["crows_cut", "funeral_bell", "invitation"]:
+				_plan_draft[seat] = {"item_id": id, "item_label": String(choice.label)}
+				_plan_mode[seat] = "item_target"
+				_plan_cursor[seat] = 0
+				_refresh_plan_card(seat)
+				return
+			var target: Variant = null
+			if id == "wisp":
+				target = _wisp_target(seat)
+				if int(target) < 0:
+					return
+			elif id == "wreath_debt":
+				target = positions[seat]
+			intent["item_id"] = id
+			intent["item_target"] = target
+			intent["item_label"] = String(choice.label)
+			intent["item_target_label"] = ""
+		"item_target":
+			var draft: Dictionary = _plan_draft[seat]
+			if draft.is_empty():
+				return
+			intent["item_id"] = String(draft.item_id)
+			intent["item_target"] = choice.value
+			intent["item_label"] = String(draft.item_label)
+			intent["item_target_label"] = String(choice.label)
+	_precommit[seat] = intent
+	_plan_mode[seat] = "root"
+	_plan_cursor[seat] = 0
+	_plan_draft[seat] = {}
+	Sfx.play("ui_confirm", -14.0, 0.8)
+	_refresh_plan_card(seat)
+	_push_net()
+
+## Standardized picker rows: {value, label, ...}. Every read is deterministic;
+## notably, choosing a ware or item here never buys, spends, rolls, or draws.
+func _plan_choices(seat: int, mode: String) -> Array:
+	var out: Array = []
+	match mode:
+		"fork":
+			var upcoming: Dictionary = _upcoming_fork(seat)
+			if upcoming.is_empty():
+				return out
+			var options: Array = upcoming.options
+			for raw in options:
+				var option: Dictionary = raw
+				out.append({"value": int(option.node), "fork_id": int(upcoming.fork_id),
+					"label": String(option.label)})
+		"cart":
+			for raw in Spaces.CART_WARES:
+				var ware: Dictionary = raw
+				var price: int = _price_for(seat, ware)
+				out.append({"value": String(ware.id), "label": "%s · %d%s" % [
+					String(ware.name), price, Spaces.PENNY_GLYPH]})
+		"item":
+			var ids: Array = items[seat].keys()
+			ids.sort()
+			for raw in ids:
+				var id: String = String(raw)
+				if id == "black_veil" or _count_item(seat, id) <= 0:
+					continue
+				var ware: Dictionary = Spaces.ware(id)
+				out.append({"value": id, "label": String(ware.name)})
+		"item_target":
+			var draft: Dictionary = _plan_draft[seat]
+			if draft.is_empty():
+				return out
+			var id: String = String(draft.item_id)
+			if id == "crows_cut":
+				for target in _planning_crow_targets(seat):
+					var target_seat: int = int(target)
+					out.append({"value": target_seat, "label": String(roster[target_seat].name)})
+			elif id == "funeral_bell":
+				var leader: int = _track_leader(seat)
+				if leader >= 0:
+					out.append({"value": leader, "label": String(roster[leader].name)})
+			elif id == "invitation":
+				var pool: Array = _mini_pool.duplicate()
+				if pool.is_empty():
+					pool = CYCLE_ORDER.duplicate()
+				for game in pool:
+					var game_id: String = String(game)
+					var meta: Dictionary = MINIGAMES[game_id]
+					out.append({"value": game_id, "label": String(meta.name)})
+	return out
+
+## First downstream node whose current adjacency forks. Unique edges are walked
+## only as a pure graph read; the player banks the exact fork id + exact next node.
+func _upcoming_fork(seat: int) -> Dictionary:
+	if board == null or bool(arrived[seat]):
+		return {}
+	var cur: int = positions[seat]
+	var guard: int = board.node_count() + 4
+	while guard > 0:
+		guard -= 1
+		var next_nodes: Array = board.next_of(cur)
+		if next_nodes.size() > 1:
+			return {"fork_id": cur, "options": _fork_options(cur)}
+		if next_nodes.is_empty():
+			break
+		cur = int(next_nodes[0])
+	return {}
+
+func _planning_crow_targets(seat: int) -> Array:
+	var out: Array = []
+	for target in roster.size():
+		if target == seat or bool(arrived[target]) or grudge[target] <= 0:
+			continue
+		out.append(target)
+	return out
+
+func _clear_precommit_category(seat: int, category: String) -> void:
+	if seat < 0 or seat >= _precommit.size():
+		return
+	var intent: Dictionary = _precommit[seat]
+	match category:
+		"fork":
+			for key in ["fork_id", "fork_node", "fork_label"]:
+				intent.erase(key)
+		"cart":
+			for key in ["cart_id", "cart_label"]:
+				intent.erase(key)
+		"item":
+			for key in ["item_id", "item_target", "item_label", "item_target_label"]:
+				intent.erase(key)
+	_precommit[seat] = intent
+	_refresh_plan_card(seat)
+
+func _clear_all_precommit() -> void:
+	for seat in _precommit.size():
+		_precommit[seat] = {}
+		_plan_open[seat] = false
+		_plan_mode[seat] = "root"
+		_plan_cursor[seat] = 0
+		_plan_draft[seat] = {}
+		_refresh_plan_card(seat)
+
+func _plan_has_intent(seat: int) -> bool:
+	return seat >= 0 and seat < _precommit.size() and not _precommit[seat].is_empty()
+
+## Closed cards retain the public banked summary; an empty waiting card is only
+## a one-line shoulder hint. Open cards show the face verbs or the current picker.
+func _refresh_plan_card(seat: int) -> void:
+	if seat < 0 or seat >= _chips.size() or not _chips[seat].has("plan"):
+		return
+	var label: Label = _chips[seat].get("plan") as Label
+	if label == null or bool(roster[seat].bot):
+		if label != null:
+			label.visible = false
+		return
+	# Ruling 1(d)'s richer-online half: on a guest's own screen their card gets
+	# more breathing room and a larger face; couch/public cards stay compact.
+	var richer_online: bool = _mirror and NetSession.is_client() \
+		and NetSession.my_seat() == seat
+	label.custom_minimum_size = Vector2(320 if richer_online else 210, 0)
+	label.add_theme_font_size_override("font_size", 16 if richer_online else 13)
+	var eligible: bool = seat != _actor_seat and not bool(arrived[seat]) \
+		and _phase in ["roll", "move"]
+	var intent: Dictionary = _precommit[seat]
+	if _is_plan_open(seat):
+		var mode: String = _plan_mode[seat]
+		if mode == "root":
+			label.text = "PLAN · LB\nX FORK · Y CART\nB ITEM · A CLOSE" + _plan_summary(intent)
+		else:
+			var choices: Array = _plan_choices(seat, mode)
+			var picked: String = "NOTHING TO BANK"
+			if not choices.is_empty():
+				var cursor: int = clampi(_plan_cursor[seat], 0, choices.size() - 1)
+				var choice: Dictionary = choices[cursor]
+				picked = "‹ %s ›" % String(choice.label)
+			var title: String = "TARGET" if mode == "item_target" else mode.to_upper()
+			label.text = "PLAN · %s\n%s\nA BANK · B CLEAR" % [title, picked]
+		label.visible = true
+		return
+	if _plan_has_intent(seat):
+		label.text = "PLAN · LB" + _plan_summary(intent)
+		label.visible = true
+	elif eligible:
+		label.text = "LB · PLAN"
+		label.visible = true
+	else:
+		label.visible = false
+
+func _plan_summary(intent: Dictionary) -> String:
+	var lines: Array[String] = []
+	if intent.has("fork_label"):
+		lines.append("FORK: %s" % String(intent.fork_label))
+	if intent.has("cart_label"):
+		lines.append("CART: %s" % String(intent.cart_label))
+	if intent.has("item_label"):
+		var target: String = String(intent.get("item_target_label", ""))
+		lines.append("ITEM: %s%s" % [String(intent.item_label),
+			" → %s" % target if target != "" else ""])
+	return "" if lines.is_empty() else "\n" + "\n".join(lines)
 
 func _announce_text(text: String, color := Color(0.95, 0.95, 1.0), hold := 2.0) -> void:
 	if _announce == null:
@@ -1805,6 +2129,9 @@ func _letters_offer() -> void:
 var _carry_spent: Array[int] = []   # LAST RITES spending counts toward the NEXT night's race
 
 func _night_settlement() -> void:
+	# No intent crosses a night boundary or leaks into LAST RITES. A pre-buy is
+	# for the cart the player may reach on their board turn, never the interlude.
+	_clear_all_precommit()
 	# The races are over — the tracker stands down for the ceremonies (P3).
 	_tracker_live = false
 	if _award_tracker != null:
@@ -1918,6 +2245,7 @@ func _emit_night_record() -> void:
 ## persist; positions, arrivals, the bell, traps and the per-night stat
 ## races reset with the board.
 func _board_reset() -> void:
+	_clear_all_precommit()
 	arrival_order.clear()
 	_arrived_this_round.clear()
 	bell_round = -1
@@ -2249,6 +2577,13 @@ func _roll_order() -> Array:
 ## cascade is now inline with the turn.
 func _take_turn(seat: int) -> void:
 	_phase = "roll"
+	_actor_seat = seat
+	_plan_open[seat] = false
+	_plan_mode[seat] = "root"
+	_plan_cursor[seat] = 0
+	_plan_draft[seat] = {}
+	for plan_seat in roster.size():
+		_refresh_plan_card(plan_seat)
 	_sync_minimap()
 	_move_item_used = false
 	_offense_hit.clear()
@@ -2361,6 +2696,17 @@ func _take_turn(seat: int) -> void:
 		breath.meter.visible = false
 	if book != null:
 		book.meter_seat = -1   # the roller's hands are their own again
+	# A cart pre-buy names this turn's possible landing. If the roll never reached
+	# a cart, the no-land intent dies quietly; fork intent may wait for its actual
+	# upcoming fork. Home seats have no future board decisions, so all plans clear.
+	if bool(arrived[seat]):
+		_precommit[seat] = {}
+	elif _precommit[seat].has("cart_id") \
+			and (path.is_empty() or board.type_at(positions[seat]) != Spaces.CART):
+		_clear_precommit_category(seat, "cart")
+	_actor_seat = -1
+	for plan_seat in roster.size():
+		_refresh_plan_card(plan_seat)
 
 func _ring_bell(ringer: int) -> void:
 	bell_round = round_num
@@ -2414,7 +2760,8 @@ func _any_human_holds_a() -> bool:
 ## Any LOCAL human tapping B this frame (the over-shoulder skip).
 func _any_human_pressed_b() -> bool:
 	for i in roster.size():
-		if _is_local_human(i) and PlayerInput.just_pressed(i, "b"):
+		if _is_local_human(i) and not _is_plan_open(i) \
+				and PlayerInput.just_pressed(i, "b"):
 			return true
 	return false
 
@@ -2514,6 +2861,12 @@ func _pose_breath_shot(seat: int) -> void:
 # decides). Bot decisions draw from the EVENT stream, deterministically.
 # --------------------------------------------------------------------------
 func _item_beat(seat: int) -> void:
+	# Ruling 6(a), item-arm slice: consume one exact, validated intent here — the
+	# same canonical pre-roll item seam. Invalid intent is already cleared and the
+	# ordinary prompt below remains untouched.
+	var used_precommit: bool = await _consume_precommitted_item(seat)
+	if used_precommit:
+		return
 	if _inv_total(seat) <= 0:
 		return
 	if bool(roster[seat].bot) or not _drama_visible():
@@ -2535,6 +2888,61 @@ func _item_beat(seat: int) -> void:
 		if pick < 0:
 			return
 		await _use_item(seat, String(usable[pick]))
+
+## Apply exactly one banked item+target. Returns true only when it applied, which
+## also explicitly means the confirmed plan keeps the rest of inventory. Invalid
+## facts discard silently and return false so today's item prompt runs normally.
+func _consume_precommitted_item(seat: int) -> bool:
+	if seat < 0 or seat >= _precommit.size():
+		return false
+	var intent: Dictionary = _precommit[seat]
+	if not intent.has("item_id"):
+		return false
+	var id: String = String(intent.item_id)
+	var target: Variant = intent.get("item_target", null)
+	_clear_precommit_category(seat, "item")
+	var usable: Array = _usable_items(seat)
+	if not usable.has(id):
+		return false
+	match id:
+		"crows_cut":
+			var crow_target: int = int(target)
+			if not _crow_targets(seat).has(crow_target):
+				return false
+			_take_item(seat, id)
+			_offense_hit[crow_target] = true
+			_crow_strike(seat, crow_target)
+		"funeral_bell":
+			var bell_target: int = int(target)
+			if _track_leader(seat) != bell_target:
+				return false
+			_take_item(seat, id)
+			_offense_hit[bell_target] = true
+			_bell_drag(seat, bell_target)
+		"invitation":
+			var game_id: String = String(target)
+			var pool: Array = _mini_pool.duplicate()
+			if pool.is_empty():
+				pool = CYCLE_ORDER.duplicate()
+			if not pool.has(game_id):
+				return false
+			_take_item(seat, id)
+			_invitation_pick = game_id
+			var meta: Dictionary = MINIGAMES[game_id]
+			_flash_line(Dialog.text("procession.items.invitation") % [
+				roster[seat].name, String(meta.name)], roster[seat].color, seat)
+		"wisp":
+			if _wisp_target(seat) != int(target):
+				return false
+			await _use_item(seat, id)
+		"wreath_debt":
+			if positions[seat] != int(target):
+				return false
+			await _use_item(seat, id)
+		_:
+			await _use_item(seat, id)
+	_refresh_hud()
+	return true
 
 ## Held items a seat can legally spend RIGHT NOW (the guardrails as a filter).
 ## BLACK VEIL is passive — it spends itself on the next hazard.
@@ -2840,10 +3248,12 @@ func _grant_ware(seat: int, id: String) -> bool:
 # ---- human choice prompts (no rng — pure input, crossroads doctrine) ----
 func _pick_prompt(header: String, sub: String, col: Color, entries: Array,
 		leave_label: String, focus_leave: bool, window: float) -> int:
+	_decision_prompt_open = true
 	var prompt := CartPrompt.new()
 	_ui.add_child(prompt)
 	prompt.open(header, sub, col, entries, leave_label, focus_leave, window)
 	var pick: int = await prompt.run()
+	_decision_prompt_open = false
 	prompt.queue_free()
 	return pick
 
@@ -2890,7 +3300,7 @@ func _pick_invitation(seat: int) -> String:
 # wreath LAST place shops at 30% off — an ANNOUNCED line, never hidden. The
 # LETTERS OF ADMINISTRATION are the same 30% (it IS the discount; no stack).
 # --------------------------------------------------------------------------
-func _shop(seat: int) -> void:
+func _shop(seat: int, allow_prebuy: bool = false) -> void:
 	var disc := _discount_for(seat)
 	if float(disc.mult) < 0.999 and not _fast:
 		_flash_line(String(disc.reason) % roster[seat].name, roster[seat].color, seat)
@@ -2898,6 +3308,11 @@ func _shop(seat: int) -> void:
 	if _capture and not _cart_demoed:
 		_cart_demoed = true
 		await _demo_cart(seat)
+	# Rulings 3(a)+6(a): landing-cart only, exact fixed ware, exact current price.
+	# A valid bank buys once and leaves; no second purchase is invented. An invalid
+	# bank is gone and the ordinary shop path below prompts exactly as before.
+	if allow_prebuy and _consume_prebuy(seat):
+		return
 	if bool(roster[seat].bot) or not _drama_visible():
 		_bot_shop(seat)
 		return
@@ -2920,6 +3335,30 @@ func _shop(seat: int) -> void:
 		if grudge[seat] < price:
 			continue
 		_buy_ware(seat, ware, price)
+
+func _consume_prebuy(seat: int) -> bool:
+	if seat < 0 or seat >= _precommit.size():
+		return false
+	var intent: Dictionary = _precommit[seat]
+	if not intent.has("cart_id"):
+		return false
+	var wanted: String = String(intent.cart_id)
+	_clear_precommit_category(seat, "cart")
+	if _inv_total(seat) >= Spaces.INV_CAP:
+		return false
+	var ware: Dictionary = {}
+	for raw in Spaces.CART_WARES:
+		var shelf_ware: Dictionary = raw
+		if String(shelf_ware.id) == wanted:
+			ware = shelf_ware
+			break
+	if ware.is_empty():
+		return false
+	var price: int = _price_for(seat, ware)
+	if grudge[seat] < price:
+		return false
+	_buy_ware(seat, ware, price)
+	return true
 
 ## Bot shopping: one considered purchase per visit, EVENT stream, every draw
 ## conditional on an affordable shelf (deterministic per seed).
@@ -3007,6 +3446,11 @@ func _resolve_walk(seat: int, steps: int) -> Array:
 ## prompt (no rng). Capture poses the prompt once with the bot's data.
 func _choose_branch(seat: int, fork_id: int) -> int:
 	var options := _fork_options(fork_id)
+	# Ruling 2(a): exact fork + exact outgoing node or nothing. A changed graph,
+	# flood filter, or reroute silently discards and falls through to today's prompt.
+	var banked: int = _consume_precommitted_fork(seat, fork_id, options)
+	if banked >= 0:
+		return banked
 	var is_human := not bool(roster[seat].bot) and not _is_remote_seat(seat)
 	if is_human and _drama_visible():
 		return await _prompt_branch_mapped(seat, fork_id, options)
@@ -3020,6 +3464,23 @@ func _choose_branch(seat: int, fork_id: int) -> int:
 		_prompt_demoed = true
 		await _demo_prompt(seat, options)
 	return _branch_index_of(fork_id, options, pick)
+
+func _consume_precommitted_fork(seat: int, fork_id: int, options: Array) -> int:
+	if seat < 0 or seat >= _precommit.size():
+		return -1
+	var intent: Dictionary = _precommit[seat]
+	if not intent.has("fork_id"):
+		return -1
+	var wanted_fork: int = int(intent.fork_id)
+	var wanted_node: int = int(intent.get("fork_node", -1))
+	_clear_precommit_category(seat, "fork")
+	if wanted_fork != fork_id:
+		return -1
+	for raw in options:
+		var option: Dictionary = raw
+		if int(option.node) == wanted_node:
+			return _branch_index_of(fork_id, options, options.find(raw))
+	return -1
 
 ## The options a fork offers RIGHT NOW. THE FLOOD (doc 28 §4 minor 1) closes
 ## Garden Row: the fork simply stops offering it while the water stands
@@ -3102,10 +3563,12 @@ func _route_pref(seat: int) -> String:
 ## the table waits. Returns the branch index; draws nothing from any stream.
 func _prompt_branch(seat: int, options: Array) -> int:
 	board_camera.landing_push(board.reveal_shot(positions[seat], Spaces.CROSSROADS))
+	_decision_prompt_open = true
 	var prompt := RoadPrompt.new()
 	_ui.add_child(prompt)
 	prompt.open({"name": roster[seat].name, "color": roster[seat].color}, options)
 	var pick: int = await prompt.run()
+	_decision_prompt_open = false
 	prompt.queue_free()
 	return clampi(pick, 0, options.size() - 1)
 
@@ -3275,6 +3738,8 @@ func _poll_reactions(victim: int) -> void:
 	for i in roster.size():
 		if i == victim or bool(roster[i].bot):
 			continue
+		if _is_plan_open(i):
+			continue   # PLAN owns this seat's face buttons until the tray closes
 		if PlayerInput.has_method("is_remote") and PlayerInput.is_remote(i):
 			continue
 		if now - _react_last[i] < REACT_COOLDOWN_MS:
@@ -3365,7 +3830,7 @@ func _resolve_box(seat: int, name: String, col: Color) -> void:
 ## handout died with P2; the peddler quotes prices and the table watches.
 func _resolve_cart(seat: int, name: String, col: Color) -> void:
 	executor.say(Executor.pick(Executor.CART, _voice_rng, [name]), col)
-	await _shop(seat)
+	await _shop(seat, true)
 
 ## THE FERRYMAN'S TOLL, landed on: pay 2♠ to the river. No owner, no refunds.
 func _resolve_ferry(seat: int, name: String, col: Color) -> void:
@@ -4467,11 +4932,16 @@ func _net_state() -> Dictionary:
 	for i in roster.size():
 		routes.append(board.route_of(positions[i]) if board else "common")
 	return {
-		"phase": _phase, "round": round_num,
+		"phase": _phase, "round": round_num, "actor": _actor_seat,
 		"grudge": grudge.duplicate(),
 		"positions": positions.duplicate(), "moved": moved_total.duplicate(),
 		"routes": routes, "arrived": arrived.duplicate(),
 		"arrival_order": arrival_order.duplicate(), "bell_round": bell_round,
+		# Public standings-chip facts only. Intents are choices, not outcomes; the
+		# host still applies them solely at the canonical decision seams above.
+		"precommit": _precommit.duplicate(true),
+		"plan_open": _plan_open.duplicate(), "plan_mode": _plan_mode.duplicate(),
+		"plan_cursor": _plan_cursor.duplicate(), "plan_draft": _plan_draft.duplicate(true),
 		"banner": _reveal.get_parsed_text() if _reveal and _reveal.visible else "",
 		"stirs": _net_stirs_state(),
 	}
@@ -4479,6 +4949,7 @@ func _net_state() -> Dictionary:
 func _net_apply(state: Dictionary) -> void:
 	_phase = String(state.get("phase", _phase))
 	round_num = int(state.get("round", round_num))
+	_actor_seat = int(state.get("actor", _actor_seat))
 	grudge.assign(state.get("grudge", grudge))
 	# Topology must exist before a mirrored pawn can be seated on a Stirs-born
 	# node. Old snapshots without this key remain backward-compatible.
@@ -4489,6 +4960,12 @@ func _net_apply(state: Dictionary) -> void:
 	arrived = state.get("arrived", arrived)
 	arrival_order = state.get("arrival_order", arrival_order)
 	bell_round = int(state.get("bell_round", bell_round))
+	if state.has("precommit"):
+		_precommit.assign(state.get("precommit", _precommit))
+		_plan_open.assign(state.get("plan_open", _plan_open))
+		_plan_mode.assign(state.get("plan_mode", _plan_mode))
+		_plan_cursor.assign(state.get("plan_cursor", _plan_cursor))
+		_plan_draft.assign(state.get("plan_draft", _plan_draft))
 	if board:
 		for i in mini(positions.size(), roster.size()):
 			board.seat_pawn(i, positions[i])

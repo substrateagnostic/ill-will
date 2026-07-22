@@ -191,6 +191,13 @@ func _process(_dt: float) -> void:
 			continue
 		if _pro.has_method("_is_remote_seat") and bool(_pro._is_remote_seat(i)):
 			continue
+		# PRE-COMMIT PLAN owns this waiting seat's face buttons while its shoulder
+		# tray is open. Close the book strip and yield; no double interpretation.
+		if _pro.has_method("_is_plan_open") and bool(_pro._is_plan_open(i)):
+			if _open[i]:
+				_open[i] = false
+				_layout()
+			continue
 		# the active roller's hands belong to THE LAST BREATH
 		if i == meter_seat:
 			if _open[i]:
