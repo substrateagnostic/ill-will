@@ -174,6 +174,14 @@ func _ready() -> void:
 	_quit_app_hold.completed.connect(quit_app)
 	quit_row.add_child(_quit_app_hold)
 	box.add_child(quit_row)
+	# FEEDBACK CAPTURE (13th watch): the same build number the title corner
+	# shows, small + unobtrusive as a footer row here too.
+	var ver_label := Label.new()
+	ver_label.text = FeedbackCapture.version_string()
+	ver_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	ver_label.add_theme_font_size_override("font_size", 13)
+	ver_label.modulate.a = 0.55
+	box.add_child(ver_label)
 	_build_disconnect_overlay()
 	_build_hostpause_overlay()
 	_build_narrate_overlay()

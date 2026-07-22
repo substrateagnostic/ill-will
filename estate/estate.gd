@@ -670,6 +670,25 @@ func _enter_title_swap() -> void:
 	hint.add_theme_font_size_override("font_size", 17)
 	hint.add_theme_color_override("font_color", Color(0.78, 0.72, 0.60))
 	box.add_child(hint)
+	# FEEDBACK CAPTURE (13th watch): the build number, small + unobtrusive, in
+	# the title screen's own corner — same parchment/serif voice as the footer
+	# hint above, just quieter (smaller, dimmer). Parked on _title_layer itself
+	# (not `box`) so it stays pinned to the corner regardless of button rows.
+	var ver := Label.new()
+	ver.text = FeedbackCapture.version_string()
+	if serif != null:
+		ver.add_theme_font_override("font", serif)
+	ver.add_theme_font_size_override("font_size", 14)
+	ver.add_theme_color_override("font_color", Color(0.78, 0.72, 0.60))
+	ver.modulate.a = 0.55
+	ver.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ver.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+	ver.offset_left = -110.0
+	ver.offset_top = -26.0
+	ver.offset_right = -10.0
+	ver.offset_bottom = -6.0
+	ver.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_title_layer.add_child(ver)
 
 ## D1 — THE FRONT DOOR: one title button, dressed as the house's funeral
 ## stationery. Near-black ink panel + gold hairline (the register of the
