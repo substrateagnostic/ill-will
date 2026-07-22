@@ -409,7 +409,17 @@
       "ferry_pass": "%s pays the Ferryman in passing",
       "seance_stir": "The planchette stirs for %s.",
       "vendetta_alone": "%s reaches the vendetta stone alone. No blood today.",
-      "vendetta_wash": "%s and %s stake %d each — a wash. The estate is disappointed."
+      "vendetta_wash": "%s and %s stake %d each — a wash. The estate is disappointed.",
+      "magpie_gift": "The magpie tips %s a shiny — lifted, still warm, from %s.",
+      "magpie_empty": "The magpie sizes up %s. Finds nothing worth the trouble.",
+      "mourner_hire": "%s hires a proper grief. Loud, and well-rehearsed.",
+      "mourner_broke": "%s passes the mourner. Grief, it turns out, is not free."
+    },
+    "mourner": {
+      "header": "%s — THE MOURNER-FOR-HIRE",
+      "hire_label": "HIRE A MOURNING · 2¢",
+      "hire_sub": "She nominates you for MOST MOURNED.",
+      "walk_label": "WALK ON"
     },
     "interim": {
       "header": "THE INTERIM READING",

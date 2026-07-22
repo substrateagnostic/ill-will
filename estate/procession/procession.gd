@@ -188,6 +188,21 @@ var debt_traps := {}                # node_id -> owner seat (WREATH OF DEBT)
 var _move_item_used := false        # max ONE die/movement item per turn
 var _offense_hit := {}              # per turn: target seat -> true (no-stack per target)
 var _wisp_dest := -1                # WILL-O'-THE-WISP teleport (replaces the roll)
+# ---- NPC BEATS (doc 28 §10 — THE MAGPIE + THE MOURNER-FOR-HIRE) ----------
+# One flavor beat each, LOCAL-HUMAN ONLY (bots march the pure economy — the
+# all-bot receipt soak never enters these branches, so the frozen hashes hold
+# with the beats live). NEVER draws from any rng stream: the magpie robs the
+# deterministically-richest rival, the mourner is pure human input. Single
+# kill-switch below; per-night trackers reset in _board_reset.
+const NPC_BEATS_LIVE := true        # false = beats built but dormant (director's re-freeze gate)
+# MEASUREMENT-ONLY hook (stays false in ship): flip true to let the MAGPIE fire
+# for bots too (the mourner stays human-only by nature — its prompt needs a live
+# seat), so the director can re-run the battery and read the enabled-for-bots
+# md5s. TRUE moves the frozen hashes and would demand a sanctioned re-freeze.
+const _NPCBEATS_ALLSEATS_MEASURE := false
+var _magpie_seen := {}              # seat -> true once the magpie has greeted them this night
+var _mourner_hired := {}            # seat -> true once a mourning is bought this night
+var _mourner_pending := {}          # seat -> true: path crossed her stone, prompt at the reveal
 # ---- THE BOOK OF THE DEAD (doc 32 v1 — sealed side-bets, cosmetic) ----
 var book: ProcessionBook = null     # the per-seat bet surface (UI builds it)
 var _cycle_mini := ""               # this cycle's game, drawn at roll-phase start
@@ -222,6 +237,7 @@ var _graphtest := false          # --boardgraphtest: print the topology receipt 
 var _stirnettest := false        # --stirnettest: host snapshot -> fresh mirror replay probe
 var _walk := false               # --walk: dev walkabout on the grounds, no night
 var _parprobe := false           # --parprobe: run the legacy Par adapter once, print, quit
+var _npcbeatprobe := false       # --npcbeatprobe: headless check of the §10 NPC beats + gate, quit
 # ---- the NAMED rng streams (header doctrine; LAYOUT lives in board_graph) ----
 var _roll_rng := RandomNumberGenerator.new()     # ROLL: band deals, bot aim, bot road picks
 var _event_rng := RandomNumberGenerator.new()    # EVENT: séance, items, minigame pick, house
@@ -453,6 +469,9 @@ func _boot(config: Dictionary) -> void:
 	if _parprobe:
 		_parprobe_run()   # dev probe: the legacy Par adapter, alone, then quit
 		return
+	if _npcbeatprobe:
+		_npcbeatprobe_run()   # dev probe: the §10 NPC beats + local-human gate, then quit
+		return
 	if _walk:
 		_enter_walk_mode()   # dev walkabout: the grounds, a body, no night
 		return
@@ -494,6 +513,70 @@ func _parprobe_run() -> void:
 	print("PARPROBE placements=", placements)
 	get_tree().quit()
 
+## NPC BEAT PROBE (--npcbeatprobe): the §10 flavor beats are LOCAL-HUMAN only —
+## the reason the all-bot receipt battery stays byte-identical with them live —
+## so no canonical soak ever exercises them. This headless probe does: it drives
+## THE MAGPIE + THE MOURNER-FOR-HIRE through their real wiring on controlled
+## purses and asserts (1) the anchors resolve to real stones, (2) the magpie's
+## robin-hood transfer is deterministic (richest OTHER rival, ties to low seat),
+## (3) a BOT passing changes nothing and draws nothing, (4) the mourner arms for
+## a human and never a bot, (5) the hire economy is −2¢ / +1 mourned. Draws no
+## rng; separate flag; zero effect on the frozen hashes. Prints a receipt + quit.
+func _npcbeatprobe_run() -> void:
+	_fast = true   # every beat's floater/flash guards on _fast; the economy still runs
+	var ok := true
+	var magpie := board.magpie_stone()
+	var mourner := board.mourner_stone()
+	print("PROCESSION_NPCBEAT anchors magpie=%d(%s,%s) mourner=%d(%s,%s) live=%s" % [
+		magpie, board.type_at(magpie), board.route_of(magpie),
+		mourner, board.type_at(mourner), board.route_of(mourner), str(NPC_BEATS_LIVE)])
+	ok = ok and magpie > 0 and magpie < board.node_count()
+	ok = ok and mourner > 0 and mourner < board.node_count()
+	ok = ok and board.route_of(mourner) == "valley"
+	# Seat 0 = the one local human; 1-3 = bots (the canonical soak's all-bot shape).
+	for i in roster.size():
+		roster[i].bot = (i != 0)
+	# --- MAGPIE: richest OTHER rival, ties to the lowest seat (crow's-cut rule) ---
+	grudge[0] = 5; grudge[1] = 9; grudge[2] = 9; grudge[3] = 2
+	var rival := _magpie_rich_rival(0)
+	ok = ok and rival == 1          # 9==9 tie breaks to the LOWER index (1), not 2
+	_magpie_seen.clear(); _mourner_hired.clear(); _mourner_pending.clear()
+	_npc_passby(0, [magpie])         # the human passes the perch: robbed-from-rich gift
+	var gift_ok := grudge[0] == 6 and grudge[1] == 8 and grudge[2] == 9 and grudge[3] == 2
+	var gift_snap := "[%d,%d,%d,%d]" % [grudge[0], grudge[1], grudge[2], grudge[3]]
+	ok = ok and gift_ok and bool(_magpie_seen.get(0, false))
+	_npc_passby(0, [magpie])         # same human, same night: the bird only greets once
+	ok = ok and grudge[0] == 6
+	grudge[1] = 9
+	_npc_passby(1, [magpie])         # a BOT passes: no gift, no seen-flag, no draw
+	var gate_ok := grudge[1] == 9 and not bool(_magpie_seen.get(1, false))
+	ok = ok and gate_ok
+	print("PROCESSION_NPCBEAT magpie rival=%d gift_after=%s once=%s bot_skip=%s" % [
+		rival, gift_snap, str(gift_ok), str(gate_ok)])
+	grudge[0] = 0; grudge[1] = 0; grudge[2] = 0; grudge[3] = 0   # nobody holds a coin
+	_magpie_seen.clear()
+	_npc_passby(0, [magpie])         # the bird finds nothing worth taking: chatter, no move
+	ok = ok and grudge[0] == 0 and _magpie_rich_rival(0) == -1
+	# --- MOURNER: arms for a human pass, never for a bot; economy is −2¢ / +1 mourned ---
+	_mourner_pending.clear()
+	_npc_passby(0, [mourner])
+	var arm_human := bool(_mourner_pending.get(0, false))
+	_npc_passby(2, [mourner])
+	var arm_bot := bool(_mourner_pending.get(2, false))
+	ok = ok and arm_human and not arm_bot
+	grudge[0] = 5
+	var haz0 := int(stats[0].hazards)
+	grudge[0] -= 2; stats[0].hazards += 1   # the exact deltas _mourner_beat applies on hire
+	var hire_ok := grudge[0] == 3 and int(stats[0].hazards) == haz0 + 1
+	ok = ok and hire_ok
+	# Headless has no drama surface, so the hire PROMPT path is guarded off — no
+	# hang, no accidental pay (only a real local human at a live table can hire).
+	ok = ok and not _drama_visible()
+	print("PROCESSION_NPCBEAT mourner arm_human=%s arm_bot=%s hire[-2c,+1mourned]=%s prompt_guarded=%s" % [
+		str(arm_human), str(arm_bot), str(hire_ok), str(not _drama_visible())])
+	print("PROCESSION_NPCBEAT_OK" if ok else "PROCESSION_NPCBEAT_FAIL")
+	get_tree().quit()
+
 func _parse_cli() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--seed="):
@@ -525,6 +608,8 @@ func _parse_cli() -> void:
 			_minisim = false     # launch real modules even under autoplay
 		elif arg == "--parprobe":
 			_parprobe = true     # dev: run the legacy Par adapter once and quit
+		elif arg == "--npcbeatprobe":
+			_npcbeatprobe = true  # dev: check THE MAGPIE + THE MOURNER beats + gate, quit
 		elif arg == "--slowsim":
 			_fast = false         # keep ceremonies at full length (for capture)
 		elif arg == "--walk":
@@ -2368,6 +2453,9 @@ func _board_reset() -> void:
 			stats[i].spent = int(_carry_spent[i])
 	_carry_spent.clear()
 	debt_traps.clear()
+	_magpie_seen.clear()
+	_mourner_hired.clear()
+	_mourner_pending.clear()
 	board.clear_all_debt_markers()
 	if final_kit and final_kit.has_method("round_reset"):
 		final_kit.round_reset()
@@ -2741,6 +2829,7 @@ func _take_turn(seat: int) -> void:
 		if walked > 0:
 			_pay_passthrough_tolls(seat, path)
 			_crow_court_strike(seat, path)
+			_npc_passby(seat, path)
 		# P3: on release, CUT to the landing area — the figurine hops through frame
 		# toward its stone (doc 28 §9: the camera frames the DECISION, not the walk).
 		# The roll is over: the acting seat now rides the MAIN frame (director beat),
@@ -3824,6 +3913,89 @@ func _crow_court_strike(seat: int, path: Array) -> void:
 			roster[seat].color, seat)
 		_scatter_crows()
 
+## NPC PASS-BY (doc 28 §10): the two flavor NPCs, resolved as the human walks
+## past their posts. LOCAL HUMANS ONLY — a bot marching the pure economy never
+## trips these, so the all-bot soak stays byte-identical with the beats live.
+## THE MAGPIE fires here (a wordless robin-hood shiny, no choice); THE MOURNER
+## only ARMS here (her hire is a choice, resolved in the reveal like the wake).
+## Draws from NO rng stream: the magpie's mark is the deterministically-richest
+## rival, exactly the crow's-cut bot rule.
+func _npc_passby(seat: int, path: Array) -> void:
+	if not NPC_BEATS_LIVE or (not _is_local_human(seat) and not _NPCBEATS_ALLSEATS_MEASURE):
+		return
+	if path.has(board.magpie_stone()) and not bool(_magpie_seen.get(seat, false)):
+		_magpie_seen[seat] = true
+		_magpie_beat(seat)
+	if path.has(board.mourner_stone()) and not bool(_mourner_hired.get(seat, false)):
+		_mourner_pending[seat] = true
+
+## THE MAGPIE — thief of shiny things. It plucks one penny from the fattest
+## OTHER purse on the road and drops it in the passer's cortege (steals from
+## the rich, gifts the passer — §10's "steals or gifts" in one motion). If no
+## rival holds a coin, the bird just chatters. Deterministic, no draw.
+func _magpie_beat(seat: int) -> void:
+	var mark := _magpie_rich_rival(seat)
+	if mark < 0:
+		if not _fast:
+			_flash_line(Dialog.text("procession.narration.magpie_empty") % roster[seat].name,
+				roster[seat].color, seat)
+		return
+	grudge[mark] -= 1
+	grudge[seat] += 1
+	_pop_transfer(mark, seat, 1)   # the shiny flies from the fat purse to the passer
+	Sfx.play("grudge", -6.0)
+	if not _fast:
+		_flash_line(Dialog.text("procession.narration.magpie_gift")
+			% [roster[seat].name, roster[mark].name], roster[seat].color, seat)
+	_refresh_hud()
+
+## The richest rival still holding a coin — max pennies, ties to the lowest
+## seat (the crow's-cut deterministic rule, no rng). -1 when no rival has one.
+func _magpie_rich_rival(seat: int) -> int:
+	var best := -1
+	for j in roster.size():
+		if j == seat or grudge[j] < 1:
+			continue
+		if best < 0 or grudge[j] > grudge[best]:
+			best = j
+	return best
+
+## THE MOURNER-FOR-HIRE — she grieves professionally, for pay. A human who
+## passed her post is offered ONE mourning: pay 2 pennies, and she nominates
+## them for MOST MOURNED (+1 to the graves/hazards race — the wreath-adjacent
+## benefit, doc 28 §7). Pure human input (no draw); bots never see the offer.
+## Modeled on THE WAKE overlay — a post-resolve beat layered over the landing.
+func _mourner_beat(seat: int) -> void:
+	_mourner_pending[seat] = false
+	if bool(_mourner_hired.get(seat, false)) or not _is_local_human(seat) \
+			or not _drama_visible():
+		return
+	if grudge[seat] < 2:
+		_flash_line(Dialog.text("procession.narration.mourner_broke") % roster[seat].name,
+			roster[seat].color, seat)
+		return
+	var name := String(roster[seat].name)
+	var entries: Array = [{
+		"label": Dialog.text("procession.mourner.hire_label"),
+		"sub": Dialog.text("procession.mourner.hire_sub"),
+		"disabled": false,
+	}]
+	var pick: int = await _pick_prompt(
+		Dialog.text("procession.mourner.header") % name, "",
+		roster[seat].color, entries, Dialog.text("procession.mourner.walk_label"),
+		true, 10.0)
+	if pick < 0:
+		return
+	_mourner_hired[seat] = true
+	grudge[seat] -= 2
+	stats[seat].lost += 2
+	stats[seat].hazards += 1   # MOST MOURNED nomination (the wreath-adjacent benefit)
+	_pop_grudge(seat, -2)
+	Sfx.play("grudge", -6.0)
+	_flash_line(Dialog.text("procession.narration.mourner_hire") % name,
+		roster[seat].color, seat)
+	_refresh_hud()
+
 func _reveal_landing(seat: int) -> void:
 	var idx := positions[seat]
 	# The affected player's badge rides the lower-third for this landing's line.
@@ -3863,6 +4035,11 @@ func _reveal_landing(seat: int) -> void:
 		if not _fast:
 			_flash_line(Dialog.text("procession.stirs.wake_toast") % name, col, seat)
 		await _resolve_seance(seat, name, col)
+	# THE MOURNER-FOR-HIRE (doc 28 §10): if this human's walk passed her post,
+	# offer the hire now — layered over the landing like the wake. Human input
+	# only; bots/soak never arm _mourner_pending, so this is a no-op there.
+	if bool(_mourner_pending.get(seat, false)):
+		await _mourner_beat(seat)
 	_refresh_hud()
 	_push_net()
 	if _capture:
