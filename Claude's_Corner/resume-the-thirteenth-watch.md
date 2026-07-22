@@ -150,6 +150,36 @@ noray seam + mock cert), phase 3 = docs/receipts (this commit). Runners:
 record. Probe rigs restore `user://` saves via external backup — verified
 restored tonight, slot 3 scratch only.
 
+## LANDING LOG 3 — THE WATCH CLOSES (2026-07-22, pre-dawn)
+
+**THE SHIP:** illwill-0.4.0.zip, 854.59 MB, cut at 00:28 from a 3/3-certified
+tree; the packaged exe re-ran canonical seed-7 and crowned HEIR RED
+[16,7,15,6] exactly. Andrew's morning build. (Ship gotchas banked: the
+"harmless" exit segfault pops a MODAL dialog on desktop runs — pipeline
+unaffected, sweep zombie godots after; package.ps1's README here-string is
+the source of truth, build/README-FOR-PLAYERS.txt is generated; build/ is
+gitignored so package.ps1 edits live on disk only.)
+
+**WAVE THREE, 4/4 HOME (all merged + pushed, battery green):**
+- FEEDBACK CAPTURE (124ee4e): version on title/ESC; F9 / BACK-hold
+  bookmarks → user://playtest_notes.txt with scene/night/round context.
+- NPC BEATS #82 (ffccded): magpie + mourner-for-hire, hash-safe by
+  construction (human-gated); PROCESSION_NPCBEAT_OK probe; table-wide
+  magpie = someday re-freeze ruling (evidence in task #82).
+- RUNDIRECTOR #79 (70b23e4): doc 28 §15 built, behavior-free by FULL
+  battery twice (worktree + master). Save schema:2 + migration landed —
+  and ran unscheduled on Alex's REAL slot_1 during worktree verification
+  (user:// IS SHARED ACROSS WORKTREES — new house lesson). Migration was
+  flawless (zero keys lost, backup slot_1.pre-schema-v1.json); Alex then
+  ruled save migrations UNIMPORTANT (memory banked; he tests on another
+  PC; dev saves are scratch).
+- PAR HUNT (265d916): honest miss after ~200 boundary putts; hunt doc
+  docs/verify/par-ball-in-hole-hunt.md leaves it warm; F9 is the trap.
+
+Codex worktrees pruned (swapmeet-rebuild, rundirector branches merged +
+deleted). Final master: 7929afb. The fourteenth watch opens with Alex's
+playtest notes and the #95 agenda — the ledger has the full morning board.
+
 ## House practice (unchanged from twelfth watch)
 
 Receipts before AND after; eyes on stills before merge; one windowed godot
