@@ -57,6 +57,33 @@ commit (360a81c), merges E+D auto-merged clean, post-merge import + receipts
 drama overlaps the roll (feature or chaos — couch decides); PLAN card words
 are a show-don't-tell glyph-pass candidate.
 
+## ONLINE ERA landing log (#91, overnight lane, 2026-07-22)
+
+**The online era is open, and it is honest.** State of it in one paragraph:
+two people who don't share a couch can now inherit this estate together and
+the sim never disagrees with itself — certified, not hoped. The live
+two-process NETPROBE (host + guest, loopback ENet, full 3-night match at
+couch pace) paired **13,137 snapshot hashes with ZERO mismatches**, the
+guest running a real procession mirror through all three nights including a
+live Estate Stirs replay. The probe earned its keep before it went green: it
+caught that guests could never boot the board mirror at all, and that
+wreaths never crossed the wire (a guest's chyron read zeros) — both fixed
+additively, receipts unmoved (md5 `ccd25c2c` + topology `b269c570`, 3/3
+PASS after). The no-port-forwarding future is code-complete: `transport =
+"noray"` in net_session.gd (Steam-seam shape, dark without `--relay=`),
+certified against a faithful in-repo mock on BOTH paths (NAT punchthrough
+35/35, relay-forwarded full session 33/33). What remains is the world, not
+the code: the producer deploys the real relay per doc 39 (5-minute docker
+recipe, pin a SHA), then a cross-network session on a second box. Until
+then, Tailscale is the works-tonight answer (README paragraph shipped).
+
+Landings: `b6cfa1e` (phase 1: netprobe + mirror fixes), `8ccfb9e` (phase 2:
+noray seam + mock cert), phase 3 = docs/receipts (this commit). Runners:
+`tools/run_netprobe.ps1` (~20 min, couch pace, deliberate) ·
+`tools/run_noraytest.ps1` (~4 min). VERIFY-BOARD §4-NET-2 is the canonical
+record. Probe rigs restore `user://` saves via external backup — verified
+restored tonight, slot 3 scratch only.
+
 ## House practice (unchanged from twelfth watch)
 
 Receipts before AND after; eyes on stills before merge; one windowed godot

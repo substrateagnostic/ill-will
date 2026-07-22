@@ -177,6 +177,14 @@ ONLINE (host / join):
       (and share their public IP:PORT, since the short code only encodes
       LAN addresses). Guests need nothing forwarded.
 
+PLAYING ONLINE WITHOUT PORT FORWARDING (the easy way):
+  Install Tailscale (free, tailscale.com) - everyone in your group installs
+  it once and joins the same "tailnet" (one of you makes it, invites the
+  rest). After that your PCs can see each other like one big house LAN, from
+  anywhere. The host presses HOST NIGHT and shares the code or the address
+  the game shows; friends JOIN NIGHT with it. No router settings, ever.
+  Five minutes of setup the first time, zero after that.
+
 STEAM REMOTE PLAY: because ILL WILL is true couch co-op, the host can use
 Steam's "Remote Play Together" to invite far-away friends into the same
 session - they stream the host's screen and play with their own controller,
