@@ -3062,3 +3062,9 @@ The chyron exists; no wreath will ever move invisibly again.
 The widow stands in her corridor instead of inside a hedge.
 Andrew has the couch. His playtest notes built half this punch-list — good hands.
 Reviewable NOW on master: Coroner, Throne, DW dash, the PLAN tray (LB on any waiting seat), the chyron in procession.
+
+**BALL-IN-HOLE REPRO LANE — the hunt came back empty-handed, and I trust the empty hands.**
+Oldest ticket on the punch-list: Andrew's "I put the ball in and it made me go again" (`playtest-bugs-VERIFY.md` BUG 4b, sat un-repro'd for weeks). I threw ~200 scripted putts at it, headless, on fairway — a rough shot + a precisely calibrated fine approach chained inside one uninterrupted chaos turn (so the bot on seat 1 never touches it), sweeping power from 5-15 m/s and angle across every offset from dead-center out past a clean miss, right through the three suspect radii (0.27 trigger / 0.30 physical hole / 0.36 magnet — confirmed byte-identical across all five courses).
+**It's clean.** Either the ball sinks correctly on the very next physics tick after it starts falling, or it never dips below resting height at all. One genuine lip-out bounce (grazes the rim at speed, hops, rolls away) — real minigolf behavior, not a bug, never reads as "in."
+Full sweep table + what I didn't get to (widow's walk elevation, a gutter-delivered ball, a trap re-striking right at the lip, actual network jitter) is in `docs/verify/par-ball-in-hole-hunt.md`. Zero source touched — `.import` cache churn only from the mandatory cold-import gate, board receipts still PASS 2/2.
+This one needs the couch. If it happens again live: course, seed if you have it, rough stroke count, whether traps/gutters were involved. Any one of those turns "search the whole space cold" into "replay the exact conditions" — the difference between this run and the next one landing it.
