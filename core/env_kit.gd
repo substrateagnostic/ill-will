@@ -106,9 +106,21 @@ static func build_environment(p: Dictionary) -> Environment:
 		sm.ground_bottom_color = p["ground_bottom"]
 		sm.sun_angle_max = 30.0
 		sky.sky_material = sm
+		# our skies are STATIC (no time-of-day): render the radiance cubemap
+		# once instead of every frame (AUTOMATIC picks realtime for procedural
+		# skies — dozens of draw calls a frame for a gradient that never moves),
+		# and keep it small (ambient usually comes from COLOR here anyway).
+		sky.process_mode = Sky.PROCESS_MODE_QUALITY
+		sky.radiance_size = Sky.RADIANCE_SIZE_64
 		e.background_mode = Environment.BG_SKY
 		e.sky = sky
-		e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+		# `sky_ambient: false` keeps a hand-tuned COLOR ambient under a
+		# gradient sky (a game whose readability is calibrated against its
+		# ambient can swap the backdrop without relighting its actors).
+		if bool(p.get("sky_ambient", true)):
+			e.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+		else:
+			e.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	else:
 		e.background_mode = Environment.BG_COLOR
 		e.background_color = p["bg_color"]
