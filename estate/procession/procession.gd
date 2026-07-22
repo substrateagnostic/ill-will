@@ -636,12 +636,28 @@ func _build_world() -> void:
 	# ground fog, AGX tonemap, bloom-on-emissives). Overrides lift the ambient a
 	# touch and add a faint cool rim so four pawn colours + eight space types all
 	# parse at couch distance under the dark. (core/env_kit.gd owns the preset.)
+	# ENV PASS (thirteenth watch, NO-BLUE-BOX law): the flat blue clear-colour
+	# is dead — a moody gradient sky (near-black zenith, moonlit teal-green
+	# horizon glow) + TEAL depth fog with a touch of aerial perspective, so
+	# every camera angle past the outskirts ends in atmosphere, never in base
+	# colour. `sky_ambient: false` keeps the calibrated COLOR ambient (pawn +
+	# space-type readability untouched). These values are the producer's sky/
+	# fog dials for the screenshot-tuning session.
 	EnvKit.apply(self, EnvKit.MOONLIT, {
 		"ambient_energy": 0.52,
 		"key_energy": 1.15,
 		"rim_energy": 0.32,
 		"rim_color": Color(0.55, 0.68, 1.0),
-		"fog_density": 0.010,
+		"bg_mode": "sky",
+		"sky_ambient": false,
+		"sky_top": Color(0.008, 0.014, 0.020),
+		"sky_horizon": Color(0.052, 0.106, 0.102),
+		"ground_horizon": Color(0.040, 0.078, 0.072),
+		"ground_bottom": Color(0.008, 0.012, 0.012),
+		"fog_color": Color(0.058, 0.104, 0.100),
+		"fog_density": 0.011,
+		"fog_aerial": 0.14,
+		"fog_sky_affect": 0.5,
 		"glow_intensity": 0.85,
 	})
 

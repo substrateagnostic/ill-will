@@ -27,6 +27,27 @@ const WATER_DEPTH_NORM := 2.4      # depth (m) that reads as full murk in water.
 const TERRAIN_SEED := 33771       # doc 33's own stream — never the night seed
 
 # --------------------------------------------------------------------------
+# ENV-PASS DIALS (thirteenth watch — the Fable-3 ground-cover pass). One block
+# the producer's screenshot-tuning session can turn without reading the code.
+# Everything here is PRESENTATION: none of these values can move a station's
+# xz, the graph, or any receipt (heights are proven receipt-safe, doc 33 §7b).
+# --------------------------------------------------------------------------
+const RELIEF_MID_AMP := 0.85       # gentle mid-land roll on the play lanes (m)
+const OUTSKIRT_HILL_AMP := 2.4     # rolling rise beyond the play envelope (m)
+const FRINGE_WIDTH := 3.0          # worn dirt hem where grass meets a path (m)
+const FRINGE_STRENGTH := 0.62      # how hard the hem tints toward worn dirt
+const STUBBLE_RATE := 0.34         # short filler blades in drift holes + path hems
+const CLOVER_RATE := 0.50          # broad-leaf density INSIDE a patch (patch noise places them)
+const MOONFLOWER_RATE := 0.06      # sparse pale accent flowers (the comp's white pops)
+const TUSSOCK_RATE := 0.62         # waterline reed-grass ring density
+const HAZE_ALPHA := 0.34           # outskirt fog-card opacity (0 = off)
+const TREELINE_TINT := Color(0.030, 0.052, 0.046)  # silhouette wall base (teal-black)
+# bank palette (the bog-bank grammar in _ground_color)
+const MUD_WET := Color(0.050, 0.044, 0.035)
+const MUD_DRY := Color(0.092, 0.079, 0.057)
+const MUD_SILT := Color(0.130, 0.121, 0.098)
+
+# --------------------------------------------------------------------------
 # PATH SEGMENTS — authored control polylines (xz; y is sampled from the land).
 # Surface spans are control-point index ranges. THE MAZE IS THE PATH: the
 # garden_a points walk the true solution of the hedge maze (grid below).
@@ -201,9 +222,26 @@ static func height(x: float, z: float) -> float:
 	var swell := 1.05 + 0.95 * _vnoise(x * 0.021 + 91.0, z * 0.021, 71)
 	var wet := exp(-(bdx * bdx + bdz * bdz)) + exp(-(ldx * ldx + ldz * ldz)) \
 		+ exp(-(cdx * cdx + cdz * cdz))
-	swell *= clampf(1.0 - 1.6 * wet, 0.0, 1.0) * _ss((bd - 2.2) / 3.2) \
+	var dry_mask := clampf(1.0 - 1.6 * wet, 0.0, 1.0) * _ss((bd - 2.2) / 3.2) \
 		* (1.0 - _ss((z - 26.0) / 8.0))
-	h += swell
+	h += swell * dry_mask
+	# ENV PASS (thirteenth watch): a second, broader roll so the estate reads
+	# HILLS, not lawn-with-noise. Low frequency = gentle slopes everywhere, so
+	# play-lane readability holds; the same dry/forecourt mask as the swell
+	# (water tables and the surveyed hub stay level). Paths conform (doc 33).
+	h += RELIEF_MID_AMP * _vnoise(x * 0.033 + 17.0, z * 0.033, 131) * dry_mask
+	# THE OUTSKIRT RISE: beyond the play envelope the land rolls UP toward the
+	# rim, so the estate sits in a bowl of dark shoulders instead of running
+	# flat to a void. Zero inside the envelope — no station feels it.
+	var edx := maxf(absf(x + 3.0) - 46.0, 0.0)
+	var edz := maxf(absf(z + 11.0) - 52.0, 0.0)
+	var edge := _ss(sqrt(edx * edx + edz * edz) / 14.0)
+	# …but never under the forecourt table (the hub's furniture was surveyed
+	# against flat ground — same doctrine as the swell): the south band stays
+	# level and the outskirts apron beyond the rim carries that silhouette.
+	edge *= 1.0 - _ss((z - 30.0) / 6.0)
+	h += edge * OUTSKIRT_HILL_AMP \
+		* (0.55 + 0.45 * _vnoise(x * 0.030 + 51.0, z * 0.030, 137))
 	# the authored swells: a meadow rise east of the garden loop, a long low
 	# ridge beyond the bog — the estate rolls toward its dark edges
 	var mdx := (x - 45.0) / 10.0
@@ -380,6 +418,7 @@ var grass_materials: Array[ShaderMaterial] = []
 func build_all(keep_out: Array = []) -> void:
 	_keep_out = keep_out
 	_build_terrain()
+	_build_outskirts()
 	_build_water()
 	for tag in SEGS:
 		_build_path(String(tag))
@@ -434,6 +473,219 @@ func _build_terrain() -> void:
 	mi.material_override = mat
 	add_child(mi)
 
+# --------------------------------------------------------------------------
+# THE OUTSKIRTS (env pass, goal 4 — the NO-BLUE-BOX law). Beyond the rim the
+# world used to end in the environment's flat clear colour. Three cheap layers
+# now close every sightline in ATMOSPHERE:
+#   1. the APRON — one coarse ring mesh tucked under the rim droop: a dark
+#      moat just past the edge, then rolling hill shoulders climbing toward
+#      the horizon (authored ring curve + noise, vertex-coloured teal-dark)
+#   2. the TREELINE — one MultiMesh of crossed silhouette cards in two depth
+#      rings (near dark, far darker) — unshaded, pure shape against the haze
+#   3. the HAZE — a ring of translucent gradient fog cards between the tree
+#      rings (the stylised-wilderness trick: haze BEHIND silhouettes = depth)
+# All deterministic, all shadow-free, +3 draw calls total.
+# --------------------------------------------------------------------------
+const APRON_OFFS: Array[float] = [-6.0, 0.0, 6.0, 14.0, 26.0, 42.0, 62.0, 88.0]
+const APRON_BASE: Array[float] = [-5.5, -7.4, -6.0, -2.6, 1.8, 6.5, 12.0, 18.5]
+const APRON_AMP: Array[float] = [0.0, 0.0, 1.0, 1.8, 2.8, 4.0, 5.2, 6.8]
+const APRON_N := 200               # perimeter samples per ring
+
+## Radial rounded-rect ring point: `off` metres beyond the terrain rim at
+## perimeter angle `th` (measured from the estate centre).
+static func _ring_pt(cx: float, cz: float, hx: float, hz: float, off: float, th: float) -> Vector2:
+	var dx := cos(th)
+	var dz := sin(th)
+	var r0 := 1.0 / maxf(absf(dx) / hx, absf(dz) / hz)
+	return Vector2(cx + dx * (r0 + off), cz + dz * (r0 + off))
+
+## The apron's height at a point `off` metres beyond the rim: piecewise-linear
+## authored ring curve over the local height() (so the moat and shoulders roll
+## with the land), plus the shared shoulder noise.
+static func _apron_h(x: float, z: float, off: float) -> float:
+	var base: float = APRON_BASE[APRON_BASE.size() - 1]
+	var amp: float = APRON_AMP[APRON_AMP.size() - 1]
+	for k in range(APRON_OFFS.size() - 1):
+		if off <= APRON_OFFS[k + 1]:
+			var t := (off - APRON_OFFS[k]) / (APRON_OFFS[k + 1] - APRON_OFFS[k])
+			base = lerpf(APRON_BASE[k], APRON_BASE[k + 1], t)
+			amp = lerpf(APRON_AMP[k], APRON_AMP[k + 1], t)
+			break
+	return height(x, z) + base + amp * _vnoise(x * 0.021 + 7.0, z * 0.021, 157)
+
+func _build_outskirts() -> void:
+	var cx := (EXT_X.x + EXT_X.y) * 0.5
+	var cz := (EXT_Z.x + EXT_Z.y) * 0.5
+	var hx := (EXT_X.y - EXT_X.x) * 0.5
+	var hz := (EXT_Z.y - EXT_Z.x) * 0.5
+	# ---- 1. the apron ----
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rings := APRON_OFFS.size()
+	var near_c := Color(0.024, 0.035, 0.030)
+	var far_c := Color(0.046, 0.064, 0.058)
+	for k in rings:
+		for i in APRON_N:
+			var th := TAU * float(i) / float(APRON_N)
+			var p := _ring_pt(cx, cz, hx, hz, APRON_OFFS[k], th)
+			var y := _apron_h(p.x, p.y, APRON_OFFS[k])
+			var kf := float(k) / float(rings - 1)
+			var c := near_c.lerp(far_c, _ss(kf))
+			var mot := _vnoise(p.x * 0.05 + 31.0, p.y * 0.05, 163)
+			c = c.lightened(mot * 0.10) if mot > 0.0 else c.darkened(-mot * 0.12)
+			st.set_color(c)
+			st.add_vertex(Vector3(p.x, y, p.y))
+	for k in rings - 1:
+		for i in APRON_N:
+			var a := k * APRON_N + i
+			var b := k * APRON_N + (i + 1) % APRON_N
+			var c2 := a + APRON_N
+			var d := b + APRON_N
+			st.add_index(a); st.add_index(b); st.add_index(c2)
+			st.add_index(b); st.add_index(d); st.add_index(c2)
+	st.generate_normals()
+	var mi := MeshInstance3D.new()
+	mi.name = "OutskirtsApron"
+	mi.mesh = st.commit()
+	var mat := StandardMaterial3D.new()
+	mat.vertex_color_use_as_albedo = true
+	mat.roughness = 1.0
+	mi.material_override = mat
+	mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mi)
+	# ---- 2. the treeline silhouettes ----
+	var tmm := MultiMesh.new()
+	tmm.transform_format = MultiMesh.TRANSFORM_3D
+	tmm.use_colors = true
+	tmm.mesh = _make_silhouette_tree_mesh()
+	var trees: Array = []
+	# a WILD wall, not a fence: ~28% of slots drop out (gaps + clusters), the
+	# radius wanders ±7m, scale swings 0.7–1.5x, and the far ring runs darker
+	# — from the board overview the line must read FOREST, never a picket of
+	# identical scallops (first framing pass caught exactly that).
+	for ring in [
+			{"off": 10.0, "step": 6.0, "smin": 7.0, "smax": 14.5, "tint": 1.0},
+			{"off": 27.0, "step": 8.5, "smin": 10.0, "smax": 17.5, "tint": 0.48}]:
+		var rd := ring as Dictionary
+		var off := float(rd.off)
+		var count := int(4.0 * (hx + hz + 2.0 * off) / float(rd.step))
+		for i in count:
+			if _h01(float(i) * 7.7, off * 3.1, 611) < 0.28:
+				continue
+			var th := TAU * (float(i) + 0.5) / float(count)
+			var p := _ring_pt(cx, cz, hx, hz,
+				off + 14.0 * (_h01(float(i) * 2.3, off, 613) - 0.5), th)
+			var sc := float(rd.smin) + (float(rd.smax) - float(rd.smin)) * _h01(p.x, p.y, 617)
+			var basis := Basis(Vector3.UP, TAU * _h01(p.x, p.y, 619)) \
+				* Basis.from_scale(Vector3(sc * (0.75 + 0.6 * _h01(p.x, p.y, 621)), sc, sc))
+			var tint := float(rd.tint) * (0.70 + 0.45 * _h01(p.x, p.y, 623))
+			trees.append({"t": Transform3D(basis,
+				Vector3(p.x, _apron_h(p.x, p.y, off) - 0.6, p.y)),
+				"c": Color(TREELINE_TINT.r * tint, TREELINE_TINT.g * tint, TREELINE_TINT.b * tint)})
+	tmm.instance_count = trees.size()
+	for i in trees.size():
+		tmm.set_instance_transform(i, (trees[i] as Dictionary).t)
+		tmm.set_instance_color(i, (trees[i] as Dictionary).c)
+	var tmat := StandardMaterial3D.new()
+	tmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	tmat.vertex_color_use_as_albedo = true
+	tmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var tmmi := MultiMeshInstance3D.new()
+	tmmi.name = "OutskirtsTreeline"
+	tmmi.multimesh = tmm
+	tmmi.material_override = tmat
+	tmmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(tmmi)
+	# ---- 3. the haze cards ----
+	var haze_n := 0
+	if HAZE_ALPHA > 0.0:
+		var hmm := MultiMesh.new()
+		hmm.transform_format = MultiMesh.TRANSFORM_3D
+		hmm.use_colors = true
+		hmm.mesh = _make_haze_card_mesh()
+		var hoff := 18.0
+		haze_n = 10
+		hmm.instance_count = haze_n
+		for i in haze_n:
+			var th := TAU * (float(i) + 0.5) / float(haze_n)
+			var p := _ring_pt(cx, cz, hx, hz, hoff, th)
+			var face := atan2(cx - p.x, cz - p.y)
+			var basis := Basis(Vector3.UP, face) * Basis.from_scale(Vector3(95.0, 26.0, 1.0))
+			hmm.set_instance_transform(i, Transform3D(basis,
+				Vector3(p.x, _apron_h(p.x, p.y, hoff) - 2.0, p.y)))
+			hmm.set_instance_color(i, Color(0.10, 0.17, 0.16, HAZE_ALPHA))
+		var hmat := StandardMaterial3D.new()
+		hmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		hmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		hmat.vertex_color_use_as_albedo = true
+		hmat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		var hmmi := MultiMeshInstance3D.new()
+		hmmi.name = "OutskirtsHaze"
+		hmmi.multimesh = hmm
+		hmmi.material_override = hmat
+		hmmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		add_child(hmmi)
+	print("ENV_MM Outskirts apron_verts=%d treeline=%d haze=%d" %
+		[rings * APRON_N, trees.size(), haze_n])
+
+## One silhouette tree: two crossed vertical planes, each a trunk quad + an
+## irregular 9-lobe canopy fan. Normalised to height 1 (instances scale it).
+## Unshaded + fog = pure dark shape that hazes out with distance.
+func _make_silhouette_tree_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var trunk_c := Color(0.78, 0.78, 0.78)
+	var canopy_c := Color(1.0, 1.0, 1.0)
+	for plane in 2:
+		var yaw := PI * 0.5 * float(plane)
+		var side := Vector3(cos(yaw), 0.0, sin(yaw))
+		# the trunk (tapering quad, ground to canopy heart)
+		var tw := 0.045
+		var bl := -side * tw
+		var br := side * tw
+		var tl := -side * tw * 0.55 + Vector3(0, 0.60, 0)
+		var tr := side * tw * 0.55 + Vector3(0, 0.60, 0)
+		st.set_normal(Vector3.UP)
+		st.set_color(trunk_c); st.add_vertex(bl)
+		st.set_color(trunk_c); st.add_vertex(tl)
+		st.set_color(trunk_c); st.add_vertex(br)
+		st.set_color(trunk_c); st.add_vertex(br)
+		st.set_color(trunk_c); st.add_vertex(tl)
+		st.set_color(trunk_c); st.add_vertex(tr)
+		# the canopy: an irregular fan around the heart
+		var ctr := Vector3(0, 0.66, 0)
+		var m := 9
+		var rim: Array[Vector3] = []
+		for i in m:
+			var a := TAU * float(i) / float(m)
+			var rr := 0.30 * (0.62 + 0.55 * _h01(float(i) * 3.1 + float(plane) * 17.0, 5.0, 641))
+			rim.append(ctr + side * cos(a) * rr * 1.25 + Vector3(0, sin(a) * rr, 0))
+		for i in m:
+			st.set_color(canopy_c); st.add_vertex(ctr)
+			st.set_color(canopy_c); st.add_vertex(rim[i])
+			st.set_color(canopy_c); st.add_vertex(rim[(i + 1) % m])
+	return st.commit()
+
+## One haze card: a unit-square gradient quad (3 columns so alpha peaks at the
+## centre and dies at the side edges — no visible card seams), fully opaque at
+## its base row, transparent at the top. Instances scale + tint it.
+func _make_haze_card_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_normal(Vector3(0, 0, 1))
+	var xs: Array[float] = [-0.5, 0.0, 0.5]
+	var xa: Array[float] = [0.0, 1.0, 0.0]
+	for cell in 2:
+		for tri in 2:
+			var order: Array = [[0, 0], [0, 1], [1, 0]] if tri == 0 else [[1, 0], [0, 1], [1, 1]]
+			for uv in order:
+				var xi: int = cell + int((uv as Array)[0])
+				var yi := int((uv as Array)[1])
+				var alpha: float = xa[xi] * (1.0 - float(yi))
+				st.set_color(Color(1, 1, 1, alpha))
+				st.add_vertex(Vector3(xs[xi], float(yi), 0.0))
+	return st.commit()
+
 func _ground_color(x: float, z: float) -> Color:
 	var lawn := Color(0.088, 0.108, 0.078)        # damp moonlit green
 	var garden := Color(0.080, 0.122, 0.068)      # tended, a shade richer
@@ -473,9 +725,34 @@ func _ground_color(x: float, z: float) -> Color:
 		# broad damp moss over most of the floor, dry leaf-litter in sparser patches
 		c = c.lerp(Color(0.070, 0.104, 0.052), smoothstep(0.15, 0.85, moss) * woods_w * 0.58)
 		c = c.lerp(Color(0.101, 0.083, 0.056), smoothstep(0.60, 0.92, litter) * woods_w * 0.45)
-	# mud ring where the land dips toward standing water
-	if h < WATER_Y + 0.9:
-		c = c.lerp(Color(0.062, 0.055, 0.044), clampf((WATER_Y + 0.9 - h) / 0.9, 0.0, 1.0))
+	# THE WORN FRINGE (env pass, goal 1): where grass meets a path the ground
+	# wears to dirt in a ragged hem — noise varies the hem width so the seam
+	# wanders in organic fingers, never a printed stripe. Strongest at the
+	# path edge, gone by FRINGE_WIDTH. Off the maze (tended corridors) and off
+	# the shore band (the bank grammar below owns that read).
+	if h > WATER_Y + 1.1 and _maze_mask(x, z) < 0.3:
+		var pdc := _path_dist(Vector2(x, z), ALL_SEGS)
+		if pdc < FRINGE_WIDTH:
+			var fw := FRINGE_WIDTH * (0.55 + 0.45 * (_vnoise(x * 0.31 + 43.0, z * 0.31, 143) * 0.5 + 0.5))
+			if pdc < fw:
+				c = c.lerp(Color(0.118, 0.097, 0.072), (1.0 - pdc / fw) * FRINGE_STRENGTH)
+	# THE BANK GRAMMAR (env pass, goal 2): the water sits IN the land now — a
+	# dark wet-mud lip at the waterline, a drying mud band above it with a
+	# noise-ragged upper edge, and a thin pale silt tide-line between, so the
+	# shore reads as three strata instead of one painted ring.
+	var sh := h - WATER_Y
+	if sh < 1.35:
+		var mudn := _vnoise(x * 0.21 + 71.0, z * 0.21, 149) * 0.5 + 0.5
+		var dryk := _ss((sh - 0.38) / (0.55 + 0.35 * mudn))
+		var band := 1.0 - _ss((sh - 0.10) / (1.05 + 0.25 * mudn))
+		c = c.lerp(MUD_WET.lerp(MUD_DRY, dryk), clampf(band * (0.72 + 0.34 * mudn), 0.0, 1.0))
+		var tide := exp(-pow((sh - 0.42 - 0.16 * (mudn - 0.5)) / 0.10, 2.0))
+		c = c.lerp(MUD_SILT, tide * 0.42 * mudn)
+	# the brook wears its own thin mud hem (its surface sits far above WATER_Y
+	# so the pond grammar never reaches it)
+	var bdist := _brook_dist(x, z)
+	if bdist < 2.9 and h < BROOK_Y + 1.0:
+		c = c.lerp(MUD_WET.lerp(MUD_DRY, 0.5), (1.0 - bdist / 2.9) * 0.55)
 	# the mottle — the lawn is never one green
 	var m := _n2(x * 1.7 + 40.0, z * 1.7 - 40.0)
 	c = c.lightened(m * 0.08) if m > 0.0 else c.darkened(-m * 0.10)
@@ -1044,8 +1321,9 @@ func _collect_meshes(node: Node, xform: Transform3D, found: Array) -> void:
 		_collect_meshes(c, here, found)
 
 ## Commit a set of world placements against a kit source list — one MultiMesh
-## per source mesh, materials as authored in the GLB.
-func _kit_multimesh(sources: Array, placements: Array) -> void:
+## per source mesh, materials as authored in the GLB. `shadows: false` skips
+## the shadow pass (shore litter etc. — draw-call budget).
+func _kit_multimesh(sources: Array, placements: Array, shadows := true) -> void:
 	if sources.is_empty() or placements.is_empty():
 		return
 	for src in sources:
@@ -1057,6 +1335,8 @@ func _kit_multimesh(sources: Array, placements: Array) -> void:
 			mm.set_instance_transform(i, (placements[i] as Transform3D) * (src.norm as Transform3D))
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm
+		if not shadows:
+			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		add_child(mmi)
 
 ## One hero instance (single placement, full scene) — the garden statues,
@@ -1263,10 +1543,12 @@ func _dress_bog() -> void:
 				var jz := z + 2.0 * (_h01(x, z, 153) - 0.5)
 				var h := height(jx, jz)
 				var lvl := _water_level(jx, jz)
-				if not is_nan(lvl) and h > lvl - 0.35 and h < lvl + 0.4 \
+				# env pass: band widened up-bank (+0.55) and thickened — the
+				# reeds are the bank's mid layer between tussocks and willows
+				if not is_nan(lvl) and h > lvl - 0.35 and h < lvl + 0.55 \
 						and _path_dist(Vector2(jx, jz), ALL_SEGS) > 2.4 \
 						and _keep_dist(Vector2(jx, jz)) > 3.0 \
-						and _h01(jx, jz, 157) < 0.6:
+						and _h01(jx, jz, 157) < 0.68:
 					var sc := 0.75 + 0.5 * _h01(jx, jz, 159)
 					var b := Basis(Vector3.UP, TAU * _h01(jx, jz, 161)) \
 						* Basis.from_scale(Vector3(sc, sc, sc))
@@ -1323,6 +1605,55 @@ func _dress_bog() -> void:
 		wx += 7.0
 	_kit_multimesh(wil_a, wa)
 	_kit_multimesh(wil_b, wb)
+	# BANK BREAKERS (env pass, goal 2): half-sunk deadfall + shore stones
+	# straddling the waterline so the bank reads OCCUPIED — placed at the lip,
+	# tilted, no ground-snap (half in the murk, half out; the water shader's
+	# depth blend does the rest). Asset-gated like every dresser.
+	var blogs := _kit_sources(KIT + "forest_deadfall_log.glb", Vector3(NAN, 0.8, NAN))
+	if not blogs.is_empty():
+		var pl4: Array = []
+		var lx := -58.0
+		while lx < -6.0:
+			var lz := -42.0
+			while lz < 14.0:
+				var jx := lx + 2.4 * (_h01(lx, lz, 571) - 0.5)
+				var jz := lz + 2.4 * (_h01(lx, lz, 573) - 0.5)
+				var h := height(jx, jz)
+				if h > WATER_Y - 0.55 and h < WATER_Y + 0.30 \
+						and _path_dist(Vector2(jx, jz), ALL_SEGS) > 2.8 \
+						and _keep_dist(Vector2(jx, jz)) > 3.0 \
+						and _h01(jx, jz, 577) < 0.11:
+					var sc := 1.05 + 0.65 * _h01(jx, jz, 579)
+					var b := Basis(Vector3.UP, TAU * _h01(jx, jz, 583)) \
+						* Basis(Vector3.RIGHT, 0.08 + 0.22 * _h01(jx, jz, 587)) \
+						* Basis.from_scale(Vector3(sc, sc, sc))
+					pl4.append(Transform3D(b,
+						Vector3(jx, clampf(h, WATER_Y - 0.30, WATER_Y + 0.12), jz)))
+				lz += 4.6
+			lx += 4.6
+		_kit_multimesh(blogs, pl4, false)
+	var bstones := _kit_sources(KIT + "ground_boulder_a.glb", Vector3(NAN, 0.85, NAN))
+	if not bstones.is_empty():
+		var pl5: Array = []
+		var sx2 := -58.0
+		while sx2 < -6.0:
+			var sz2 := -42.0
+			while sz2 < 14.0:
+				var jx := sx2 + 2.6 * (_h01(sx2, sz2, 593) - 0.5)
+				var jz := sz2 + 2.6 * (_h01(sx2, sz2, 597) - 0.5)
+				var h := height(jx, jz)
+				if h > WATER_Y - 0.45 and h < WATER_Y + 0.42 \
+						and _path_dist(Vector2(jx, jz), ALL_SEGS) > 2.6 \
+						and _keep_dist(Vector2(jx, jz)) > 3.0 \
+						and _h01(jx, jz, 599) < 0.09:
+					var sc := 0.8 + 0.7 * _h01(jx, jz, 601)
+					var b := Basis(Vector3.UP, TAU * _h01(jx, jz, 607)) \
+						* Basis.from_scale(Vector3(sc, sc, sc))
+					pl5.append(Transform3D(b,
+						Vector3(jx, clampf(h, WATER_Y - 0.35, WATER_Y + 0.2) - 0.10, jz)))
+				sz2 += 5.4
+			sx2 += 5.4
+		_kit_multimesh(bstones, pl5, false)
 	# authored loneliness: the sunken fences, the gallows tree, the watch ruin
 	_hero(KIT + "bog_fence_sunken.glb", 1.0, snap(Vector3(-20.0, 0, 10.5), -0.12), 0.5)
 	_hero(KIT + "bog_fence_sunken.glb", 1.0, snap(Vector3(-17.5, 0, -24.5), -0.14), -0.8)
@@ -1535,6 +1866,13 @@ func _dress_grass() -> void:
 		bog_pl, bog_cd, true)
 	_emit_seedheads(seed_pl)
 	_dress_brambles()
+	# ENV PASS (thirteenth watch) — the Fable-3 layered cover: short stubble
+	# filling the drift holes and path hems, clover patches breaking the turf,
+	# pale moonflower accents, and the waterline tussock ring.
+	_dress_stubble()
+	_dress_clover()
+	_dress_moonflowers()
+	_dress_shore_tussocks()
 
 ## SPARSE brambles through the hollow woods — the forest's bushes. PURE gate
 ## (same _h01 hash-noise family as every scatter): hollow only, off the bog,
@@ -1705,6 +2043,257 @@ func _emit_seedheads(placements: Array[Transform3D]) -> void:
 	grass_materials.append(mat)
 	print("GRASS_MM GrassSeedHeads stalks=%d" % placements.size())
 
+# ---- ENV PASS — the layered cover (goal 1) --------------------------------
+
+## Commit a generic grass-shader cover layer: ONE MultiMesh + one material with
+## per-layer shader-param overrides. Optional per-instance custom data (same
+## channel contract as _emit_grass; pass [] for neutral). Every material joins
+## grass_materials so the GrassField trample driver + wind + distance fade all
+## carry it for free. Prints the GRASS_MM receipt line.
+func _emit_cover(nm: String, mesh: ArrayMesh, placements: Array[Transform3D],
+		customs: Array[Color], params: Dictionary) -> void:
+	if placements.is_empty():
+		return
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.use_custom_data = not customs.is_empty()
+	mm.mesh = mesh
+	mm.instance_count = placements.size()
+	for i in placements.size():
+		mm.set_instance_transform(i, placements[i])
+		if mm.use_custom_data:
+			mm.set_instance_custom_data(i, customs[i])
+	var mmi := MultiMeshInstance3D.new()
+	mmi.name = nm
+	mmi.multimesh = mm
+	var mat := ShaderMaterial.new()
+	mat.shader = load(GRASS_SHADER)
+	mat.set_shader_parameter("fade_start", GRASS_FADE_START)
+	mat.set_shader_parameter("fade_end", GRASS_FADE_END)
+	for k in params:
+		mat.set_shader_parameter(String(k), params[k])
+	mmi.material_override = mat
+	# low filler cover casts no readable shadow under the night key — skip the
+	# whole shadow pass for these layers (draw-call budget, w6 watchline)
+	mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(mmi)
+	grass_materials.append(mat)
+	print("GRASS_MM %s instances=%d" % [nm, placements.size()])
+
+## STUBBLE — the short filler coat that kills the "flat base between spaces"
+## read: sparse low blades living exactly where the tall turf ISN'T (drift
+## holes, path hems, between the stones' skirts). The bare patches now read as
+## worn ground with life in it — the Fable-comp grammar — never billiard felt.
+func _dress_stubble() -> void:
+	var pl: Array[Transform3D] = []
+	var cd: Array[Color] = []
+	var salt := 503
+	var x := EXT_X.x + 2.0
+	while x < EXT_X.y - 2.0:
+		var z := EXT_Z.x + 2.0
+		while z < EXT_Z.y - 2.0:
+			var jx := x + 0.9 * (_h01(x, z, salt) - 0.5)
+			var jz := z + 0.9 * (_h01(x, z, salt + 1) - 0.5)
+			var p := Vector2(jx, jz)
+			if not _lawn_ok(p, "stubble", 1.35):
+				z += 1.05
+				continue
+			var drift := _vnoise(jx * 0.048 + 57.0, jz * 0.048, 91)
+			var thin := 1.0 - _ss((drift + 0.28) / 0.44)     # 1 in the drift holes
+			var rate := STUBBLE_RATE * (0.55 + 0.75 * thin)
+			if _path_dist(p, ALL_SEGS) < 2.6:
+				rate *= 1.35                                  # the hems read stubbled
+			if _h01(jx, jz, salt + 2) >= minf(rate, 0.60):
+				z += 1.05
+				continue
+			var sc := 0.80 + 0.35 * _h01(jx, jz, salt + 3)
+			var basis := Basis(Vector3.UP, TAU * _h01(jx, jz, salt + 4)) \
+				* Basis.from_scale(Vector3(sc, sc, sc))
+			pl.append(Transform3D(basis, snap(Vector3(jx, 0, jz), -0.03)))
+			cd.append(Color((_h01(jx, jz, salt + 5) - 0.5) * 0.5,
+				(_h01(jx, jz, salt + 6) - 0.5) * 0.8, _h01(jx, jz, salt + 7), 0.0))
+			z += 1.05
+		x += 1.05
+	_emit_cover("GrassStubble", _make_tuft_mesh(5, 0.22, false), pl, cd, {
+		"root_color": Color(0.048, 0.058, 0.038),
+		"tip_color": Color(0.128, 0.215, 0.098),
+		"dry_tip": Color(0.220, 0.205, 0.105),
+		"wind_strength": 0.07,
+		"moon_gain": 0.06,
+	})
+
+## CLOVER — low broad-leaf patches drifting through the open lawn in their own
+## clump noise, breaking the all-blades uniformity (comp read: layered cover,
+## not one species). Rich saturated green — a pop, per the palette law.
+func _dress_clover() -> void:
+	var pl: Array[Transform3D] = []
+	var salt := 521
+	var x := EXT_X.x + 2.0
+	while x < EXT_X.y - 2.0:
+		var z := EXT_Z.x + 2.0
+		while z < EXT_Z.y - 2.0:
+			var jx := x + 1.1 * (_h01(x, z, salt) - 0.5)
+			var jz := z + 1.1 * (_h01(x, z, salt + 1) - 0.5)
+			var p := Vector2(jx, jz)
+			if _lawn_ok(p, "clover", 1.7) and _h01(jx, jz, salt + 2) < CLOVER_RATE:
+				var sc := 0.70 + 0.45 * _h01(jx, jz, salt + 3)
+				pl.append(Transform3D(Basis(Vector3.UP, TAU * _h01(jx, jz, salt + 4))
+					* Basis.from_scale(Vector3(sc, sc, sc)), snap(Vector3(jx, 0, jz), -0.03)))
+			z += 1.5
+		x += 1.5
+	var none: Array[Color] = []
+	_emit_cover("GroundClover", _make_clover_mesh(7), pl, none, {
+		"root_color": Color(0.052, 0.088, 0.046),
+		"tip_color": Color(0.105, 0.235, 0.105),
+		"dry_tip": Color(0.128, 0.245, 0.115),
+		"wind_strength": 0.045,
+		"moon_gain": 0.07,
+	})
+
+## MOONFLOWERS — the comp's white accent flowers, translated to the estate's
+## night: sparse pale heads riding the thick drifts, catching the moon as the
+## saturation pop against the dark turf. Deliberately rare (accents, not beds).
+func _dress_moonflowers() -> void:
+	var pl: Array[Transform3D] = []
+	var salt := 541
+	var x := EXT_X.x + 2.0
+	while x < EXT_X.y - 2.0:
+		var z := EXT_Z.x + 2.0
+		while z < EXT_Z.y - 2.0:
+			var jx := x + 1.4 * (_h01(x, z, salt) - 0.5)
+			var jz := z + 1.4 * (_h01(x, z, salt + 1) - 0.5)
+			var p := Vector2(jx, jz)
+			var drift := _vnoise(jx * 0.048 + 57.0, jz * 0.048, 91)
+			if jx > -19.0 and drift > 0.0 and _keep_dist(p) > 3.0 \
+					and _lawn_ok(p, "grass", 1.9) \
+					and _h01(jx, jz, salt + 2) < MOONFLOWER_RATE:
+				var sc := 0.85 + 0.35 * _h01(jx, jz, salt + 3)
+				pl.append(Transform3D(Basis(Vector3.UP, TAU * _h01(jx, jz, salt + 4))
+					* Basis.from_scale(Vector3(sc, sc, sc)), snap(Vector3(jx, 0, jz), -0.02)))
+			z += 2.2
+		x += 2.2
+	var none: Array[Color] = []
+	_emit_cover("Moonflowers", _make_moonflower_mesh(), pl, none, {
+		"root_color": Color(0.055, 0.090, 0.050),
+		"tip_color": Color(0.560, 0.545, 0.470),
+		"dry_tip": Color(0.600, 0.560, 0.430),
+		"wind_strength": 0.12,
+		"moon_gain": 0.30,
+	})
+
+## SHORE TUSSOCKS (goal 2) — the waterline reed-grass ring: tall olive-teal
+## tufts crowding the band where land meets water on the pond AND the brook,
+## so the Meshy reed clusters blend into the mud instead of standing on it.
+## Placed at the lip (clamped just above the surface — roots may stand IN the
+## shallows), never snapped under water.
+func _dress_shore_tussocks() -> void:
+	var pl: Array[Transform3D] = []
+	var cd: Array[Color] = []
+	var salt := 563
+	var x := EXT_X.x + 2.0
+	while x < EXT_X.y - 2.0:
+		var z := EXT_Z.x + 2.0
+		while z < 14.0:
+			var jx := x + 0.8 * (_h01(x, z, salt) - 0.5)
+			var jz := z + 0.8 * (_h01(x, z, salt + 1) - 0.5)
+			var lvl := _water_level(jx, jz)
+			if is_nan(lvl):
+				z += 1.0
+				continue
+			var h := height(jx, jz)
+			var p := Vector2(jx, jz)
+			if h > lvl - 0.18 and h < lvl + 0.62 \
+					and _path_dist(p, ALL_SEGS) > 1.9 and _keep_dist(p) > 2.4 \
+					and _h01(jx, jz, salt + 2) < TUSSOCK_RATE:
+				var sc := 0.75 + 0.5 * _h01(jx, jz, salt + 3)
+				var basis := Basis(Vector3.UP, TAU * _h01(jx, jz, salt + 4)) \
+					* Basis.from_scale(Vector3(sc, sc, sc))
+				pl.append(Transform3D(basis, Vector3(jx, maxf(h, lvl - 0.12) - 0.03, jz)))
+				cd.append(Color((_h01(jx, jz, salt + 5) - 0.5) * 0.4,
+					(_h01(jx, jz, salt + 6) - 0.5) * 0.7, _h01(jx, jz, salt + 7), 0.0))
+			z += 1.0
+		x += 1.0
+	_emit_cover("ShoreTussocks", _make_tuft_mesh(7, 0.72, true), pl, cd, {
+		"root_color": Color(0.042, 0.056, 0.040),
+		"tip_color": Color(0.095, 0.200, 0.150),
+		"dry_tip": Color(0.185, 0.190, 0.095),
+		"wind_strength": 0.12,
+		"moon_gain": 0.09,
+	})
+
+## One clover sprig clump: n sprigs, each three rounded leaflets (diamond fans)
+## on a low crown. UV.y sits mid-gradient (0.45–0.8) so the shader colours them
+## between root and tip and gives them only gentle wind authority.
+func _make_clover_mesh(n: int) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 6060 + n * 11
+	for ci in range(n):
+		var root := Vector2(rng.randf_range(-0.30, 0.30), rng.randf_range(-0.30, 0.30))
+		var h := rng.randf_range(0.055, 0.105)
+		var yaw := rng.randf() * TAU
+		var col := Color(rng.randf(), rng.randf_range(0.0, 0.35), 0.0)
+		var fnrm := Vector3(0.15 * cos(yaw), 1.0, 0.15 * sin(yaw)).normalized()
+		for li in range(3):
+			var a := yaw + TAU * float(li) / 3.0 + rng.randf_range(-0.25, 0.25)
+			var dirv := Vector3(cos(a), 0.0, sin(a))
+			var side := Vector3(-sin(a), 0.0, cos(a))
+			var r := rng.randf_range(0.055, 0.085)
+			var c0 := Vector3(root.x, h, root.y)
+			var mid := c0 + dirv * r * 0.6 + Vector3(0, r * 0.35, 0)
+			var tip := c0 + dirv * r * 1.15 + Vector3(0, r * 0.15, 0)
+			var l := mid - side * r * 0.55
+			var rr := mid + side * r * 0.55
+			_grass_tri(st, col, fnrm, c0, Vector2(0.5, 0.45), l, Vector2(0.0, 0.6),
+				tip, Vector2(0.5, 0.8))
+			_grass_tri(st, col, fnrm, c0, Vector2(0.5, 0.45), tip, Vector2(0.5, 0.8),
+				rr, Vector2(1.0, 0.6))
+	return st.commit()
+
+## One moonflower clump: three slender stems, each topped by a five-petal pale
+## head (petals at UV.y=1.0 → the material's cream tip + moon gain carry the
+## glow-catch; stems sit low on the gradient and stay green).
+func _make_moonflower_mesh() -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 8123
+	for si in range(3):
+		var root := Vector2(rng.randf_range(-0.14, 0.14), rng.randf_range(-0.14, 0.14))
+		var h := rng.randf_range(0.24, 0.38)
+		var yaw := rng.randf() * TAU
+		var lean := Vector2(cos(yaw), sin(yaw)) * rng.randf_range(0.03, 0.10)
+		var col := Color(rng.randf(), 0.15, 0.0)
+		var side := Vector2(-sin(yaw), cos(yaw))
+		var fnrm := Vector3(cos(yaw), 0.5, sin(yaw)).normalized()
+		var w := 0.010
+		var segs := 3
+		for j in range(segs):
+			var p: Array[Vector3] = []
+			var u: Array[Vector2] = []
+			for side_i in [-1.0, 1.0]:
+				for rj in [j, j + 1]:
+					var t := float(rj) / float(segs)
+					var hf := t * 0.72
+					var bow := pow(hf, 1.3)
+					var wj := w * (1.0 - 0.35 * t)
+					var cx := root.x + lean.x * bow
+					var cz := root.y + lean.y * bow
+					p.append(Vector3(cx + side.x * wj * side_i, h * hf, cz + side.y * wj * side_i))
+					u.append(Vector2(0.5 + 0.5 * side_i, hf))
+			_grass_tri(st, col, fnrm, p[0], u[0], p[2], u[2], p[1], u[1])
+			_grass_tri(st, col, fnrm, p[1], u[1], p[2], u[2], p[3], u[3])
+		var top := Vector3(root.x + lean.x, h * 0.72, root.y + lean.y)
+		for k in range(5):
+			var a := TAU * float(k) / 5.0 + yaw
+			var pd := Vector3(cos(a), 0.55, sin(a)).normalized()
+			var ps := Vector3(-sin(a), 0.0, cos(a)) * 0.018
+			var ptip := top + pd * 0.058
+			_grass_tri(st, col, fnrm, top - ps, Vector2(0.0, 1.0),
+				top + ps, Vector2(1.0, 1.0), ptip, Vector2(0.5, 1.0))
+	return st.commit()
+
 ## One fanned tuft: n blades at varied yaw / lean / height, each a 4-segment
 ## strip tapering to a point (pure geometry — no alpha). UV.y = height frac;
 ## COLOR.r = per-blade phase random; COLOR.g = per-blade hue jitter. Blades run
@@ -1809,25 +2398,51 @@ func _grass_tri(st: SurfaceTool, col: Color, nrm: Vector3,
 ## drowned, the bog vanished, moonlight read as noon — GROUNDS BAR says no
 ## uniformity, and COLOR IS GOOD needs dark to pop against).
 func _lawn_ok(p: Vector2, kind: String, dmin: float) -> bool:
-	if _path_dist(p, ALL_SEGS) < dmin or _keep_dist(p) < 2.6:
+	# ENV PASS: the path apron is RAGGED now — noise wanders the effective
+	# apron between ~0.95x and ~1.37x dmin so every cover meets a path in
+	# organic fingers, never a surveyed stripe. The floor (0.95x) still clears
+	# the widest slab road, so nothing ever grows THROUGH a surface.
+	var rag01 := _vnoise(p.x * 0.29 + 23.0, p.y * 0.29, 87) * 0.5 + 0.5
+	if _path_dist(p, ALL_SEGS) < dmin * (0.95 + 0.42 * rag01):
+		return false
+	# stone skirts: grass-family covers lap CLOSE to a station (the stones and
+	# their ground surrounds stay clean — outer ring ≈1.6m); wide Meshy props
+	# keep the old generous berth.
+	var keep_min := 2.6
+	if kind == "grass":
+		keep_min = 1.75 + 0.55 * _h01(p.x, p.y, 431)
+	elif kind == "stubble":
+		keep_min = 1.62 + 0.45 * _h01(p.x, p.y, 433)
+	if _keep_dist(p) < keep_min:
 		return false
 	if height(p.x, p.y) < WATER_Y + 0.25 or _maze_mask(p.x, p.y) > 0.1:
 		return false
 	if p.y > 34.0:
 		return false   # the forecourt table keeps its worn flagstone
-	if kind == "grass":
+	if kind == "grass" or kind == "stubble":
 		# the bog stays MUD — sparse tussocks only, west of the treeline
+		# (stubble skips it entirely: the shore tussock ring owns that band)
 		if p.x < -20.0 and p.y > -32.0 and p.y < 10.0:
-			return _h01(p.x, p.y, 97) < 0.16
-		# meadow drifts: broad noise carves bare dark soil between them
+			return kind == "grass" and _h01(p.x, p.y, 97) < 0.16
+		# meadow drifts: broad noise carves bare dark soil between them.
+		# STUBBLE inverts the gate — it lives where the turf thins (drift
+		# holes + path hems), so the bare patches read as worn ground with
+		# life in it (the Fable-comp read), never billiard felt.
 		var drift := _vnoise(p.x * 0.048 + 57.0, p.y * 0.048, 91)
-		if drift < -0.15:
+		if kind == "grass" and drift < -0.15:
+			return false
+		if kind == "stubble" and drift > 0.35:
 			return false
 	match kind:
 		"garden":
 			return _path_dist(p, ["garden_a", "garden_b"]) < 10.0
 		"hollow":
 			return p.x > -19.0 and _path_dist(p, ["hollow_a", "hollow_b"]) < 8.0
+		"clover":
+			# broad-leaf patches: open lawn east of the bog treeline only,
+			# arriving in CLUMPS (their own patch noise), breaking up the turf
+			return p.x > -19.0 \
+				and _vnoise(p.x * 0.09 + 5.0, p.y * 0.09, 141) > 0.22
 	return true
 
 ## Distance to the nearest Estate Stirs ground claim (doc 33 §5b) — the
