@@ -1896,9 +1896,7 @@ first==last==0, peak preserved; headless boot VERIFY_DONE 0 errors; windowed
 --wardrobetest clean. I can't hear it — verified by waveform math. Join-night shares
 the same card/confirm path as wardrobe, so it's covered.
 
-================================================================
 2026-07-07 — BALANCE FIVE: your signed-off changes are in (one commit per game)
-================================================================
 Doc 09's five parked BALANCE items, all signed by you, now live. Full receipts
 in docs/verify/balance-five-VERIFY.md; the short version + my judgment calls:
 
@@ -2231,11 +2229,9 @@ WORTH KNOWING (shared dev machine, overnight fleet):
 STILL OPEN (unchanged phase-2/3 chores): podium not mirrored (spectate
 card), local echo v1 none, killcam-skip gating for games that have one.
 
-================================================================================
 2026-07-07 — PAR v4 WAVES 2+3: LIVE CHAOS GRIEFING + THE WIDOW'S WALK
 (flagship builder; branch worktree-agent-a17949b6b8362a717, commits b7582ab +
 e84199c + verify doc; docs/verify/par-v4-wave23-VERIFY.md has all receipts)
-================================================================================
 
 WHAT SHIPPED:
 - WAVE 2 — your day-one wish, live griefing in chaos: all four characters are
@@ -2368,10 +2364,8 @@ STILL OPEN (unchanged): podium not mirrored (champ beat on the mirror is
 legend, keyboard couch players can't feather (binary move — pre-existing
 couch reality, pads only; unchanged online).
 
-================================================================
 FINAL STRETCH + DECIDING MOMENT (AAA queue Q1+Q2, the last two items)
 game-feel agent, overnight — for Alex's review
-================================================================
 
 WHAT SHIPPED (all presentation; receipts byte-identical, see
 docs/verify/finalstretch-VERIFY.md):
@@ -2425,10 +2419,8 @@ WITH THE REAL TRACKS IN assets/music/, THIS IS THE WAVE WHERE THE WHOLE
 ANTHOLOGY LIGHTS UP AT ONCE — the kit was a no-op until your soundtrack
 landed; now every game's last seconds are heard.
 
-================================================================
 2026-07-07 — ONLINE MIRRORS, THE FINAL PAIR: ORBITAL + LAST WILL
 (online-mirror agent; branch worktree-agent-ac940a8125f5036c9)
-================================================================
 
 WHAT LANDED: the last two game mirrors. Every game in the anthology
 except par now plays across the wire — a guest's screen runs the real
@@ -2483,10 +2475,8 @@ THE MILESTONE: with these two, ONLINE PHASE 2 GAME COVERAGE IS COMPLETE
 — 13 of 13 non-par games mirror across the wire. What remains online is
 ceremony polish (podium mirroring) and par itself.
 
-================================================================
 ONLINE MIRRORS: ECHO CHAMBER + SWAP MEET (the last arena pair)
 online-mirror agent, overnight — for Alex's review
-================================================================
 
 WHAT SHIPPED (house pattern, spec 10 §4.3; net_session/estate untouched):
 
@@ -2567,9 +2557,7 @@ Docs: online-echo-VERIFY.md + online-swap-VERIFY.md (+ committed probe
 logs and windowed snap pairs). user:// backed up/restored, md5s
 re-verified, no .npbak leftovers, only my own PIDs touched.
 
-================================================================================
 NIGHT 5 — B6 (GHOST MEDDLING): dead humans get one attributed verb
-================================================================================
 
 Doc 24 §6 doctrine made real: an eliminated HUMAN seat becomes a colour-tinted
 WISP (name + cooldown ring + "MEDDLE READY") for its respawn window and gets ONE
@@ -3084,3 +3072,8 @@ The README finally tells the truth (LAST BREATH, wreaths, FINAL BELL — the dee
 Your crash screenshot was the old exit-segfault wearing a window; the pipeline never flinched. Zombies swept.
 Wave three still cooking for 0.4.1: RunDirector, feedback bookmarks, NPC beats, the Par hole hunt.
 When you wake: hand Andrew the zip, deploy the relay whenever (doc 39), and the couch is yours.
+**BALL-IN-HOLE REPRO LANE — the hunt came back empty-handed, and I trust the empty hands.**
+Oldest ticket on the punch-list: Andrew's "I put the ball in and it made me go again" (`playtest-bugs-VERIFY.md` BUG 4b, sat un-repro'd for weeks). I threw ~200 scripted putts at it, headless, on fairway — a rough shot + a precisely calibrated fine approach chained inside one uninterrupted chaos turn (so the bot on seat 1 never touches it), sweeping power from 5-15 m/s and angle across every offset from dead-center out past a clean miss, right through the three suspect radii (0.27 trigger / 0.30 physical hole / 0.36 magnet — confirmed byte-identical across all five courses).
+**It's clean.** Either the ball sinks correctly on the very next physics tick after it starts falling, or it never dips below resting height at all. One genuine lip-out bounce (grazes the rim at speed, hops, rolls away) — real minigolf behavior, not a bug, never reads as "in."
+Full sweep table + what I didn't get to (widow's walk elevation, a gutter-delivered ball, a trap re-striking right at the lip, actual network jitter) is in `docs/verify/par-ball-in-hole-hunt.md`. Zero source touched — `.import` cache churn only from the mandatory cold-import gate, board receipts still PASS 2/2.
+This one needs the couch. If it happens again live: course, seed if you have it, rough stroke count, whether traps/gutters were involved. Any one of those turns "search the whole space cold" into "replay the exact conditions" — the difference between this run and the next one landing it.
