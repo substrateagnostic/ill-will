@@ -51,6 +51,10 @@ and Crow Murder weights.
 
 - **SWAP-SHELL** homes on the kart immediately ahead. A hit enters the existing
   atomic `soul()` exchange, dual ghost flash, hit-stop, and one-second immunity.
+  The exchanged soul is the complete race position: transform/velocity,
+  main/shortcut path hints, distance-along-track, checkpoint and lap high-water,
+  current-lap clock, and recorded lap history move together. Inventory, score,
+  debuffs, and finish identity remain with the driver.
 - **PALLBEARER'S COFFIN** drops behind and persists until hit or race end. A hit
   causes an 0.85-second tumble. Oldest-first enforcement caps each seat at
   three live coffins.
@@ -63,7 +67,12 @@ and Crow Murder weights.
 Normal swap-orb pickups grant one lob, independent of item boxes. Golden orb
 spawn/claim/homing-leader behavior remains intact. Empty seats use `swap_bot.gd`
 pure pursuit, seeded item use, drift/shortcut decisions, and a mild placement
-speed scale from 0.98 (leader) to 1.08 (fourth).
+speed scale from 0.98 (leader) to 1.08 (fourth). A progress watchdog ignores
+intended coffin tumbles and ramp airtime; after 2.5 seconds without meaningful
+forward track progress it reverses briefly, resamples the current next waypoint,
+and logs exactly one `BOT_UNSTUCK p=N t=S.S` line per escape. Bog slowdown is
+recomputed from the kart's current surface every tick and clears on the dry
+plank/after leaving the water.
 
 ## Config dials
 

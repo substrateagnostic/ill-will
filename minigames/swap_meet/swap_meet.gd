@@ -870,9 +870,9 @@ func _fire_swap_shell(kart: SwapKart) -> void:
 	_net_oid += 1
 	shell.oid = _net_oid
 	shell.target_idx = target
+	_fx_root.add_child(shell)
 	shell.global_position = kart.center() + kart.heading * 1.0 + Vector3.UP * 0.25
 	shell.vel = kart.heading * 9.0
-	_fx_root.add_child(shell)
 	orbs.append(shell)
 	kart.play_anim("Throw", 0.7)
 	_item_stats["shells"] = int(_item_stats.get("shells", 0)) + 1
@@ -1567,8 +1567,9 @@ func _resolve_hit(orb: SwapOrb, victim: SwapKart) -> void:
 	if orb.dead:
 		return
 	var thrower: SwapKart = karts[orb.owner_idx]
-	# a lobbed orb can outlive the race; no swaps after the flag
-	if phase != Phase.PLAY or victim.finished or victim == thrower:
+	# A lobbed orb can outlive its owner crossing the line. A finished race
+	# position is sealed; it cannot be traded back into the active pack.
+	if phase != Phase.PLAY or thrower.finished or victim.finished or victim == thrower:
 		orb.fizzle()
 		return
 	if not orb.golden and victim.swap_immune > 0.0:
@@ -1583,7 +1584,7 @@ func on_swap_blocked(_orb: SwapOrb, victim: SwapKart) -> void:
 	_flash_event("%s IS SWAP-PROOF (immunity)" % victim.pname, Color(0.8, 0.85, 1.0))
 	print("SWAP_BLOCKED t=%.1f victim=%d" % [race_t, victim.index])
 
-## THE verb. Atomic exchange of two karts' kinematic souls, with the
+## THE verb. Atomic exchange of two karts' complete race-position souls, with the
 ## full ritual: 0.08s hit-stop, dual teleport beams in both colors,
 ## camera shake, name-tag flashes, SWAPPED! banner.
 func _do_swap(a: SwapKart, b: SwapKart, golden: bool) -> void:
@@ -1596,8 +1597,16 @@ func _do_swap(a: SwapKart, b: SwapKart, golden: bool) -> void:
 	var soul_a: Dictionary = a.soul()
 	a.apply_soul(b.soul())
 	b.apply_soul(soul_a)
-	a.gates_credited = maxi(a.gates_credited, _gates_below(a.progress))
-	b.gates_credited = maxi(b.gates_credited, _gates_below(b.progress))
+	# Bot steering samples the route from its transformed position each tick;
+	# only its stuck-watch baseline is driver-local and must be invalidated.
+	if a.index < bots.size():
+		var bot_a: SwapBot = bots[a.index] as SwapBot
+		if bot_a != null:
+			bot_a.position_exchanged()
+	if b.index < bots.size():
+		var bot_b: SwapBot = bots[b.index] as SwapBot
+		if bot_b != null:
+			bot_b.position_exchanged()
 	a.swap_immune = SWAP_IMMUNITY
 	b.swap_immune = SWAP_IMMUNITY
 	a.play_anim("Hit_A", 0.4)

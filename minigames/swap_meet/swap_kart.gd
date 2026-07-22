@@ -59,11 +59,12 @@ var sc_hint: int = -1
 var progress: float = 0.0              # lap * L + s, wrap-integrated
 var last_s_eff: float = 0.0            # previous tick's effective main-loop s
 var last_cross_time: float = 0.0       # race time when this POSITION last crossed the line
+var laps_hw: int = -1                  # high-water laps completed (-1 = pre-line)
+var gates_credited: int = 0            # checkpoint high-water for this race position
+var lap_times: Array[float] = []        # history follows the race position it timed
+var bog_speed_scale: float = 1.0        # derived surface state; refreshed by the world each tick
 
 ## driver state (stays with the player through swaps)
-var laps_hw: int = -1                # high-water laps completed (-1 = pre-line)
-var gates_credited: int = 0
-var lap_times: Array[float] = []
 var finished: bool = false
 var finish_place: int = 0
 var orb_cd: float = 0.0
@@ -80,7 +81,6 @@ var orb_charges: int = 0
 var bell_slow_t: float = 0.0
 var crow_t: float = 0.0
 var tumble_t: float = 0.0
-var bog_speed_scale: float = 1.0
 var bot_speed_scale: float = 1.0
 
 var drifting: bool = false
@@ -319,6 +319,8 @@ func soul() -> Dictionary:
 		"airborne": airborne, "on_shortcut": on_shortcut,
 		"hint": hint, "sc_hint": sc_hint, "progress": progress,
 		"last_s_eff": last_s_eff, "last_cross_time": last_cross_time,
+		"laps_hw": laps_hw, "gates_credited": gates_credited,
+		"lap_times": lap_times.duplicate(), "bog_speed_scale": bog_speed_scale,
 	}
 
 func apply_soul(s: Dictionary) -> void:
@@ -336,6 +338,13 @@ func apply_soul(s: Dictionary) -> void:
 	progress = float(s.get("progress", 0.0))
 	last_s_eff = float(s.get("last_s_eff", 0.0))
 	last_cross_time = float(s.get("last_cross_time", 0.0))
+	laps_hw = int(s.get("laps_hw", -1))
+	gates_credited = int(s.get("gates_credited", 0))
+	lap_times.clear()
+	var saved_lap_times: Array = s.get("lap_times", [])
+	for lap_time_value: Variant in saved_lap_times:
+		lap_times.append(float(lap_time_value))
+	bog_speed_scale = float(s.get("bog_speed_scale", 1.0))
 	global_position.y = y
 	_orient(1000.0)
 

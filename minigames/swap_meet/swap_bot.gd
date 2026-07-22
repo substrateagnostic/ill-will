@@ -8,6 +8,12 @@ const ITEM_SWAP_SHELL: int = 0
 const ITEM_COFFIN: int = 1
 const ITEM_BELL: int = 2
 const ITEM_CROWS: int = 3
+const STUCK_LIMIT: float = 2.5
+const STUCK_PROGRESS_STEP: float = 0.45
+const STUCK_BACKSTEP_RESET: float = 2.0
+const UNSTUCK_TOTAL: float = 1.75
+const UNSTUCK_RECOVER: float = 0.55
+const UNSTUCK_LOOK: float = 4.0
 
 var index: int = 0
 var world: Variant = null
@@ -22,12 +28,24 @@ var _take_shortcut: bool = false
 var _lap_seen: int = -1
 var _action_check_t: float = 0.0
 var _drift_hold: bool = false
+var _progress_seen: float = 0.0
+var _progress_watch_ready: bool = false
+var _stuck_t: float = 0.0
+var _unstuck_t: float = 0.0
 
-func setup(w, seat: int, seed_value: int) -> void:
+func setup(w: Variant, seat: int, seed_value: int) -> void:
 	world = w
 	index = seat
 	rng.seed = seed_value
 	_skill = rng.randf_range(0.93, 1.04)
+
+## A SWAP changes the progress frame discontinuously. Forget the old watchdog
+## baseline so the new race position is never mistaken for a steering stall.
+func position_exchanged() -> void:
+	_progress_watch_ready = false
+	_stuck_t = 0.0
+	_unstuck_t = 0.0
+	_drift_hold = false
 
 func think(dt: float) -> void:
 	a = false
@@ -36,7 +54,11 @@ func think(dt: float) -> void:
 	if kart.finished or kart.locked:
 		move = Vector2.ZERO
 		b = false
+		_progress_watch_ready = false
+		_stuck_t = 0.0
+		_unstuck_t = 0.0
 		return
+	_update_stuck_watch(kart, dt)
 	if kart.laps_hw != _lap_seen:
 		_lap_seen = kart.laps_hw
 		var place: int = world.position_of(index)
@@ -45,6 +67,8 @@ func think(dt: float) -> void:
 
 	var target: Vector3 = Vector3.ZERO
 	var look_distance: float = 6.2 + absf(kart.speed) * 0.62
+	if _unstuck_t > 0.0:
+		look_distance = UNSTUCK_LOOK
 	if kart.on_shortcut:
 		var shortcut_near: Dictionary = track.nearest_sc(kart.global_position, kart.sc_hint)
 		var shortcut_s: float = float(shortcut_near.get("s", 0.0)) + look_distance
@@ -72,6 +96,16 @@ func think(dt: float) -> void:
 	if to_target.length_squared() > 0.001:
 		var angle: float = kart.heading.signed_angle_to(to_target.normalized(), Vector3.UP)
 		move = Vector2(clampf(-angle * (2.15 * _skill), -1.0, 1.0), 0.0)
+
+	# First back straight out of the jam, then spend a short phase steering at
+	# the freshly sampled next waypoint. Item/drift decisions wait until the
+	# recovery is complete so they cannot interrupt it.
+	if _unstuck_t > 0.0:
+		_drift_hold = false
+		b = false
+		if _unstuck_t > UNSTUCK_RECOVER:
+			move = Vector2(0.0, 1.0)
+		return
 
 	if not kart.on_shortcut:
 		var curve_near: Dictionary = track.nearest_main(kart.global_position, kart.hint)
@@ -127,3 +161,38 @@ func think(dt: float) -> void:
 				and absf(kart.heading.signed_angle_to(relative.normalized(), Vector3.UP)) < 0.4:
 			a = true
 			break
+
+## Greed's bot cure watches outcome rather than intent. Do the same here:
+## steering, speed, and wall contacts do not count as success; only forward
+## distance-along-track does. Intended pauses (coffin tumble / airborne ramp)
+## reset the timer, while bog slowdown still has ample forward progress.
+func _update_stuck_watch(kart: SwapKart, dt: float) -> void:
+	if not _progress_watch_ready:
+		_progress_seen = kart.progress
+		_progress_watch_ready = true
+		return
+	if kart.tumble_t > 0.0 or kart.airborne:
+		_progress_seen = kart.progress
+		_stuck_t = 0.0
+		return
+	if _unstuck_t > 0.0:
+		_unstuck_t = maxf(0.0, _unstuck_t - dt)
+		_progress_seen = kart.progress
+		_stuck_t = 0.0
+		return
+	if kart.progress >= _progress_seen + STUCK_PROGRESS_STEP:
+		_progress_seen = kart.progress
+		_stuck_t = 0.0
+		return
+	if kart.progress < _progress_seen - STUCK_BACKSTEP_RESET:
+		# A shove or external restage establishes a new honest baseline.
+		_progress_seen = kart.progress
+		_stuck_t = 0.0
+		return
+	_stuck_t += dt
+	if _stuck_t < STUCK_LIMIT:
+		return
+	_stuck_t = 0.0
+	_unstuck_t = UNSTUCK_TOTAL
+	_drift_hold = false
+	print("BOT_UNSTUCK p=%d t=%.1f" % [index, float(world.race_t)])
