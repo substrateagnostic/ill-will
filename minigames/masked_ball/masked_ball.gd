@@ -212,6 +212,7 @@ var _tally := false
 var _snaps := false
 var _cli_players := 4
 var _cli_seed := 1
+var _cli_round_time := -1.0   # --mbroundtime= (VERIFY only; 0 = use ROUND_TIME)
 var _snapped: Dictionary = {}
 var _pending_snaps: Array = []      # {tag, at} in game_time
 var _forced_waste_done := false
@@ -306,6 +307,8 @@ func _parse_args() -> void:
 			_cli_players = clampi(int(arg.trim_prefix("--players=")), 2, 4)
 		elif arg.begins_with("--seed="):
 			_cli_seed = int(arg.trim_prefix("--seed="))
+		elif arg.begins_with("--mbroundtime="):
+			_cli_round_time = clampf(float(arg.trim_prefix("--mbroundtime=")), 25.0, ROUND_TIME)
 	if _tally:
 		# faster-than-realtime with dt pinned to exactly 1/60 (house trick)
 		var fast := 8.0
@@ -327,7 +330,10 @@ func _default_config() -> Dictionary:
 			"device": dev,
 			"bot": _all_bots or PlayerInput.standalone_bot_default(i) or dev == -3 or dev == -99,
 		})
-	return {"roster": r, "rounds": ROUND_COUNT, "rng_seed": _cli_seed, "practice": false}
+	var cfg := {"roster": r, "rounds": ROUND_COUNT, "rng_seed": _cli_seed, "practice": false}
+	if _cli_round_time > 0.0:
+		cfg["round_time"] = _cli_round_time
+	return cfg
 
 func begin(config: Dictionary) -> void:
 	if _started:
@@ -337,7 +343,11 @@ func begin(config: Dictionary) -> void:
 	rng.seed = int(config.get("rng_seed", 1))
 	crowd_rng.seed = int(config.get("rng_seed", 1)) ^ 0xC0DA
 	_practice = bool(config.get("practice", false))
-	_waltz_len = ROUND_TIME
+	# THE TIMING PASS (#84): masked_ball used to opt out of dials entirely —
+	# ROUND_TIME was hardcoded here regardless of context. _round_total stays
+	# tied to player count (the errand-guest/Coroner rotation must complete),
+	# only the per-round clock is dialable.
+	_waltz_len = clampf(float(config.get("round_time", ROUND_TIME)), 25.0, ROUND_TIME)
 	roster = config.get("roster", [])
 	players.clear()
 	for i in roster.size():

@@ -48,6 +48,7 @@ const SCATTER_FRAC := 0.2
 const DASH_COIN_COST := 2
 const ROUND_TIME := 90.0
 const ROUNDS := 3
+const MAX_ROUNDS := 9   # THE TIMING PASS (#84): ceiling decoupled from the default
 const INTRO_TIME := 1.6
 const ROUND_END_TIME := 3.2
 const MATCH_END_HOLD := 8.0
@@ -261,11 +262,12 @@ func begin(config: Dictionary) -> void:
 	rng.seed = int(config.rng_seed)
 	fx_rng.seed = int(config.rng_seed) + 9173
 	practice = bool(config.get("practice", false))
-	rounds_total = clampi(int(config.get("rounds", ROUNDS)), 1, ROUNDS)
+	rounds_total = clampi(int(config.get("rounds", ROUNDS)), 1, MAX_ROUNDS)
+	round_time = clampf(float(config.get("round_time", ROUND_TIME)), 8.0, 180.0)
 	if practice:
 		rounds_total = 1
 	if _cli_rounds > 0:
-		rounds_total = clampi(_cli_rounds, 1, ROUNDS)
+		rounds_total = clampi(_cli_rounds, 1, MAX_ROUNDS)
 	if _cli_roundtime > 0.0:
 		round_time = clampf(_cli_roundtime, 8.0, 180.0)
 	_stretch = FinalStretch.attach(self, timer_label, {"ticks": false})

@@ -399,7 +399,11 @@ func begin(config: Dictionary) -> void:
 	# through the reliable panel-intent pipe; couch/tally nights never see one.
 	if NetSession.is_host() and NetSession.has_guests():
 		NetSession.panel_intent_received.connect(_on_net_intent)
-	_talk_len = TALK_TIME
+	# THE TIMING PASS (#84): config.talk_time is the (light) board dial — séance
+	# is a theater game (interlude-exclusive, 4-5 min ceiling) already well
+	# under budget, so this trims the accusation window rather than the core
+	# SEANCE_TIME deliberation clock.
+	_talk_len = float(config.get("talk_time", TALK_TIME))
 	if _all_bots or players.all(func(p): return p.is_bot):
 		_talk_len = 8.0
 	print("SEANCE_BEGIN players=%d seed=%d practice=%s bots=%s" % [players.size(),
