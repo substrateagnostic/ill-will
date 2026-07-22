@@ -49,6 +49,7 @@ const MinigameRouletteScene := preload("res://estate/procession/minigame_roulett
 const VendettaStakes := preload("res://estate/procession/vendetta_stakes.gd")
 const TextFit := preload("res://estate/procession/text_fit.gd")
 const Minimap := preload("res://estate/procession/board_minimap.gd")
+const Chyron := preload("res://estate/procession/ui/standings_chyron.gd")   # #87 live standings
 
 const CHAR_SCENES := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -237,6 +238,7 @@ var _lowerthird: PanelContainer         # dark scrim housing the reveal line
 var _reveal_badge: PlayerBadge          # affected-player portrait in the lower-third
 var _reveal_seat := -1                  # seat the current reveal line is about (-1 = none)
 var _minimap: Minimap                   # F-mini: corner board inset (place read)
+var chyron: Chyron                      # #87: the always-on wreath-standings CHYRON + LEDGER
 var _announce: Label
 var _announce_scrim: Control            # dark band behind the centre ceremony cards
 var _round_lbl: Label
@@ -862,6 +864,14 @@ func _build_hud() -> void:
 	add_child(fx)
 	fx.setup(_fx_host, cam, _fast)
 
+	# #87 THE LIVE STANDINGS SCOREBOARD: the funeral-program CHYRON rides the HUD
+	# CanvasLayer, so it hides for free while a module owns the screen. Scoring
+	# wreaths fly into its slots (see _pop_grudge) and it unfurls the LEDGER at
+	# round end / minigame return / the FINAL BELL (see _ledger_beat).
+	chyron = Chyron.new()
+	_ui.add_child(chyron)
+	chyron.setup(roster, cam, _fast)
+
 	# The séance dial (F13) — a visible four-slot wheel that spins to the sim's
 	# pre-decided slot. Titles come straight from the announced grammar.
 	var wheel_titles: Array = []
@@ -895,6 +905,12 @@ func _pop_grudge(seat: int, amount: int, glyph := "") -> void:
 	if _fast or fx == null or amount == 0:
 		return
 	var g := glyph if glyph != "" else Spaces.PENNY_GLYPH
+	# #87: WREATHS are the victory currency — their scoring numbers LAND in the
+	# chyron slot and tick the count there, at the moment of scoring. Pennies keep
+	# the existing chip-broadcast home.
+	if g == Spaces.WREATH_GLYPH and chyron != null:
+		chyron.fly_gain(seat, amount, _pawn_src(seat), roster[seat].color)
+		return
 	fx.fly_number(amount, g, _pawn_src(seat), _chip_screen_pos(seat), roster[seat].color)
 
 ## A grudge TRANSFER: the value lifts off the payer's pawn and flies to the
@@ -986,6 +1002,12 @@ func _refresh_hud() -> void:
 		_refresh_plan_card(i)
 	_refresh_award_tracker()
 	_sync_minimap()
+	# #87: the chyron's law — reconcile catches every wreath change (arrival,
+	# liquidation, a debt trap) that did not arrive as a flying number, ticking
+	# it into place visibly so a total can never jump behind the couch's back.
+	if chyron != null:
+		chyron.reconcile(wreaths)
+		chyron.set_pennies(grudge)
 
 ## P3 — refresh THE THREE RACES tracker rows (leader name + running stat).
 ## Visible only while armed (_tracker_live, set at the interim reading) and
@@ -2724,6 +2746,9 @@ func _ring_bell(ringer: int) -> void:
 			await _cap_snap("final_bell")
 		await _beat(2.6)
 		_hide_announce()
+		# #87: the bell is rung — the match is closing. Unfurl THE LEDGER so the
+		# standings are read plainly as the FINAL BELL arrives.
+		await _ledger_beat()
 
 # --------------------------------------------------------------------------
 # THE LAST BREATH turn plumbing (P2)
@@ -4421,6 +4446,9 @@ func _settle_minigame(mid: String, placements: Array) -> void:
 	_push_net()
 	await _beat(2.4)
 	_hide_announce()
+	# #87: the minigame's take just registered — unfurl THE LEDGER so the round's
+	# wreath deltas read plainly before play resumes.
+	await _ledger_beat()
 
 ## Genuine ties, FFA only: when the module reports scores ("points": seat ->
 ## score) and adjacent placements hold EQUAL scores, the whole tied group takes
@@ -4870,6 +4898,15 @@ func _beat(seconds: float) -> void:
 			return
 		await get_tree().process_frame
 		t += get_process_delta_time()
+
+## #87: unfurl THE LEDGER — the standings recap beat at round end / on return
+## from a minigame / as the FINAL BELL nears. ~4s, auto-dismissing, and ANY
+## single input skips it (the never-required law). Inert in the headless soak;
+## the chyron itself no-ops while hidden (a module owning the screen).
+func _ledger_beat() -> void:
+	if _fast or chyron == null:
+		return
+	await chyron.ledger_beat(wreaths)
 
 ## Windowed capture: let a couple of frames render so tweens/labels settle,
 ## then snap. Inert in headless (VerifyCapture.snap no-ops without a viewport).
