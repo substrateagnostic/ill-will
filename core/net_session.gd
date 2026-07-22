@@ -19,8 +19,11 @@ extends Node
 ##       --net=join --addr=IP:PORT       spec §7 form, same thing
 ##       --net=join=CODE                 join a 6-char invite code
 ##       --net=join=steam:LOBBYID        join a Steam lobby (or bare 15+ digits)
-##       --transport=enet|steam          explicit transport pick (default enet;
-##                                       steam falls back to enet when absent)
+##       --net=join=noray:OID            join via a noray relay (needs --relay=)
+##       --net=join=norayrelay:OID       same, but skip punchthrough (relay only)
+##       --relay=HOST[:PORT]             the noray relay to use (default port 8890)
+##       --transport=enet|steam|noray    explicit transport pick (default enet;
+##                                       steam/noray fall back to enet when absent)
 ##       --nettape                       NETPROBE: drive the claimed seat from
 ##                                       the built-in deterministic input tape
 ##
@@ -68,8 +71,9 @@ const PING_INTERVAL := 2.0
 const CODE_ALPHABET := "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 
 var role: int = Role.OFFLINE
-## "enet" | "steam" — which MultiplayerPeer carries the CURRENT session.
-## Meaningless while OFFLINE (reads "enet", the default).
+## "enet" | "steam" | "noray" — which transport carries the CURRENT session.
+## Meaningless while OFFLINE (reads "enet", the default). Note "noray" still
+## RIDES an ENetMultiplayerPeer — the value records how the wire was opened.
 var transport := "enet"
 var _listen_port := DEFAULT_PORT
 var _seat_by_peer := {}   # peer_id -> seat  (peer 0 = the local couch-probe tape)
@@ -161,6 +165,8 @@ func _ready() -> void:
 			_listen_port = int(arg.trim_prefix("--port="))
 		elif arg.begins_with("--transport="):
 			_cli_transport = arg.trim_prefix("--transport=")
+		elif arg.begins_with("--relay="):
+			set_relay(arg.trim_prefix("--relay="))
 		elif arg == "--nettape":
 			_tape_requested = true
 		elif arg.begins_with("--netprobe="):
@@ -174,7 +180,13 @@ func _ready() -> void:
 				print("NET steam host: lobby create in flight (appid %d)" % STEAM_APP_ID)
 			else:
 				print("NET steam host unavailable (err=%d) — hosting on enet instead" % serr)
-		if role == Role.OFFLINE and _steam_pending == "":
+		elif _cli_transport == "noray":
+			var nerr := host_night_noray()
+			if nerr == OK:
+				print("NET noray host: registering with relay %s:%d" % [_relay_host, _relay_port])
+			else:
+				print("NET noray host unavailable (err=%d) — hosting on enet instead" % nerr)
+		if role == Role.OFFLINE and _steam_pending == "" and _noray_stage == "":
 			var err := host_night(_listen_port)
 			print("NET host port=%d err=%d code=%s addr=%s" % [_listen_port, err, invite_code(), listen_addr()])
 	elif _cli_mode == "join":
@@ -184,7 +196,9 @@ func _ready() -> void:
 ## ----- session lifecycle -----
 
 func host_night(port := DEFAULT_PORT) -> int:
-	if role != Role.OFFLINE:
+	# A pending async transport (steam lobby / noray registration) has already
+	# spoken for the wire — opening plain ENet under it would double-host.
+	if role != Role.OFFLINE or _steam_pending != "" or _noray_stage != "":
 		return ERR_ALREADY_IN_USE
 	var peer := ENetMultiplayerPeer.new()
 	var err := peer.create_server(port, MAX_GUESTS)
@@ -210,6 +224,10 @@ func join_night(target: String) -> int:
 		return ERR_INVALID_PARAMETER
 	if t.begins_with("steam:"):
 		return join_night_steam(int(t.trim_prefix("steam:")))
+	if t.begins_with("noray:"):
+		return join_night_noray(t.trim_prefix("noray:"))
+	if t.begins_with("norayrelay:"):
+		return join_night_noray(t.trim_prefix("norayrelay:"), true)
 	if t.is_valid_int() and t.length() >= 15:
 		return join_night_steam(int(t))
 	if t.contains(":"):
@@ -249,6 +267,7 @@ func leave(reason := "left the night") -> void:
 	role = Role.OFFLINE
 	_steam_pending = ""
 	_steam_drop_lobby()
+	_noray_teardown()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	session_closed.emit(reason)
 
@@ -305,6 +324,8 @@ func set_aim_provider(cb: Callable) -> void:
 func listen_addr() -> String:
 	if transport == "steam" and _steam_lobby_id != 0:
 		return "steam lobby %d" % _steam_lobby_id
+	if transport == "noray" and _noray_oid != "":
+		return "noray:%s via %s:%d" % [_noray_oid, _relay_host, _relay_port]
 	return "%s:%d" % [_best_lan_ip(), _listen_port]
 
 ## Host grants (seat >= 0) or declines (seat == -1) a requested chair.
@@ -468,6 +489,408 @@ func _on_steam_join_requested(lobby_id: int, _friend_id: int) -> void:
 	print("NET steam invite accepted -> lobby %d" % lobby_id)
 	join_night_steam(lobby_id)
 
+## ----- NORAY transport seam (ONLINE ERA #91 — docs/design/39-noray-deploy.md) -----
+## Self-hosted NAT punchthrough + relay via foxssake/noray. No addon and no
+## vendored binary: noray's whole client surface is four line-based TCP verbs
+## plus a UDP registrar, implemented here directly against the documented flow
+## (netfox.noray is the reference client; wire-compatible $-status punches).
+## The Steam lesson repeats: whatever the negotiation, the result is an
+## address:port fed into the SAME ENetMultiplayerPeer calls — every @rpc above
+## rides unchanged, and the sim never learns which transport carries it.
+##
+## HOST:  TCP "register-host" -> "set-oid"/"set-pid" -> UDP registrar (send the
+##        PID until "OK"; that socket's local port is THE port noray routes) ->
+##        ENet create_server(local_port). For every guest the relay announces
+##        ("connect <ip>:<port>" / "connect-relay <port>"), punch outward
+##        through the live server socket (ENetConnection.socket_send).
+## GUEST: same registration, then "connect <oid>" -> on the "connect" answer
+##        run the $-status handshake from local_port -> ENet create_client(ip,
+##        port, ..., local_port). Punch failure falls back to "connect-relay".
+## Graceful absence: with no --relay configured the seam stays dark — enet and
+## steam paths are untouched, and every receipt runs bit-for-bit as before.
+const NORAY_DEFAULT_PORT := 8890       # noray TCP command port
+const NORAY_REGISTRAR_PORT := 8809     # noray UDP address registrar
+const NORAY_TCP_TIMEOUT := 6.0
+const NORAY_REGISTER_TIMEOUT := 8.0
+const NORAY_CONNECT_TIMEOUT := 10.0
+const NORAY_PUNCH_TIMEOUT := 6.0
+const NORAY_SEND_EVERY := 0.1          # registrar resend / punch cadence (netfox's)
+const NORAY_HOST_PUNCHES := 24         # outward punches per announced guest (~2.4 s)
+
+var _relay_host := ""                  # --relay=HOST[:PORT]; "" = seam dark
+var _relay_port := NORAY_DEFAULT_PORT
+var _relay_ip := ""                    # resolved once per attempt
+var _noray_tcp: StreamPeerTCP = null
+var _noray_buf := ""
+var _noray_oid := ""
+var _noray_pid := ""
+var _noray_local_port := 0             # the one port noray knows us by
+var _noray_udp: PacketPeerUDP = null   # registrar, then punch socket
+var _noray_stage := ""                 # "" | "tcp" | "register" | "registrar" | "await" | "punch"
+var _noray_pending := ""               # "" | "host" | "join" | "join-relay"
+var _noray_join_oid := ""
+var _noray_timer := 0.0
+var _noray_accum := 0.0
+var _noray_punch_ip := ""
+var _noray_punch_port := 0
+var _noray_punch_read := false         # we have heard the far side
+var _noray_punch_ack := false          # the far side has heard us
+var _noray_relay_fallback := false     # join: relay retry already fired
+var _noray_out_punches: Array = []     # host: [{ip: String, port: int, left: int}]
+
+## Configure (or clear, with "") the relay address. CLI --relay= wins at boot;
+## the estate settings pass may call this from a UI knob later.
+func set_relay(addr: String) -> void:
+	var t := addr.strip_edges()
+	if t == "":
+		_relay_host = ""
+		_relay_port = NORAY_DEFAULT_PORT
+		return
+	if t.contains(":"):
+		var pr := t.rsplit(":", false, 1)
+		_relay_host = pr[0]
+		_relay_port = int(pr[1])
+	else:
+		_relay_host = t
+		_relay_port = NORAY_DEFAULT_PORT
+
+func noray_available() -> bool:
+	return _relay_host != ""
+
+## One-word answer for logs and the estate UI:
+##   "dark"  — no relay configured (seam inert)
+##   "ready" — relay configured, nothing in flight
+##   "busy"  — registration / punchthrough in progress
+##   "up"    — a noray-opened session is live this process
+func noray_status() -> String:
+	if transport == "noray" and role != Role.OFFLINE:
+		return "up"
+	if _noray_stage != "":
+		return "busy"
+	return "ready" if noray_available() else "dark"
+
+func noray_oid() -> String:
+	return _noray_oid
+
+## HOST via noray: async like the Steam path — OK means the registration flow
+## is in flight; session_opened fires when the ENet server stands on the port
+## noray registered. Requires a configured relay (--relay= / set_relay).
+func host_night_noray() -> int:
+	if role != Role.OFFLINE or _noray_stage != "":
+		return ERR_ALREADY_IN_USE
+	if not noray_available():
+		return ERR_UNCONFIGURED
+	_noray_pending = "host"
+	return _noray_begin()
+
+## JOIN via noray OID (the host's shareable "noray:OID" code). `use_relay`
+## skips punchthrough and rides the relay from the start (probe/dev use).
+func join_night_noray(oid: String, use_relay := false) -> int:
+	if role != Role.OFFLINE or _noray_stage != "":
+		return ERR_ALREADY_IN_USE
+	if not noray_available():
+		return ERR_UNCONFIGURED
+	var t := oid.strip_edges()
+	if t == "":
+		return ERR_INVALID_PARAMETER
+	_noray_join_oid = t
+	_noray_pending = "join-relay" if use_relay else "join"
+	return _noray_begin()
+
+func _noray_begin() -> int:
+	_noray_relay_fallback = false
+	_noray_oid = ""
+	_noray_pid = ""
+	_noray_local_port = 0
+	_noray_buf = ""
+	_noray_out_punches.clear()
+	_relay_ip = _relay_host if _relay_host.is_valid_ip_address() \
+		else IP.resolve_hostname(_relay_host)
+	if _relay_ip == "":
+		_noray_pending = ""
+		print("NET noray: cannot resolve relay host '%s'" % _relay_host)
+		return ERR_CANT_RESOLVE
+	_noray_tcp = StreamPeerTCP.new()
+	var err := _noray_tcp.connect_to_host(_relay_ip, _relay_port)
+	if err != OK:
+		_noray_pending = ""
+		_noray_tcp = null
+		return err
+	_noray_stage = "tcp"
+	_noray_timer = NORAY_TCP_TIMEOUT
+	print("NET noray: dialing relay %s:%d (%s)" % [_relay_host, _relay_port, _noray_pending])
+	return OK
+
+## The whole client state machine, driven from _process. Stages are linear;
+## a live noray HOST parks in "await" forever, reading guest announcements.
+func _noray_poll(delta: float) -> void:
+	if _noray_stage == "":
+		return
+	if _noray_tcp != null:
+		_noray_tcp.poll()
+	_noray_timer -= delta
+	match _noray_stage:
+		"tcp":
+			var st := _noray_tcp.get_status()
+			if st == StreamPeerTCP.STATUS_CONNECTED:
+				_noray_tcp.put_data("register-host\n".to_utf8_buffer())
+				_noray_stage = "register"
+				_noray_timer = NORAY_REGISTER_TIMEOUT
+			elif st == StreamPeerTCP.STATUS_ERROR or _noray_timer <= 0.0:
+				_noray_fail("the relay did not answer")
+		"register":
+			_noray_read_lines()
+			if _noray_oid != "" and _noray_pid != "":
+				_noray_udp = PacketPeerUDP.new()
+				if _noray_udp.bind(0) != OK:
+					_noray_fail("could not open a UDP socket")
+					return
+				_noray_udp.set_dest_address(_relay_ip, NORAY_REGISTRAR_PORT)
+				_noray_stage = "registrar"
+				_noray_timer = NORAY_REGISTER_TIMEOUT
+				_noray_accum = NORAY_SEND_EVERY
+			elif _noray_timer <= 0.0:
+				_noray_fail("the relay never assigned an id")
+		"registrar":
+			_noray_accum += delta
+			if _noray_accum >= NORAY_SEND_EVERY:
+				_noray_accum = 0.0
+				_noray_udp.put_packet(_noray_pid.to_utf8_buffer())
+			var confirmed := false
+			while _noray_udp.get_available_packet_count() > 0:
+				var pkt := _noray_udp.get_packet()
+				if pkt.get_string_from_utf8().strip_edges().begins_with("OK"):
+					confirmed = true
+			if confirmed:
+				_noray_local_port = _noray_udp.get_local_port()
+				_noray_udp.close()
+				_noray_udp = null
+				_noray_registered()
+			elif _noray_timer <= 0.0:
+				_noray_fail("the relay never confirmed our address")
+		"await":
+			var ast := _noray_tcp.get_status() if _noray_tcp != null else StreamPeerTCP.STATUS_NONE
+			if ast != StreamPeerTCP.STATUS_CONNECTED:
+				if _noray_pending == "host":
+					# The night is NOT the relay's hostage: current guests ride
+					# the already-punched ENet wire; only NEW joins need a rehost.
+					print("NET noray: relay link lost — current guests unaffected; new joins need a rehost")
+					_noray_tcp = null
+					_noray_stage = ""
+				else:
+					_noray_fail("the relay dropped the line")
+				return
+			_noray_read_lines()
+			if _noray_pending == "host":
+				if not _noray_out_punches.is_empty():
+					_noray_accum += delta
+					if _noray_accum >= NORAY_SEND_EVERY:
+						_noray_accum = 0.0
+						_noray_send_out_punches()
+			elif _noray_timer <= 0.0:
+				_noray_fail("no answer to the join request")
+		"punch":
+			_noray_punch_step(delta)
+
+## Registration done — the local port is the one noray routes. Host: stand the
+## ENet server on it. Guest: ask the relay for an introduction.
+func _noray_registered() -> void:
+	if _noray_pending == "host":
+		var peer := ENetMultiplayerPeer.new()
+		var err := peer.create_server(_noray_local_port, MAX_GUESTS)
+		if err != OK:
+			_noray_fail("could not stand the estate on port %d (err=%d)" % [
+				_noray_local_port, err])
+			return
+		multiplayer.multiplayer_peer = peer
+		_listen_port = _noray_local_port
+		transport = "noray"
+		role = Role.HOST
+		_noray_stage = "await"
+		_noray_accum = 0.0
+		session_opened.emit(role)
+		print("NET noray host up: guests join with  noray:%s  (relay %s:%d, local port %d)" % [
+			_noray_oid, _relay_host, _relay_port, _noray_local_port])
+	else:
+		var verb := "connect-relay" if _noray_pending == "join-relay" else "connect"
+		_noray_tcp.put_data(("%s %s\n" % [verb, _noray_join_oid]).to_utf8_buffer())
+		_noray_stage = "await"
+		_noray_timer = NORAY_CONNECT_TIMEOUT
+		print("NET noray: asked the relay to %s us to %s" % [verb, _noray_join_oid])
+
+func _noray_read_lines() -> void:
+	if _noray_tcp == null:
+		return
+	var avail := _noray_tcp.get_available_bytes()
+	if avail > 0:
+		var res: Array = _noray_tcp.get_partial_data(avail)
+		if int(res[0]) == OK:
+			_noray_buf += (res[1] as PackedByteArray).get_string_from_utf8()
+	while _noray_buf.contains("\n"):
+		var nl := _noray_buf.find("\n")
+		var line := _noray_buf.substr(0, nl).strip_edges()
+		_noray_buf = _noray_buf.substr(nl + 1)
+		if line != "":
+			_noray_command(line)
+
+## noray's line protocol: "<command> <data>". Only four commands matter to a
+## client; anything else is ignored (forward-compatible).
+func _noray_command(line: String) -> void:
+	var sp := line.find(" ")
+	var cmd := line if sp < 0 else line.substr(0, sp)
+	var data := "" if sp < 0 else line.substr(sp + 1).strip_edges()
+	match cmd:
+		"set-oid":
+			_noray_oid = data
+		"set-pid":
+			_noray_pid = data
+		"connect":
+			var pr := data.rsplit(":", false, 1)
+			if pr.size() != 2:
+				return
+			var ip := String(pr[0])
+			var port := int(pr[1])
+			if role == Role.HOST and transport == "noray":
+				# A guest is punching toward us: punch back through the live
+				# server socket so their inbound path opens. Send-only — ENet
+				# ignores the stray $-packets (netfox's over_enet pattern).
+				_noray_out_punches.append({"ip": ip, "port": port, "left": NORAY_HOST_PUNCHES})
+				print("NET noray: punching toward guest %s:%d" % [ip, port])
+			elif _noray_pending == "join":
+				_noray_start_punch(ip, port)
+		"connect-relay":
+			var rport := int(data)
+			if role == Role.HOST and transport == "noray":
+				_noray_out_punches.append({"ip": _relay_ip, "port": rport, "left": NORAY_HOST_PUNCHES})
+				print("NET noray: punching toward relay port %d" % rport)
+			elif _noray_pending == "join" or _noray_pending == "join-relay":
+				# Relay endpoints are directly reachable; ride stock ENet
+				# through them from our registered local port.
+				print("NET noray: relay endpoint %s:%d" % [_relay_ip, rport])
+				_noray_finish_join(_relay_ip, rport)
+
+func _noray_start_punch(ip: String, port: int) -> void:
+	_noray_udp = PacketPeerUDP.new()
+	if _noray_udp.bind(_noray_local_port) != OK:
+		_noray_fail("could not rebind local port %d for the punch" % _noray_local_port)
+		return
+	_noray_udp.set_dest_address(ip, port)
+	_noray_punch_ip = ip
+	_noray_punch_port = port
+	_noray_punch_read = false
+	_noray_punch_ack = false
+	_noray_stage = "punch"
+	_noray_timer = NORAY_PUNCH_TIMEOUT
+	_noray_accum = NORAY_SEND_EVERY
+	print("NET noray: punchthrough handshake with %s:%d" % [ip, port])
+
+## netfox-compatible $-status packets: '$' + r(ead) + w(rite) + x(handshake),
+## '-' for unset. Success = we hear them AND they report hearing us.
+func _noray_punch_step(delta: float) -> void:
+	_noray_accum += delta
+	if _noray_accum >= NORAY_SEND_EVERY:
+		_noray_accum = 0.0
+		var flags := "$%sw%s" % [
+			"r" if _noray_punch_read else "-",
+			"x" if _noray_punch_read and _noray_punch_ack else "-"]
+		_noray_udp.put_packet(flags.to_utf8_buffer())
+	while _noray_udp.get_available_packet_count() > 0:
+		var txt := _noray_udp.get_packet().get_string_from_utf8()
+		if txt.begins_with("$"):
+			_noray_punch_read = true
+			if txt.contains("r") or txt.contains("x"):
+				_noray_punch_ack = true
+	if _noray_punch_read and _noray_punch_ack:
+		var ip := _noray_punch_ip
+		var port := _noray_punch_port
+		_noray_udp.close()
+		_noray_udp = null
+		print("NET noray: punchthrough OK — %s:%d answers" % [ip, port])
+		_noray_finish_join(ip, port)
+		return
+	if _noray_timer <= 0.0:
+		_noray_udp.close()
+		_noray_udp = null
+		if not _noray_relay_fallback and _noray_tcp != null:
+			_noray_relay_fallback = true
+			print("NET noray: punchthrough failed — falling back to the relay")
+			_noray_tcp.put_data(("connect-relay %s\n" % _noray_join_oid).to_utf8_buffer())
+			_noray_stage = "await"
+			_noray_timer = NORAY_CONNECT_TIMEOUT
+		else:
+			_noray_fail("punchthrough and relay both failed")
+
+## The last noray step: a stock ENet client BOUND TO OUR REGISTERED LOCAL PORT
+## (noray only routes that port — an ephemeral bind would break connectivity).
+## From here the normal MultiplayerAPI signals own the outcome.
+func _noray_finish_join(ip: String, port: int) -> void:
+	var peer := ENetMultiplayerPeer.new()
+	var err := peer.create_client(ip, port, 0, 0, 0, _noray_local_port)
+	if err != OK:
+		_noray_fail("could not open the wire to %s:%d (err=%d)" % [ip, port, err])
+		return
+	multiplayer.multiplayer_peer = peer
+	transport = "noray"
+	role = Role.CLIENT
+	print("NET noray: ENet client -> %s:%d (local port %d)" % [ip, port, _noray_local_port])
+	# The control line has served its purpose for a guest.
+	if _noray_tcp != null:
+		_noray_tcp.disconnect_from_host()
+		_noray_tcp = null
+	_noray_stage = ""
+	_noray_pending = ""
+	_noray_buf = ""
+
+## Outward punches ride the LIVE server socket so the reply path maps through
+## the same NAT pinhole ENet will use. Raw sends; ENet peers ignore them.
+func _noray_send_out_punches() -> void:
+	var mp: MultiplayerPeer = multiplayer.multiplayer_peer
+	if not (mp is ENetMultiplayerPeer):
+		_noray_out_punches.clear()
+		return
+	var conn: ENetConnection = (mp as ENetMultiplayerPeer).host
+	if conn == null:
+		return
+	var keep: Array = []
+	for p in _noray_out_punches:
+		var entry: Dictionary = p
+		conn.socket_send(String(entry.ip), int(entry.port), "$rwx".to_utf8_buffer())
+		entry.left = int(entry.left) - 1
+		if int(entry.left) > 0:
+			keep.append(entry)
+	_noray_out_punches = keep
+
+func _noray_fail(reason: String) -> void:
+	var was_pending := _noray_pending
+	print("NET noray %s failed: %s" % [was_pending if was_pending != "" else "session", reason])
+	var was_joining := was_pending == "join" or was_pending == "join-relay"
+	_noray_teardown()
+	if role == Role.OFFLINE and was_joining:
+		# Same retry ladder as a refused ENet join: a CLI join keeps knocking
+		# (the host may register with the relay a beat after our first try).
+		if _join_retries > 0:
+			_join_retries -= 1
+			get_tree().create_timer(1.5).timeout.connect(_try_cli_join)
+			return
+		session_closed.emit("noray: %s" % reason)
+
+## Close the control plane and scratch state. Safe no-op in every enet/steam
+## flow — nothing here is ever non-null unless a noray attempt ran.
+func _noray_teardown() -> void:
+	if _noray_udp != null:
+		_noray_udp.close()
+		_noray_udp = null
+	if _noray_tcp != null:
+		_noray_tcp.disconnect_from_host()
+		_noray_tcp = null
+	_noray_stage = ""
+	_noray_pending = ""
+	_noray_buf = ""
+	_noray_oid = ""
+	_noray_pid = ""
+	_noray_local_port = 0
+	_noray_out_punches.clear()
+
 ## ----- connection plumbing -----
 
 func _try_cli_join() -> void:
@@ -484,6 +907,7 @@ func _on_connection_failed() -> void:
 	_clear_host_pause()
 	role = Role.OFFLINE
 	_steam_drop_lobby()
+	_noray_teardown()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	if _join_retries > 0:
 		_join_retries -= 1
@@ -498,6 +922,7 @@ func _on_server_disconnected() -> void:
 	_clear_host_pause()
 	role = Role.OFFLINE
 	_steam_drop_lobby()
+	_noray_teardown()
 	multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
 	session_closed.emit("the host closed the night" if was_seated else "connection lost")
 
@@ -820,6 +1245,7 @@ func _step_tape() -> void:
 func _process(delta: float) -> void:
 	if _steam_inited:
 		_steam.call("run_callbacks")   # lobby/overlay callbacks + socket pump
+	_noray_poll(delta)                 # inert unless a noray flow is in flight
 	if role != Role.HOST:
 		return
 	_ping_accum += delta
@@ -837,6 +1263,8 @@ func invite_code() -> String:
 		return ""
 	if transport == "steam":
 		return "steam:%d" % _steam_lobby_id   # overlay invites are the real flow
+	if transport == "noray":
+		return "noray:%s" % _noray_oid        # the OID is the shareable code
 	return encode_code(_best_lan_ip(), _listen_port)
 
 static func _best_lan_ip() -> String:
