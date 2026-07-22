@@ -3072,3 +3072,15 @@ The probe paid rent before it went green: guests could never actually boot the b
 And the no-port-forwarding future is built: a `noray` transport in net_session.gd, same one-file seam Steam proved, certified against an in-repo mock relay on both paths (punchthrough AND relay-forwarded). Your part is a 5-minute docker deploy on the always-on box — doc 39 has the exact recipe, ports, and a SHA line to fill.
 Until then: Tailscale + HOST NIGHT works tonight, zero code — the player README now says so in player words.
 Runners: `tools\run_netprobe.ps1` (the 20-minute couch-pace certification) · `tools\run_noraytest.ps1` (4 minutes). VERIFY-BOARD §4-NET-2 is the ledger of what's certified vs what honestly isn't (live relay, second machine).
+
+---
+
+## THE SHIP (2026-07-22, 00:28)
+
+**illwill-0.4.0.zip — 854.59 MB — on the shelf for Andrew.**
+Cut from a 3/3-certified tree. The packaged exe itself re-ran the canonical night: HEIR RED, [16,7,15,6], exact.
+Two watches of game inside: Coroner, Throne, bog, night games, camera, pre-commit, chyron, timing modes, Swap Meet, the living grounds, the online era.
+The README finally tells the truth (LAST BREATH, wreaths, FINAL BELL — the deeds/putt/classic ghosts are gone).
+Your crash screenshot was the old exit-segfault wearing a window; the pipeline never flinched. Zombies swept.
+Wave three still cooking for 0.4.1: RunDirector, feedback bookmarks, NPC beats, the Par hole hunt.
+When you wake: hand Andrew the zip, deploy the relay whenever (doc 39), and the couch is yours.
