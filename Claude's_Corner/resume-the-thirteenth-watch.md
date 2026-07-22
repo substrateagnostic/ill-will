@@ -107,6 +107,23 @@ letter. New-goal compass banked: SHIP-TO-STRANGERS polish over features
 (wider-audience playtest is near; feedback capture = the one missing
 last-mile piece).
 
+## WAVE THREE (launched late night, 2026-07-22 after midnight — none Alex-gated)
+
+| Lane | What | Rails that matter |
+|---|---|---|
+| RUNDIRECTOR #79 | codex xhigh, worktree codex-rundirector, branch `rundirector` | doc 28 §15 constitution; REFACTOR NOT REDESIGN — full receipts byte-identical; save schema tag + run{} migration (landmine 5) rides along; director commits + verifies (sandbox blocks codex's godot) |
+| Feedback capture | sonnet worktree | version on title/ESC + F9/SELECT-hold playtest bookmarks → user://playtest_notes.txt; FEEDBACK_CAPTURE_OK receipt; ship-to-strangers last-mile |
+| NPC beats #82 | opus worktree | magpie + mourner-for-hire per doc 28 §10; EVENT-stream determinism; if beats move canonical hashes → deliver DISABLED behind NPC_BEATS_LIVE=false + enabled-md5 evidence, director rules on re-freeze |
+| Par ball-in-hole | sonnet worktree | Andrew's oldest bug; detection-layer only, PARV3 physics FROZEN byte-identical; repro tuple or honest hunt doc |
+
+**SHIP ORDER (unchanged, Alex's gate):** online lane merges → full receipts →
+package.ps1 (README already de-staled on disk; version 0.4.0 committed bf32fa6)
+→ illwill-0.4.0.zip for Andrew. WAVE-THREE LANES MERGE AFTER THE ZIP — they
+are tomorrow's build (0.4.1+), not Andrew's morning build. NPC-beats re-freeze
+ruling and RunDirector verification are DIRECTOR work at landing; if context
+dies, next instance: verify RunDirector against the full battery FIRST, it is
+the riskiest merge on the board.
+
 ## House practice (unchanged from twelfth watch)
 
 Receipts before AND after; eyes on stills before merge; one windowed godot
