@@ -33,6 +33,7 @@ Transition="*res://core/transition.gd"
 VerifyCapture="*res://scripts/verify_capture.gd"
 NetSession="*res://core/net_session.gd"
 ProcessionBoot="*res://estate/procession/procession_boot.gd"
+FeedbackCapture="*res://core/feedback_capture.gd"
 
 [display]
 
