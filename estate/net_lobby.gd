@@ -113,6 +113,11 @@ static func host_broadcast(estate, delta: float) -> void:
 			if estate._netprobe != "" and estate._net_module_seq % 40 == 0:
 				print("NETHASH_MOD side=host seq=%d h=%s bytes=%d" % [
 					estate._net_module_seq, NetSession.snapshot_hash(ms), var_to_bytes(ms).size()])
+			# ONLINE ERA (#91): the module prints its own fact hash for this seq —
+			# the guest prints the twin after applying the same snapshot.
+			if estate._netprobe != "" and estate._module != null \
+					and estate._module.has_method("netprobe_mark"):
+				estate._module.netprobe_mark(estate._net_module_seq)
 
 static func build_lobby_state(estate) -> Dictionary:
 	var seats: Array = []

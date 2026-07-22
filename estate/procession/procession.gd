@@ -220,6 +220,7 @@ var _vendettatest := false       # dev flag: force the board-drama presentation 
 var _longnames := false          # dev flag (W9): worst-case long names to stress the text surfaces
 var _graphtest := false          # --boardgraphtest: print the topology receipt and quit
 var _stirnettest := false        # --stirnettest: host snapshot -> fresh mirror replay probe
+var _netprobe_armed := false     # ONLINE ERA (#91): two-process hash lines (probe rigs only)
 var _walk := false               # --walk: dev walkabout on the grounds, no night
 var _parprobe := false           # --parprobe: run the legacy Par adapter once, print, quit
 # ---- the NAMED rng streams (header doctrine; LAYOUT lives in board_graph) ----
@@ -5138,6 +5139,9 @@ func _net_state() -> Dictionary:
 	return {
 		"phase": _phase, "round": round_num, "actor": _actor_seat,
 		"grudge": grudge.duplicate(),
+		# ONLINE ERA (#91): wreaths + night were missing from the wire (VERIFY-BOARD
+		# §8's known gap) — a guest's chyron read zero all match. Additive facts.
+		"wreaths": wreaths.duplicate(), "night": night_index,
 		"positions": positions.duplicate(), "moved": moved_total.duplicate(),
 		"routes": routes, "arrived": arrived.duplicate(),
 		"arrival_order": arrival_order.duplicate(), "bell_round": bell_round,
@@ -5153,8 +5157,11 @@ func _net_state() -> Dictionary:
 func _net_apply(state: Dictionary) -> void:
 	_phase = String(state.get("phase", _phase))
 	round_num = int(state.get("round", round_num))
+	night_index = int(state.get("night", night_index))
 	_actor_seat = int(state.get("actor", _actor_seat))
 	grudge.assign(state.get("grudge", grudge))
+	if state.has("wreaths"):
+		wreaths.assign(state.get("wreaths", wreaths))
 	# Topology must exist before a mirrored pawn can be seated on a Stirs-born
 	# node. Old snapshots without this key remain backward-compatible.
 	if state.has("stirs"):
@@ -5180,6 +5187,40 @@ func _net_apply(state: Dictionary) -> void:
 			_reveal.visible = false
 		else:
 			executor.say(banner_text, Color.WHITE)
+	# ONLINE ERA (#91): the guest recomputes the fact hash from its OWN post-apply
+	# state (never from the wire dict), keyed by the pump's seq — the runner pairs
+	# it with the host's PROCESSION_NETPROBE_HOST line for the same seq.
+	if _netprobe_armed and state.has("seq"):
+		print("PROCESSION_NETPROBE_CLIENT seq=%d round=%d night=%d hash=%s t=%d" % [
+			int(state["seq"]), round_num, night_index, netprobe_hash(),
+			Time.get_ticks_msec()])
+
+## ONLINE ERA (#91): one stable digest over every fact the mirror is supposed to
+## carry — board positions, the two currencies, arrivals, the bell, pre-commit
+## intents, and the LIVE graph adjacency (stirs mutations included). Both sides
+## build this dict with the SAME code, so key order and value types agree; any
+## fact that fails to cross the wire (or fails to apply) splits the hash.
+func netprobe_hash() -> String:
+	var facts := {
+		"phase": _phase, "round": round_num, "night": night_index,
+		"actor": _actor_seat,
+		"positions": positions, "moved": moved_total,
+		"grudge": grudge, "wreaths": wreaths,
+		"arrived": arrived, "arrival_order": arrival_order,
+		"bell_round": bell_round,
+		"precommit": _precommit, "plan_open": _plan_open,
+		"plan_mode": _plan_mode, "plan_cursor": _plan_cursor,
+		"plan_draft": _plan_draft,
+		"stirs_adj": _stir_graph_checksum(board, true) if board != null else "none",
+	}
+	return NetSession.snapshot_hash(facts)
+
+## Host side, called by the estate's 20 Hz pump in the same frame the snapshot
+## serializes — the printed hash is exactly the state that just left the house.
+func netprobe_mark(seq: int) -> void:
+	if _netprobe_armed:
+		print("PROCESSION_NETPROBE_HOST seq=%d round=%d night=%d hash=%s t=%d" % [
+			seq, round_num, night_index, netprobe_hash(), Time.get_ticks_msec()])
 
 ## Apply full current facts, then replay only fired IDs this board has never
 ## seen. This is intentionally snapshot logic, not an event queue: a guest's
