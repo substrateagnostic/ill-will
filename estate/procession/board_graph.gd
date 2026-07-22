@@ -570,6 +570,34 @@ func first_of_type(type: String) -> int:
 func grave_owner(node_id: int) -> int:
 	return int(grave_monument.get(node_id, -1))
 
+## NPC BEAT ANCHORS (doc 28 §10 — one flavor beat each). Both are pure graph
+## reads (no rng); the beats themselves live in procession.gd, gated on a local
+## human so the all-bot receipt soak never touches them.
+## THE MAGPIE perches on the lychgate signpost — its beat rides the FIRST stone
+## every pawn steps onto leaving the start (the bird's own perch, node 0, is
+## never walked through again).
+func magpie_stone() -> int:
+	var lych := int((graph.landmarks as Dictionary).get("lychgate", 0))
+	var nxt := next_of(lych)
+	return int(nxt[0]) if not nxt.is_empty() else lych
+
+## THE MOURNER-FOR-HIRE stands by the broken angel where the valley road begins
+## — her beat rides the WEEPING VALLEY stone nearest her post (planar distance).
+func mourner_stone() -> int:
+	var best := -1
+	var best_d := INF
+	for n in nodes:
+		if String(n.route) != "valley":
+			continue
+		var p := n.pos as Vector3
+		var dx := p.x - MOURNER_FORHIRE_POST.x
+		var dz := p.z - MOURNER_FORHIRE_POST.z
+		var d := dx * dx + dz * dz
+		if d < best_d:
+			best_d = d
+			best = int(n.id)
+	return best
+
 # --------------------------------------------------------------------------
 # BUILD — the world from the graph
 # --------------------------------------------------------------------------
