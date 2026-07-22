@@ -1,16 +1,17 @@
 extends Node
 ## Autoload EstateState: persistent estate data and the current roster.
-## Historical classic-run keys are round-tripped opaquely until a dedicated
-## save-schema migration retires them; no live game flow consumes them.
+## Schema-v1 classic-run keys are archived opaquely during the v2 migration;
+## no live game flow consumes or reinterprets their Trail stone indices.
 
 const LEGACY_SAVE_PATH := "user://estate_save.json"
 const SAVE_DIR := "user://saves"
 const STARTING_GRUDGE := 2
+const SAVE_SCHEMA := 2
 
-var pending_play := false  # slot panel picked an estate: auto-PLAY after the
+var pending_play: bool = false  # slot panel picked an estate: auto-PLAY after the
                            # scene reload instead of dumping back on the title
 var players: Array = []
-var rng := RandomNumberGenerator.new()
+var rng: RandomNumberGenerator = RandomNumberGenerator.new()
 
 var monuments: Array = []
 var graffiti: Array = []
@@ -21,20 +22,28 @@ var gate_statues: Array = []
 # superlatives, monuments, gate statues), plus a live events accumulator that
 # games may feed via chronicle_event(). Read back as Executor-voiced
 # observations in chronicle_lines(). Persisted in the slot save.
-var chronicle := {}
-var nights_played := 0
+var chronicle: Dictionary = {}
+var nights_played: int = 0
 # Persistent per-player wallet + owned cosmetics. LEGACY is earned at
 # night's end (your points + champion bonus) and only buys vanity.
-var legacy := {}
-var wardrobe := {}
+var legacy: Dictionary = {}
+var wardrobe: Dictionary = {}
 
-var trail_pos := {}
-var tollgates := {}
-var current_slot := 1
-var run_active := false
-var run_night := 0
-var at_boundary := false
-var house_rules_shown := false
+var current_slot: int = 1
+var run_active: bool = false
+var run_night: int = 0
+var at_boundary: bool = false
+var run_match_nights: int = 3
+var run_turn_cap: int = 12
+var run_board_seed: int = 0
+var run_positions: Array = []
+var run_pennies: Array = []
+var run_wreaths: Array = []
+var run_inventory: Array = []
+var classic_run_archive: Dictionary = {}
+var _migration_retag_pending: bool = false
+var _save_write_blocked: bool = false
+var house_rules_shown: bool = false
 
 func _ready() -> void:
 	rng.randomize()
@@ -51,8 +60,8 @@ func _ready() -> void:
 
 ## Pre-slots saves become slot 1, once.
 func _migrate_to_slots() -> void:
-	var old := ProjectSettings.globalize_path(LEGACY_SAVE_PATH)
-	var slot1 := ProjectSettings.globalize_path(slot_path(1))
+	var old: String = ProjectSettings.globalize_path(LEGACY_SAVE_PATH)
+	var slot1: String = ProjectSettings.globalize_path(slot_path(1))
 	if FileAccess.file_exists(old) and not FileAccess.file_exists(slot1):
 		DirAccess.copy_absolute(old, slot1)
 		print("MIGRATE estate_save.json -> saves/slot_1.json")
@@ -64,10 +73,13 @@ func slot_path(n: int) -> String:
 func slot_summary(n: int) -> String:
 	if not FileAccess.file_exists(slot_path(n)):
 		return ""
-	var data = JSON.parse_string(FileAccess.open(slot_path(n), FileAccess.READ).get_as_text())
+	var file: FileAccess = FileAccess.open(slot_path(n), FileAccess.READ)
+	if file == null:
+		return ""
+	var data: Variant = JSON.parse_string(file.get_as_text())
 	if not data is Dictionary:
 		return ""
-	var nights := int(data.get("nights_played", 0))
+	var nights: int = int((data as Dictionary).get("nights_played", 0))
 	return "estate of %s" % _plural(nights, "night")
 
 func load_slot(n: int) -> void:
@@ -83,15 +95,23 @@ func load_slot(n: int) -> void:
 	run_active = false
 	run_night = 0
 	at_boundary = false
+	run_match_nights = 3
+	run_turn_cap = 12
+	run_board_seed = 0
+	run_positions = []
+	run_pennies = []
+	run_wreaths = []
+	run_inventory = []
+	classic_run_archive = {}
+	_migration_retag_pending = false
+	_save_write_blocked = false
 	house_rules_shown = false
-	trail_pos = {}
-	tollgates = {}
 	load_estate()
 
 ## NEW GAME: a fresh estate on this slot (wipes its history).
 func new_game(n: int) -> void:
 	current_slot = clampi(n, 1, 3)
-	var p := ProjectSettings.globalize_path(slot_path(current_slot))
+	var p: String = ProjectSettings.globalize_path(slot_path(current_slot))
 	if FileAccess.file_exists(p):
 		DirAccess.remove_absolute(p)
 	load_slot(current_slot)
@@ -110,7 +130,7 @@ func ensure_players(player_count: int) -> void:
 		})
 
 func standings() -> Array:
-	var idx := range(players.size())
+	var idx: Array = range(players.size())
 	idx.sort_custom(func(a, b):
 		if players[a].points != players[b].points:
 			return players[a].points > players[b].points
@@ -121,7 +141,7 @@ func _plural(n: int, word: String) -> String:
 	return "%d %s" % [n, word if n == 1 else word + "s"]
 
 func add_monument(owner_idx: int, label: String) -> void:
-	var pl = players[owner_idx]
+	var pl: Dictionary = players[owner_idx]
 	monuments.append({
 		"owner": pl.name,
 		"color": pl.color.to_html(),
@@ -150,47 +170,68 @@ func buy_cosmetic(p: int, id: String, price: int) -> bool:
 	save_estate()
 	return true
 
-func save_estate() -> void:
-	var f := FileAccess.open(slot_path(current_slot), FileAccess.WRITE)
-	if f:
-		var leg := {}
-		var ward := {}
-		var tp := {}
-		var tg := {}
-		for k in legacy:
-			leg[str(k)] = legacy[k]
-		for k in wardrobe:
-			ward[str(k)] = wardrobe[k]
-		for k in trail_pos:
-			tp[str(k)] = trail_pos[k]
-		for k in tollgates:
-			tg[str(k)] = tollgates[k]
-		f.store_string(JSON.stringify({
-			"monuments": monuments, "graffiti": graffiti,
-			"ledger": ledger, "nights_played": nights_played,
-			"gate_statues": gate_statues, "chronicle": chronicle,
-			"legacy": leg, "wardrobe": ward,
-			"house_rules_shown": house_rules_shown,
-			"run": {"active": run_active, "run_night": run_night,
-				"at_boundary": at_boundary, "trail_pos": tp, "tollgates": tg},
-		}, "  "))
+func save_estate() -> bool:
+	if _save_write_blocked:
+		push_error("EstateState: save blocked until the pre-schema slot is archived safely")
+		return false
+	var f: FileAccess = FileAccess.open(slot_path(current_slot), FileAccess.WRITE)
+	if f == null:
+		return false
+	var leg: Dictionary = {}
+	var ward: Dictionary = {}
+	for k in legacy:
+		leg[str(k)] = legacy[k]
+	for k in wardrobe:
+		ward[str(k)] = wardrobe[k]
+	var data: Dictionary = {
+		"schema": SAVE_SCHEMA,
+		"monuments": monuments, "graffiti": graffiti,
+		"ledger": ledger, "nights_played": nights_played,
+		"gate_statues": gate_statues, "chronicle": chronicle,
+		"legacy": leg, "wardrobe": ward,
+		"house_rules_shown": house_rules_shown,
+		"run": {
+			"active": run_active,
+			"match_nights": run_match_nights,
+			"turn_cap": run_turn_cap,
+			"night_index": run_night,
+			"at_boundary": at_boundary,
+			"board_seed": run_board_seed,
+			"positions": run_positions,
+			"pennies": run_pennies,
+			"wreaths": run_wreaths,
+			"inventory": run_inventory,
+		},
+	}
+	if not classic_run_archive.is_empty():
+		data["classic_run_archive"] = classic_run_archive
+	f.store_string(JSON.stringify(data, "  "))
+	f.close()
+	return true
 
 func load_estate() -> void:
 	if not FileAccess.file_exists(slot_path(current_slot)):
 		return
-	var f := FileAccess.open(slot_path(current_slot), FileAccess.READ)
-	var data = JSON.parse_string(f.get_as_text())
-	if data is Dictionary:
+	var f: FileAccess = FileAccess.open(slot_path(current_slot), FileAccess.READ)
+	if f == null:
+		return
+	var source_text: String = f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(source_text)
+	if parsed is Dictionary:
+		var data: Dictionary = _migrate_save_data(parsed as Dictionary)
 		monuments = data.get("monuments", [])
 		graffiti = data.get("graffiti", [])
 		ledger = data.get("ledger", [])
 		gate_statues = data.get("gate_statues", [])
 		chronicle = data.get("chronicle", {})
 		nights_played = int(data.get("nights_played", 0))
-		for k in data.get("legacy", {}):
-			legacy[int(k)] = int(data.legacy[k])
-		for k in data.get("wardrobe", {}):
-			wardrobe[int(k)] = Array(data.wardrobe[k])
+		var saved_legacy: Dictionary = data.get("legacy", {})
+		for k in saved_legacy:
+			legacy[int(k)] = int(saved_legacy[k])
+		var saved_wardrobe: Dictionary = data.get("wardrobe", {})
+		for k in saved_wardrobe:
+			wardrobe[int(k)] = Array(saved_wardrobe[k])
 		# Grandfather clause: saves from before the wardrobe existed get
 		# credit for prior service, so nobody starts the store broke.
 		if not data.has("legacy") and nights_played > 0:
@@ -199,13 +240,80 @@ func load_estate() -> void:
 		house_rules_shown = bool(data.get("house_rules_shown", false))
 		var run: Dictionary = data.get("run", {})
 		run_active = bool(run.get("active", false))
-		run_night = int(run.get("run_night", 0))
+		run_match_nights = clampi(int(run.get("match_nights", 3)), 1, 5)
+		run_turn_cap = clampi(int(run.get("turn_cap", 12)), 4, 40)
+		run_night = int(run.get("night_index", 0))
 		at_boundary = bool(run.get("at_boundary", false))
-		for k in run.get("trail_pos", {}):
-			trail_pos[int(k)] = int(run.trail_pos[k])
-		for k in run.get("tollgates", {}):
-			tollgates[int(k)] = int(run.tollgates[k])
+		run_board_seed = int(run.get("board_seed", 0))
+		run_positions = Array(run.get("positions", []))
+		run_pennies = Array(run.get("pennies", []))
+		run_wreaths = Array(run.get("wreaths", []))
+		run_inventory = Array(run.get("inventory", []))
+		var archive_value: Variant = data.get("classic_run_archive", {})
+		classic_run_archive = (archive_value as Dictionary).duplicate(true) \
+			if archive_value is Dictionary else {}
 		_rebuild_chronicle()
+		if _migration_retag_pending:
+			if save_estate():
+				_migration_retag_pending = false
+				print("SAVE_MIGRATION slot_%d re-tagged schema=%d" % [current_slot, SAVE_SCHEMA])
+			else:
+				push_error("SAVE_MIGRATION could not re-tag slot_%d" % current_slot)
+
+## Version-absent files are schema 1. Copy the entire file before rewriting it,
+## then retire its classic Trail run. An active run is embedded opaquely under
+## classic_run_archive as well: its stone indices are evidence, never graph IDs.
+func _migrate_save_data(source: Dictionary) -> Dictionary:
+	var source_schema: int = int(source.get("schema", 1))
+	if source_schema >= SAVE_SCHEMA:
+		return source
+	if not _archive_pre_schema_slot():
+		_save_write_blocked = true
+		push_error("SAVE_MIGRATION refused to rewrite slot_%d: archive copy failed" % current_slot)
+		return source
+	var migrated: Dictionary = source.duplicate(true)
+	var legacy_run_value: Variant = migrated.get("run", {})
+	var legacy_run: Dictionary = (legacy_run_value as Dictionary).duplicate(true) \
+		if legacy_run_value is Dictionary else {}
+	if bool(legacy_run.get("active", false)):
+		migrated["classic_run_archive"] = {
+			"schema": 1,
+			"kind": "classic_trail",
+			"notice": "Archived classic Trail state; stone indices are not Procession graph nodes.",
+			"run": legacy_run,
+		}
+		push_warning("SAVE_MIGRATION archived active classic Trail run in slot_%d; it will not be resumed as graph state" % current_slot)
+	migrated["run"] = _empty_run_payload()
+	migrated["schema"] = SAVE_SCHEMA
+	_migration_retag_pending = true
+	return migrated
+
+func _empty_run_payload() -> Dictionary:
+	return {
+		"active": false,
+		"match_nights": 3,
+		"turn_cap": 12,
+		"night_index": 0,
+		"at_boundary": false,
+		"board_seed": 0,
+		"positions": [],
+		"pennies": [],
+		"wreaths": [],
+		"inventory": [],
+	}
+
+func _archive_pre_schema_slot() -> bool:
+	var source_path: String = ProjectSettings.globalize_path(slot_path(current_slot))
+	var archive_user_path: String = slot_path(current_slot).trim_suffix(".json") \
+		+ ".pre-schema-v1.json"
+	var archive_path: String = ProjectSettings.globalize_path(archive_user_path)
+	if FileAccess.file_exists(archive_path):
+		return true
+	var copy_error: int = DirAccess.copy_absolute(source_path, archive_path)
+	if copy_error != OK:
+		return false
+	print("SAVE_MIGRATION archived %s -> %s" % [slot_path(current_slot), archive_user_path])
+	return true
 
 func _wipe_save() -> void:
 	if FileAccess.file_exists(slot_path(current_slot)):
@@ -219,7 +327,7 @@ func _wipe_save() -> void:
 ## "backstab"). NOT wired into any game tonight — the API exists for a later
 ## pass to enrich the memory without touching this file again.
 func chronicle_event(kind: String, p: int, _meta := {}) -> void:
-	var pname := _player_name(p)
+	var pname: String = _player_name(p)
 	if pname == "":
 		return
 	var ev: Dictionary = _chron_rec(pname)["events"]
@@ -253,26 +361,28 @@ func _chron_rec(pname: String) -> Dictionary:
 ## monuments, gate statues) while preserving the game-fed events accumulator
 ## that history cannot reconstruct.
 func _rebuild_chronicle() -> void:
-	var saved_events := {}
+	var saved_events: Dictionary = {}
 	if chronicle.has("by_name"):
 		for nm in chronicle["by_name"]:
-			var r = chronicle["by_name"][nm]
-			if r is Dictionary and r.has("events"):
-				saved_events[nm] = (r["events"] as Dictionary).duplicate(true)
+			var record_value: Variant = chronicle["by_name"][nm]
+			if record_value is Dictionary:
+				var record: Dictionary = record_value as Dictionary
+				if record.has("events"):
+					saved_events[nm] = (record["events"] as Dictionary).duplicate(true)
 	chronicle = {"by_name": {}, "nights_recorded": ledger.size()}
 	for entry in ledger:
-		var winner := String(entry.get("winner", ""))
+		var winner: String = String(entry.get("winner", ""))
 		if winner != "":
 			_chron_rec(winner)["nights_won"] += 1
 		for aw in entry.get("awards", []):
-			var who := String(aw.get("who", ""))
-			var title := String(aw.get("title", ""))
+			var who: String = String(aw.get("who", ""))
+			var title: String = String(aw.get("title", ""))
 			if who == "" or title == "":
 				continue
-			var rec := _chron_rec(who)
-			var key := title
+			var rec: Dictionary = _chron_rec(who)
+			var key: String = title
 			if title.begins_with("NEMESIS OF "):
-				var prey := title.substr("NEMESIS OF ".length())
+				var prey: String = title.substr("NEMESIS OF ".length())
 				var nof: Dictionary = rec["nemesis_of"]
 				nof[prey] = int(nof.get(prey, 0)) + 1
 				key = "THE NEMESIS"
@@ -281,10 +391,10 @@ func _rebuild_chronicle() -> void:
 			if key == "THE DOORMAT":
 				rec["lasts"] += 1
 	for m in monuments:
-		var owner := String(m.get("owner", ""))
+		var owner: String = String(m.get("owner", ""))
 		if owner == "":
 			continue
-		var mr := _chron_rec(owner)
+		var mr: Dictionary = _chron_rec(owner)
 		mr["monuments"] += 1
 		if String(m.get("label", "")).find("TOOK THE MANOR") >= 0:
 			mr["manor_taken"] += 1
@@ -314,14 +424,14 @@ func chronicle_lines(limit := 0) -> Array:
 	var by: Dictionary = chronicle.get("by_name", {})
 	for pname in by:
 		var r: Dictionary = by[pname]
-		var won := int(r.get("nights_won", 0))
-		var mons := int(r.get("monuments", 0))
-		var lasts := int(r.get("lasts", 0))
-		var manor := int(r.get("manor_taken", 0))
+		var won: int = int(r.get("nights_won", 0))
+		var mons: int = int(r.get("monuments", 0))
+		var lasts: int = int(r.get("lasts", 0))
+		var manor: int = int(r.get("manor_taken", 0))
 		var titles: Dictionary = r.get("titles", {})
 		var nof: Dictionary = r.get("nemesis_of", {})
 		var events: Dictionary = r.get("events", {})
-		var title_total := 0
+		var title_total: int = 0
 		for t in titles:
 			title_total += int(titles[t])
 			if int(titles[t]) >= 2:
@@ -374,15 +484,15 @@ func chronicle_lines(limit := 0) -> Array:
 		for kind in events:
 			if int(events[kind]) >= 1:
 				pool.append("%s has a documented habit of %s. The estate stopped being surprised some nights ago." % [pname, _humanize(String(kind))])
-	var nights := int(chronicle.get("nights_recorded", 0))
+	var nights: int = int(chronicle.get("nights_recorded", 0))
 	if nights >= 1:
 		pool.append("The estate has recorded %s. It forgets none of them, however politely it is asked." % _plural(nights, "night"))
 	if nights >= 4:
 		pool.append("Four nights in, and no one has yet been kind without an audience. The estate had wagered as much.")
-	var top_name := ""
-	var top_mon := -1
+	var top_name: String = ""
+	var top_mon: int = -1
 	for pname in by:
-		var mc := int(by[pname].get("monuments", 0))
+		var mc: int = int(by[pname].get("monuments", 0))
 		if mc > top_mon:
 			top_mon = mc
 			top_name = pname
@@ -391,10 +501,10 @@ func chronicle_lines(limit := 0) -> Array:
 	pool.append("The estate has reviewed its records and finds everyone, on balance, guilty of something.")
 	pool.append("Memory is the only inheritance the estate offers freely. It is also the one no one asked for.")
 	if limit > 0 and pool.size() > limit:
-		var copy := pool.duplicate()
+		var copy: Array = pool.duplicate()
 		for i in range(copy.size() - 1, 0, -1):
-			var j := rng.randi_range(0, i)
-			var tmp = copy[i]
+			var j: int = rng.randi_range(0, i)
+			var tmp: Variant = copy[i]
 			copy[i] = copy[j]
 			copy[j] = tmp
 		return copy.slice(0, limit)

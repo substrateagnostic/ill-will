@@ -52,6 +52,7 @@ const VendettaStakes := preload("res://estate/procession/vendetta_stakes.gd")
 const TextFit := preload("res://estate/procession/text_fit.gd")
 const Minimap := preload("res://estate/procession/board_minimap.gd")
 const Chyron := preload("res://estate/procession/ui/standings_chyron.gd")   # #87 live standings
+const RunDirectorScript := preload("res://estate/run_director.gd")
 
 const CHAR_SCENES := [
 	"res://assets/models/kaykit/Barbarian.glb",
@@ -167,6 +168,7 @@ const MINI_WREATHS := [2, 1, 1, 0]
 signal night_over(tally: Dictionary)
 
 # ---- night state (the tally reads out of these) ----
+var run_director: RunDirector = null
 var seed_value := 0
 var roster: Array = []
 var grudge: Array[int] = []         # PENNIES on screen (internal name kept — RC §3:
@@ -195,13 +197,10 @@ var _laurel_next: Array = []        # per seat: correct bet -> laurel wisp next 
 var _cart_demoed := false           # capture poses the cart UI once (P2 screenshot b)
 var round_num := 0
 var winner := -1
-# ---- THE 3-NIGHT MATCH (doc 28 §2; landmine 1: night_length means games-per-
-# night in the estate shell — this is a NEW field, never that one) ----
+# ---- THE 3-NIGHT MATCH (doc 28 §2; RunDirector owns the match state and
+# sequence; these two values mirror its context for board presentation) ----
 var match_nights := 3               # --nights=N; estate merge passes config.match_nights
 var night_index := 1                # 1-based, current night
-# Escalating FINAL BELL arrival wreaths by night (doc 28 §15 — night 3 can
-# never be ceremonial). Crossing order first, then dist_to_gate ranking.
-const ARRIVAL_WREATHS := [[8, 5, 3, 1], [10, 6, 3, 2], [12, 7, 4, 2]]
 var wreath_src: Array = []          # per seat {arrival, mini, award, liquid} — THE READING streams
 var mini_wins_match: Array[int] = []   # match-level minigame wins (LETTERS + finale tie-break)
 var board_firsts: Array[int] = []      # nights finished #1 on the board (finale tie-break 1)
@@ -209,7 +208,6 @@ var night_final_rank: Array[int] = []  # board rank on the LAST night (finale ti
 var letters: Array = []             # per seat: LETTERS OF ADMINISTRATION active tonight
 var _mini_pool: Array = []          # per-night draw-without-replacement pool
 var _invitation_pick := ""          # THE INVITATION override for the next draw
-var _interlude1_pick := ""          # interlude 1's game — later interludes may not repeat it (doc 28 §2)
 var _started := false
 var _autoplay := false
 var _fast := false
@@ -413,6 +411,14 @@ func _boot(config: Dictionary) -> void:
 		turn_cap = clampi(int(config.turn_cap), 4, 40)
 	if config.has("match_nights"):
 		match_nights = clampi(int(config.match_nights), 1, 5)
+	var configured_director: Variant = config.get("run_director", null)
+	if configured_director is RunDirector:
+		run_director = configured_director as RunDirector
+	else:
+		run_director = RunDirectorScript.new()
+		run_director.name = "RunDirector"
+		add_child(run_director)
+	run_director.configure_match(match_nights, turn_cap)
 	# Seed the NAMED streams (header doctrine). Distinct affine salts per stream
 	# so no draw in one can ever shift another; presentation streams can never
 	# shift the tally at all.
@@ -456,7 +462,7 @@ func _boot(config: Dictionary) -> void:
 	if _walk:
 		_enter_walk_mode()   # dev walkabout: the grounds, a body, no night
 		return
-	_run_match()
+	run_director.run(self)
 
 ## DEV WALKABOUT (`--walk`, producer request — review the procession's course
 ## on foot without playing a night). Hides the match HUD, spawns a stroller
@@ -572,23 +578,21 @@ func _apply_longnames() -> void:
 
 func _init_arrays() -> void:
 	var n := roster.size()
-	grudge.resize(n); positions.resize(n); moved_total.resize(n)
-	wreaths.resize(n)
-	mini_wins_match.resize(n)
-	board_firsts.resize(n)
-	night_final_rank.resize(n)
-	wreath_src.clear()
+	run_director.initialize_match_state(n, EstateState.STARTING_GRUDGE + 3)
+	grudge = run_director.pennies
+	wreaths = run_director.wreaths
+	items = run_director.inventory
+	wreath_src = run_director.wreath_sources
+	mini_wins_match = run_director.minigame_firsts
+	board_firsts = run_director.board_firsts
+	night_final_rank = run_director.last_night_board_rank
+	moved_total = run_director.moved_total
+	positions.resize(n)
 	letters.clear()
 	for i in n:
-		wreaths[i] = 0
-		mini_wins_match[i] = 0
-		board_firsts[i] = 0
-		night_final_rank[i] = 0
-		wreath_src.append({"arrival": 0, "mini": 0, "award": 0, "liquid": 0})
 		letters.append(false)
 	_mini_pool = CYCLE_ORDER.duplicate()
 	_invitation_pick = ""
-	_interlude1_pick = ""
 	pending_die.resize(n)
 	pending_lucky.resize(n)
 	for i in n:
@@ -610,7 +614,7 @@ func _init_arrays() -> void:
 		_plan_mode[i] = "root"
 		_plan_cursor[i] = 0
 		_plan_draft[i] = {}
-	items.clear(); stats.clear()
+	stats.clear()
 	trail.clear(); arrived.clear(); arrival_order.clear()
 	_arrived_this_round.clear()
 	bell_round = -1
@@ -618,12 +622,9 @@ func _init_arrays() -> void:
 	_epitaphs.resize(n)
 	for i in n:
 		_epitaphs[i] = ""
-		grudge[i] = EstateState.STARTING_GRUDGE + 3   # a small float so turn 1 has stakes
 		positions[i] = 0                # node 0 = THE LYCHGATE
-		moved_total[i] = 0
 		trail.append([0])               # walked history (slip-backs retrace it)
 		arrived.append(false)
-		items.append({})                # ware_id -> count (the priced cart's economy)
 		stats.append({"moved": 0, "graves": 0, "lost": 0, "duels": 0,
 			"shrines": 0, "deeds_bought": 0, "spent": 0,
 			"hazards": 0, "seances": 0, "mini_wins": 0})
@@ -1576,24 +1577,36 @@ func _choose_clauses() -> void:
 	]
 
 # --------------------------------------------------------------------------
-# THE MATCH — 3 nights (doc 28 §2), then THE READING. Wreaths, pennies and
-# inventory persist across nights; the board resets between them.
+# RUNDIRECTOR BOARD-HOST API. The director owns the multi-night sequence and
+# the state that crosses these calls; Procession resolves one board night and
+# presents the existing ceremonies without deciding what comes next.
 # --------------------------------------------------------------------------
-func _run_match() -> void:
+func set_run_context(current_night: int, total_nights: int) -> void:
+	night_index = current_night
+	match_nights = total_nights
+
+func run_match_intro() -> void:
 	_phase = "intro"
 	if final_kit and final_kit.has_method("play_started"):
 		final_kit.play_started()
 	await _intro()
-	for n in range(1, match_nights + 1):
-		night_index = n
-		await _night_open()
-		await _run_night_cycles()
-		await _night_settlement()
-		if night_index < match_nights:
-			# P3 (doc 28 §2): between nights, after the will reading + LAST
-			# RITES, the grounds offer ONE more game before the board resets.
-			await _interlude_minigame()
-			_board_reset()
+
+func run_night_open() -> void:
+	await _night_open()
+
+func run_night_game() -> void:
+	await _run_night_cycles()
+
+func run_night_settlement() -> void:
+	await _night_settlement()
+
+func run_interlude_game() -> void:
+	await _interlude_minigame()
+
+func reset_night_board() -> void:
+	_board_reset()
+
+func run_match_finale() -> void:
 	await _finale()
 
 ## The cycle loop: roll phase → move/resolve → MINIGAME (every cycle, doc 28
@@ -2437,34 +2450,12 @@ func _finale_stream(src: String, col: Color) -> void:
 ## §15): most board firsts → best last-night board rank → most minigame
 ## firsts. Seat index orders the display only — it can never decide the heir.
 func _match_order() -> Array:
-	var order: Array = []
-	for i in roster.size():
-		order.append(i)
-	order.sort_custom(func(a, b):
-		if wreaths[a] != wreaths[b]:
-			return wreaths[a] > wreaths[b]
-		if board_firsts[a] != board_firsts[b]:
-			return board_firsts[a] > board_firsts[b]
-		if night_final_rank[a] != night_final_rank[b]:
-			return night_final_rank[a] < night_final_rank[b]
-		if mini_wins_match[a] != mini_wins_match[b]:
-			return mini_wins_match[a] > mini_wins_match[b]
-		return a < b)
-	return order
+	return run_director.match_order()
 
 ## Everyone still tied with the top seat after the WHOLE chain inherits
 ## together — JOINT HEIRS, never a coin flip (doc 28 §15).
 func _match_heirs() -> Array:
-	var order := _match_order()
-	var top := int(order[0])
-	var heirs: Array = [top]
-	for k in range(1, order.size()):
-		var p := int(order[k])
-		if wreaths[p] == wreaths[top] and board_firsts[p] == board_firsts[top] \
-				and night_final_rank[p] == night_final_rank[top] \
-				and mini_wins_match[p] == mini_wins_match[top]:
-			heirs.append(p)
-	return heirs
+	return run_director.match_heirs()
 
 ## ARRIVAL WREATHS (doc 28 §6/§15): the FINAL BELL pays arrival order on the
 ## escalating night table — crossing order first, then dist_to_gate ranking
@@ -2472,7 +2463,7 @@ func _match_heirs() -> Array:
 ## holder's award is bumped ONE TIER (doc 28 §8 rule 5), announced.
 func _arrival_wreaths() -> void:
 	_phase = "arrival_pay"
-	var table: Array = ARRIVAL_WREATHS[clampi(night_index - 1, 0, ARRIVAL_WREATHS.size() - 1)]
+	var table: Array = run_director.arrival_wreaths_for_night(night_index)
 	var order := _final_order()
 	var lines: Array[String] = []
 	for rank in order.size():
@@ -4454,10 +4445,10 @@ func _interlude_minigame() -> void:
 	# The overnight family only (producer ruling): the theater trio.
 	var pool := THEATER_ORDER.duplicate()
 	var pick := ""
-	if _interlude1_pick == "":
+	if run_director.first_interlude_game == "":
 		# --- interlude 1: the estate deals (EVENT stream, one randi) ---
 		pick = String(pool[_event_rng.randi_range(0, pool.size() - 1)])
-		_interlude1_pick = pick
+		run_director.first_interlude_game = pick
 		if not _fast:
 			_reveal_seat = -1
 			executor.say(Dialog.text("procession.interlude.random_line") \
@@ -4466,7 +4457,7 @@ func _interlude_minigame() -> void:
 			executor.clear_banner()
 	else:
 		# --- interlude 2+: the DOORMAT's privilege (no repeat of interlude 1) ---
-		pool.erase(_interlude1_pick)
+		pool.erase(run_director.first_interlude_game)
 		var doormat := int(_roll_order().back())
 		if _is_local_human(doormat) and _drama_visible():
 			var entries: Array = []
@@ -4851,14 +4842,7 @@ func _slip_back(seat: int, steps: int) -> void:
 ## The night closes when everyone is home, or one full round after THE FINAL
 ## BELL rang (doc 28: every other player gets exactly one more turn).
 func _check_win() -> bool:
-	var all_home := true
-	for i in roster.size():
-		if not bool(arrived[i]):
-			all_home = false
-			break
-	if all_home:
-		return true
-	return bell_round >= 0 and round_num >= bell_round + 1
+	return run_director.final_bell_closes_night(arrived, bell_round, round_num)
 
 func _will_reading() -> void:
 	_phase = "will"
@@ -5309,6 +5293,10 @@ func _stirnettest_run() -> void:
 	mirror._mirror = true
 	mirror.roster = roster.duplicate(true)
 	get_tree().root.add_child(mirror)
+	mirror.run_director = RunDirectorScript.new()
+	mirror.run_director.name = "RunDirector"
+	mirror.add_child(mirror.run_director)
+	mirror.run_director.configure_match(match_nights, turn_cap)
 	mirror._init_arrays()
 	mirror._build_world()
 	mirror._build_hud()

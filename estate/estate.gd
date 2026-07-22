@@ -78,6 +78,7 @@ var _start_force_hold: HoldConfirm = null
 @onready var banner: Label = $UI/Banner
 @onready var plinths: Node3D = $Plinths
 @onready var wall_text: Label3D = $GraffitiWall/Lines
+@onready var run_director: RunDirector = $RunDirector
 
 # ---- G3 (doc 33): THE HUB LIVES ON THE FORECOURT. One offset carries the
 # whole hub cluster onto the procession grounds' forecourt table; the WORLD
@@ -423,10 +424,17 @@ func _proc_nights() -> int:
 func _proc_turncap() -> int:
 	return clampi(int(PartySetup.pref("proc_turncap", 12)), 4, 40)
 
-## Launch THE PROCESSION board mode (doc 19). The scene lives at the tree root
-## like a gamestate module (zombie-swept); it supplies its own camera, HUD and
-## environment, so the shell only hides its own overlays and folds home after.
+## Launch the three-night run through its one match authority. Estate remains
+## the HubHost/shell; Procession is created by RunDirector as the BoardHost.
 func _enter_procession() -> void:
+	run_director.start_match(self, {
+		"match_nights": _proc_nights(),
+		"turn_cap": _proc_turncap(),
+	})
+
+## RUNDIRECTOR HUB-HOST API. These callbacks contain only shell-specific work;
+## RunDirector owns their ordering and the launched BoardHost's lifetime.
+func prepare_run_host() -> void:
 	phase = Phase.GAME
 	_net_set_ceremony({})
 	Music.stop()
@@ -443,37 +451,45 @@ func _enter_procession() -> void:
 	$Plinths.visible = false
 	_fill_empty_seats_with_bots()
 	PlayerInput.save_setup()
-	var proc: Node = load("res://estate/procession/procession.tscn").instantiate()
-	get_tree().root.add_child(proc)   # root, like a gamestate module (zombie-swept)
-	# Track it as the live module so the estate's bot-wander stays parked and the
-	# 20 Hz host mirror pump has a target (procession exposes _net_state()).
-	_module = proc
-	_net_game_name = "THE PROCESSION"
+
+func build_run_config(settings: Dictionary) -> Dictionary:
 	var roster: Array = []
 	for pl in EstateState.players:
 		roster.append({"index": pl.index, "name": pl.name, "color": pl.color,
 			"char_scene": CHAR_PATHS[pl.index], "device": PlayerInput.device_of(pl.index),
 			"bot": _is_bot(pl.index)})
-	proc.night_over.connect(func(_tally):
-		_module = null
-		_net_mirror_id = ""
-		if is_instance_valid(proc):
-			proc.queue_free()
-		$Grounds.visible = true
-		$Grounds.process_mode = Node.PROCESS_MODE_INHERIT
-		$GraffitiWall.visible = true
-		$Plinths.visible = true
-		cam.current = true
-		_enter_title(), CONNECT_ONE_SHOT)
-	# P3: the PLAY-panel dials feed the real match config.
-	proc.begin({"roster": roster, "seed": EstateState.rng.randi(),
-		"match_nights": _proc_nights(), "turn_cap": _proc_turncap()})
+	return {
+		"roster": roster,
+		"seed": EstateState.rng.randi(),
+		"match_nights": int(settings.get("match_nights", 3)),
+		"turn_cap": int(settings.get("turn_cap", 12)),
+	}
+
+func attach_run_board(proc: Node) -> void:
+	# Track it as the live module so the estate's bot-wander stays parked and the
+	# 20 Hz host mirror pump has a target (procession exposes _net_state()).
+	_module = proc
+	_net_game_name = "THE PROCESSION"
+
+func run_board_started(proc: Node) -> void:
 	# ONLINE PHASE 2: fan the board to guests through the existing 20 Hz module
 	# pump exactly as for a contract minigame (procession exposes _net_state).
 	if NetSession.is_host() and proc.has_method("_net_state"):
 		_net_mirror_id = "procession"
 		_net_module_seq = 0
 		_net_module_accum = 0.0
+
+func finish_run_host(proc: Node, _tally: Dictionary) -> void:
+	_module = null
+	_net_mirror_id = ""
+	if is_instance_valid(proc):
+		proc.queue_free()
+	$Grounds.visible = true
+	$Grounds.process_mode = Node.PROCESS_MODE_INHERIT
+	$GraffitiWall.visible = true
+	$Plinths.visible = true
+	cam.current = true
+	_enter_title()
 
 ## NEW GAME / slot management: each slot is a whole estate universe.
 func _build_slot_panel() -> void:
